@@ -1,0 +1,22 @@
+syntax = "proto3";
+package pb;
+import "pb/common.proto";
+
+option go_package="./pb";
+
+
+message PoWBlock {
+  bytes parentHash = 1;
+  uint64 height=2;
+  repeated bytes txs=3;
+  uint64 nonce=4;
+  bytes blockHash = 5;
+  bool commited = 6;
+}
+
+message PoWMessage {
+  oneof msg {
+    PoWBlock block = 1;
+    Request request = 2;
+  }
+}

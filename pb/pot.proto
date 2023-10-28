@@ -1,0 +1,81 @@
+syntax = "proto3";
+package pb;
+
+option go_package="./pb";
+
+
+message PoTMessage {
+  MessageType  MsgType = 1;
+  bytes  MsgByte = 2;
+}
+
+
+message Header{
+  uint64 Height = 1;
+  bytes  ParentHash = 2;
+  repeated bytes UncleHash = 3;
+  bytes Mixdigest = 4;
+  bytes Difficulty = 5;
+  int64 Nonce = 6;
+  bytes Timestamp = 7;
+  repeated bytes PoTProof = 8;
+  int64 Address = 9;
+  bytes Hashes =10;
+  string PeerId = 11;
+}
+
+enum MessageType{
+  Header_Data = 0;
+  Header_Request = 1;
+  Header_Response = 2;
+  PoT_Request = 3;
+  PoT_Response = 4;
+  PoT_Proof = 5;
+}
+
+message HeaderRequest {
+
+  uint64 Height = 1;
+  bytes  Hashes = 2;
+  int64  srcid = 3;
+  int64  desid = 4;
+  string src =5;
+  string des = 6;
+}
+message HeaderResponse{
+  Header header =1;
+  string src = 2;
+  string des = 3;
+  int64  srcid = 4;
+  int64  desid = 5;
+
+}
+
+message PoTRequest{
+  uint64 Epoch = 1;
+  int64  Desid = 2;
+  string Des = 3;
+  int64  Srcid = 4;
+  string Src = 5 ;
+}
+
+message PotProof{
+  uint64 Epoch = 1;
+  bytes Proof = 2;
+  string Src = 3;
+  string Des = 4;
+}
+
+message PoTResponse{
+  uint64 Epoch = 1;
+  int64  Desid = 2;
+  string Des = 3;
+  int64  Srcid = 4;
+  string Src = 5 ;
+  bytes  Proof = 6;
+}
+
+message PoTBlock {
+  Header Header = 1;
+  bytes Data = 2;
+}
