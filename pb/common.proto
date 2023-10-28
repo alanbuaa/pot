@@ -5,7 +5,7 @@ option go_package="./pb";
 
 message Empty {}
 
-message Block {
+message WhirlyBlock {
   bytes ParentHash = 1;
   bytes Hash = 2;
   uint64 height = 3;
@@ -34,9 +34,11 @@ message QuorumCert {
 
 message Request {
   bytes tx = 1;
+  int32 chainID = 2;
 }
 
 message Reply {
   bytes tx = 1;
   bytes receipt = 2;
+  int32 chainID =3;
 }

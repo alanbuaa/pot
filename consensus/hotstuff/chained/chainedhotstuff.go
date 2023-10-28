@@ -195,12 +195,12 @@ func (chs *ChainedHotStuff) handleMsg(msg *pb.Msg) {
 	}
 }
 
-func (chs *ChainedHotStuff) SafeNode(node *pb.Block, qc *pb.QuorumCert) bool {
+func (chs *ChainedHotStuff) SafeNode(node *pb.WhirlyBlock, qc *pb.QuorumCert) bool {
 	return bytes.Equal(node.ParentHash, chs.lockQC.BlockHash) || //safety rule
 		qc.ViewNum > chs.lockQC.ViewNum // liveness rule
 }
 
-func (chs *ChainedHotStuff) update(block *pb.Block) {
+func (chs *ChainedHotStuff) update(block *pb.WhirlyBlock) {
 	chs.lock.Lock()
 	defer chs.lock.Unlock()
 	if block.Justify == nil {

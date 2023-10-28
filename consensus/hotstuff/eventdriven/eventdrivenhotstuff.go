@@ -31,8 +31,8 @@ const (
 )
 
 type EventDrivenHotStuff interface {
-	Update(block *pb.Block)
-	OnCommit(block *pb.Block)
+	Update(block *pb.WhirlyBlock)
+	OnCommit(block *pb.WhirlyBlock)
 	OnReceiveProposal(msg *pb.Prepare) (*tcrsa.SigShare, error)
 	OnReceiveVote(partSig *tcrsa.SigShare)
 	OnPropose()
@@ -42,13 +42,13 @@ type EventDrivenHotStuffImpl struct {
 	hotstuff.HotStuffImpl
 	lock          sync.Mutex
 	pacemaker     Pacemaker
-	bLeaf         *pb.Block
-	bLock         *pb.Block
-	bExec         *pb.Block
+	bLeaf         *pb.WhirlyBlock
+	bLock         *pb.WhirlyBlock
+	bExec         *pb.WhirlyBlock
 	qcHigh        *pb.QuorumCert
 	vHeight       uint64
 	waitProposal  *sync.Cond
-	pendingUpdate chan *pb.Block
+	pendingUpdate chan *pb.WhirlyBlock
 	eventChannels []chan Event
 }
 
@@ -68,7 +68,7 @@ func NewEventDrivenHotStuff(
 		bExec:         genesisBlock,
 		qcHigh:        nil,
 		vHeight:       genesisBlock.Height,
-		pendingUpdate: make(chan *pb.Block, 1),
+		pendingUpdate: make(chan *pb.WhirlyBlock, 1),
 		eventChannels: make([]chan Event, 0),
 	}
 	ehs.Init(id, cid, cfg, exec, p2pAdaptor, log)
@@ -119,13 +119,13 @@ func (ehs *EventDrivenHotStuffImpl) GetVHeight() uint64 {
 	return ehs.vHeight
 }
 
-func (ehs *EventDrivenHotStuffImpl) GetLeaf() *pb.Block {
+func (ehs *EventDrivenHotStuffImpl) GetLeaf() *pb.WhirlyBlock {
 	ehs.lock.Lock()
 	defer ehs.lock.Unlock()
 	return ehs.bLeaf
 }
 
-func (ehs *EventDrivenHotStuffImpl) SetLeaf(b *pb.Block) {
+func (ehs *EventDrivenHotStuffImpl) SetLeaf(b *pb.WhirlyBlock) {
 	ehs.lock.Lock()
 	defer ehs.lock.Unlock()
 	ehs.bLeaf = b
@@ -262,7 +262,7 @@ func (ehs *EventDrivenHotStuffImpl) updateAsync() {
 }
 
 // Update update blocks before block
-func (ehs *EventDrivenHotStuffImpl) Update(block *pb.Block) {
+func (ehs *EventDrivenHotStuffImpl) Update(block *pb.WhirlyBlock) {
 	// block1 = b'', block2 = b', block3 = b
 	block1, err := ehs.BlockStorage.BlockOf(block.Justify)
 	if err != nil && err != leveldb.ErrNotFound {
@@ -307,7 +307,7 @@ func (ehs *EventDrivenHotStuffImpl) Update(block *pb.Block) {
 	}
 }
 
-func (ehs *EventDrivenHotStuffImpl) OnCommit(block *pb.Block) {
+func (ehs *EventDrivenHotStuffImpl) OnCommit(block *pb.WhirlyBlock) {
 	if ehs.bExec.Height < block.Height {
 		if parent, _ := ehs.BlockStorage.ParentOf(block); parent != nil {
 			ehs.OnCommit(parent)
@@ -344,7 +344,7 @@ func (ehs *EventDrivenHotStuffImpl) OnReceiveProposal(msg *pb.Prepare) (*tcrsa.S
 		ehs.Log.WithFields(logrus.Fields{
 			"blockHeight": newBlock.Height,
 			"vHeight":     ehs.vHeight,
-		}).Warn("[EVENT-DRIVEN HOTSTUFF] OnReceiveProposal: Block height less than vHeight.")
+		}).Warn("[EVENT-DRIVEN HOTSTUFF] OnReceiveProposal: WhirlyBlock height less than vHeight.")
 		return nil, errors.New("block was not accepted")
 	}
 	safe := false
@@ -377,7 +377,7 @@ func (ehs *EventDrivenHotStuffImpl) OnReceiveProposal(msg *pb.Prepare) (*tcrsa.S
 	if !safe {
 		// ehs.Log.Debug("release lock")
 		ehs.lock.Unlock()
-		ehs.Log.Warn("[EVENT-DRIVEN HOTSTUFF] OnReceiveProposal: Block not safe.")
+		ehs.Log.Warn("[EVENT-DRIVEN HOTSTUFF] OnReceiveProposal: WhirlyBlock not safe.")
 		return nil, errors.New("block was not accepted")
 	}
 	ehs.Log.Trace("[EVENT-DRIVEN HOTSTUFF] OnReceiveProposal: Accepted block.")
@@ -471,7 +471,7 @@ func (ehs *EventDrivenHotStuffImpl) OnPropose() {
 
 // expectBlock looks for a block with the given Hash, or waits for the next proposal to arrive
 // ehs.lock must be locked when calling this function
-func (ehs *EventDrivenHotStuffImpl) expectBlock(hash []byte) (*pb.Block, error) {
+func (ehs *EventDrivenHotStuffImpl) expectBlock(hash []byte) (*pb.WhirlyBlock, error) {
 	block, err := ehs.BlockStorage.Get(hash)
 	if err == nil {
 		return block, nil
@@ -481,7 +481,7 @@ func (ehs *EventDrivenHotStuffImpl) expectBlock(hash []byte) (*pb.Block, error) 
 }
 
 // createProposal create a new proposal
-func (ehs *EventDrivenHotStuffImpl) createProposal(txs []types.RawTransaction) *pb.Block {
+func (ehs *EventDrivenHotStuffImpl) createProposal(txs []types.RawTransaction) *pb.WhirlyBlock {
 	// create a new block
 	// ehs.Log.Debug("[ehs] require lock")
 	ehs.lock.Lock()

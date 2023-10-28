@@ -16,17 +16,17 @@ import (
 用于存储和查找区块信息
 */
 type BlockStorage interface {
-	Put(block *pb.Block) error
-	Get(hash []byte) (*pb.Block, error)
-	UpdateState(block *pb.Block) error
-	BlockOf(cert *pb.QuorumCert) (*pb.Block, error)
-	ParentOf(block *pb.Block) (*pb.Block, error)
+	Put(block *pb.WhirlyBlock) error
+	Get(hash []byte) (*pb.WhirlyBlock, error)
+	UpdateState(block *pb.WhirlyBlock) error
+	BlockOf(cert *pb.QuorumCert) (*pb.WhirlyBlock, error)
+	ParentOf(block *pb.WhirlyBlock) (*pb.WhirlyBlock, error)
 	GetLastBlockHash() []byte
 	RestoreStatus()
 	Close()
 }
 
-func Hash(block *pb.Block) []byte {
+func Hash(block *pb.WhirlyBlock) []byte {
 	// 防止重复生成哈希
 	if block.Hash != nil {
 		return block.Hash
@@ -49,7 +49,7 @@ func Hash(block *pb.Block) []byte {
 	return blockHash
 }
 
-func String(block *pb.Block) string {
+func String(block *pb.WhirlyBlock) string {
 	return fmt.Sprintf("\n[BLOCK]\nParentHash: %s\nHash: %s\nHeight: %d\n",
 		hex.EncodeToString(block.ParentHash), hex.EncodeToString(block.Hash), block.Height)
 }
@@ -72,7 +72,7 @@ func NewBlockStorageImpl(id string) *BlockStorageImpl {
 	}
 }
 
-func (bsi *BlockStorageImpl) Put(block *pb.Block) error {
+func (bsi *BlockStorageImpl) Put(block *pb.WhirlyBlock) error {
 	marshal, _ := proto.Marshal(block)
 	err := bsi.db.Put(block.Hash, marshal, nil)
 	if err != nil {
@@ -83,12 +83,12 @@ func (bsi *BlockStorageImpl) Put(block *pb.Block) error {
 	return err
 }
 
-func (bsi *BlockStorageImpl) Get(hash []byte) (*pb.Block, error) {
+func (bsi *BlockStorageImpl) Get(hash []byte) (*pb.WhirlyBlock, error) {
 	blockByte, err := bsi.db.Get(hash, nil)
 	if err != nil {
 		return nil, err
 	}
-	block := &pb.Block{}
+	block := &pb.WhirlyBlock{}
 	err = proto.Unmarshal(blockByte, block)
 	if err != nil {
 		return nil, err
@@ -96,12 +96,12 @@ func (bsi *BlockStorageImpl) Get(hash []byte) (*pb.Block, error) {
 	return block, nil
 }
 
-func (bsi *BlockStorageImpl) BlockOf(cert *pb.QuorumCert) (*pb.Block, error) {
+func (bsi *BlockStorageImpl) BlockOf(cert *pb.QuorumCert) (*pb.WhirlyBlock, error) {
 	blockBytes, err := bsi.db.Get(cert.BlockHash, nil)
 	if err != nil {
 		return nil, err
 	}
-	b := &pb.Block{}
+	b := &pb.WhirlyBlock{}
 	err = proto.Unmarshal(blockBytes, b)
 	if err != nil {
 		return nil, err
@@ -109,12 +109,12 @@ func (bsi *BlockStorageImpl) BlockOf(cert *pb.QuorumCert) (*pb.Block, error) {
 	return b, err
 }
 
-func (bsi *BlockStorageImpl) ParentOf(block *pb.Block) (*pb.Block, error) {
+func (bsi *BlockStorageImpl) ParentOf(block *pb.WhirlyBlock) (*pb.WhirlyBlock, error) {
 	bytes, err := bsi.db.Get(block.ParentHash, nil)
 	if err != nil {
 		return nil, err
 	}
-	parentBlock := &pb.Block{}
+	parentBlock := &pb.WhirlyBlock{}
 	err = proto.Unmarshal(bytes, parentBlock)
 	if err != nil {
 		return nil, err
@@ -136,7 +136,7 @@ func (bsi *BlockStorageImpl) RestoreStatus() {
 
 }
 
-func (bsi *BlockStorageImpl) UpdateState(block *pb.Block) error {
+func (bsi *BlockStorageImpl) UpdateState(block *pb.WhirlyBlock) error {
 	if block == nil || block.Hash == nil {
 		return errors.New("block is null")
 	}

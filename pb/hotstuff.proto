@@ -21,7 +21,7 @@ message Msg {
 }
 
 message Prepare {
-  Block curProposal = 1;
+  WhirlyBlock curProposal = 1;
   QuorumCert highQC = 2;
   uint64 viewNum = 3;
 }

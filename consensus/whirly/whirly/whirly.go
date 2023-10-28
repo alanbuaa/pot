@@ -34,8 +34,8 @@ const (
 
 type Whirly interface {
 	Update(qc *pb.QuorumCert)
-	OnCommit(block *pb.Block)
-	OnReceiveProposal(newBlock *pb.Block, qc *pb.QuorumCert)
+	OnCommit(block *pb.WhirlyBlock)
+	OnReceiveProposal(newBlock *pb.WhirlyBlock, qc *pb.QuorumCert)
 	OnReceiveVote(msg *pb.WhirlyMsg)
 	OnPropose()
 }
@@ -49,8 +49,8 @@ type WhirlyImpl struct {
 	curNewView    []*pb.QuorumCert
 	proposeView   uint64
 	pacemaker     Pacemaker
-	bLock         *pb.Block
-	bExec         *pb.Block
+	bLock         *pb.WhirlyBlock
+	bExec         *pb.WhirlyBlock
 	lockQC        *pb.QuorumCert
 	vHeight       uint64
 	waitProposal  *sync.Cond
@@ -134,13 +134,13 @@ func (whi *WhirlyImpl) GetVHeight() uint64 {
 	return whi.vHeight
 }
 
-func (whi *WhirlyImpl) GetLock() *pb.Block {
+func (whi *WhirlyImpl) GetLock() *pb.WhirlyBlock {
 	whi.lock.Lock()
 	defer whi.lock.Unlock()
 	return whi.bLock
 }
 
-func (whi *WhirlyImpl) SetLock(b *pb.Block) {
+func (whi *WhirlyImpl) SetLock(b *pb.WhirlyBlock) {
 	whi.lock.Lock()
 	defer whi.lock.Unlock()
 	whi.bLock = b
@@ -271,7 +271,7 @@ func (whi *WhirlyImpl) Update(qc *pb.QuorumCert) {
 	}
 }
 
-func (whi *WhirlyImpl) OnCommit(block *pb.Block) {
+func (whi *WhirlyImpl) OnCommit(block *pb.WhirlyBlock) {
 	if whi.bExec.Height < block.Height {
 		if parent, _ := whi.BlockStorage.ParentOf(block); parent != nil {
 			whi.OnCommit(parent)
@@ -291,7 +291,7 @@ func (whi *WhirlyImpl) verfiyQc(qc *pb.QuorumCert) bool {
 	return true
 }
 
-func (whi *WhirlyImpl) OnReceiveProposal(newBlock *pb.Block, qc *pb.QuorumCert) {
+func (whi *WhirlyImpl) OnReceiveProposal(newBlock *pb.WhirlyBlock, qc *pb.QuorumCert) {
 	whi.Log.WithFields(logrus.Fields{
 		"blockHeight": newBlock.Height,
 		"qcView":      qc.ViewNum,
@@ -333,7 +333,7 @@ func (whi *WhirlyImpl) OnReceiveProposal(newBlock *pb.Block, qc *pb.QuorumCert) 
 		whi.Log.WithFields(logrus.Fields{
 			"blockHeight": newBlock.Height,
 			"vHeight":     whi.vHeight,
-		}).Info("[replica_" + strconv.Itoa(int(whi.ID)) + "] [view_" + strconv.Itoa(int(whi.View.ViewNum)) + "] OnReceiveProposal: Block height less than vHeight.")
+		}).Info("[replica_" + strconv.Itoa(int(whi.ID)) + "] [view_" + strconv.Itoa(int(whi.View.ViewNum)) + "] OnReceiveProposal: WhirlyBlock height less than vHeight.")
 		return
 	}
 
@@ -548,7 +548,7 @@ func (whi *WhirlyImpl) OnPropose() {
 
 // expectBlock looks for a block with the given Hash, or waits for the next proposal to arrive
 // whi.lock must be locked when calling this function
-func (whi *WhirlyImpl) expectBlock(hash []byte) (*pb.Block, error) {
+func (whi *WhirlyImpl) expectBlock(hash []byte) (*pb.WhirlyBlock, error) {
 	block, err := whi.BlockStorage.Get(hash)
 	if err == nil {
 		return block, nil
@@ -561,7 +561,7 @@ func (whi *WhirlyImpl) expectBlock(hash []byte) (*pb.Block, error) {
 }
 
 // createProposal create a new proposal
-func (whi *WhirlyImpl) createProposal(txs []types.RawTransaction) *pb.Block {
+func (whi *WhirlyImpl) createProposal(txs []types.RawTransaction) *pb.WhirlyBlock {
 	// create a new block
 	whi.lock.Lock()
 	// do not use qc fields for blocks

@@ -19,13 +19,13 @@ import (
 
 // common hotstuff func defined in the paper
 type HotStuff interface {
-	Msg(msgType pb.MsgType, node *pb.Block, qc *pb.QuorumCert) *pb.Msg
-	VoteMsg(msgType pb.MsgType, node *pb.Block, qc *pb.QuorumCert, justify []byte) *pb.Msg
-	CreateLeaf(parentHash []byte, txs []types.RawTransaction, justify *pb.QuorumCert) *pb.Block
+	Msg(msgType pb.MsgType, node *pb.WhirlyBlock, qc *pb.QuorumCert) *pb.Msg
+	VoteMsg(msgType pb.MsgType, node *pb.WhirlyBlock, qc *pb.QuorumCert, justify []byte) *pb.Msg
+	CreateLeaf(parentHash []byte, txs []types.RawTransaction, justify *pb.QuorumCert) *pb.WhirlyBlock
 	QC(msgType pb.MsgType, sig tcrsa.Signature, blockHash []byte) *pb.QuorumCert
 	MatchingMsg(msg *pb.Msg, msgType pb.MsgType) bool
 	MatchingQC(qc *pb.QuorumCert, msgType pb.MsgType) bool
-	SafeNode(node *pb.Block, qc *pb.QuorumCert) bool
+	SafeNode(node *pb.WhirlyBlock, qc *pb.QuorumCert) bool
 	GetMsgByteEntrance() chan<- []byte
 	GetRequestEntrance() chan<- *pb.Request
 	GetSelfInfo() *config.ReplicaInfo
@@ -105,7 +105,7 @@ func (hs *HotStuffImpl) DecodeMsgByte(msgByte []byte) (*pb.Msg, error) {
 }
 
 type CurProposal struct {
-	Node          *pb.Block
+	Node          *pb.WhirlyBlock
 	DocumentHash  []byte
 	PrepareVote   []*tcrsa.SigShare
 	PreCommitVote []*tcrsa.SigShare
@@ -138,7 +138,7 @@ func NewView(viewNum uint64, primary int64) *View {
 	}
 }
 
-func (h *HotStuffImpl) Msg(msgType pb.MsgType, node *pb.Block, qc *pb.QuorumCert) *pb.Msg {
+func (h *HotStuffImpl) Msg(msgType pb.MsgType, node *pb.WhirlyBlock, qc *pb.QuorumCert) *pb.Msg {
 	msg := &pb.Msg{}
 	switch msgType {
 	case pb.MsgType_PREPARE:
@@ -159,7 +159,7 @@ func (h *HotStuffImpl) Msg(msgType pb.MsgType, node *pb.Block, qc *pb.QuorumCert
 	return msg
 }
 
-func (h *HotStuffImpl) VoteMsg(msgType pb.MsgType, node *pb.Block, qc *pb.QuorumCert, justify []byte) *pb.Msg {
+func (h *HotStuffImpl) VoteMsg(msgType pb.MsgType, node *pb.WhirlyBlock, qc *pb.QuorumCert, justify []byte) *pb.Msg {
 	msg := &pb.Msg{}
 	switch msgType {
 	case pb.MsgType_PREPARE_VOTE:
@@ -187,8 +187,8 @@ func (h *HotStuffImpl) VoteMsg(msgType pb.MsgType, node *pb.Block, qc *pb.Quorum
 	return msg
 }
 
-func (h *HotStuffImpl) CreateLeaf(parentHash []byte, txs []types.RawTransaction, justify *pb.QuorumCert) *pb.Block {
-	b := &pb.Block{
+func (h *HotStuffImpl) CreateLeaf(parentHash []byte, txs []types.RawTransaction, justify *pb.QuorumCert) *pb.WhirlyBlock {
+	b := &pb.WhirlyBlock{
 		ParentHash: parentHash,
 		Hash:       nil,
 		Height:     h.View.ViewNum,
@@ -234,7 +234,7 @@ func (h *HotStuffImpl) MatchingQC(qc *pb.QuorumCert, msgType pb.MsgType) bool {
 	return qc.Type == msgType && qc.ViewNum == h.View.ViewNum
 }
 
-func (h *HotStuffImpl) SafeNode(node *pb.Block, qc *pb.QuorumCert) bool {
+func (h *HotStuffImpl) SafeNode(node *pb.WhirlyBlock, qc *pb.QuorumCert) bool {
 	return bytes.Equal(node.ParentHash, h.PreCommitQC.BlockHash) || //safety rule
 		qc.ViewNum > h.PreCommitQC.ViewNum // liveness rule
 }
@@ -316,7 +316,7 @@ func (h *HotStuffImpl) Unicast(address string, msg *pb.Msg) error {
 	return h.p2pAdaptor.Unicast(address, msgByte, h.ConsensusID, []byte("consensus"))
 }
 
-func (h *HotStuffImpl) ProcessProposal(b *pb.Block, p []byte) {
+func (h *HotStuffImpl) ProcessProposal(b *pb.WhirlyBlock, p []byte) {
 	h.Executor.CommitBlock(b, p, h.ConsensusID)
 	// for _, tx := range txs {
 	// 	h.Executor.CommitTx(tx, h.ConsensusID)
@@ -330,8 +330,8 @@ func (h *HotStuffImpl) ProcessProposal(b *pb.Block, p []byte) {
 }
 
 // GenerateGenesisBlock returns genesis block
-func GenerateGenesisBlock() *pb.Block {
-	genesisBlock := &pb.Block{
+func GenerateGenesisBlock() *pb.WhirlyBlock {
+	genesisBlock := &pb.WhirlyBlock{
 		ParentHash: nil,
 		Hash:       nil,
 		Height:     0,

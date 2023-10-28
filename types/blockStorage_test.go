@@ -21,7 +21,7 @@ func TestHash(t *testing.T) {
 	txs := [][]byte{[]byte("ss"), []byte("aaa"), []byte("ddd")}
 	parentHash := sha256.Sum256([]byte("parentHash"))
 
-	block := &pb.Block{
+	block := &pb.WhirlyBlock{
 		ParentHash: parentHash[:],
 		Hash:       nil,
 		Height:     1,
@@ -41,7 +41,7 @@ func TestBlock_PutAndGet(t *testing.T) {
 	txs := [][]byte{[]byte("ss"), []byte("aaa"), []byte("ddd")}
 	parentHash := sha256.Sum256([]byte("parentHash"))
 
-	block := &pb.Block{
+	block := &pb.WhirlyBlock{
 		ParentHash: parentHash[:],
 		Hash:       nil,
 		Height:     1,

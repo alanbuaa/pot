@@ -42,7 +42,7 @@ func (p *pacemakerImpl) UpdateLockQC(qc *pb.QuorumCert) {
 	}
 	oldQCHighBlock, _ := p.whi.BlockStorage.BlockOf(p.whi.lockQC)
 	if oldQCHighBlock == nil {
-		p.log.Error("Block from the old qcHigh missing from storage.")
+		p.log.Error("WhirlyBlock from the old qcHigh missing from storage.")
 		return
 	}
 

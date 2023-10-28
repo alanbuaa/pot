@@ -24,9 +24,9 @@ import (
 type Event uint8
 
 type SimpleWhirly interface {
-	Update(block *pb.Block)
-	OnCommit(block *pb.Block)
-	OnReceiveProposal(newBlock *pb.Block, swProof *pb.SimpleWhirlyProof)
+	Update(block *pb.WhirlyBlock)
+	OnCommit(block *pb.WhirlyBlock)
+	OnReceiveProposal(newBlock *pb.WhirlyBlock, swProof *pb.SimpleWhirlyProof)
 	OnReceiveVote(msg *pb.WhirlyMsg)
 	OnPropose()
 	GetPoTByteEntrance() chan<- []byte
@@ -41,8 +41,8 @@ type SimpleWhirlyImpl struct {
 	curYesVote   []*pb.WhirlyVote
 	curNoVote    []*pb.SimpleWhirlyProof
 	proposeView  uint64
-	bLock        *pb.Block
-	bExec        *pb.Block
+	bLock        *pb.WhirlyBlock
+	bExec        *pb.WhirlyBlock
 	lockProof    *pb.SimpleWhirlyProof
 	vHeight      uint64
 	waitProposal *sync.Cond
@@ -141,13 +141,13 @@ func (sw *SimpleWhirlyImpl) GetVHeight() uint64 {
 	return sw.vHeight
 }
 
-func (sw *SimpleWhirlyImpl) GetLock() *pb.Block {
+func (sw *SimpleWhirlyImpl) GetLock() *pb.WhirlyBlock {
 	sw.lock.Lock()
 	defer sw.lock.Unlock()
 	return sw.bLock
 }
 
-func (sw *SimpleWhirlyImpl) SetLock(b *pb.Block) {
+func (sw *SimpleWhirlyImpl) SetLock(b *pb.WhirlyBlock) {
 	sw.lock.Lock()
 	defer sw.lock.Unlock()
 	sw.bLock = b
@@ -276,7 +276,7 @@ func (sw *SimpleWhirlyImpl) Update(swProof *pb.SimpleWhirlyProof) {
 	}
 }
 
-func (sw *SimpleWhirlyImpl) OnCommit(block *pb.Block) {
+func (sw *SimpleWhirlyImpl) OnCommit(block *pb.WhirlyBlock) {
 	if sw.bExec.Height < block.Height {
 		if parent, _ := sw.BlockStorage.ParentOf(block); parent != nil {
 			sw.OnCommit(parent)
@@ -326,7 +326,7 @@ func (sw *SimpleWhirlyImpl) verfiySwProof(swProof *pb.SimpleWhirlyProof) bool {
 	return true
 }
 
-func (sw *SimpleWhirlyImpl) OnReceiveProposal(newBlock *pb.Block, swProof *pb.SimpleWhirlyProof, peerId string) {
+func (sw *SimpleWhirlyImpl) OnReceiveProposal(newBlock *pb.WhirlyBlock, swProof *pb.SimpleWhirlyProof, peerId string) {
 	sw.Log.WithFields(logrus.Fields{
 		"blockHeight": newBlock.Height,
 		"proofView":   swProof.ViewNum,
@@ -373,7 +373,7 @@ func (sw *SimpleWhirlyImpl) OnReceiveProposal(newBlock *pb.Block, swProof *pb.Si
 		sw.Log.WithFields(logrus.Fields{
 			"blockHeight": newBlock.Height,
 			"vHeight":     sw.vHeight,
-		}).Info("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] OnReceiveProposal: Block height less than vHeight.")
+		}).Info("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] OnReceiveProposal: WhirlyBlock height less than vHeight.")
 		return
 	}
 
@@ -544,7 +544,7 @@ func (sw *SimpleWhirlyImpl) OnPropose() {
 
 // expectBlock looks for a block with the given Hash, or waits for the next proposal to arrive
 // sw.lock must be locked when calling this function
-func (sw *SimpleWhirlyImpl) expectBlock(hash []byte) (*pb.Block, error) {
+func (sw *SimpleWhirlyImpl) expectBlock(hash []byte) (*pb.WhirlyBlock, error) {
 	block, err := sw.BlockStorage.Get(hash)
 	if err == nil {
 		return block, nil
@@ -557,7 +557,7 @@ func (sw *SimpleWhirlyImpl) expectBlock(hash []byte) (*pb.Block, error) {
 }
 
 // createProposal create a new proposal
-func (sw *SimpleWhirlyImpl) createProposal(txs []types.RawTransaction) *pb.Block {
+func (sw *SimpleWhirlyImpl) createProposal(txs []types.RawTransaction) *pb.WhirlyBlock {
 	// create a new block
 	sw.lock.Lock()
 	// do not use proof fields for blocks
@@ -583,7 +583,7 @@ func (sw *SimpleWhirlyImpl) UpdateLockProof(swProof *pb.SimpleWhirlyProof) {
 	}
 	oldProofHighBlock, _ := sw.BlockStorage.Get(sw.lockProof.BlockHash)
 	if oldProofHighBlock == nil {
-		sw.Log.Error("Block from the old proofHigh missing from storage.")
+		sw.Log.Error("WhirlyBlock from the old proofHigh missing from storage.")
 		return
 	}
 	if block.Height > oldProofHighBlock.Height {

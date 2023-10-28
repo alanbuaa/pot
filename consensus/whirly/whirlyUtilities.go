@@ -17,13 +17,13 @@ import (
 
 // common whirlyUtilities func defined in the paper
 type WhirlyUtilities interface {
-	ProposalMsg(block *pb.Block, qc *pb.QuorumCert, proof *pb.SimpleWhirlyProof, epoch int64) *pb.WhirlyMsg
+	ProposalMsg(block *pb.WhirlyBlock, qc *pb.QuorumCert, proof *pb.SimpleWhirlyProof, epoch int64) *pb.WhirlyMsg
 	VoteMsg(blockView uint64, blockHash []byte, flag bool, qc *pb.QuorumCert, partSig []byte, proof *pb.SimpleWhirlyProof, epoch int64) *pb.WhirlyMsg
 	NewViewMsg(qc *pb.QuorumCert, viewNum uint64) *pb.WhirlyMsg
 	NewLeaderNotifyMsg(epoch int64, proof []byte) *pb.WhirlyMsg
-	NewLeaderEchoMsg(leader int64, block *pb.Block, proof *pb.SimpleWhirlyProof, epoch int64, vHeghit uint64) *pb.WhirlyMsg
+	NewLeaderEchoMsg(leader int64, block *pb.WhirlyBlock, proof *pb.SimpleWhirlyProof, epoch int64, vHeghit uint64) *pb.WhirlyMsg
 	PingMsg() *pb.WhirlyMsg
-	CreateLeaf(parentHash []byte, viewNum uint64, txs []types.RawTransaction, justify *pb.QuorumCert) *pb.Block
+	CreateLeaf(parentHash []byte, viewNum uint64, txs []types.RawTransaction, justify *pb.QuorumCert) *pb.WhirlyBlock
 	QC(view uint64, sig tcrsa.Signature, blockHash []byte) *pb.QuorumCert
 	GetMsgByteEntrance() chan<- []byte
 	GetRequestEntrance() chan<- *pb.Request
@@ -110,7 +110,7 @@ func NewView(viewNum uint64, primary int64) *View {
 	}
 }
 
-func (wu *WhirlyUtilitiesImpl) ProposalMsg(block *pb.Block, qc *pb.QuorumCert, proof *pb.SimpleWhirlyProof, epoch int64) *pb.WhirlyMsg {
+func (wu *WhirlyUtilitiesImpl) ProposalMsg(block *pb.WhirlyBlock, qc *pb.QuorumCert, proof *pb.SimpleWhirlyProof, epoch int64) *pb.WhirlyMsg {
 	wMsg := &pb.WhirlyMsg{}
 
 	wMsg.Payload = &pb.WhirlyMsg_WhirlyProposal{WhirlyProposal: &pb.WhirlyProposal{
@@ -163,7 +163,7 @@ func (wu *WhirlyUtilitiesImpl) NewLeaderNotifyMsg(epoch int64, proof []byte) *pb
 	return wMsg
 }
 
-func (wu *WhirlyUtilitiesImpl) NewLeaderEchoMsg(leader int64, block *pb.Block, proof *pb.SimpleWhirlyProof, epoch int64, vHeghit uint64) *pb.WhirlyMsg {
+func (wu *WhirlyUtilitiesImpl) NewLeaderEchoMsg(leader int64, block *pb.WhirlyBlock, proof *pb.SimpleWhirlyProof, epoch int64, vHeghit uint64) *pb.WhirlyMsg {
 	wMsg := &pb.WhirlyMsg{}
 
 	wMsg.Payload = &pb.WhirlyMsg_NewLeaderEcho{NewLeaderEcho: &pb.NewLeaderEcho{
@@ -186,8 +186,8 @@ func (wu *WhirlyUtilitiesImpl) PingMsg() *pb.WhirlyMsg {
 	return wMsg
 }
 
-func (wu *WhirlyUtilitiesImpl) CreateLeaf(parentHash []byte, viewNum uint64, txs []types.RawTransaction, justify *pb.QuorumCert) *pb.Block {
-	b := &pb.Block{
+func (wu *WhirlyUtilitiesImpl) CreateLeaf(parentHash []byte, viewNum uint64, txs []types.RawTransaction, justify *pb.QuorumCert) *pb.WhirlyBlock {
+	b := &pb.WhirlyBlock{
 		ParentHash: parentHash,
 		Hash:       nil,
 		Height:     viewNum,
@@ -284,7 +284,7 @@ func (wu *WhirlyUtilitiesImpl) Unicast(address string, msg *pb.WhirlyMsg) error 
 	return wu.p2pAdaptor.Unicast(address, msgByte, wu.ConsensusID, []byte("consensus"))
 }
 
-func (wu *WhirlyUtilitiesImpl) ProcessProposal(b *pb.Block, p []byte) {
+func (wu *WhirlyUtilitiesImpl) ProcessProposal(b *pb.WhirlyBlock, p []byte) {
 	// wu.Log.Debugf("[whu] Process proposal")
 	wu.Executor.CommitBlock(b, p, wu.ConsensusID)
 	// wu.Log.Debugf("[whu] after Process proposal")
@@ -300,8 +300,8 @@ func (wu *WhirlyUtilitiesImpl) ProcessProposal(b *pb.Block, p []byte) {
 }
 
 // GenerateGenesisBlock returns genesis block
-func GenerateGenesisBlock() *pb.Block {
-	genesisBlock := &pb.Block{
+func GenerateGenesisBlock() *pb.WhirlyBlock {
+	genesisBlock := &pb.WhirlyBlock{
 		ParentHash: nil,
 		Hash:       nil,
 		Height:     0,

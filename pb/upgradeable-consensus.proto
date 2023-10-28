@@ -1,6 +1,6 @@
 syntax = "proto3";
 package pb;
-import "pb/pot.proto";
+//import "pb/pot.proto";
 import "pb/common.proto";
 
 option go_package="./pb";
@@ -15,7 +15,8 @@ message Packet {
   bytes msg =1;
   int64 consensusID=2;
   int64 epoch=3;
-  PacketType type = 4;
+  int32 chainID = 4;
+  PacketType type = 5;
 }
 
 enum TransactionType{
@@ -34,6 +35,4 @@ message Transaction {
 
 service P2P {
   rpc Send(Packet) returns (Empty) {}
-  rpc Request(HeaderRequest) returns (Header) {}
-  rpc PoTresRequest(PoTRequest) returns (PoTResponse) {}
 }

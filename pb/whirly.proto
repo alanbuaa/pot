@@ -27,7 +27,7 @@ message SimpleWhirlyProof {
 message WhirlyProposal {
   uint64 id = 1;
   uint64 senderId = 2;
-  Block block = 3;
+  WhirlyBlock block = 3;
   QuorumCert highQC = 4;
   SimpleWhirlyProof swProof = 5;
   uint64 epoch = 6;
@@ -65,7 +65,7 @@ message NewLeaderEcho {
   uint64 leader = 1;
   uint64 senderId = 2;
   uint64 epoch = 3;
-  Block block = 4;
+  WhirlyBlock block = 4;
   SimpleWhirlyProof swProof = 5;
   uint64 vHeight = 6;
   string peerId = 7;

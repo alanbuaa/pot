@@ -19,9 +19,7 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	P2P_Send_FullMethodName          = "/pb.P2P/Send"
-	P2P_Request_FullMethodName       = "/pb.P2P/Request"
-	P2P_PoTresRequest_FullMethodName = "/pb.P2P/PoTresRequest"
+	P2P_Send_FullMethodName = "/pb.P2P/Send"
 )
 
 // P2PClient is the client API for P2P service.
@@ -29,8 +27,6 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type P2PClient interface {
 	Send(ctx context.Context, in *Packet, opts ...grpc.CallOption) (*Empty, error)
-	Request(ctx context.Context, in *HeaderRequest, opts ...grpc.CallOption) (*Header, error)
-	PoTresRequest(ctx context.Context, in *PoTRequest, opts ...grpc.CallOption) (*PoTResponse, error)
 }
 
 type p2PClient struct {
@@ -50,31 +46,11 @@ func (c *p2PClient) Send(ctx context.Context, in *Packet, opts ...grpc.CallOptio
 	return out, nil
 }
 
-func (c *p2PClient) Request(ctx context.Context, in *HeaderRequest, opts ...grpc.CallOption) (*Header, error) {
-	out := new(Header)
-	err := c.cc.Invoke(ctx, P2P_Request_FullMethodName, in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *p2PClient) PoTresRequest(ctx context.Context, in *PoTRequest, opts ...grpc.CallOption) (*PoTResponse, error) {
-	out := new(PoTResponse)
-	err := c.cc.Invoke(ctx, P2P_PoTresRequest_FullMethodName, in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 // P2PServer is the server API for P2P service.
 // All implementations must embed UnimplementedP2PServer
 // for forward compatibility
 type P2PServer interface {
 	Send(context.Context, *Packet) (*Empty, error)
-	Request(context.Context, *HeaderRequest) (*Header, error)
-	PoTresRequest(context.Context, *PoTRequest) (*PoTResponse, error)
 	mustEmbedUnimplementedP2PServer()
 }
 
@@ -84,12 +60,6 @@ type UnimplementedP2PServer struct {
 
 func (UnimplementedP2PServer) Send(context.Context, *Packet) (*Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Send not implemented")
-}
-func (UnimplementedP2PServer) Request(context.Context, *HeaderRequest) (*Header, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Request not implemented")
-}
-func (UnimplementedP2PServer) PoTresRequest(context.Context, *PoTRequest) (*PoTResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method PoTresRequest not implemented")
 }
 func (UnimplementedP2PServer) mustEmbedUnimplementedP2PServer() {}
 
@@ -122,42 +92,6 @@ func _P2P_Send_Handler(srv interface{}, ctx context.Context, dec func(interface{
 	return interceptor(ctx, in, info, handler)
 }
 
-func _P2P_Request_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(HeaderRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(P2PServer).Request(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: P2P_Request_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(P2PServer).Request(ctx, req.(*HeaderRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _P2P_PoTresRequest_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(PoTRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(P2PServer).PoTresRequest(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: P2P_PoTresRequest_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(P2PServer).PoTresRequest(ctx, req.(*PoTRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 // P2P_ServiceDesc is the grpc.ServiceDesc for P2P service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -168,14 +102,6 @@ var P2P_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Send",
 			Handler:    _P2P_Send_Handler,
-		},
-		{
-			MethodName: "Request",
-			Handler:    _P2P_Request_Handler,
-		},
-		{
-			MethodName: "PoTresRequest",
-			Handler:    _P2P_PoTresRequest_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

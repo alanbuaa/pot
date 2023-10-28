@@ -136,38 +136,38 @@ func (bp *BaseP2p) Stop() {
 	bp.rpcServer.Stop()
 }
 
-func (bp *BaseP2p) Request(ctx context.Context, in *pb.HeaderRequest) (*pb.Header, error) {
-	id := in.Desid
-	address := bp.nodes[id].RpcAddress
-	conn, err := grpc.Dial(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		bp.log.Warn("dial", address, "failed")
-		return nil, err
-	}
-	client := pb.NewP2PClient(conn)
-	header, err := client.Request(context.Background(), in)
-	if err != nil {
-		bp.log.Warn("[BaseP2P]\t sent request to ", address, "fail: ", err)
-		return nil, err
-	}
-	conn.Close()
-	return header, nil
-}
-
-func (bp *BaseP2p) PoTresRequest(ctx context.Context, request *pb.PoTRequest) (*pb.PoTResponse, error) {
-	id := request.Desid
-	address := bp.nodes[id].RpcAddress
-	conn, err := grpc.Dial(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		bp.log.Warn("dial", address, "failed")
-		return nil, err
-	}
-	client := pb.NewP2PClient(conn)
-	potproof, err := client.PoTresRequest(context.Background(), request)
-	if err != nil {
-		bp.log.Warn("[BaseP2P]\t sent request to ", address, "fail: ", err)
-		return nil, err
-	}
-	conn.Close()
-	return potproof, nil
-}
+//func (bp *BaseP2p) Request(ctx context.Context, in *pb.HeaderRequest) (*pb.Header, error) {
+//	id := in.Desid
+//	address := bp.nodes[id].RpcAddress
+//	conn, err := grpc.Dial(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+//	if err != nil {
+//		bp.log.Warn("dial", address, "failed")
+//		return nil, err
+//	}
+//	client := pb.NewP2PClient(conn)
+//	header, err := client.Request(context.Background(), in)
+//	if err != nil {
+//		bp.log.Warn("[BaseP2P]\t sent request to ", address, "fail: ", err)
+//		return nil, err
+//	}
+//	conn.Close()
+//	return header, nil
+//}
+//
+//func (bp *BaseP2p) PoTresRequest(ctx context.Context, request *pb.PoTRequest) (*pb.PoTResponse, error) {
+//	id := request.Desid
+//	address := bp.nodes[id].RpcAddress
+//	conn, err := grpc.Dial(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+//	if err != nil {
+//		bp.log.Warn("dial", address, "failed")
+//		return nil, err
+//	}
+//	client := pb.NewP2PClient(conn)
+//	potproof, err := client.PoTresRequest(context.Background(), request)
+//	if err != nil {
+//		bp.log.Warn("[BaseP2P]\t sent request to ", address, "fail: ", err)
+//		return nil, err
+//	}
+//	conn.Close()
+//	return potproof, nil
+//}
