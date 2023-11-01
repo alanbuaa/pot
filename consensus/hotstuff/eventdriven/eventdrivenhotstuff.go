@@ -147,7 +147,7 @@ func (ehs *EventDrivenHotStuffImpl) GetEvents() chan Event {
 // 	ehs.cancel()
 // 	close(ehs.MsgByteEntrance)
 // 	close(ehs.RequestEntrance)
-// 	ehs.BlockStorage.Close()
+// 	ehs.WhirlyBlockStorage.Close()
 // 	// _ = os.RemoveAll("dbfile/node" + strconv.Itoa(int(ehs.ID)))
 // }
 

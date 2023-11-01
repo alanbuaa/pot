@@ -15,7 +15,7 @@ import (
 /*
 用于存储和查找区块信息
 */
-type BlockStorage interface {
+type WhirlyBlockStorage interface {
 	Put(block *pb.WhirlyBlock) error
 	Get(hash []byte) (*pb.WhirlyBlock, error)
 	UpdateState(block *pb.WhirlyBlock) error

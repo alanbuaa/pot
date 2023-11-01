@@ -78,6 +78,7 @@ func (w *Worker) handleBlock() {
 }
 
 func (w *Worker) handleAdvancedBlock(epoch uint64, header *types.Header) {
+
 	_ = w.handleAdvancedHeaderVDF(epoch, header)
 	if header.Height == epoch+1 {
 		vdfres, err := w.GetVdf0byEpoch(epoch)

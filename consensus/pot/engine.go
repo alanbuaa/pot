@@ -34,6 +34,8 @@ type PoTEngine struct {
 	Height         int64
 	worker         *Worker
 	headerStorage  *types.HeaderStorage
+	potstorage     *types.PoTBlockStorage
+	chainreader    *types.ChainReader
 	UpperConsensus *simpleWhirly.SimpleWhirlyImpl
 }
 
@@ -136,6 +138,10 @@ func (e *PoTEngine) Unicast(address string, msgByte []byte) error {
 
 func (e *PoTEngine) GetHeaderStorage() *types.HeaderStorage {
 	return e.headerStorage
+}
+
+func (e *PoTEngine) GetPoTStorage() *types.PoTBlockStorage {
+	return e.potstorage
 }
 
 func (e *PoTEngine) Setwhirly(whirly2 *simpleWhirly.SimpleWhirlyImpl) {

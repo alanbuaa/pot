@@ -134,3 +134,9 @@ func DefaultGenesisHeader() *Header {
 	h.Hash()
 	return h
 }
+
+type PoTBlock struct {
+	Header Header
+	//Data   Data
+	Txs [][]byte
+}

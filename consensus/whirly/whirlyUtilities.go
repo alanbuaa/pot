@@ -35,7 +35,7 @@ type WhirlyUtilities interface {
 type WhirlyUtilitiesImpl struct {
 	ID              int64
 	ConsensusID     int64
-	BlockStorage    types.BlockStorage
+	BlockStorage    types.WhirlyBlockStorage
 	View            *View
 	Config          *config.ConsensusConfig
 	TimeChan        *utils.Timer
