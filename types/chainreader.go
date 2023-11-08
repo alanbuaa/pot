@@ -3,7 +3,6 @@ package types
 import (
 	"bytes"
 	"fmt"
-	"github.com/zzz136454872/upgradeable-consensus/config"
 )
 
 /*
@@ -11,23 +10,32 @@ ChainReader 用于获取有关当前PoT链的一系列状态
 */
 
 type ChainReader struct {
-	storage *PoTBlockStorage
-	chain   map[uint64]*PoTBlock
+	storage *HeaderStorage
+	chain   map[uint64]*Header
 	height  uint64
 }
 
-func NewChainReader(config *config.Config, storage *PoTBlockStorage) *ChainReader {
-	return &ChainReader{
+func NewChainReader(storage *HeaderStorage) *ChainReader {
+	c := &ChainReader{
 		storage: storage,
-		chain:   make(map[uint64]*PoTBlock),
+		chain:   make(map[uint64]*Header),
+		height:  0,
+	}
+	c.chain[0] = DefaultGenesisHeader()
+	return c
+}
+
+func (c *ChainReader) SetHeight(height uint64, block *Header) {
+	c.chain[height] = block
+	if height > c.height {
+		c.height = height
 	}
 }
 
-func (c *ChainReader) SetHeight(height uint64, block *PoTBlock) {
-	c.chain[height] = block
-}
-
-func (c *ChainReader) GetByHeight(height uint64) (*PoTBlock, error) {
+func (c *ChainReader) GetByHeight(height uint64) (*Header, error) {
+	if height > c.height {
+		return nil, fmt.Errorf("the height %d haven't set yet", height)
+	}
 	if c.chain[height] != nil {
 		return c.chain[height], nil
 	} else {
@@ -35,25 +43,26 @@ func (c *ChainReader) GetByHeight(height uint64) (*PoTBlock, error) {
 	}
 }
 
-func (c *ChainReader) GetParentOf(block *PoTBlock) (*PoTBlock, error) {
-	header := block.Header
+func (c *ChainReader) GetParentOf(block *Header) (*Header, error) {
+	header := block
 	height := header.Height
 	parent, err := c.GetByHeight(height - 1)
 	if err != nil {
 		return nil, err
 	}
-	if !bytes.Equal(parent.Header.Hashes, block.Header.ParentHash) {
+	if !bytes.Equal(parent.Hashes, block.ParentHash) {
 		return nil, fmt.Errorf("block's parent doesn't match, may get a wrong block")
 	}
 	return parent, nil
 }
 
-func (c *ChainReader) GetCurrentBlock() *PoTBlock {
-	parent, err := c.GetByHeight(c.GetCurrentHeight())
+func (c *ChainReader) GetCurrentBlock() *Header {
+	height := c.GetCurrentHeight()
+	parent, err := c.GetByHeight(height)
 	if err != nil {
-		return parent
+		return nil
 	}
-	return nil
+	return parent
 }
 
 func (c *ChainReader) GetCurrentHeight() uint64 {
@@ -61,7 +70,77 @@ func (c *ChainReader) GetCurrentHeight() uint64 {
 
 }
 
-func (c *ChainReader) ValidateBlock(block *PoTBlock) bool {
+func (c *ChainReader) ValidateBlock(block *Header) bool {
 
+	return true
+}
+
+func (c *ChainReader) GetSharedAncestor(block *Header) (*Header, error) {
+	current := c.GetCurrentBlock()
+	currentheight := c.GetCurrentHeight()
+	header := block
+
+	if header.Height == currentheight {
+		if bytes.Equal(current.Hashes, header.Hashes) {
+			return current, nil
+		}
+		for {
+			current, err := c.GetByHeight(current.Height - 1)
+			if err != nil {
+				return nil, err
+			}
+			header, err := c.storage.Get(header.ParentHash)
+			if err != nil {
+				return nil, err
+			}
+			if bytes.Equal(current.Hashes, header.Hashes) {
+				return current, nil
+			}
+		}
+	}
+	if header.Height > currentheight {
+		headerahead, err := c.storage.Get(header.ParentHash)
+		if err != nil {
+			return nil, err
+		}
+		return c.GetSharedAncestor(headerahead)
+	}
+	if header.Height < currentheight {
+		current, err := c.GetByHeight(header.Height)
+		if err != nil {
+			return nil, err
+		}
+		if bytes.Equal(current.Hashes, header.Hashes) {
+			return current, nil
+		}
+		for {
+			current, err := c.GetByHeight(current.Height - 1)
+			if err != nil {
+				return nil, err
+			}
+			header, err := c.storage.Get(header.ParentHash)
+			if err != nil {
+				return nil, err
+			}
+			if bytes.Equal(current.Hashes, header.Hashes) {
+				return current, nil
+			}
+		}
+	}
+	return nil, fmt.Errorf("get ancestor error for unknown end")
+}
+
+func (c *ChainReader) IsBehindCurrent(header *Header) bool {
+	currentheight := c.GetCurrentHeight()
+	if currentheight == 0 {
+		return true
+	}
+	if currentheight+1 != header.Height {
+		return false
+	}
+	current := c.GetCurrentBlock()
+	if !bytes.Equal(current.Hashes, header.ParentHash) {
+		return false
+	}
 	return true
 }

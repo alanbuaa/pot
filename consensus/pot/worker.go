@@ -25,8 +25,8 @@ import (
 var bigD = new(big.Int).Sub(big.NewInt(0).Exp(big.NewInt(2), big.NewInt(256), nil), big.NewInt(1))
 
 const (
-	Vdf0Iteration = 100000
-	vdf1Iteration = 60000
+	Vdf0Iteration = 300000
+	vdf1Iteration = 180000
 	cpucounter    = 1
 	NoParentD     = 1
 )
@@ -53,14 +53,16 @@ type Worker struct {
 	rand         *rand.Rand
 	blockcounter int
 
-	Engine           *PoTEngine
-	stopCh           chan struct{}
-	synclock         sync.Mutex
-	storage          *types.HeaderStorage
+	Engine   *PoTEngine
+	stopCh   chan struct{}
+	synclock sync.Mutex
+	storage  *types.HeaderStorage
+
 	peerMsgQueue     chan *types.Header
 	headerResponsech chan *pb.HeaderResponse
 	potResponseCh    chan *pb.PoTResponse
-
+	potstorage       *types.PoTBlockStorage
+	chainreader      *types.ChainReader
 	//upperconsensus
 	whirly     *simpleWhirly.SimpleWhirlyImpl
 	potsigchan chan<- []byte
@@ -102,6 +104,8 @@ func NewWorker(id int64, config *config.ConsensusConfig, logger *logrus.Entry, s
 		storage:      st,
 		commitee:     orderedmap.NewOrderedMap(),
 		vdfchecker:   vdf.New("wesolowski_rust", []byte(""), Vdf0Iteration, id),
+		chainreader:  types.NewChainReader(st),
+		Peerid:       engine.GetPeerID(),
 	}
 	w.Init()
 
@@ -173,7 +177,7 @@ func (w *Worker) OnGetVdf0Response() {
 			}()
 
 			backupblock, err := w.storage.GetbyHeight(epoch)
-			w.log.Infof("[PoT]\tepoch %d:epoch %d block num %d", epoch+1, epoch, len(backupblock))
+			w.log.Debugf("[PoT]\tepoch %d:epoch %d block num %d", epoch+1, epoch, len(backupblock))
 
 			if err != nil {
 				w.log.Warn("[PoT]\tget backup block error :", err)
@@ -327,10 +331,12 @@ func (w *Worker) setVDF0epoch(epoch uint64) error {
 
 func (w *Worker) getParentBlock(header *types.Header) (*types.Header, error) {
 	parenthash := header.ParentHash
+
 	if parenthash == nil {
 		return nil, nil
 	}
 	parent, err := w.storage.Get(parenthash)
+
 	if err != nil {
 		request := &pb.HeaderRequest{
 			Height: header.Height - 1,
@@ -348,10 +354,13 @@ func (w *Worker) getParentBlock(header *types.Header) (*types.Header, error) {
 		}
 		pbparent := headerResponse.GetHeader()
 		parent = types.ToHeader(pbparent)
-		if w.checkHeader(parent) {
+		flag, err := w.checkHeader(parent)
+		if flag {
 			w.storage.Put(parent)
+			return parent, nil
+		} else {
+			return nil, err
 		}
-		return parent, nil
 	} else {
 		return parent, nil
 	}
@@ -459,7 +468,7 @@ func (w *Worker) caldifficultyExp(parentblock *types.Header, uncleBlock []*types
 	}
 }
 
-func (w *Worker) blockSelection(readyBlock []*types.Header, vdf0res []byte) (parent *types.Header, uncle []*types.Header) {
+func (w *Worker) blockSelection(headers []*types.Header, vdf0res []byte) (parent *types.Header, uncle []*types.Header) {
 	sr := crypto.Hash(vdf0res)
 	maxweight := big.NewInt(0)
 	max := -1
@@ -467,22 +476,32 @@ func (w *Worker) blockSelection(readyBlock []*types.Header, vdf0res []byte) (par
 	w.synclock.Lock()
 	defer w.synclock.Unlock()
 
-	if len(readyBlock) == 0 {
+	if len(headers) == 0 {
 		return nil, nil
 	}
 
-	for i, block := range readyBlock {
-		hashinput := append(block.Hash(), sr...)
-		tmp := new(big.Int).Div(bigD, new(big.Int).SetBytes(crypto.Hash(hashinput)))
-		weight := new(big.Int).Mul(block.Difficulty, tmp)
-		if weight.Cmp(maxweight) > 0 {
-			max = i
-			maxweight.Set(weight)
+	readyblocks := make([]*types.Header, 0)
+	for _, block := range headers {
+		if w.chainreader.IsBehindCurrent(block) || block.ParentHash == nil {
+			readyblocks = append(readyblocks, block)
+			hashinput := append(block.Hash(), sr...)
+			tmp := new(big.Int).Div(bigD, new(big.Int).SetBytes(crypto.Hash(hashinput)))
+			weight := new(big.Int).Mul(block.Difficulty, tmp)
+			if weight.Cmp(maxweight) > 0 {
+				max = len(readyblocks)
+				maxweight.Set(weight)
+			}
 		}
 	}
+	if max == -1 {
+		return nil, nil
+	}
 
-	parent = readyBlock[max]
-	uncle = append(readyBlock[:max], readyBlock[max+1:]...)
+	parent = readyblocks[max-1]
+	uncle = append(readyblocks[:max-1], readyblocks[max:]...)
+
+	w.chainreader.SetHeight(parent.Height, parent)
+
 	return parent, uncle
 }
 
@@ -503,9 +522,4 @@ func (w *Worker) isMinerWorking() bool {
 func (w *Worker) SetEngine(engine *PoTEngine) {
 	w.Engine = engine
 	w.Peerid = w.Engine.GetPeerID()
-}
-
-func (w *Worker) checkHeader(header *types.Header) bool {
-
-	return true
 }

@@ -136,7 +136,7 @@ func DefaultGenesisHeader() *Header {
 }
 
 type PoTBlock struct {
-	Header Header
+	Header *Header
 	//Data   Data
 	Txs [][]byte
 }

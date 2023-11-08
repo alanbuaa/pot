@@ -13,6 +13,7 @@ import (
 type HeaderStorage struct {
 	db        *leveldb.DB
 	heightmap map[uint64][][]byte
+	vdfmap    map[uint64][]byte
 }
 
 func NewHeaderStorage(id int64) *HeaderStorage {
@@ -23,7 +24,7 @@ func NewHeaderStorage(id int64) *HeaderStorage {
 		panic(err)
 	}
 
-	return &HeaderStorage{db: db, heightmap: make(map[uint64][][]byte)}
+	return &HeaderStorage{db: db, heightmap: make(map[uint64][][]byte), vdfmap: map[uint64][]byte{}}
 }
 
 func (s *HeaderStorage) Put(header *Header) error {
@@ -132,14 +133,21 @@ func (s *HeaderStorage) putHeightHash(height uint64, hash []byte) error {
 func (s *HeaderStorage) SetVdfRes(epoch uint64, vdfres []byte) error {
 	key := []byte(fmt.Sprintf("epoch:%d", epoch))
 	err := s.db.Put(key, vdfres, nil)
+	s.vdfmap[epoch] = vdfres
 	return err
 }
 
 func (s *HeaderStorage) GetPoTbyEpoch(epoch uint64) ([]byte, error) {
-	key := []byte(fmt.Sprintf("epoch:%d", epoch))
-	value, err := s.db.Get(key, nil)
-	if err != nil {
-		return nil, err
+	//key := []byte(fmt.Sprintf("epoch:%d", epoch))
+	//value, err := s.db.Get(key, nil)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//return value, nil
+	v := s.vdfmap[epoch]
+	if v != nil {
+		return v, nil
+	} else {
+		return nil, fmt.Errorf("didn't get height %d VDF result", epoch)
 	}
-	return value, nil
 }

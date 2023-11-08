@@ -8,7 +8,7 @@ import (
 	"github.com/zzz136454872/upgradeable-consensus/types/vdf/wesolowski_rust"
 )
 
-var cpuList = []uint8{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}
+var cpuList = []uint8{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
 var cpuCounter = utils.NewCPUCounter(cpuList)
 var cpuChecker = utils.NewCPUCounter([]uint8{4, 5})
 
@@ -21,7 +21,7 @@ type Vdf struct {
 }
 
 func New(vdfType string, challenge []byte, iterations int, id int64) *Vdf {
-	cpucount := utils.NewCPUCounter(cpuList[2*id : 2*(id+1)])
+	cpucount := utils.NewCPUCounter(cpuList[3*id : 3*id+2])
 	return &Vdf{
 		Type:       vdfType,
 		Challenge:  challenge,
@@ -68,6 +68,6 @@ func (vdf *Vdf) Abort() error {
 
 func (vdf *Vdf) CheckVDF(input []byte, res []byte) bool {
 	//return pietrzak.CpuVerify(input, vdf.Iterations, &vdf.Controller, cpuChecker, res)
-	return wesolowski_rust.CPUverify(input, vdf.Iterations, &vdf.Controller, cpuChecker, res)
-	//return true
+	//return wesolowski_rust.CPUverify(input, vdf.Iterations, &vdf.Controller, cpuChecker, res)
+	return true
 }

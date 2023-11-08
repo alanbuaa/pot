@@ -7,6 +7,7 @@ import (
 	"github.com/zzz136454872/upgradeable-consensus/types"
 	"google.golang.org/protobuf/proto"
 	"math/big"
+	"time"
 )
 
 func (w *Worker) handleBlock() {
@@ -33,7 +34,7 @@ func (w *Worker) handleBlock() {
 					err = w.headerbroadcast(header)
 
 					if err != nil {
-						w.log.Errorf("[PoT]\tbroadcast header error", err)
+						w.log.Errorf("[PoT]\tbroadcast header error:%s", err)
 					}
 				} else {
 					w.log.Infof("[PoT]\tepoch %d:Receive block from node %d", epoch, header.Address)
@@ -50,15 +51,16 @@ func (w *Worker) handleBlock() {
 					//	w.log.Infof("[PoT]\tthe header check need %d ms", time.Since(tsp)/time.Millisecond)
 					//}
 					// pass check, add to back up header
-
+					w.handleCurrentBlock(header)
 					w.synclock.Lock()
 					//w.backupBlock = append(w.backupBlock, header)
+
 					w.blockcounter += 1
 					err := w.storage.Put(header)
 					w.synclock.Unlock()
 
 					if err != nil {
-						w.log.Errorf("[PoT]\tstore header error", err)
+						w.log.Errorf("[PoT]\tstore header error: %s", err)
 					}
 				}
 			} else if header.Height > epoch {
@@ -77,6 +79,15 @@ func (w *Worker) handleBlock() {
 	}
 }
 
+func (w *Worker) handleCurrentBlock(block *types.Header) error {
+	header := block
+	_, _ = w.checkHeader(header)
+	if !w.chainreader.IsBehindCurrent(block) {
+		w.log.Error(w.chainreader.GetSharedAncestor(block))
+	}
+	return nil
+}
+
 func (w *Worker) handleAdvancedBlock(epoch uint64, header *types.Header) {
 
 	_ = w.handleAdvancedHeaderVDF(epoch, header)
@@ -87,9 +98,9 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, header *types.Header) {
 		}
 		vdfin := crypto.Hash(vdfres)
 		vdfout := header.PoTProof[0]
-		//times := time.Now()
+		times := time.Now()
 		if w.vdfchecker.CheckVDF(vdfin, vdfout) {
-			//w.log.Infof("[PoT]\tVDF check need %d ms", time.Since(times)/time.Millisecond)
+			w.log.Infof("[PoT]\tVDF check need %d ms", time.Since(times)/time.Millisecond)
 			w.storage.Put(header)
 			//epochnow := w.getEpoch()
 			err := w.setVDF0epoch(header.Height - 1)
@@ -198,4 +209,15 @@ func (w *Worker) headerbroadcast(header *types.Header) error {
 		return err
 	}
 	return nil
+}
+
+func (w *Worker) checkHeader(header *types.Header) (bool, error) {
+	parent, err := w.getParentBlock(header)
+	if err != nil {
+		return false, err
+	}
+	if parent.Hashes != nil {
+		return true, nil
+	}
+	return true, nil
 }
