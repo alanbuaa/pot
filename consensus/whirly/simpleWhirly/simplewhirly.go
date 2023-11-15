@@ -493,7 +493,7 @@ func (sw *SimpleWhirlyImpl) OnPropose() {
 	// if sw.ID == 3 {
 	// 	return
 	// }
-
+	time.Sleep(2 * time.Second)
 	if sw.leader[sw.epoch] != sw.ID {
 		sw.Log.WithFields(logrus.Fields{
 			"nowView": sw.View.ViewNum,

@@ -25,8 +25,8 @@ import (
 var bigD = new(big.Int).Sub(big.NewInt(0).Exp(big.NewInt(2), big.NewInt(256), nil), big.NewInt(1))
 
 const (
-	Vdf0Iteration = 300000
-	vdf1Iteration = 180000
+	Vdf0Iteration = 100000
+	vdf1Iteration = 60000
 	cpucounter    = 1
 	NoParentD     = 1
 )
@@ -139,7 +139,7 @@ func (w *Worker) OnGetVdf0Response() {
 		case res := <-w.vdf0Chan:
 			timer := time.Since(w.timestamp) / time.Millisecond
 			epoch := w.getEpoch()
-			if epoch > res.Epoch {
+			if epoch >= res.Epoch {
 				w.log.Errorf("[PoT]\tthe epoch already set")
 				continue
 			}

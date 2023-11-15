@@ -55,6 +55,7 @@ func NewEngine(nid int64, cid int64, config *config.ConsensusConfig, exec execut
 		//Worker:          worker,
 		headerStorage: st,
 	}
+	st.Put(types.DefaultGenesisHeader())
 	worker := NewWorker(nid, config, log, st, e)
 	e.worker = worker
 	// adaptor.SetReceiver(e)

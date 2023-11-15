@@ -1,7 +1,9 @@
 package pot
 
 import (
+	"bytes"
 	"encoding/hex"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/zzz136454872/upgradeable-consensus/crypto"
 	"github.com/zzz136454872/upgradeable-consensus/pb"
 	"github.com/zzz136454872/upgradeable-consensus/types"
@@ -83,7 +85,23 @@ func (w *Worker) handleCurrentBlock(block *types.Header) error {
 	header := block
 	_, _ = w.checkHeader(header)
 	if !w.chainreader.IsBehindCurrent(block) {
-		w.log.Error(w.chainreader.GetSharedAncestor(block))
+		if block.ParentHash != nil {
+			w.log.Errorf("find a fork at block with parents %s,current parent %s", hexutil.Encode(block.ParentHash), hexutil.Encode(w.chainreader.GetCurrentBlock().Hashes))
+			b, err := w.chainreader.GetSharedAncestor(block)
+			if err != nil {
+				w.log.Error(err)
+				return err
+			}
+			c, err := w.chainreader.GetByHeight(b.Height)
+			if err != nil {
+				w.log.Error(err)
+				return err
+			}
+			w1 := w.calculateChainWeight(b, w.chainreader.GetCurrentBlock())
+			w2 := w.calculateChainWeight(b, block)
+			w.log.Errorf("the chain weight %d, the fork chain weight %d", w1.Int64(), w2.Int64())
+			w.log.Errorf("the shared ancestor of fork is %s at %d,match %s", hexutil.Encode(b.Hashes), b.Height, bytes.Equal(c.Hashes, b.Hashes))
+		}
 	}
 	return nil
 }
@@ -212,7 +230,12 @@ func (w *Worker) headerbroadcast(header *types.Header) error {
 }
 
 func (w *Worker) checkHeader(header *types.Header) (bool, error) {
+	if header.ParentHash == nil {
+		return true, nil
+	}
+
 	parent, err := w.getParentBlock(header)
+
 	if err != nil {
 		return false, err
 	}

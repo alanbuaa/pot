@@ -7,10 +7,6 @@ import (
 	"time"
 )
 
-func (w *Worker) timeTicker(second int64, ch chan struct{}) {
-
-}
-
 func (w *Worker) request(request *pb.HeaderRequest) (*pb.HeaderResponse, error) {
 	requestbyte, err := proto.Marshal(request)
 	if err != nil {
@@ -37,6 +33,8 @@ func (w *Worker) request(request *pb.HeaderRequest) (*pb.HeaderResponse, error) 
 	if err != nil {
 		return nil, err
 	}
+	timer := time.NewTimer(5 * time.Second)
+
 	res := new(pb.HeaderResponse)
 	select {
 	case response := <-w.headerResponsech:
@@ -44,6 +42,10 @@ func (w *Worker) request(request *pb.HeaderRequest) (*pb.HeaderResponse, error) 
 			return nil, fmt.Errorf("receive response from wrong address")
 		}
 		res = response
+	case <-timer.C:
+		close(w.headerResponsech)
+		w.headerResponsech = nil
+		return nil, fmt.Errorf("request for header %s from %s timeout", request.GetHashes(), request.GetDes())
 	}
 
 	close(w.headerResponsech)
@@ -53,6 +55,7 @@ func (w *Worker) request(request *pb.HeaderRequest) (*pb.HeaderResponse, error) 
 	} else {
 		return nil, fmt.Errorf("didn't receive response")
 	}
+
 }
 
 func (w *Worker) handleHeaderResponse(response *pb.HeaderResponse) error {
