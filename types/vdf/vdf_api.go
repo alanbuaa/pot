@@ -21,7 +21,7 @@ type Vdf struct {
 }
 
 func New(vdfType string, challenge []byte, iterations int, id int64) *Vdf {
-	cpucount := utils.NewCPUCounter(cpuList[3*id : 3*id+2])
+	cpucount := utils.NewCPUCounter(cpuList[3*id : 3*id+3])
 	return &Vdf{
 		Type:       vdfType,
 		Challenge:  challenge,

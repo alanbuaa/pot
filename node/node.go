@@ -2,7 +2,6 @@ package node
 
 import (
 	"context"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"net"
 	"strings"
 
@@ -77,9 +76,9 @@ func (node *Node) Send(ctx context.Context, in *pb.Packet) (*pb.Empty, error) {
 		pbmsg := new(pb.PoTMessage)
 		_ = proto.Unmarshal(in.Msg, pbmsg)
 		node.pot.GetMsgByteEntrance() <- in.GetMsg()
-		protos := new(pb.HeaderRequest)
-		_ = proto.Unmarshal(pbmsg.MsgByte, protos)
-		node.log.Warn("[Node] packet type error ", hexutil.Encode(protos.Hashes))
+		//protos := new(pb.HeaderRequest)
+		//_ = proto.Unmarshal(pbmsg.MsgByte, protos)
+		//node.log.Warn("[Node] packet type error ", hexutil.Encode(protos.Hashes))
 		return &pb.Empty{}, nil
 	}
 	request := new(pb.Request)

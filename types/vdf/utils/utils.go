@@ -63,6 +63,7 @@ func ExecCmdAffinity(command string, ctrl *Controller) []byte {
 	ctrl.Pid = cmd.Process.Pid //查看命令pid
 	// affinity
 	commandAffinity := fmt.Sprintf("taskset -pc %d %d", ctrl.CPU, ctrl.Pid)
+	//fmt.Printf(commandAffinity + "\n")
 	cmdAffinity := exec.Command("bash", "-c", commandAffinity)
 	cmdAffinity.Env = append(os.Environ(), "GODEBUG=asyncpreemptoff=1")
 

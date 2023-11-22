@@ -3,6 +3,7 @@ package pot
 import (
 	"fmt"
 	"github.com/zzz136454872/upgradeable-consensus/pb"
+	"github.com/zzz136454872/upgradeable-consensus/types"
 	"google.golang.org/protobuf/proto"
 	"time"
 )
@@ -137,4 +138,76 @@ func (w *Worker) potRequest(request *pb.PoTRequest) (*pb.PoTResponse, error) {
 		return nil, fmt.Errorf("didn't receive response")
 	}
 	// return nil, nil
+}
+func (w *Worker) getParentBlock(header *types.Header) (*types.Header, error) {
+	parenthash := header.ParentHash
+
+	if parenthash == nil {
+		return nil, nil
+	}
+	parent, err := w.storage.Get(parenthash)
+
+	if err != nil {
+		request := &pb.HeaderRequest{
+			Height: header.Height - 1,
+			Hashes: parenthash,
+			Desid:  header.Address,
+			Srcid:  w.ID,
+			Des:    header.PeerId,
+			Src:    w.Peerid,
+		}
+		//w.p2p.Unicast()
+		headerResponse, err := w.request(request)
+
+		if err != nil {
+			return nil, err
+		}
+		pbparent := headerResponse.GetHeader()
+		parent = types.ToHeader(pbparent)
+		flag, err := w.checkHeader(parent)
+		if flag {
+			w.storage.Put(parent)
+			return parent, nil
+		} else {
+			return nil, err
+		}
+	} else {
+		return parent, nil
+	}
+	//return nil, nil
+}
+
+func (w *Worker) getUncleBlock(header *types.Header) ([]*types.Header, error) {
+	n := len(header.UncleHash)
+	ommerHeaders := make([]*types.Header, n)
+
+	for i := 0; i < n; i++ {
+		ommerheader, err := w.storage.Get(header.UncleHash[i])
+		if err != nil {
+			request := &pb.HeaderRequest{
+				Height: header.Height - 1,
+				Hashes: header.UncleHash[i],
+				Desid:  header.Address,
+				Srcid:  w.ID,
+				Des:    header.PeerId,
+				Src:    w.Peerid,
+			}
+			//w.p2p.Unicast()
+			headerResponse, err := w.request(request)
+			if err != nil {
+				return nil, err
+			}
+			pbommer := headerResponse.GetHeader()
+			ommer := types.ToHeader(pbommer)
+			flag, err := w.checkHeader(ommer)
+			if flag {
+				w.storage.Put(ommer)
+				ommerheader = ommer
+			} else {
+				return nil, err
+			}
+		}
+		ommerHeaders[i] = ommerheader
+	}
+	return ommerHeaders, nil
 }

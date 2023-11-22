@@ -26,7 +26,7 @@ func (w *Worker) handleBlock() {
 				break
 			} else if header.Height == epoch {
 				if header.Address == w.self() {
-					w.log.Infof("[PoT]\tepoch %d:Receive block from myself, Difficulty %d", epoch, header.Difficulty.Int64())
+					w.log.Infof("[PoT]\tepoch %d:Receive block from myself, Difficulty %d, with parent %s", epoch, header.Difficulty.Int64(), hex.EncodeToString(header.ParentHash))
 
 					w.synclock.Lock()
 					//w.backupBlock = append(w.backupBlock, header)
@@ -39,7 +39,7 @@ func (w *Worker) handleBlock() {
 						w.log.Errorf("[PoT]\tbroadcast header error:%s", err)
 					}
 				} else {
-					w.log.Infof("[PoT]\tepoch %d:Receive block from node %d", epoch, header.Address)
+					w.log.Infof("[PoT]\tepoch %d:Receive block from node %d, Difficulty %d, with parent %s", epoch, header.Address, header.Difficulty.Int64(), hex.EncodeToString(header.ParentHash))
 					// header check
 					//vdfin := crypto.Hash(w.getVDF0lastepoch(epoch))
 
@@ -53,17 +53,13 @@ func (w *Worker) handleBlock() {
 					//	w.log.Infof("[PoT]\tthe header check need %d ms", time.Since(tsp)/time.Millisecond)
 					//}
 					// pass check, add to back up header
-					w.handleCurrentBlock(header)
-					w.synclock.Lock()
-					//w.backupBlock = append(w.backupBlock, header)
+					go func() {
+						err := w.handleCurrentBlock(header)
+						if err != nil {
+							w.log.Errorf("[PoT]\t%s", err)
+						}
+					}()
 
-					w.blockcounter += 1
-					err := w.storage.Put(header)
-					w.synclock.Unlock()
-
-					if err != nil {
-						w.log.Errorf("[PoT]\tstore header error: %s", err)
-					}
 				}
 			} else if header.Height > epoch {
 				// vdf check
@@ -92,6 +88,19 @@ func (w *Worker) handleCurrentBlock(block *types.Header) error {
 				w.log.Error(err)
 				return err
 			}
+			nowbranch, _, err := w.GetBranch(b, w.chainreader.GetCurrentBlock())
+			forkbranch, _, err := w.GetBranch(b, block)
+			if err != nil {
+				w.log.Error(err)
+				return err
+			}
+			for i := 0; i < len(nowbranch); i++ {
+				w.log.Errorf("the nowbranch at height %d: %s", nowbranch[i].Height, hexutil.Encode(nowbranch[i].Hashes))
+			}
+			for i := 0; i < len(forkbranch); i++ {
+				w.log.Errorf("the fork chain at height %d: %s", forkbranch[i].Height, hexutil.Encode(forkbranch[i].Hashes))
+			}
+
 			c, err := w.chainreader.GetByHeight(b.Height)
 			if err != nil {
 				w.log.Error(err)
@@ -102,6 +111,18 @@ func (w *Worker) handleCurrentBlock(block *types.Header) error {
 			w.log.Errorf("the chain weight %d, the fork chain weight %d", w1.Int64(), w2.Int64())
 			w.log.Errorf("the shared ancestor of fork is %s at %d,match %s", hexutil.Encode(b.Hashes), b.Height, bytes.Equal(c.Hashes, b.Hashes))
 		}
+	} else {
+		w.synclock.Lock()
+		//w.backupBlock = append(w.backupBlock, header)
+
+		w.blockcounter += 1
+		err := w.storage.Put(header)
+		w.synclock.Unlock()
+
+		if err != nil {
+			return err
+		}
+		return nil
 	}
 	return nil
 }

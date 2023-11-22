@@ -2,6 +2,7 @@ package types
 
 import (
 	"encoding/json"
+	"sync"
 
 	"fmt"
 
@@ -14,6 +15,7 @@ type HeaderStorage struct {
 	db        *leveldb.DB
 	heightmap map[uint64][][]byte
 	vdfmap    map[uint64][]byte
+	synclock  *sync.RWMutex
 }
 
 func NewHeaderStorage(id int64) *HeaderStorage {
@@ -24,7 +26,7 @@ func NewHeaderStorage(id int64) *HeaderStorage {
 		panic(err)
 	}
 
-	return &HeaderStorage{db: db, heightmap: make(map[uint64][][]byte), vdfmap: map[uint64][]byte{}}
+	return &HeaderStorage{db: db, heightmap: make(map[uint64][][]byte), vdfmap: map[uint64][]byte{}, synclock: new(sync.RWMutex)}
 }
 
 func (s *HeaderStorage) Put(header *Header) error {
@@ -37,6 +39,7 @@ func (s *HeaderStorage) Put(header *Header) error {
 	hash := header.Hash()
 	err = s.db.Put(hash, b, nil)
 	if err != nil {
+		fmt.Println(err)
 		return err
 	}
 	err = s.putHeightHash(header.Height, hash)
@@ -75,7 +78,7 @@ func (s *HeaderStorage) GetbyHeight(height uint64) ([]*Header, error) {
 	}
 	values, exists := s.getHeightHash(height)
 	if exists == leveldb.ErrNotFound {
-		return nil, fmt.Errorf("not have block for height %d", height)
+		return nil, fmt.Errorf("[Headerstorage]\tnot have block for height %d", height)
 	} else if exists != nil {
 		return nil, exists
 	}
@@ -91,7 +94,9 @@ func (s *HeaderStorage) GetbyHeight(height uint64) ([]*Header, error) {
 		if err != nil {
 			return nil, err
 		}
-		headers = append(headers, ToHeader(block))
+
+		header := ToHeader(block)
+		headers = append(headers, header)
 	}
 	return headers, nil
 }
@@ -133,7 +138,9 @@ func (s *HeaderStorage) putHeightHash(height uint64, hash []byte) error {
 func (s *HeaderStorage) SetVdfRes(epoch uint64, vdfres []byte) error {
 	key := []byte(fmt.Sprintf("epoch:%d", epoch))
 	err := s.db.Put(key, vdfres, nil)
+	s.synclock.Lock()
 	s.vdfmap[epoch] = vdfres
+	defer s.synclock.Unlock()
 	return err
 }
 
@@ -144,10 +151,12 @@ func (s *HeaderStorage) GetPoTbyEpoch(epoch uint64) ([]byte, error) {
 	//	return nil, err
 	//}
 	//return value, nil
+	s.synclock.RLock()
 	v := s.vdfmap[epoch]
+	defer s.synclock.RUnlock()
 	if v != nil {
 		return v, nil
 	} else {
-		return nil, fmt.Errorf("didn't get height %d VDF result", epoch)
+		return nil, fmt.Errorf("[Headerstorage]\tdidn't get height %d VDF result", epoch)
 	}
 }
