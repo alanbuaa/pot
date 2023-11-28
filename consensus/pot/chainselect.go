@@ -3,6 +3,7 @@ package pot
 import (
 	"bytes"
 	"fmt"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/syndtr/goleveldb/leveldb"
 	"math/big"
 
@@ -68,7 +69,7 @@ func (w *Worker) GetSharedAncestor(block *types.Header) (*types.Header, error) {
 				if err != nil {
 					return nil, err
 				}
-			} else {
+			} else if err != nil {
 				return nil, err
 			}
 
@@ -85,7 +86,7 @@ func (w *Worker) GetSharedAncestor(block *types.Header) (*types.Header, error) {
 			if err != nil {
 				return nil, err
 			}
-		} else {
+		} else if err != nil {
 			return nil, err
 		}
 		return w.GetSharedAncestor(headerahead)
@@ -112,7 +113,7 @@ func (w *Worker) GetSharedAncestor(block *types.Header) (*types.Header, error) {
 				if err != nil {
 					return nil, err
 				}
-			} else {
+			} else if err != nil {
 				return nil, err
 			}
 			if bytes.Equal(current.Hashes, header.Hashes) {
@@ -129,45 +130,66 @@ func (w *Worker) GetBranch(root, leaf *types.Header) ([]*types.Header, [][]*type
 		return nil, nil, fmt.Errorf("branch is nil")
 	}
 
-	rootheight := root.Height
-	leaftheight := leaf.Height
+	//rootheight := root.Height
+	//leaftheight := leaf.Height
 
-	depth := leaftheight - rootheight
-	mainbranch := make([]*types.Header, depth)
-	ommerbranch := make([][]*types.Header, depth)
+	//depth := leaftheight - rootheight
+	mainbranch := make([]*types.Header, 1)
+	ommerbranch := make([][]*types.Header, 1)
 
-	h := depth - 1
-	mainbranch[h] = leaf
-	ommerbranch[h] = make([]*types.Header, 0)
+	//h := depth - 1
+	mainbranch[0] = leaf
+	ommerbranch[0] = make([]*types.Header, 0)
 	//var err error
 
 	for i := leaf; !bytes.Equal(i.ParentHash, root.Hashes); {
-
+		//h -= 1
 		parentBlock, err := w.getParentBlock(i)
 		if err != nil {
 			return nil, nil, err
 		}
-		mainbranch[h] = parentBlock
+		mainbranch = append(mainbranch, parentBlock)
 		//ommerblock := make([]*types.Header, 0)
 		for k := 0; k < len(i.UncleHash); k++ {
 			ommer, err := w.getUncleBlock(i)
 			if err != nil {
 				return nil, nil, err
 			}
-			ommerbranch[h] = ommer
+			ommerbranch = append(ommerbranch, ommer)
 		}
 		i = parentBlock
-		h -= 1
+	}
+	n := len(mainbranch) / 2
+	for i := 0; i < len(mainbranch)/2; i++ {
+		mainbranch[i], mainbranch[n-i-1] = mainbranch[n-i-1], mainbranch[i]
+		ommerbranch[i], ommerbranch[n-i-1] = ommerbranch[n-i-1], ommerbranch[i]
 	}
 	return mainbranch, ommerbranch, nil
 }
 
 func (w *Worker) chainreset(branch []*types.Header) error {
+	epoch := w.getEpoch()
 
-	for i := 0; i < len(branch)-1; i++ {
+	branchlen := len(branch)
+	branchstr := ""
+	for i := 0; i < branchlen; i++ {
+
 		height := branch[i].Height
-		w.chainreader.SetHeight(height, branch[i])
+		if height != epoch {
+			w.chainreader.SetHeight(height, branch[i])
+			branchstr = branchstr + "\t" + hexutil.Encode(branch[i].Hash())
+		}
 	}
-	
+	w.log.Infof("[PoT]\tthe chain has been reset by branch %s", branchstr)
+	if w.isMinerWorking() {
+		abort := w.abort
+		if abort != nil {
+			close(abort)
+			w.wg.Wait()
+			w.log.Infof("[PoT]\tthe work got abort for chain reset")
+		} else {
+			w.log.Warnf("[PoT]\twithout worker working")
+		}
+	}
 	return nil
 }

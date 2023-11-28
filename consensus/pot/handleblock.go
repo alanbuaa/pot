@@ -3,6 +3,7 @@ package pot
 import (
 	"bytes"
 	"encoding/hex"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/zzz136454872/upgradeable-consensus/crypto"
 	"github.com/zzz136454872/upgradeable-consensus/pb"
@@ -38,8 +39,13 @@ func (w *Worker) handleBlock() {
 					if err != nil {
 						w.log.Errorf("[PoT]\tbroadcast header error:%s", err)
 					}
+
 				} else {
 					w.log.Infof("[PoT]\tepoch %d:Receive block from node %d, Difficulty %d, with parent %s", epoch, header.Address, header.Difficulty.Int64(), hex.EncodeToString(header.ParentHash))
+					if header.Difficulty.Cmp(common.Big0) == 0 {
+						w.storage.Put(header)
+						continue
+					}
 					// header check
 					//vdfin := crypto.Hash(w.getVDF0lastepoch(epoch))
 
@@ -82,12 +88,18 @@ func (w *Worker) handleCurrentBlock(block *types.Header) error {
 	_, _ = w.checkHeader(header)
 	if !w.chainreader.IsBehindCurrent(block) {
 		if block.ParentHash != nil {
-			w.log.Errorf("find a fork at block with parents %s,current parent %s", hexutil.Encode(block.ParentHash), hexutil.Encode(w.chainreader.GetCurrentBlock().Hashes))
-			b, err := w.chainreader.GetSharedAncestor(block)
+			w.log.Errorf("find a fork at epoch %d block with parents %s,current epoch %d parent %s", block.Height, hexutil.Encode(block.ParentHash), w.chainreader.GetCurrentHeight(), hexutil.Encode(w.chainreader.GetCurrentBlock().Hashes))
+			b, err := w.GetSharedAncestor(block)
 			if err != nil {
 				w.log.Error(err)
 				return err
 			}
+			c, err := w.chainreader.GetByHeight(b.Height)
+			if err != nil {
+				w.log.Error(err)
+				return err
+			}
+			w.log.Errorf("the shared ancestor of fork is %s at %d,match %t", hexutil.Encode(b.Hashes), b.Height, bytes.Equal(c.Hashes, b.Hashes))
 			nowbranch, _, err := w.GetBranch(b, w.chainreader.GetCurrentBlock())
 			forkbranch, _, err := w.GetBranch(b, block)
 			if err != nil {
@@ -101,15 +113,22 @@ func (w *Worker) handleCurrentBlock(block *types.Header) error {
 				w.log.Errorf("the fork chain at height %d: %s", forkbranch[i].Height, hexutil.Encode(forkbranch[i].Hashes))
 			}
 
-			c, err := w.chainreader.GetByHeight(b.Height)
-			if err != nil {
-				w.log.Error(err)
-				return err
-			}
 			w1 := w.calculateChainWeight(b, w.chainreader.GetCurrentBlock())
 			w2 := w.calculateChainWeight(b, block)
 			w.log.Errorf("the chain weight %d, the fork chain weight %d", w1.Int64(), w2.Int64())
-			w.log.Errorf("the shared ancestor of fork is %s at %d,match %s", hexutil.Encode(b.Hashes), b.Height, bytes.Equal(c.Hashes, b.Hashes))
+			if w1.Int64() < w2.Int64() {
+				err := w.chainreset(forkbranch)
+				if err != nil {
+					w.log.Errorf("chain reset error for %s", err)
+				}
+			}
+			w.synclock.Lock()
+			//w.backupBlock = append(w.backupBlock, header)
+
+			w.blockcounter += 1
+			_ = w.storage.Put(header)
+			w.synclock.Unlock()
+
 		}
 	} else {
 		w.synclock.Lock()

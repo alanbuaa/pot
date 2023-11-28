@@ -40,12 +40,12 @@ func NewBaseP2p(log *logrus.Entry, id int64) (*BaseP2p, string, error) {
 		output:                 nil,
 		rpcServer:              rpcServer,
 		UnimplementedP2PServer: pb.UnimplementedP2PServer{},
-		peerid:                 cfg.Nodes[id].RpcAddress,
+		peerid:                 cfg.Nodes[id].Address,
 	}
 	pb.RegisterP2PServer(rpcServer, bp)
 	log.Infof("[UpgradeableConsensus] Server start at %s", listen.Addr().String())
 	go rpcServer.Serve(listen)
-	nid := cfg.Nodes[id].RpcAddress
+	nid := cfg.Nodes[id].Address
 	return bp, nid, nil
 }
 
@@ -61,7 +61,7 @@ func (bp *BaseP2p) UnSubscribe(topic []byte) error {
 
 func (bp *BaseP2p) GetPeerID() string {
 	// do nothing
-	return bp.peerid
+	return bp.nodes[bp.id].Address
 }
 
 func (bp *BaseP2p) GetP2PType() string {

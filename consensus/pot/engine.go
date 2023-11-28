@@ -128,13 +128,13 @@ func (e *PoTEngine) Broadcast(msgByte []byte) error {
 func (e *PoTEngine) Unicast(address string, msgByte []byte) error {
 	packet := &pb.Packet{
 		Msg:         msgByte,
-		ConsensusID: e.id,
+		ConsensusID: e.consensusID,
 		Epoch:       e.Height,
 		Type:        pb.PacketType_P2PPACKET,
 	}
 	bytePacket, err := proto.Marshal(packet)
 	utils.PanicOnError(err)
-	return e.Adaptor.Unicast(address, bytePacket, e.id, []byte("this-is-consensus-topic"))
+	return e.Adaptor.Unicast(address, bytePacket, e.consensusID, []byte("this-is-consensus-topic"))
 }
 
 func (e *PoTEngine) GetHeaderStorage() *types.HeaderStorage {

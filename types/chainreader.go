@@ -3,16 +3,19 @@ package types
 import (
 	"bytes"
 	"fmt"
+	"github.com/syndtr/goleveldb/leveldb"
+	"sync"
 )
 
 /*
-ChainReader 用于获取有关当前PoT链的一系列状态
+ChainReader is used to store chain state for the pot chain
 */
 
 type ChainReader struct {
 	storage *HeaderStorage
 	chain   map[uint64]*Header
 	height  uint64
+	sync    *sync.RWMutex
 }
 
 func NewChainReader(storage *HeaderStorage) *ChainReader {
@@ -20,12 +23,15 @@ func NewChainReader(storage *HeaderStorage) *ChainReader {
 		storage: storage,
 		chain:   make(map[uint64]*Header),
 		height:  0,
+		sync:    new(sync.RWMutex),
 	}
 	c.chain[0] = DefaultGenesisHeader()
 	return c
 }
 
 func (c *ChainReader) SetHeight(height uint64, block *Header) {
+	c.sync.Lock()
+	defer c.sync.Unlock()
 	c.chain[height] = block
 	if height > c.height {
 		c.height = height
@@ -33,6 +39,8 @@ func (c *ChainReader) SetHeight(height uint64, block *Header) {
 }
 
 func (c *ChainReader) GetByHeight(height uint64) (*Header, error) {
+	c.sync.RLock()
+	defer c.sync.RUnlock()
 	if height > c.height {
 		return nil, fmt.Errorf("the height %d haven't set yet", height)
 	}
@@ -90,7 +98,7 @@ func (c *ChainReader) GetSharedAncestor(block *Header) (*Header, error) {
 				return nil, err
 			}
 			header, err := c.storage.Get(header.ParentHash)
-			if err != nil {
+			if err == leveldb.ErrNotFound {
 				return nil, err
 			}
 			if bytes.Equal(current.Hashes, header.Hashes) {

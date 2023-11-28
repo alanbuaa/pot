@@ -2,6 +2,7 @@ package pot
 
 import (
 	"fmt"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/zzz136454872/upgradeable-consensus/pb"
 	"github.com/zzz136454872/upgradeable-consensus/types"
 	"google.golang.org/protobuf/proto"
@@ -17,10 +18,11 @@ func (w *Worker) request(request *pb.HeaderRequest) (*pb.HeaderResponse, error) 
 		MsgType: pb.MessageType_Header_Request,
 		MsgByte: requestbyte,
 	}
-	msgbyte, err := proto.Marshal(potmsg)
+	potmsgbyte, err := proto.Marshal(potmsg)
 	if err != nil {
 		return nil, err
 	}
+
 	for {
 		if w.headerResponsech == nil {
 			ch := make(chan *pb.HeaderResponse, 10)
@@ -30,7 +32,8 @@ func (w *Worker) request(request *pb.HeaderRequest) (*pb.HeaderResponse, error) 
 		time.Sleep(1 * time.Second)
 	}
 
-	err = w.Engine.Unicast(request.Des, msgbyte)
+	err = w.Engine.Unicast(request.Des, potmsgbyte)
+
 	if err != nil {
 		return nil, err
 	}
@@ -43,10 +46,11 @@ func (w *Worker) request(request *pb.HeaderRequest) (*pb.HeaderResponse, error) 
 			return nil, fmt.Errorf("receive response from wrong address")
 		}
 		res = response
+		w.log.Infof("[PoT]\treceive for header %s from %s", hexutil.Encode(request.GetHashes()), request.GetDes())
 	case <-timer.C:
 		close(w.headerResponsech)
 		w.headerResponsech = nil
-		return nil, fmt.Errorf("request for header %s from %s timeout", request.GetHashes(), request.GetDes())
+		return nil, fmt.Errorf("request for header %s from %s timeout", hexutil.Encode(request.GetHashes()), request.GetDes())
 	}
 
 	close(w.headerResponsech)
@@ -140,10 +144,13 @@ func (w *Worker) potRequest(request *pb.PoTRequest) (*pb.PoTResponse, error) {
 	// return nil, nil
 }
 func (w *Worker) getParentBlock(header *types.Header) (*types.Header, error) {
+	if header == nil {
+		return nil, fmt.Errorf("could not get parent from a nil block")
+	}
 	parenthash := header.ParentHash
 
 	if parenthash == nil {
-		return nil, nil
+		return nil, fmt.Errorf("the block %s without parent", hexutil.Encode(header.Hashes))
 	}
 	parent, err := w.storage.Get(parenthash)
 
@@ -162,9 +169,12 @@ func (w *Worker) getParentBlock(header *types.Header) (*types.Header, error) {
 		if err != nil {
 			return nil, err
 		}
+
 		pbparent := headerResponse.GetHeader()
 		parent = types.ToHeader(pbparent)
+
 		flag, err := w.checkHeader(parent)
+
 		if flag {
 			w.storage.Put(parent)
 			return parent, nil

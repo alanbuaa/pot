@@ -151,8 +151,10 @@ func (w *Worker) OnGetVdf0Response() {
 			w.increaseEpoch()
 
 			if w.isMinerWorking() {
-				close(w.abort)
-				w.wg.Wait()
+				if w.abort != nil {
+					close(w.abort)
+					w.wg.Wait()
+				}
 			}
 
 			// the last epoch is over
@@ -162,7 +164,6 @@ func (w *Worker) OnGetVdf0Response() {
 
 			// calculate the next epoch vdf
 			inputhash := crypto.Hash(res0)
-			//w.log.Errorf("[PoT]\tepoch %d VDF result is %s", epoch, hex.EncodeToString(inputhash))
 
 			err := w.vdf0.SetInput(inputhash, Vdf0Iteration)
 			if err != nil {
@@ -181,9 +182,7 @@ func (w *Worker) OnGetVdf0Response() {
 			}()
 
 			backupblock, err := w.storage.GetbyHeight(epoch)
-			if len(backupblock) == 0 {
 
-			}
 			w.log.Infof("[PoT]\tepoch %d:epoch %d block num %d", epoch+1, epoch, len(backupblock))
 
 			if err != nil {
@@ -194,8 +193,12 @@ func (w *Worker) OnGetVdf0Response() {
 			if parentblock != nil {
 				w.log.Errorf("[PoT]\tepoch %d parent block hash is : %s Difficulty %d from %d", epoch+1, hex.EncodeToString(parentblock.Hash()), parentblock.Difficulty.Int64(), parentblock.Address)
 			} else {
-				w.log.Errorf("[PoT]\tepoch %d parent block hash is nil", epoch+1)
 
+				if len(backupblock) != 0 {
+					w.chainreader.SetHeight(epoch, backupblock[0])
+					parentblock = backupblock[0]
+					w.log.Errorf("[PoT]\tepoch %d parent block hash is nil,set nil block %s as parent", epoch+1, hex.EncodeToString(parentblock.Hashes))
+				}
 			}
 			if epoch > 1 {
 				w.simpleLeaderUpdate(parentblock)
@@ -241,8 +244,9 @@ func (w *Worker) mine(vdf0res []byte, nonce int64, workerid int, abort chan stru
 			if tmp.Cmp(target) >= 0 {
 
 				block := w.createnilBlock(epoch, parentblock, uncleblock, difficulty, mixdigest, nonce, vdf0res, res1)
-				w.log.Infof("[PoT]\tfail to find a block, create a nil block %s", hexutil.Encode(block.Hash()))
+				w.log.Infof("[PoT]\tepoch %d:fail to find a %d block, create a nil block %s", epoch, difficulty.Int64(), hexutil.Encode(block.Hash()))
 				w.storage.Put(block)
+				w.peerMsgQueue <- block
 				return block
 			}
 			// w.createBlock
@@ -321,6 +325,7 @@ func (w *Worker) SetVdf0res(epocch uint64, vdf0 []byte) {
 	w.synclock.Lock()
 	defer w.synclock.Unlock()
 	w.storage.SetVdfRes(epocch, vdf0)
+
 }
 
 func (w *Worker) GetVdf0byEpoch(epoch uint64) ([]byte, error) {

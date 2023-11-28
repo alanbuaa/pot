@@ -20,6 +20,7 @@ type HeaderStorage struct {
 
 func NewHeaderStorage(id int64) *HeaderStorage {
 	sint := fmt.Sprintf("%d", id)
+
 	db, err := leveldb.OpenFile("dbfile/node0-"+sint, nil)
 	if err != nil {
 		fmt.Println("output:", err)

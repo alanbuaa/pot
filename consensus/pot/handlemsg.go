@@ -104,6 +104,7 @@ func (e *PoTEngine) handlePoTMsg(message *pb.PoTMessage) error {
 		if err != nil {
 			return err
 		}
+		//e.log.Infof("[Engine]\treceive header request from %s ", request.Src)
 		hashes := request.GetHashes()
 		st := e.GetHeaderStorage()
 		header, err := st.Get(hashes)
@@ -149,9 +150,11 @@ func (e *PoTEngine) handlePoTMsg(message *pb.PoTMessage) error {
 		}
 	case pb.MessageType_Header_Response:
 		// TODO: choose channel to put the response
+
 		bytes := message.GetMsgByte()
 		response := new(pb.HeaderResponse)
 		err := proto.Unmarshal(bytes, response)
+		//e.log.Infof("[Engine]\treceive header response from %s ", response.Src)
 		if err != nil {
 			return err
 		}
@@ -166,6 +169,7 @@ func (e *PoTEngine) handlePoTMsg(message *pb.PoTMessage) error {
 		if err != nil {
 			return err
 		}
+		e.log.Infof("[Engine]\treceive pot request from %s ", request.Src)
 		epoch := request.GetEpoch()
 		proof, err := e.headerStorage.GetPoTbyEpoch(epoch)
 		if err != nil {
@@ -202,6 +206,7 @@ func (e *PoTEngine) handlePoTMsg(message *pb.PoTMessage) error {
 		if err != nil {
 			return err
 		}
+		e.log.Infof("[Engine]\treceive pot response from %s ", response.Src)
 		err = e.worker.handlePoTResponse(response)
 		if err != nil {
 			return err
