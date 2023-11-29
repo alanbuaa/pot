@@ -178,8 +178,13 @@ func (w *Worker) chainreset(branch []*types.Header) error {
 		if height != epoch {
 			w.chainreader.SetHeight(height, branch[i])
 			branchstr = branchstr + "\t" + hexutil.Encode(branch[i].Hash())
+		} else {
+			if i+1 != branchlen {
+				w.chainreader.SetHeight(height, branch[i])
+			}
 		}
 	}
+
 	w.log.Infof("[PoT]\tthe chain has been reset by branch %s", branchstr)
 	if w.isMinerWorking() {
 		abort := w.abort
