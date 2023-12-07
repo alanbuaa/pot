@@ -3,11 +3,11 @@ package pot
 import (
 	"bytes"
 	"fmt"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/syndtr/goleveldb/leveldb"
-	"math/big"
-
 	"github.com/zzz136454872/upgradeable-consensus/types"
+	"math/big"
+	"strconv"
+	time2 "time"
 )
 
 func (w *Worker) calculateChainWeight(root, leaf *types.Header) *big.Int {
@@ -63,13 +63,8 @@ func (w *Worker) GetSharedAncestor(block *types.Header) (*types.Header, error) {
 				return nil, err
 			}
 
-			header, err := w.storage.Get(header.ParentHash)
-			if err == leveldb.ErrNotFound {
-				header, err = w.getParentBlock(header)
-				if err != nil {
-					return nil, err
-				}
-			} else if err != nil {
+			header, err := w.getParentBlock(header)
+			if err != nil {
 				return nil, err
 			}
 
@@ -80,16 +75,47 @@ func (w *Worker) GetSharedAncestor(block *types.Header) (*types.Header, error) {
 	}
 
 	if header.Height > currentheight {
-		headerahead, err := w.storage.Get(header.ParentHash)
-		if err == leveldb.ErrNotFound {
-			headerahead, err = w.getParentBlock(header)
+		//headerahead, err := w.storage.Get(header.ParentHash)
+		//if err == leveldb.ErrNotFound {
+		//	headerahead, err = w.getParentBlock(header)
+		//	if err != nil {
+		//		return nil, err
+		//	}
+		//} else if err != nil {
+		//	return nil, err
+		//}
+		//return w.GetSharedAncestor(headerahead)
+		for true {
+			headerahead, err := w.getParentBlock(header)
 			if err != nil {
 				return nil, err
 			}
-		} else if err != nil {
-			return nil, err
+
+			if headerahead.Height == currentheight {
+				if bytes.Equal(current.Hashes, headerahead.Hashes) {
+					return current, nil
+				}
+
+				for {
+					current, err := w.chainreader.GetByHeight(current.Height - 1)
+					if err != nil {
+						return nil, err
+					}
+
+					headerahead, err = w.getParentBlock(headerahead)
+					if err != nil {
+						return nil, err
+					}
+
+					if bytes.Equal(current.Hashes, headerahead.Hashes) {
+						return current, nil
+					}
+				}
+			} else {
+				header = headerahead
+			}
+
 		}
-		return w.GetSharedAncestor(headerahead)
 	}
 
 	if header.Height < currentheight {
@@ -159,12 +185,25 @@ func (w *Worker) GetBranch(root, leaf *types.Header) ([]*types.Header, [][]*type
 		}
 		i = parentBlock
 	}
-	n := len(mainbranch) / 2
-	for i := 0; i < len(mainbranch)/2; i++ {
-		mainbranch[i], mainbranch[n-i-1] = mainbranch[n-i-1], mainbranch[i]
-		ommerbranch[i], ommerbranch[n-i-1] = ommerbranch[n-i-1], ommerbranch[i]
-	}
+
 	return mainbranch, ommerbranch, nil
+}
+
+func (w *Worker) chainResetAdvanced(branch []*types.Header) error {
+	epoch := w.getEpoch()
+	branchlen := len(branch)
+	branchstr := ""
+
+	for i := branchlen - 1; i > 0; i-- {
+
+		height := branch[i].Height
+
+		w.chainreader.SetHeight(height, branch[i])
+		branchstr = branchstr + "\t" + strconv.Itoa(int(height))
+	}
+	w.log.Infof("[PoT]\tepoch %d: the chain has been reset by branch %s", epoch, branchstr)
+
+	return nil
 }
 
 func (w *Worker) chainreset(branch []*types.Header) error {
@@ -172,29 +211,39 @@ func (w *Worker) chainreset(branch []*types.Header) error {
 
 	branchlen := len(branch)
 	branchstr := ""
-	for i := 0; i < branchlen; i++ {
+	for i := branchlen - 1; i >= 0; i-- {
 
 		height := branch[i].Height
 		if height != epoch {
 			w.chainreader.SetHeight(height, branch[i])
-			branchstr = branchstr + "\t" + hexutil.Encode(branch[i].Hash())
-		} else {
-			if i+1 != branchlen {
-				w.chainreader.SetHeight(height, branch[i])
-			}
+			branchstr = branchstr + "\t" + strconv.Itoa(int(height))
 		}
 	}
 
-	w.log.Infof("[PoT]\tthe chain has been reset by branch %s", branchstr)
-	if w.isMinerWorking() {
-		abort := w.abort
-		if abort != nil {
-			close(abort)
-			w.wg.Wait()
-			w.log.Infof("[PoT]\tthe work got abort for chain reset")
-		} else {
-			w.log.Warnf("[PoT]\twithout worker working")
-		}
+	w.log.Infof("[PoT]\tepoch %d: the chain has been reset by branch %s", epoch, branchstr)
+	flag := w.isMinerWorking()
+	w.log.Infof("[PoT]\tflag: %t", flag)
+	time := time2.Now()
+	if flag {
+		close(w.abort)
+		w.wg.Wait()
+		w.log.Infof("[PoT]\tthe vdf1 work got abort for chain reset, need %d ms", time2.Since(time)/time2.Millisecond)
+		w.workflag = false
 	}
+
 	return nil
+}
+
+func (w *Worker) isBehindHeight(height uint64, block *types.Header) bool {
+	b, err := w.chainreader.GetByHeight(height)
+	if err != nil {
+		return false
+	}
+	if block.Height != b.Height+1 {
+		return false
+	}
+	if !bytes.Equal(block.ParentHash, b.Hashes) {
+		return false
+	}
+	return true
 }

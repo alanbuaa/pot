@@ -49,8 +49,8 @@ type WhirlyConfig struct {
 type PoTConfig struct {
 	Snum          int64  `yaml:"snum"`
 	SysPara       string `yaml:"sysPara"`
-	Vdf0Iteration int64  `yaml:"vdf0Iteration"`
-	vdf1Iteration int64  `yaml:"vdf1Iteration"`
+	Vdf0Iteration int    `yaml:"vdf0Iteration"`
+	Vdf1Iteration int    `yaml:"vdf1Iteration"`
 }
 type ConsensusConfig struct {
 	Type        string             `yaml:"type"`

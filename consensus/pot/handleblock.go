@@ -45,19 +45,6 @@ func (w *Worker) handleBlock() {
 						w.storage.Put(header)
 						continue
 					}
-					// header check
-					//vdfin := crypto.Hash(w.getVDF0lastepoch(epoch))
-
-					//vdfout := header.PoTProof[0]
-					//tsp := time.Now()
-					//if !w.vdfchecker.CheckVDF(vdfin, vdfout) {
-					//	w.log.Errorf("[PoT]\tthe header from %d is a bad header", header.Address)
-					//	continue
-					//} else {
-					//	w.log.Infof("[PoT]\tepoch %d:the header from %d pass check", epoch, header.Address)
-					//	w.log.Infof("[PoT]\tthe header check need %d ms", time.Since(tsp)/time.Millisecond)
-					//}
-					// pass check, add to back up header
 					go func() {
 						err := w.handleCurrentBlock(header)
 						if err != nil {
@@ -68,15 +55,8 @@ func (w *Worker) handleBlock() {
 				}
 			} else if header.Height > epoch {
 				// vdf check
-				w.log.Infof("[PoT]\tepoch %d: Receive a epoch %d block from node %d", epoch, header.Height, header.Address)
+				w.log.Infof("[PoT]\tepoch %d:Receive a epoch %d block %s from node %d", epoch, header.Height, hexutil.Encode(header.Hashes), header.Address)
 				go w.handleAdvancedBlock(epoch, header)
-
-				//w.vdf0.Abort()
-
-				// catch up
-
-				// header check
-
 			}
 		}
 	}
@@ -84,10 +64,10 @@ func (w *Worker) handleBlock() {
 
 func (w *Worker) handleCurrentBlock(block *types.Header) error {
 	header := block
-	_, _ = w.checkHeader(header)
-	if !w.chainreader.IsBehindCurrent(block) {
+	//_, _ = w.checkHeader(header)
+	if !w.isBehindHeight(block.Height-1, block) {
 		if block.ParentHash != nil {
-			w.log.Errorf("[PoT]\tfind a fork at epoch %d block with parents %s,current epoch %d parent %s", block.Height, hexutil.Encode(block.ParentHash), w.chainreader.GetCurrentHeight(), hexutil.Encode(w.chainreader.GetCurrentBlock().Hashes))
+			w.log.Errorf("[PoT]\tfind fork at epoch %d block %s with parents %s,current epoch %d parent %s", block.Height, hexutil.Encode(block.Hashes), hexutil.Encode(block.ParentHash), w.chainreader.GetCurrentHeight(), hexutil.Encode(w.chainreader.GetCurrentBlock().Hashes))
 			b, err := w.GetSharedAncestor(block)
 			if err != nil {
 				w.log.Error(err)
@@ -147,147 +127,57 @@ func (w *Worker) handleCurrentBlock(block *types.Header) error {
 
 func (w *Worker) handleAdvancedBlock(epoch uint64, header *types.Header) {
 
-	// _ = w.handleAdvancedHeaderVDF(epoch, header)
-	if header.Height == epoch+1 {
-
-		//vdfres, err := w.GetVdf0byEpoch(epoch)
-		//if err != nil {
-		//	w.log.Error(err)
-		//}
-		//vdfin := crypto.Hash(vdfres)
-		//vdfout := header.PoTProof[0]
-		//times := time.Now()
-		//if w.vdfchecker.CheckVDF(vdfin, vdfout) {
-		//	w.log.Infof("[PoT]\tVDF check need %d ms", time.Since(times)/time.Millisecond)
-		//	w.storage.Put(header)
-		//	//epochnow := w.getEpoch()
-		//	err := w.setVDF0epoch(header.Height - 1)
-		//	if err != nil {
-		//		w.log.Warnf("[PoT]\tset vdf error for %s:", err)
-		//		return
-		//	}
-		//	w.log.Errorf("[PoT]\tAlready set VDF ,start from epoch %d", header.Height-1)
-		//	res := &types.VDF0res{
-		//		Res:   vdfout,
-		//		Epoch: header.Height - 1,
-		//	}
-		//	w.vdf0Chan <- res
-		//	return
-		//}
-		flag, err := w.checkAdvancedBlock(epoch, header)
-		if err != nil {
-			w.log.Errorf("[PoT]\t handle advanced block error for %s", err)
-
-		}
-		if flag {
-			w.log.Infof("[PoT]\tepoch %d: the epoch %d block %s is legal", epoch, header.Height, hexutil.Encode(header.Hashes))
-
-			err = w.storage.Put(header)
-			if err != nil {
-				w.log.Infof("[Storage]\tstorage error for %s", err)
-				return
-			}
-
-			err := w.setVDF0epoch(header.Height - 1)
-			if err != nil {
-				w.log.Warnf("[PoT]\tset vdf error for %s:", err)
-				return
-			}
-
-			w.log.Errorf("[PoT]\tAlready set VDF ,start from epoch %d", header.Height-1)
-			res := &types.VDF0res{
-				Res:   header.PoTProof[0],
-				Epoch: header.Height - 1,
-			}
-			w.vdf0Chan <- res
-
-			return
-		}
-	} else if header.Height > epoch+1 {
-		//w.log.Errorf("[PoT]\tepoch %d: Receive an epoch %d block from node %d", epoch, header.Height, header.Address)
-		////w.log.Warn("[PoT]\terror get too high block")
-		//
-		//if header.ParentHash == nil && header.Difficulty.Cmp(big.NewInt(NoParentD)) == 0 {
-		//	w.log.Infof("[PoT]\tthe block is a higher block with no parentblock")
-		//	w.storage.Put(header)
-		//	potres := header.PoTProof[0]
-		//	err := w.setVDF0epoch(header.Height - 1)
-		//	err = w.storage.SetVdfRes(header.Height, potres)
-		//	if err != nil {
-		//		w.log.Errorf("[PoT]\tset vdf error for %s:", err)
-		//		return
-		//	}
-		//	w.log.Errorf("[PoT]\tAlready set VDF ,start from epoch %d", header.Height-1)
-		//	res := &types.VDF0res{
-		//		Res:   potres,
-		//		Epoch: header.Height - 1,
-		//	}
-		//	w.vdf0Chan <- res
-		//	return
-		//} else {
-		//	parent, err := w.getParentBlock(header)
-		//	if err != nil {
-		//		w.log.Error("[PoT]\tGet block error for ", err)
-		//		return
-		//	}
-		//	if parent != nil {
-		//		w.log.Errorf("[PoT]\tGet header at height %d parent hash is %s", header.Height, hex.EncodeToString(parent.Hash()))
-		//		w.handleAdvancedBlock(epoch, parent)
-		//		w.storage.Put(header)
-		//		potres := header.PoTProof[0]
-		//		err := w.setVDF0epoch(header.Height - 1)
-		//		if err != nil {
-		//			w.log.Errorf("[PoT]\tset vdf error for %s:", err)
-		//			return
-		//		}
-		//
-		//		res := &types.VDF0res{
-		//			Res:   potres,
-		//			Epoch: header.Height - 1,
-		//		}
-		//		w.vdf0Chan <- res
-		//		w.log.Errorf("[PoT]\tAlready set VDF ,start from epoch %d", header.Height-1)
-		//		return
-		//	}
-		//}
-		ances, err := w.chainreader.GetSharedAncestor(header)
-		if err != nil {
-			return
-		}
-
-		branch, _, err := w.GetBranch(ances, header)
-		if err != nil {
-			w.log.Errorf("[PoT]\tGet branch error for: %s", err)
-			return
-		}
-
-		for i := 0; i < len(branch); i++ {
-			w.log.Errorf("the nowbranch at height %d: %s", branch[i].Height, hexutil.Encode(branch[i].Hashes))
-		}
-
-		err = w.chainreset(branch)
-		if err != nil {
-			w.log.Errorf("chain reset error for %s", err)
-		}
-
-		err = w.setVDF0epoch(header.Height - 1)
-		if err != nil {
-			w.log.Warnf("[PoT]\tset vdf error for %s:", err)
-			return
-		}
-
-		res := &types.VDF0res{
-			Res:   header.PoTProof[0],
-			Epoch: header.Height - 1,
-		}
-		w.vdf0Chan <- res
-
-		return
-
-	} else {
-		w.log.Errorf("[PoT]\terror to handle block")
+	ances, err := w.GetSharedAncestor(header)
+	if err != nil {
 		return
 	}
+
+	w.log.Infof("[PoT]\tGet shared ancestor of block %s is %s at height %d", hexutil.Encode(header.Hashes), hexutil.Encode(ances.Hashes), ances.Height)
+
+	branch, _, err := w.GetBranch(ances, header)
+
+	if err != nil {
+		w.log.Errorf("[PoT]\tGet branch error for: %s", err)
+		return
+	}
+
+	for i := 0; i < len(branch); i++ {
+		w.log.Errorf("[PoT]\tthe nowbranch at height %d: %s", branch[i].Height, hexutil.Encode(branch[i].Hashes))
+	}
+
+	err = w.chainResetAdvanced(branch)
+	if err != nil {
+		w.log.Errorf("[PoT]\tchain reset error for %s", err)
+	}
+	flag := w.vdf0.Finished
+	w.log.Infof("[PoT]\tMinew Work flag: %t", flag)
+
+	if flag {
+		close(w.abort)
+		w.wg.Wait()
+		w.workflag = false
+	}
+
+	//if !w.vdf0.IsFinished() {
+	//	err := w.vdf0.Abort()
+	//	if err != nil {
+	//		return
+	//	}
+	//	w.log.Infof("[PoT]\tepoch %d:VDF0 got abort for advanced chain reset ", epoch)
+	//}
+
+	err = w.setVDF0epoch(header.Height - 1)
+	if err != nil {
+		w.log.Warnf("[PoT]\tset vdf error for %s:", err)
+		return
+	}
+	res := &types.VDF0res{
+		Res:   header.PoTProof[0],
+		Epoch: header.Height - 1,
+	}
+	w.vdf0Chan <- res
+	w.log.Infof("[PoT]\tepoch %d:set vdf complete. Start from epoch %d", epoch, header.Height-1)
+	return
 }
 
 func (w *Worker) checkAdvancedBlock(epoch uint64, header *types.Header) (bool, error) {
