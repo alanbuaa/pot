@@ -47,9 +47,12 @@ func (w *Worker) request(request *pb.HeaderRequest) (*pb.HeaderResponse, error) 
 		}
 		res = response
 		w.log.Infof("[PoT]\treceive for header %s from %s", hexutil.Encode(request.GetHashes()), request.GetDes())
+		timer.Stop()
 	case <-timer.C:
+
 		close(w.headerResponsech)
 		w.headerResponsech = nil
+		timer.Stop()
 		return nil, fmt.Errorf("request for header %s from %s timeout", hexutil.Encode(request.GetHashes()), request.GetDes())
 	}
 
@@ -150,7 +153,7 @@ func (w *Worker) getParentBlock(header *types.Header) (*types.Header, error) {
 	parenthash := header.ParentHash
 
 	if parenthash == nil {
-		return nil, fmt.Errorf("the block %s without parent", hexutil.Encode(header.Hashes))
+		return nil, fmt.Errorf("the epcoh %d block %s from %d without parent", header.Height, hexutil.Encode(header.Hashes), header.Address)
 	}
 	parent, err := w.storage.Get(parenthash)
 

@@ -63,6 +63,10 @@ func (w *Worker) GetSharedAncestor(block *types.Header) (*types.Header, error) {
 				return nil, err
 			}
 
+			if header.Height == 0 {
+				return types.DefaultGenesisHeader(), nil
+			}
+
 			header, err := w.getParentBlock(header)
 			if err != nil {
 				return nil, err
@@ -102,14 +106,15 @@ func (w *Worker) GetSharedAncestor(block *types.Header) (*types.Header, error) {
 						return nil, err
 					}
 
-					headerahead, err = w.getParentBlock(headerahead)
+					headeraheadparent, err := w.getParentBlock(headerahead)
 					if err != nil {
 						return nil, err
 					}
 
-					if bytes.Equal(current.Hashes, headerahead.Hashes) {
+					if bytes.Equal(current.Hashes, headeraheadparent.Hashes) {
 						return current, nil
 					}
+					headerahead = headeraheadparent
 				}
 			} else {
 				header = headerahead
@@ -225,10 +230,10 @@ func (w *Worker) chainreset(branch []*types.Header) error {
 	w.log.Infof("[PoT]\tflag: %t", flag)
 	time := time2.Now()
 	if flag {
+		w.workflag = false
 		close(w.abort)
 		w.wg.Wait()
 		w.log.Infof("[PoT]\tthe vdf1 work got abort for chain reset, need %d ms", time2.Since(time)/time2.Millisecond)
-		w.workflag = false
 	}
 
 	return nil

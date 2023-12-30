@@ -68,7 +68,7 @@ func (wu *WhirlyUtilitiesImpl) Init(
 	wu.BlockStorage = types.NewBlockStorageImpl(strconv.Itoa(int(cid)) + "-" + strconv.Itoa(int(id)))
 
 	// Set receiver
-	p2pAdaptor.SetReceiver(wu.GetMsgByteEntrance())
+	//p2pAdaptor.SetReceiver(wu.GetMsgByteEntrance())
 	var consensusTopic = "this-is-consensus-topic"
 	// Subscribe topic
 	err := p2pAdaptor.Subscribe([]byte(consensusTopic))
@@ -271,7 +271,15 @@ func (wu *WhirlyUtilitiesImpl) Broadcast(msg *pb.WhirlyMsg) error {
 	// 	}
 	// }
 	// return nil
-	return wu.p2pAdaptor.Broadcast(msgByte, wu.ConsensusID, []byte("this-is-consensus-topic"))
+	packet := &pb.Packet{
+		Msg:         msgByte,
+		ConsensusID: wu.ConsensusID,
+		Epoch:       0,
+		Type:        pb.PacketType_P2PPACKET,
+	}
+	bytePacket, err := proto.Marshal(packet)
+	utils.PanicOnError(err)
+	return wu.p2pAdaptor.Broadcast(bytePacket, wu.ConsensusID, []byte("this-is-consensus-topic"))
 }
 
 func (wu *WhirlyUtilitiesImpl) Unicast(address string, msg *pb.WhirlyMsg) error {
@@ -281,7 +289,15 @@ func (wu *WhirlyUtilitiesImpl) Unicast(address string, msg *pb.WhirlyMsg) error 
 	}
 	msgByte, err := proto.Marshal(msg)
 	utils.PanicOnError(err)
-	return wu.p2pAdaptor.Unicast(address, msgByte, wu.ConsensusID, []byte("consensus"))
+	packet := &pb.Packet{
+		Msg:         msgByte,
+		ConsensusID: wu.ConsensusID,
+		Epoch:       0,
+		Type:        pb.PacketType_P2PPACKET,
+	}
+	bytePacket, err := proto.Marshal(packet)
+	utils.PanicOnError(err)
+	return wu.p2pAdaptor.Unicast(address, bytePacket, wu.ConsensusID, []byte("consensus"))
 }
 
 func (wu *WhirlyUtilitiesImpl) ProcessProposal(b *pb.WhirlyBlock, p []byte) {

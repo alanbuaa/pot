@@ -12,14 +12,14 @@ import (
 var logging *logrus.Logger
 
 func init() {
-	fcfg, err := config.NewConfig("config/config.yaml", 0)
+	fcfg, err := config.NewConfig("config/configpot.yaml", 0)
 	var cfg *config.LogConfig
 	if err == nil {
 		cfg = fcfg.Log
 	} else {
 		// for testing
 		cfg = &config.LogConfig{
-			Level:  "debug",
+			Level:  "info",
 			ToFile: false,
 		}
 	}

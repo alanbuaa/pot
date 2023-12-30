@@ -51,12 +51,12 @@ func (e *PoTEngine) handlePacket(packet *pb.Packet) {
 			}
 		}
 	} else if packet.Type == pb.PacketType_CLIENTPACKET {
-		msg := new(pb.Msg)
-		if err := proto.Unmarshal(packet.Msg, msg); err != nil {
+		request := new(pb.Request)
+		if err := proto.Unmarshal(packet.Msg, request); err != nil {
 			e.log.WithError(err).Warn("unmarshal msg failed")
 			return
 		}
-		request := msg.GetRequest()
+
 		if request == nil {
 			e.log.Warn("only request msg allowed in client packet")
 			return

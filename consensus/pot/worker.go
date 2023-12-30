@@ -147,28 +147,29 @@ func (w *Worker) OnGetVdf0Response() {
 		select {
 		//receive vdf0
 		case res := <-w.vdf0Chan:
-
 			epoch := w.getEpoch()
+			timer := time.Since(w.timestamp) / time.Millisecond
+			w.log.Errorf("[PoT]\tepoch %d:Receive epoch %d vdf0 res %s, use %d ms\n", epoch, res.Epoch, hexutil.Encode(crypto.Hash(res.Res)), timer)
 			if epoch > res.Epoch {
-
 				w.log.Errorf("[PoT]\tthe epoch already set")
 				continue
 			}
-			timer := time.Since(w.timestamp) / time.Millisecond
-			w.log.Errorf("[PoT]\tepoch %d:Receive epoch %d vdf0 res, use %d ms\n", epoch, res.Epoch, timer)
+
+			//w.log.Errorf("[PoT]\tepoch %d:Receive epoch %d vdf0 res, use %d ms\n", epoch, res.Epoch, timer)
 			w.increaseEpoch()
 
-			if epoch == 5 && w.ID == 3 {
-				time.Sleep(time.Second * 15)
-			}
-			if epoch == 7 && w.ID == 2 {
-				time.Sleep(time.Second * 20)
-			}
+			//if epoch == 5 && w.ID == 3 {
+			//	time.Sleep(time.Second * 15)
+			//}
+			//if epoch == 7 && w.ID == 2 {
+			//	time.Sleep(time.Second * 20)
+			//}
 
 			if w.isMinerWorking() {
 				close(w.abort)
-				//w.workflag = false
+				w.setWorkFlagFalse()
 				w.wg.Wait()
+				w.log.Infof("[PoT]\tepoch %d:the miner got abort for get in new epoch", epoch+1)
 			}
 
 			// the last epoch is over
@@ -179,9 +180,19 @@ func (w *Worker) OnGetVdf0Response() {
 			// calculate the next epoch vdf
 			inputhash := crypto.Hash(res0)
 
+			if !w.vdf0.Finished {
+				err := w.vdf0.Abort()
+				if err != nil {
+					w.log.Errorf("[PoT]\tepoch %d: vdf0 abort error for %s", epoch+1, err)
+				}
+				w.log.Warnf("[PoT]\tepoch %d:vdf0 got abort for new epoch ", epoch+1)
+			}
+
 			err := w.vdf0.SetInput(inputhash, w.config.PoT.Vdf0Iteration)
 			if err != nil {
-				return
+				w.log.Errorf("[PoT]\tepoch %d:set vdf0 error for %t", epoch+1, err)
+
+				continue
 			}
 			// TODO: handle vdf error
 
@@ -191,7 +202,7 @@ func (w *Worker) OnGetVdf0Response() {
 			go func() {
 				err = w.vdf0.Exec(epoch + 1)
 				if err != nil {
-
+					w.log.Infof("")
 				}
 			}()
 
@@ -201,6 +212,7 @@ func (w *Worker) OnGetVdf0Response() {
 
 			if err != nil {
 				w.log.Warn("[PoT]\tget backup block error :", err)
+				continue
 			}
 
 			parentblock, uncleblock := w.blockSelection(backupblock, res0, epoch)
@@ -213,6 +225,7 @@ func (w *Worker) OnGetVdf0Response() {
 					w.log.Errorf("[PoT]\tepoch %d:parent block hash is nil,set nil block %s as parent", epoch+1, hex.EncodeToString(parentblock.Hashes))
 				}
 			}
+
 			if epoch > 1 {
 				w.simpleLeaderUpdate(parentblock)
 			}

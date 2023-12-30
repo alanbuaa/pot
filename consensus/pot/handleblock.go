@@ -48,7 +48,7 @@ func (w *Worker) handleBlock() {
 					go func() {
 						err := w.handleCurrentBlock(header)
 						if err != nil {
-							w.log.Errorf("[PoT]\t%s", err)
+							w.log.Errorf("[PoT]\tepoch %d:handle current block err for %s", epoch, err)
 						}
 					}()
 
@@ -131,6 +131,12 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, header *types.Header) {
 	if err != nil {
 		return
 	}
+	w.synclock.Lock()
+	//w.backupBlock = append(w.backupBlock, header)
+
+	w.blockcounter += 1
+	err = w.storage.Put(header)
+	w.synclock.Unlock()
 
 	w.log.Infof("[PoT]\tGet shared ancestor of block %s is %s at height %d", hexutil.Encode(header.Hashes), hexutil.Encode(ances.Hashes), ances.Height)
 
@@ -152,10 +158,10 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, header *types.Header) {
 	flag := w.vdf0.Finished
 	w.log.Infof("[PoT]\tMinew Work flag: %t", flag)
 
-	if flag {
+	if w.isMinerWorking() {
+		w.workflag = false
 		close(w.abort)
 		w.wg.Wait()
-		w.workflag = false
 	}
 
 	//if !w.vdf0.IsFinished() {
@@ -176,7 +182,7 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, header *types.Header) {
 		Epoch: header.Height - 1,
 	}
 	w.vdf0Chan <- res
-	w.log.Infof("[PoT]\tepoch %d:set vdf complete. Start from epoch %d", epoch, header.Height-1)
+	w.log.Infof("[PoT]\tepoch %d:set vdf complete. Start from epoch %d with res %s", epoch, header.Height-1, hexutil.Encode(crypto.Hash(res.Res)))
 	return
 }
 
