@@ -1,3 +1,4 @@
+// Package types defines the important functions needed by pot consensus
 package types
 
 import (
@@ -6,7 +7,6 @@ import (
 	"github.com/zzz136454872/upgradeable-consensus/types/vdf/wesolowski_rust"
 )
 
-// this file defines the important functions needed by pot consensus
 type VDF0res struct {
 	Res   []byte
 	Epoch uint64
@@ -25,17 +25,17 @@ func NewVDF(outch chan *VDF0res, iteration int, id int64) *VDF {
 
 func (v *VDF) Exec(epoch uint64) error {
 	v.Finished = false
-	res, err := v.Vdf.Execute()
-	vdfres := &VDF0res{
+	res := v.Vdf.Execute()
+	vdfRes := &VDF0res{
 		Res:   res,
 		Epoch: epoch,
 	}
-	if err != nil {
-		return err
-	} else {
-		v.OutputChan <- vdfres
+	if res != nil {
+		v.OutputChan <- vdfRes
 		v.Finished = true
 		return nil
+	} else {
+		return errors.New("Exec vdf0 failed\n")
 	}
 }
 

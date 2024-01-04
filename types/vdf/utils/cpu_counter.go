@@ -5,52 +5,55 @@ import (
 )
 
 type CPUCounter struct {
-	mu          sync.Mutex
-	IdleCPUList []uint8
-	MaxCPUNum   uint8
+	cond        *sync.Cond
+	idleCpuList []uint8
+	cpuSet      Set
 }
 
 type Controller struct {
-	Pid        int
-	CPU        uint8
-	Abort      bool
-	Allocated  bool
-	CpuCounter *CPUCounter
+	Pid         int
+	CpuNo       uint8
+	IsAbort     bool
+	IsAllocated bool
+	CpuCounter  *CPUCounter
 }
 
 func NewCPUCounter(cpuList []uint8) (c *CPUCounter) {
+	// 创建一个新的切片，拷贝 cpuList 中的元素到新的切片中
+	idleCpuList := make([]uint8, len(cpuList))
+	copy(idleCpuList, cpuList)
 	return &CPUCounter{
-		mu:          sync.Mutex{},
-		IdleCPUList: cpuList,
-		MaxCPUNum:   uint8(len(cpuList)),
+		cond:        sync.NewCond(&sync.Mutex{}),
+		idleCpuList: cpuList,
+		cpuSet:      NewSet(cpuList),
 	}
 }
 
 func (c *CPUCounter) Occupy(ctrl *Controller) {
+
 	for {
-		if ctrl.Abort {
+		if ctrl.IsAbort {
 			break
 		}
-		c.mu.Lock()
-		// 从空闲队列中获取
-		if len(c.IdleCPUList) > 0 {
-			ctrl.CPU = c.IdleCPUList[0]
-			c.IdleCPUList = c.IdleCPUList[1:]
-			ctrl.Allocated = true
+		c.cond.L.Lock()
+		if len(c.idleCpuList) == 0 {
+			c.cond.Wait()
 		}
-		c.mu.Unlock()
-		if ctrl.Allocated {
+		ctrl.CpuNo = c.idleCpuList[0]
+		c.idleCpuList = c.idleCpuList[1:]
+		ctrl.IsAllocated = true
+		c.cond.L.Unlock()
+		if ctrl.IsAllocated {
 			break
 		}
 	}
 }
 
 func (c *CPUCounter) Release(ctrl *Controller) {
-	c.mu.Lock()
-	// 添加到空闲队列
-	if ctrl.CPU < c.MaxCPUNum {
-		c.IdleCPUList = append(c.IdleCPUList, ctrl.CPU)
+	c.cond.L.Lock()
+	if c.cpuSet.Contains(ctrl.CpuNo) {
+		c.idleCpuList = append(c.idleCpuList, ctrl.CpuNo)
 	}
-	//ctrl.Allocated = false
-	c.mu.Unlock()
+	c.cond.Signal()
+	c.cond.L.Unlock()
 }
