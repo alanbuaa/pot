@@ -29,46 +29,46 @@ var bigD = new(big.Int).Sub(big.NewInt(0).Exp(big.NewInt(2), big.NewInt(256), ni
 const (
 	Vdf0Iteration = 100000
 	vdf1Iteration = 60000
-	cpucounter    = 1
+	cpuCounter    = 1
 	NoParentD     = 2
 )
 
 type Worker struct {
-	//basic info
+	// basic info
 	ID     int64
-	Peerid string
+	PeerId string
 	log    *logrus.Entry
 	config *config.ConsensusConfig
 	epoch  uint64
 
-	//vdf work
+	// vdf work
 	timestamp  time.Time
 	vdf0       *types.VDF
 	vdf0Chan   chan *types.VDF0res
 	vdf1       []*types.VDF
 	vdf1Chan   chan *types.VDF0res
-	vdfchecker *vdf.Vdf
+	vdfChecker *vdf.Vdf
 	abort      chan struct{}
 	wg         *sync.WaitGroup
-	workflag   bool
-	//rand seed
+	workFlag   bool
+	// rand seed
 	rand         *rand.Rand
-	blockcounter int
+	blockCounter int
 
-	Engine   *PoTEngine
-	stopCh   chan struct{}
-	synclock sync.Mutex
-	storage  *types.HeaderStorage
+	Engine  *PoTEngine
+	stopCh  chan struct{}
+	mutex   sync.Mutex
+	storage *types.HeaderStorage
 
-	peerMsgQueue     chan *types.Header
-	headerResponsech chan *pb.HeaderResponse
-	potResponseCh    chan *pb.PoTResponse
-	potstorage       *types.PoTBlockStorage
-	chainreader      *types.ChainReader
-	//upperconsensus
-	whirly     *simpleWhirly.SimpleWhirlyImpl
-	potsigchan chan<- []byte
-	commitee   *orderedmap.OrderedMap
+	peerMsgQueue       chan *types.Header
+	headerResponseChan chan *pb.HeaderResponse
+	potResponseCh      chan *pb.PoTResponse
+	potStorage         *types.PoTBlockStorage
+	chainReader        *types.ChainReader
+	// upper consensus
+	whirly        *simpleWhirly.SimpleWhirlyImpl
+	potSignalChan chan<- []byte
+	committee     *orderedmap.OrderedMap
 }
 
 func NewWorker(id int64, config *config.ConsensusConfig, logger *logrus.Entry, st *types.HeaderStorage, engine *PoTEngine) *Worker {
@@ -82,8 +82,8 @@ func NewWorker(id int64, config *config.ConsensusConfig, logger *logrus.Entry, s
 	rands := rand.New(rand.NewSource(seed.Int64()))
 
 	vdf0 := types.NewVDF(ch0, potconfig.Vdf0Iteration, id)
-	vdf1 := make([]*types.VDF, cpucounter)
-	for i := 0; i < cpucounter; i++ {
+	vdf1 := make([]*types.VDF, cpuCounter)
+	for i := 0; i < cpuCounter; i++ {
 		vdf1[i] = types.NewVDF(ch1, potconfig.Vdf1Iteration, id)
 	}
 
@@ -104,11 +104,11 @@ func NewWorker(id int64, config *config.ConsensusConfig, logger *logrus.Entry, s
 		rand:         rands,
 		peerMsgQueue: peer,
 		storage:      st,
-		commitee:     orderedmap.NewOrderedMap(),
-		vdfchecker:   vdf.New("wesolowski_rust", []byte(""), potconfig.Vdf0Iteration, id),
-		chainreader:  types.NewChainReader(st),
-		Peerid:       engine.GetPeerID(),
-		workflag:     false,
+		committee:    orderedmap.NewOrderedMap(),
+		vdfChecker:   vdf.New("wesolowski_rust", []byte(""), potconfig.Vdf0Iteration, id),
+		chainReader:  types.NewChainReader(st),
+		PeerId:       engine.GetPeerID(),
+		workFlag:     false,
 	}
 	w.Init()
 
@@ -117,16 +117,16 @@ func NewWorker(id int64, config *config.ConsensusConfig, logger *logrus.Entry, s
 
 func (w *Worker) Init() {
 	// catchup
-	//w.log.Infof("%d %d", w.config.PoT.Snum, w.config.PoT.Vdf1Iteration)
+	// w.log.Infof("%d %d", w.config.PoT.Snum, w.config.PoT.Vdf1Iteration)
 	w.vdf0.SetInput(crypto.Hash([]byte("aa")), w.config.PoT.Vdf0Iteration)
 	w.SetVdf0res(0, []byte("aa"))
-	w.blockcounter = 0
+	w.blockCounter = 0
 
 }
 func (w *Worker) startWorking() {
-	w.synclock.Lock()
-	defer w.synclock.Unlock()
-	w.workflag = true
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
+	w.workFlag = true
 
 }
 
@@ -145,7 +145,7 @@ func (w *Worker) OnGetVdf0Response() {
 
 	for {
 		select {
-		//receive vdf0
+		// receive vdf0
 		case res := <-w.vdf0Chan:
 			epoch := w.getEpoch()
 			timer := time.Since(w.timestamp) / time.Millisecond
@@ -155,15 +155,15 @@ func (w *Worker) OnGetVdf0Response() {
 				continue
 			}
 
-			//w.log.Errorf("[PoT]\tepoch %d:Receive epoch %d vdf0 res, use %d ms\n", epoch, res.Epoch, timer)
+			// w.log.Errorf("[PoT]\tepoch %d:Receive epoch %d vdf0 res, use %d ms\n", epoch, res.Epoch, timer)
 			w.increaseEpoch()
 
-			//if epoch == 5 && w.ID == 3 {
+			// if epoch == 5 && w.ID == 3 {
 			//	time.Sleep(time.Second * 15)
-			//}
-			//if epoch == 7 && w.ID == 2 {
+			// }
+			// if epoch == 7 && w.ID == 2 {
 			//	time.Sleep(time.Second * 20)
-			//}
+			// }
 
 			if w.isMinerWorking() {
 				close(w.abort)
@@ -220,7 +220,7 @@ func (w *Worker) OnGetVdf0Response() {
 				w.log.Errorf("[PoT]\tepoch %d:parent block hash is : %s Difficulty %d from %d", epoch+1, hex.EncodeToString(parentblock.Hash()), parentblock.Difficulty.Int64(), parentblock.Address)
 			} else {
 				if len(backupblock) != 0 {
-					w.chainreader.SetHeight(epoch, backupblock[0])
+					w.chainReader.SetHeight(epoch, backupblock[0])
 					parentblock = backupblock[0]
 					w.log.Errorf("[PoT]\tepoch %d:parent block hash is nil,set nil block %s as parent", epoch+1, hex.EncodeToString(parentblock.Hashes))
 				}
@@ -234,8 +234,8 @@ func (w *Worker) OnGetVdf0Response() {
 
 			w.startWorking()
 			w.abort = make(chan struct{})
-			w.wg.Add(cpucounter)
-			for i := 0; i < cpucounter; i++ {
+			w.wg.Add(cpuCounter)
+			for i := 0; i < cpuCounter; i++ {
 				go w.mine(res0, rand.Int63(), i, w.abort, difficulty, parentblock, uncleblock, w.wg)
 			}
 
@@ -275,17 +275,17 @@ func (w *Worker) mine(vdf0res []byte, nonce int64, workerid int, abort chan stru
 				w.log.Infof("[PoT]\tepoch %d:fail to find a %d block, create a nil block %s", epoch, difficulty.Int64(), hexutil.Encode(block.Hash()))
 				w.storage.Put(block)
 				w.peerMsgQueue <- block
-				//w.workflag = false
+				// w.workFlag = false
 				return block
 			}
 			// w.createBlock
 			block := w.createBlock(epoch, parentblock, uncleblock, difficulty, mixdigest, nonce, vdf0res, res1)
-			w.blockcounter += 1
-			w.log.Infof("[PoT]\tepoch %d:get new block %d", epoch, w.blockcounter)
+			w.blockCounter += 1
+			w.log.Infof("[PoT]\tepoch %d:get new block %d", epoch, w.blockCounter)
 
 			// broadcast the block
 			w.peerMsgQueue <- block
-			//w.workflag = false
+			// w.workFlag = false
 			return block
 		case <-abort:
 			err := w.vdf1[workerid].Abort()
@@ -293,7 +293,7 @@ func (w *Worker) mine(vdf0res []byte, nonce int64, workerid int, abort chan stru
 				return nil
 			}
 			w.log.Infof("[PoT]\tepoch %d:vdf1 workerid %d got abort", epoch, workerid)
-			//w.workflag = false
+			// w.workFlag = false
 			return nil
 		}
 
@@ -319,7 +319,7 @@ func (w *Worker) createBlock(epoch uint64, parentBlock *types.Header, uncleBlock
 		Mixdigest:  mixdigest,
 		Address:    w.ID,
 		PoTProof:   Potproof,
-		PeerId:     w.Peerid,
+		PeerId:     w.PeerId,
 	}
 	h.Hashes = h.Hash()
 	return h
@@ -345,7 +345,7 @@ func (w *Worker) createnilBlock(epoch uint64, parentBlock *types.Header, uncleBl
 		Mixdigest:  mixdigest,
 		Address:    w.ID,
 		PoTProof:   Potproof,
-		PeerId:     w.Peerid,
+		PeerId:     w.PeerId,
 	}
 
 	h.Hashes = h.Hash()
@@ -353,8 +353,8 @@ func (w *Worker) createnilBlock(epoch uint64, parentBlock *types.Header, uncleBl
 }
 
 func (w *Worker) SetVdf0res(epocch uint64, vdf0 []byte) {
-	w.synclock.Lock()
-	defer w.synclock.Unlock()
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
 	w.storage.SetVdfRes(epocch, vdf0)
 
 }
@@ -369,14 +369,14 @@ func (w *Worker) getVDF0chan() chan *types.VDF0res {
 
 func (w *Worker) checkVDFforepoch(epoch uint64, vdfres []byte) bool {
 	epoch1, err := w.storage.GetPoTbyEpoch(epoch + 1)
-	//we have next epoch vdfres
+	// we have next epoch vdfres
 	if err == nil && len(epoch1) != 0 {
 		return bytes.Equal(vdfres, epoch1)
 	}
 	epoch0, err := w.storage.GetPoTbyEpoch(epoch)
-	//we don't have next epoch vdfres, but we have now vdfres
+	// we don't have next epoch vdfres, but we have now vdfres
 	if err == nil && len(epoch0) != 0 {
-		return w.vdfchecker.CheckVDF(epoch0, vdfres)
+		return w.vdfChecker.CheckVDF(epoch0, vdfres)
 	}
 
 	return false
@@ -396,23 +396,23 @@ func (w *Worker) setVDF0epoch(epoch uint64) error {
 		}
 		w.log.Errorf("[PoT]\tVDF0 got abort for reset")
 	}
-	w.synclock.Lock()
-	defer w.synclock.Unlock()
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
 	w.epoch = epoch
 
 	return nil
 }
 
 func (w *Worker) getEpoch() uint64 {
-	w.synclock.Lock()
-	defer w.synclock.Unlock()
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
 	epoch := w.epoch
 	return epoch
 }
 func (w *Worker) increaseEpoch() {
-	w.synclock.Lock()
+	w.mutex.Lock()
 	w.epoch += 1
-	w.synclock.Unlock()
+	w.mutex.Unlock()
 }
 
 func (w *Worker) calcDifficulty(parentblock *types.Header, uncleBlock []*types.Header) *big.Int {
@@ -501,14 +501,14 @@ func (w *Worker) blockSelection(headers []*types.Header, vdf0res []byte, height 
 	maxweight := big.NewInt(0)
 	max := -1
 
-	current, err := w.chainreader.GetByHeight(height - 1)
+	current, err := w.chainReader.GetByHeight(height - 1)
 
 	if err != nil {
 		return nil, nil
 	}
 
-	w.synclock.Lock()
-	defer w.synclock.Unlock()
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
 
 	if len(headers) == 0 {
 		return nil, nil
@@ -534,7 +534,7 @@ func (w *Worker) blockSelection(headers []*types.Header, vdf0res []byte, height 
 	parent = readyblocks[max-1]
 	uncle = append(readyblocks[:max-1], readyblocks[max:]...)
 
-	w.chainreader.SetHeight(parent.Height, parent)
+	w.chainReader.SetHeight(parent.Height, parent)
 
 	return parent, uncle
 }
@@ -545,23 +545,23 @@ func (w *Worker) self() int64 {
 
 func (w *Worker) isMinerWorking() bool {
 
-	//for i := 0; i < len(w.vdf1); i++ {
+	// for i := 0; i < len(w.vdf1); i++ {
 	//	if !w.vdf1[i].Finished {
 	//		return true
 	//	}
-	//}
-	w.synclock.Lock()
-	defer w.synclock.Unlock()
-	return w.workflag
+	// }
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
+	return w.workFlag
 }
 
 func (w *Worker) setWorkFlagFalse() {
-	w.synclock.Lock()
-	w.synclock.Unlock()
-	w.workflag = false
+	w.mutex.Lock()
+	w.mutex.Unlock()
+	w.workFlag = false
 }
 
 func (w *Worker) SetEngine(engine *PoTEngine) {
 	w.Engine = engine
-	w.Peerid = w.Engine.GetPeerID()
+	w.PeerId = w.Engine.GetPeerID()
 }

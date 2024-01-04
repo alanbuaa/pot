@@ -57,7 +57,7 @@ type reply struct {
 	count  int
 }
 
-// receive packet from consensus
+// Send receive packet from consensus
 func (gc *Client) Send(ctx context.Context, in *pb.Packet) (*pb.Empty, error) {
 	msg := new(pb.Msg)
 	err := proto.Unmarshal(in.Msg, msg)
@@ -219,7 +219,7 @@ func (client *Client) normalRun() {
 				return
 			case <-ticker.C:
 				innerTx := strconv.Itoa(rand.Intn(1000)) + "," + strconv.Itoa(rand.Intn(1000))
-				//client.log.WithField("content", cmd).Info("[CLIENT] Send request")
+				// client.log.WithField("content", cmd).Info("[CLIENT] Send request")
 				tx := &pb.Transaction{Type: pb.TransactionType_NORMAL, Payload: []byte(innerTx)}
 				client.sendTx(tx)
 			}

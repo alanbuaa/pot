@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestPoT_MsgReceive(t *testing.T) {
+func TestPoTMsgReceive(t *testing.T) {
 	cpuInfo, err := cpu.Info()
 	if err != nil {
 		fmt.Printf("Failed to get CPU info: %v", err)

@@ -5,8 +5,8 @@ import (
 	"os/signal"
 	"syscall"
 
-	upgradeable_consensus "github.com/zzz136454872/upgradeable-consensus"
 	"github.com/zzz136454872/upgradeable-consensus/logging"
+	upgradeable_consensus "github.com/zzz136454872/upgradeable-consensus/node"
 )
 
 var (

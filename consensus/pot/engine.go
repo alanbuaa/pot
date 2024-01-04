@@ -17,25 +17,25 @@ import (
 
 type PoTEngine struct {
 	id     int64
-	peerid string
+	peerId string
 
-	//consensus config
+	// consensus config
 	consensusID int64
 	config      *config.ConsensusConfig
-	//consensus exector
+	// consensus exector
 	exec executor.Executor
 	log  *logrus.Entry
-	//network
+	// network
 	Adaptor         p2p.P2PAdaptor
-	isBasep2p       bool
+	isBaseP2P       bool
 	MsgByteEntrance chan []byte
 	RequestEntrance chan *pb.Request
-	//consensus work
+	// consensus work
 	Height         int64
 	worker         *Worker
 	headerStorage  *types.HeaderStorage
-	potstorage     *types.PoTBlockStorage
-	chainreader    *types.ChainReader
+	potStorage     *types.PoTBlockStorage
+	chainReader    *types.ChainReader
 	UpperConsensus *simpleWhirly.SimpleWhirlyImpl
 }
 
@@ -45,14 +45,14 @@ func NewEngine(nid int64, cid int64, config *config.ConsensusConfig, exec execut
 
 	e := &PoTEngine{
 		id:              nid,
-		peerid:          adaptor.GetPeerID(),
+		peerId:          adaptor.GetPeerID(),
 		consensusID:     cid,
 		exec:            exec,
 		log:             log,
 		Adaptor:         adaptor,
 		config:          config,
 		MsgByteEntrance: ch,
-		//Worker:          worker,
+		// Worker:          worker,
 		headerStorage: st,
 	}
 	st.Put(types.DefaultGenesisHeader())
@@ -62,7 +62,7 @@ func NewEngine(nid int64, cid int64, config *config.ConsensusConfig, exec execut
 	adaptor.SetReceiver(e.GetMsgByteEntrance())
 	err := adaptor.Subscribe([]byte("this-is-consensus-topic"))
 	if adaptor.GetP2PType() == "p2p" {
-		e.peerid = config.Nodes[nid].Address
+		e.peerId = config.Nodes[nid].Address
 	}
 	if err != nil {
 		return nil
@@ -142,13 +142,13 @@ func (e *PoTEngine) GetHeaderStorage() *types.HeaderStorage {
 }
 
 func (e *PoTEngine) GetPoTStorage() *types.PoTBlockStorage {
-	return e.potstorage
+	return e.potStorage
 }
 
-func (e *PoTEngine) Setwhirly(whirly2 *simpleWhirly.SimpleWhirlyImpl) {
+func (e *PoTEngine) SetWhirly(whirly2 *simpleWhirly.SimpleWhirlyImpl) {
 	e.UpperConsensus = whirly2
 }
 
 func (e *PoTEngine) GetPeerID() string {
-	return e.peerid
+	return e.peerId
 }

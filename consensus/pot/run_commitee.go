@@ -9,14 +9,14 @@ import (
 
 func (w *Worker) simpleLeaderUpdate(parent *types.Header) {
 	if parent != nil {
-		//address := parent.Address
+		// address := parent.Address
 		address := parent.Address
-		if !w.commiteeCheck(address, parent) {
+		if !w.committeeCheck(address, parent) {
 			return
 		}
-		if w.commiteeLencheck() && w.whirly == nil {
+		if w.committeeSizeCheck() && w.whirly == nil {
 
-			whirlyconfig := &config.ConsensusConfig{
+			whirlyConfig := &config.ConsensusConfig{
 				Type:        "whirly",
 				ConsensusID: 1009,
 				Whirly: &config.WhirlyConfig{
@@ -28,42 +28,42 @@ func (w *Worker) simpleLeaderUpdate(parent *types.Header) {
 				Keys:  w.config.Keys,
 				F:     w.config.F,
 			}
-			s := simpleWhirly.NewSimpleWhirly(w.ID, 1009, whirlyconfig, w.Engine.exec, w.Engine.Adaptor, w.log)
+			s := simpleWhirly.NewSimpleWhirly(w.ID, 1009, whirlyConfig, w.Engine.exec, w.Engine.Adaptor, w.log)
 			w.whirly = s
-			w.Engine.Setwhirly(s)
-			w.potsigchan = w.whirly.GetPoTByteEntrance()
-			w.log.Errorf("[PoT]\t Start commitee consensus at epoch %d", parent.Height+1)
+			w.Engine.SetWhirly(s)
+			w.potSignalChan = w.whirly.GetPoTByteEntrance()
+			w.log.Errorf("[PoT]\t Start committee consensus at epoch %d", parent.Height+1)
 			return
 		}
-		potsig := &simpleWhirly.PoTSignal{
+		potSignal := &simpleWhirly.PoTSignal{
 			Epoch:           int64(parent.Height),
 			Proof:           parent.PoTProof[0],
 			ID:              parent.Address,
 			LeaderNetworkId: parent.PeerId,
 		}
-		b, err := json.Marshal(potsig)
+		b, err := json.Marshal(potSignal)
 		if err != nil {
 			w.log.WithError(err)
 			return
 		}
-		if w.potsigchan != nil {
-			w.potsigchan <- b
+		if w.potSignalChan != nil {
+			w.potSignalChan <- b
 		}
 	}
 }
 
-func (w *Worker) commiteeCheck(id int64, header *types.Header) bool {
-	if _, exist := w.commitee.Get(id); !exist {
-		w.commitee.Set(id, header)
+func (w *Worker) committeeCheck(id int64, header *types.Header) bool {
+	if _, exist := w.committee.Get(id); !exist {
+		w.committee.Set(id, header)
 		return false
 	}
 	return true
 }
 
-func (w *Worker) commiteeLencheck() bool {
-	return w.commitee.Len() == 4
+func (w *Worker) committeeSizeCheck() bool {
+	return w.committee.Len() == 4
 }
 
-func (w *Worker) GetPeerqueue() chan *types.Header {
+func (w *Worker) GetPeerQueue() chan *types.Header {
 	return w.peerMsgQueue
 }

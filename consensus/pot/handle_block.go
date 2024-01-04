@@ -28,12 +28,12 @@ func (w *Worker) handleBlock() {
 				if header.Address == w.self() {
 					w.log.Infof("[PoT]\tepoch %d:Receive block from myself, Difficulty %d, with parent %s", epoch, header.Difficulty.Int64(), hex.EncodeToString(header.ParentHash))
 
-					w.synclock.Lock()
-					//w.backupBlock = append(w.backupBlock, header)
+					w.mutex.Lock()
+					// w.backupBlock = append(w.backupBlock, header)
 					err := w.storage.Put(header)
-					w.synclock.Unlock()
+					w.mutex.Unlock()
 
-					err = w.headerbroadcast(header)
+					err = w.headerBroadcast(header)
 
 					if err != nil {
 						w.log.Errorf("[PoT]\tbroadcast header error:%s", err)
@@ -64,58 +64,58 @@ func (w *Worker) handleBlock() {
 
 func (w *Worker) handleCurrentBlock(block *types.Header) error {
 	header := block
-	//_, _ = w.checkHeader(header)
+	// _, _ = w.checkHeader(header)
 	if !w.isBehindHeight(block.Height-1, block) {
 		if block.ParentHash != nil {
-			w.log.Errorf("[PoT]\tfind fork at epoch %d block %s with parents %s,current epoch %d parent %s", block.Height, hexutil.Encode(block.Hashes), hexutil.Encode(block.ParentHash), w.chainreader.GetCurrentHeight(), hexutil.Encode(w.chainreader.GetCurrentBlock().Hashes))
+			w.log.Errorf("[PoT]\tfind fork at epoch %d block %s with parents %s,current epoch %d parent %s", block.Height, hexutil.Encode(block.Hashes), hexutil.Encode(block.ParentHash), w.chainReader.GetCurrentHeight(), hexutil.Encode(w.chainReader.GetCurrentBlock().Hashes))
 			b, err := w.GetSharedAncestor(block)
 			if err != nil {
 				w.log.Error(err)
 				return err
 			}
-			c, err := w.chainreader.GetByHeight(b.Height)
+			c, err := w.chainReader.GetByHeight(b.Height)
 			if err != nil {
 				w.log.Error(err)
 				return err
 			}
 			w.log.Errorf("[PoT]\tthe shared ancestor of fork is %s at %d,match %t", hexutil.Encode(b.Hashes), b.Height, bytes.Equal(c.Hashes, b.Hashes))
-			nowbranch, _, err := w.GetBranch(b, w.chainreader.GetCurrentBlock())
-			forkbranch, _, err := w.GetBranch(b, block)
+			nowBranch, _, err := w.GetBranch(b, w.chainReader.GetCurrentBlock())
+			forkBranch, _, err := w.GetBranch(b, block)
 			if err != nil {
 				w.log.Error(err)
 				return err
 			}
-			for i := 0; i < len(nowbranch); i++ {
-				w.log.Errorf("[PoT]\tthe nowbranch at height %d: %s", nowbranch[i].Height, hexutil.Encode(nowbranch[i].Hashes))
+			for i := 0; i < len(nowBranch); i++ {
+				w.log.Errorf("[PoT]\tthe nowBranch at height %d: %s", nowBranch[i].Height, hexutil.Encode(nowBranch[i].Hashes))
 			}
-			for i := 0; i < len(forkbranch); i++ {
-				w.log.Errorf("[PoT]\tthe fork chain at height %d: %s", forkbranch[i].Height, hexutil.Encode(forkbranch[i].Hashes))
+			for i := 0; i < len(forkBranch); i++ {
+				w.log.Errorf("[PoT]\tthe fork chain at height %d: %s", forkBranch[i].Height, hexutil.Encode(forkBranch[i].Hashes))
 			}
 
-			w1 := w.calculateChainWeight(b, w.chainreader.GetCurrentBlock())
+			w1 := w.calculateChainWeight(b, w.chainReader.GetCurrentBlock())
 			w2 := w.calculateChainWeight(b, block)
 			w.log.Errorf("[PoT]\tthe chain weight %d, the fork chain weight %d", w1.Int64(), w2.Int64())
 			if w1.Int64() < w2.Int64() {
-				err := w.chainreset(forkbranch)
+				err := w.chainreset(forkBranch)
 				if err != nil {
 					w.log.Errorf("[PoT]\tchain reset error for %s", err)
 				}
 			}
-			w.synclock.Lock()
-			//w.backupBlock = append(w.backupBlock, header)
+			w.mutex.Lock()
+			// w.backupBlock = append(w.backupBlock, header)
 
-			w.blockcounter += 1
+			w.blockCounter += 1
 			_ = w.storage.Put(header)
-			w.synclock.Unlock()
+			w.mutex.Unlock()
 
 		}
 	} else {
-		w.synclock.Lock()
-		//w.backupBlock = append(w.backupBlock, header)
+		w.mutex.Lock()
+		// w.backupBlock = append(w.backupBlock, header)
 
-		w.blockcounter += 1
+		w.blockCounter += 1
 		err := w.storage.Put(header)
-		w.synclock.Unlock()
+		w.mutex.Unlock()
 
 		if err != nil {
 			return err
@@ -131,12 +131,12 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, header *types.Header) {
 	if err != nil {
 		return
 	}
-	w.synclock.Lock()
-	//w.backupBlock = append(w.backupBlock, header)
+	w.mutex.Lock()
+	// w.backupBlock = append(w.backupBlock, header)
 
-	w.blockcounter += 1
+	w.blockCounter += 1
 	err = w.storage.Put(header)
-	w.synclock.Unlock()
+	w.mutex.Unlock()
 
 	w.log.Infof("[PoT]\tGet shared ancestor of block %s is %s at height %d", hexutil.Encode(header.Hashes), hexutil.Encode(ances.Hashes), ances.Height)
 
@@ -159,18 +159,18 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, header *types.Header) {
 	w.log.Infof("[PoT]\tMinew Work flag: %t", flag)
 
 	if w.isMinerWorking() {
-		w.workflag = false
+		w.workFlag = false
 		close(w.abort)
 		w.wg.Wait()
 	}
 
-	//if !w.vdf0.IsFinished() {
+	// if !w.vdf0.IsFinished() {
 	//	err := w.vdf0.Abort()
 	//	if err != nil {
 	//		return
 	//	}
 	//	w.log.Infof("[PoT]\tepoch %d:VDF0 got abort for advanced chain reset ", epoch)
-	//}
+	// }
 
 	err = w.setVDF0epoch(header.Height - 1)
 	if err != nil {
@@ -188,13 +188,13 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, header *types.Header) {
 
 func (w *Worker) checkAdvancedBlock(epoch uint64, header *types.Header) (bool, error) {
 	if header.Height == epoch+1 {
-		//now the parent is at the same height
-		headerparent, err := w.getParentBlock(header)
+		// now the parent is at the same height
+		headerParent, err := w.getParentBlock(header)
 		if err != nil {
 			return false, err
 		}
-		if headerparent.Height == epoch {
-			err := w.handleCurrentBlock(headerparent)
+		if headerParent.Height == epoch {
+			err := w.handleCurrentBlock(headerParent)
 			if err != nil {
 				return false, err
 			}
@@ -203,7 +203,7 @@ func (w *Worker) checkAdvancedBlock(epoch uint64, header *types.Header) (bool, e
 		if err != nil && !flag {
 			return false, err
 		}
-		//w.log.Infof("")
+		// w.log.Infof("")
 	}
 	return true, nil
 }
@@ -211,15 +211,15 @@ func (w *Worker) checkAdvancedBlock(epoch uint64, header *types.Header) (bool, e
 func (w *Worker) checkHeaderVDF0(header *types.Header) (bool, error) {
 	epoch := w.getEpoch()
 	if header.Height == epoch+1 {
-		vdfres, err := w.GetVdf0byEpoch(epoch)
+		vdfRes, err := w.GetVdf0byEpoch(epoch)
 		if err != nil {
 			return false, fmt.Errorf("get VDF for epoch %d error for: %s", epoch, err)
 		}
 
-		vdfin := crypto.Hash(vdfres)
-		vdfout := header.PoTProof[0]
+		vdfInput := crypto.Hash(vdfRes)
+		vdfOutput := header.PoTProof[0]
 
-		if !w.vdfchecker.CheckVDF(vdfin, vdfout) {
+		if !w.vdfChecker.CheckVDF(vdfInput, vdfOutput) {
 			return false, fmt.Errorf("the vdf0 proof of block is wrong")
 		}
 
@@ -231,9 +231,9 @@ func (w *Worker) checkHeaderVDF0(header *types.Header) (bool, error) {
 func (w *Worker) handleAdvancedHeaderVDF(epoch uint64, header *types.Header) bool {
 	epoch0, err := w.storage.GetPoTbyEpoch(epoch)
 	if epoch+1 == header.Height {
-		//we don't have next epoch vdfres, but we have now vdfres
+		// we don't have next epoch vdfRes, but we have now vdfRes
 		if err == nil && len(epoch0) != 0 {
-			return w.vdfchecker.CheckVDF(epoch0, header.PoTProof[0])
+			return w.vdfChecker.CheckVDF(epoch0, header.PoTProof[0])
 		}
 	} else if header.Height > epoch+1 {
 		res, err := w.requestPoTResFor(epoch+1, header.Address, header.PeerId)
@@ -241,7 +241,7 @@ func (w *Worker) handleAdvancedHeaderVDF(epoch uint64, header *types.Header) boo
 			w.log.Error(err)
 			return false
 		}
-		if w.vdfchecker.CheckVDF(epoch0, res) {
+		if w.vdfChecker.CheckVDF(epoch0, res) {
 			w.SetVdf0res(epoch+1, res)
 			return w.handleAdvancedHeaderVDF(epoch+1, header)
 		}
@@ -249,21 +249,21 @@ func (w *Worker) handleAdvancedHeaderVDF(epoch uint64, header *types.Header) boo
 	return false
 }
 
-func (w *Worker) headerbroadcast(header *types.Header) error {
-	pbheader := header.ToProto()
-	headerbyte, err := proto.Marshal(pbheader)
+func (w *Worker) headerBroadcast(header *types.Header) error {
+	pbHeader := header.ToProto()
+	headerByte, err := proto.Marshal(pbHeader)
 	if err != nil {
 		return err
 	}
 	message := &pb.PoTMessage{
 		MsgType: pb.MessageType_Header_Data,
-		MsgByte: headerbyte,
+		MsgByte: headerByte,
 	}
-	messagebyte, err := proto.Marshal(message)
+	messageByte, err := proto.Marshal(message)
 	if err != nil {
 		return err
 	}
-	err = w.Engine.Broadcast(messagebyte)
+	err = w.Engine.Broadcast(messageByte)
 	if err != nil {
 		return err
 	}

@@ -10,29 +10,29 @@ import (
 )
 
 func (w *Worker) request(request *pb.HeaderRequest) (*pb.HeaderResponse, error) {
-	requestbyte, err := proto.Marshal(request)
+	requestByte, err := proto.Marshal(request)
 	if err != nil {
 		return nil, err
 	}
-	potmsg := &pb.PoTMessage{
+	potMsg := &pb.PoTMessage{
 		MsgType: pb.MessageType_Header_Request,
-		MsgByte: requestbyte,
+		MsgByte: requestByte,
 	}
-	potmsgbyte, err := proto.Marshal(potmsg)
+	potMsgByte, err := proto.Marshal(potMsg)
 	if err != nil {
 		return nil, err
 	}
 
 	for {
-		if w.headerResponsech == nil {
+		if w.headerResponseChan == nil {
 			ch := make(chan *pb.HeaderResponse, 10)
-			w.headerResponsech = ch
+			w.headerResponseChan = ch
 			break
 		}
 		time.Sleep(1 * time.Second)
 	}
 
-	err = w.Engine.Unicast(request.Des, potmsgbyte)
+	err = w.Engine.Unicast(request.Des, potMsgByte)
 
 	if err != nil {
 		return nil, err
@@ -41,7 +41,7 @@ func (w *Worker) request(request *pb.HeaderRequest) (*pb.HeaderResponse, error) 
 
 	res := new(pb.HeaderResponse)
 	select {
-	case response := <-w.headerResponsech:
+	case response := <-w.headerResponseChan:
 		if response.Src != request.Des || response.Srcid != request.Desid {
 			return nil, fmt.Errorf("receive response from wrong address")
 		}
@@ -50,14 +50,14 @@ func (w *Worker) request(request *pb.HeaderRequest) (*pb.HeaderResponse, error) 
 		timer.Stop()
 	case <-timer.C:
 
-		close(w.headerResponsech)
-		w.headerResponsech = nil
+		close(w.headerResponseChan)
+		w.headerResponseChan = nil
 		timer.Stop()
 		return nil, fmt.Errorf("request for header %s from %s timeout", hexutil.Encode(request.GetHashes()), request.GetDes())
 	}
 
-	close(w.headerResponsech)
-	w.headerResponsech = nil
+	close(w.headerResponseChan)
+	w.headerResponseChan = nil
 	if res != nil {
 		return res, nil
 	} else {
@@ -67,10 +67,10 @@ func (w *Worker) request(request *pb.HeaderRequest) (*pb.HeaderResponse, error) 
 }
 
 func (w *Worker) handleHeaderResponse(response *pb.HeaderResponse) error {
-	if w.headerResponsech == nil {
+	if w.headerResponseChan == nil {
 		return fmt.Errorf("can't find channel to handle header response")
 	} else {
-		w.headerResponsech <- response
+		w.headerResponseChan <- response
 		return nil
 	}
 }
@@ -90,7 +90,7 @@ func (w *Worker) requestPoTResFor(epoch uint64, address int64, peerid string) ([
 		Desid: address,
 		Des:   peerid,
 		Srcid: w.ID,
-		Src:   w.Peerid,
+		Src:   w.PeerId,
 	}
 	response, err := w.potRequest(request)
 	if err != nil {
@@ -102,15 +102,15 @@ func (w *Worker) requestPoTResFor(epoch uint64, address int64, peerid string) ([
 }
 
 func (w *Worker) potRequest(request *pb.PoTRequest) (*pb.PoTResponse, error) {
-	requestbyte, err := proto.Marshal(request)
+	requestByte, err := proto.Marshal(request)
 	if err != nil {
 		return nil, err
 	}
-	potmsg := &pb.PoTMessage{
+	potMsg := &pb.PoTMessage{
 		MsgType: pb.MessageType_PoT_Request,
-		MsgByte: requestbyte,
+		MsgByte: requestByte,
 	}
-	msgbyte, err := proto.Marshal(potmsg)
+	msgByte, err := proto.Marshal(potMsg)
 	if err != nil {
 		return nil, err
 	}
@@ -125,7 +125,7 @@ func (w *Worker) potRequest(request *pb.PoTRequest) (*pb.PoTResponse, error) {
 		time.Sleep(1 * time.Second)
 		counter += 1
 	}
-	err = w.Engine.Unicast(request.Des, msgbyte)
+	err = w.Engine.Unicast(request.Des, msgByte)
 	if err != nil {
 		return nil, err
 	}
@@ -150,31 +150,31 @@ func (w *Worker) getParentBlock(header *types.Header) (*types.Header, error) {
 	if header == nil {
 		return nil, fmt.Errorf("could not get parent from a nil block")
 	}
-	parenthash := header.ParentHash
+	parentHash := header.ParentHash
 
-	if parenthash == nil {
+	if parentHash == nil {
 		return nil, fmt.Errorf("the epcoh %d block %s from %d without parent", header.Height, hexutil.Encode(header.Hashes), header.Address)
 	}
-	parent, err := w.storage.Get(parenthash)
+	parent, err := w.storage.Get(parentHash)
 
 	if err != nil {
 		request := &pb.HeaderRequest{
 			Height: header.Height - 1,
-			Hashes: parenthash,
+			Hashes: parentHash,
 			Desid:  header.Address,
 			Srcid:  w.ID,
 			Des:    header.PeerId,
-			Src:    w.Peerid,
+			Src:    w.PeerId,
 		}
-		//w.p2p.Unicast()
+		// w.p2p.Unicast()
 		headerResponse, err := w.request(request)
 
 		if err != nil {
 			return nil, err
 		}
 
-		pbparent := headerResponse.GetHeader()
-		parent = types.ToHeader(pbparent)
+		pbParent := headerResponse.GetHeader()
+		parent = types.ToHeader(pbParent)
 
 		flag, err := w.checkHeader(parent)
 
@@ -187,15 +187,15 @@ func (w *Worker) getParentBlock(header *types.Header) (*types.Header, error) {
 	} else {
 		return parent, nil
 	}
-	//return nil, nil
+	// return nil, nil
 }
 
 func (w *Worker) getUncleBlock(header *types.Header) ([]*types.Header, error) {
 	n := len(header.UncleHash)
-	ommerHeaders := make([]*types.Header, n)
+	uncleHeaders := make([]*types.Header, n)
 
 	for i := 0; i < n; i++ {
-		ommerheader, err := w.storage.Get(header.UncleHash[i])
+		uncleHeader, err := w.storage.Get(header.UncleHash[i])
 		if err != nil {
 			request := &pb.HeaderRequest{
 				Height: header.Height - 1,
@@ -203,24 +203,24 @@ func (w *Worker) getUncleBlock(header *types.Header) ([]*types.Header, error) {
 				Desid:  header.Address,
 				Srcid:  w.ID,
 				Des:    header.PeerId,
-				Src:    w.Peerid,
+				Src:    w.PeerId,
 			}
-			//w.p2p.Unicast()
+			// w.p2p.Unicast()
 			headerResponse, err := w.request(request)
 			if err != nil {
 				return nil, err
 			}
-			pbommer := headerResponse.GetHeader()
-			ommer := types.ToHeader(pbommer)
-			flag, err := w.checkHeader(ommer)
+			pbUncle := headerResponse.GetHeader()
+			uncle := types.ToHeader(pbUncle)
+			flag, err := w.checkHeader(uncle)
 			if flag {
-				w.storage.Put(ommer)
-				ommerheader = ommer
+				w.storage.Put(uncle)
+				uncleHeader = uncle
 			} else {
 				return nil, err
 			}
 		}
-		ommerHeaders[i] = ommerheader
+		uncleHeaders[i] = uncleHeader
 	}
-	return ommerHeaders, nil
+	return uncleHeaders, nil
 }

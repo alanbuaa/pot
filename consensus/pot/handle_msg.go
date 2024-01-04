@@ -35,12 +35,12 @@ func (e *PoTEngine) onReceiveMsg() {
 func (e *PoTEngine) handlePacket(packet *pb.Packet) {
 	if packet.Type == pb.PacketType_P2PPACKET {
 		if packet.ConsensusID == e.consensusID {
-			potmsg := new(pb.PoTMessage)
-			if err := proto.Unmarshal(packet.Msg, potmsg); err != nil {
+			potMsg := new(pb.PoTMessage)
+			if err := proto.Unmarshal(packet.Msg, potMsg); err != nil {
 				e.log.WithError(err).Warn("decode pot message failed")
 				return
 			}
-			err := e.handlePoTMsg(potmsg)
+			err := e.handlePoTMsg(potMsg)
 			if err != nil {
 				e.log.WithError(err).Warn("handle pot message error")
 				return
@@ -90,12 +90,12 @@ func (e *PoTEngine) handlePoTMsg(message *pb.PoTMessage) error {
 	switch message.MsgType {
 	case pb.MessageType_Header_Data:
 		bytes := message.GetMsgByte()
-		pbheader := new(pb.Header)
-		err := proto.Unmarshal(bytes, pbheader)
+		pbHeader := new(pb.Header)
+		err := proto.Unmarshal(bytes, pbHeader)
 		if err != nil {
 			return err
 		}
-		header := types.ToHeader(pbheader)
+		header := types.ToHeader(pbHeader)
 		e.handleHeader(header)
 	case pb.MessageType_Header_Request:
 		bytes := message.GetMsgByte()
@@ -104,7 +104,7 @@ func (e *PoTEngine) handlePoTMsg(message *pb.PoTMessage) error {
 		if err != nil {
 			return err
 		}
-		//e.log.Infof("[Engine]\treceive header request from %s ", request.Src)
+		// e.log.Infof("[Engine]\treceive header request from %s ", request.Src)
 		hashes := request.GetHashes()
 		st := e.GetHeaderStorage()
 		header, err := st.Get(hashes)
@@ -113,38 +113,38 @@ func (e *PoTEngine) handlePoTMsg(message *pb.PoTMessage) error {
 			e.log.Errorf("get block err for %s", err)
 			return err
 		}
-		pbheader := header.ToProto()
-		pbresponse := &pb.HeaderResponse{}
-		if e.isBasep2p {
-			pbresponse = &pb.HeaderResponse{
-				Header: pbheader,
-				Src:    e.peerid,
+		pbHeader := header.ToProto()
+		pbResponse := &pb.HeaderResponse{}
+		if e.isBaseP2P {
+			pbResponse = &pb.HeaderResponse{
+				Header: pbHeader,
+				Src:    e.peerId,
 				Des:    request.GetSrc(),
 				Srcid:  e.id,
 				Desid:  request.GetSrcid(),
 			}
 		} else {
-			pbresponse = &pb.HeaderResponse{
-				Header: pbheader,
-				Src:    e.peerid,
+			pbResponse = &pb.HeaderResponse{
+				Header: pbHeader,
+				Src:    e.peerId,
 				Des:    request.GetSrc(),
 				Srcid:  e.id,
 				Desid:  request.GetSrcid(),
 			}
 		}
-		bytes, err = proto.Marshal(pbresponse)
+		bytes, err = proto.Marshal(pbResponse)
 		if err != nil {
 			return err
 		}
-		potmsg := &pb.PoTMessage{
+		potMsg := &pb.PoTMessage{
 			MsgType: pb.MessageType_Header_Response,
 			MsgByte: bytes,
 		}
-		msgbyte, err := proto.Marshal(potmsg)
+		msgByte, err := proto.Marshal(potMsg)
 		if err != nil {
 			return err
 		}
-		err = e.Unicast(request.GetSrc(), msgbyte)
+		err = e.Unicast(request.GetSrc(), msgByte)
 		if err != nil {
 			return err
 		}
@@ -154,7 +154,7 @@ func (e *PoTEngine) handlePoTMsg(message *pb.PoTMessage) error {
 		bytes := message.GetMsgByte()
 		response := new(pb.HeaderResponse)
 		err := proto.Unmarshal(bytes, response)
-		//e.log.Infof("[Engine]\treceive header response from %s ", response.Src)
+		// e.log.Infof("[Engine]\treceive header response from %s ", response.Src)
 		if err != nil {
 			return err
 		}
@@ -175,27 +175,27 @@ func (e *PoTEngine) handlePoTMsg(message *pb.PoTMessage) error {
 		if err != nil {
 			return err
 		}
-		pbpotresponse := &pb.PoTResponse{
+		pbPoTResponse := &pb.PoTResponse{
 			Epoch: epoch,
 			Desid: request.Srcid,
 			Des:   request.Src,
 			Srcid: e.id,
-			Src:   e.peerid,
+			Src:   e.peerId,
 			Proof: proof,
 		}
-		bytes, err = proto.Marshal(pbpotresponse)
+		bytes, err = proto.Marshal(pbPoTResponse)
 		if err != nil {
 			return err
 		}
-		potmsg := &pb.PoTMessage{
+		potMsg := &pb.PoTMessage{
 			MsgType: pb.MessageType_PoT_Response,
 			MsgByte: bytes,
 		}
-		msgbyte, err := proto.Marshal(potmsg)
+		msgByte, err := proto.Marshal(potMsg)
 		if err != nil {
 			return err
 		}
-		err = e.Unicast(request.GetSrc(), msgbyte)
+		err = e.Unicast(request.GetSrc(), msgByte)
 		if err != nil {
 			return err
 		}
@@ -218,12 +218,12 @@ func (e *PoTEngine) handlePoTMsg(message *pb.PoTMessage) error {
 
 func (e *PoTEngine) handleHeader(header *types.Header) {
 	if header != nil {
-		channel := e.worker.GetPeerqueue()
+		channel := e.worker.GetPeerQueue()
 		channel <- header
 	}
 
 }
 
-func (e *PoTEngine) braodcastHeader() {
+func (e *PoTEngine) broadcastHeader() {
 
 }

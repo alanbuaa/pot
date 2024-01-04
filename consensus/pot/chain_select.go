@@ -36,18 +36,18 @@ func (w *Worker) calculateChainWeight(root, leaf *types.Header) *big.Int {
 		}
 	}
 	return total
-	//for pointer := leaf; !bytes.Equal(pointer.Hashes, root.Hashes); pointer, _ = w.storage.Get(pointer.ParentHash) {
+	// for pointer := leaf; !bytes.Equal(pointer.Hashes, root.Hashes); pointer, _ = w.storage.Get(pointer.ParentHash) {
 	//	if pointer == nil {
 	//		return big.NewInt(0)
 	//	}
 	//	total = new(big.Int).Add(total, pointer.Difficulty)
-	//}
-	//total = new(big.Int).Add(total, root.Difficulty)
+	// }
+	// total = new(big.Int).Add(total, root.Difficulty)
 }
 
 func (w *Worker) GetSharedAncestor(block *types.Header) (*types.Header, error) {
-	current := w.chainreader.GetCurrentBlock()
-	currentheight := w.chainreader.GetCurrentHeight()
+	current := w.chainReader.GetCurrentBlock()
+	currentheight := w.chainReader.GetCurrentHeight()
 
 	header := block
 
@@ -58,7 +58,7 @@ func (w *Worker) GetSharedAncestor(block *types.Header) (*types.Header, error) {
 		}
 
 		for {
-			current, err := w.chainreader.GetByHeight(current.Height - 1)
+			current, err := w.chainReader.GetByHeight(current.Height - 1)
 			if err != nil {
 				return nil, err
 			}
@@ -79,16 +79,16 @@ func (w *Worker) GetSharedAncestor(block *types.Header) (*types.Header, error) {
 	}
 
 	if header.Height > currentheight {
-		//headerahead, err := w.storage.Get(header.ParentHash)
-		//if err == leveldb.ErrNotFound {
+		// headerahead, err := w.storage.Get(header.ParentHash)
+		// if err == leveldb.ErrNotFound {
 		//	headerahead, err = w.getParentBlock(header)
 		//	if err != nil {
 		//		return nil, err
 		//	}
-		//} else if err != nil {
+		// } else if err != nil {
 		//	return nil, err
-		//}
-		//return w.GetSharedAncestor(headerahead)
+		// }
+		// return w.GetSharedAncestor(headerahead)
 		for true {
 			headerahead, err := w.getParentBlock(header)
 			if err != nil {
@@ -101,7 +101,7 @@ func (w *Worker) GetSharedAncestor(block *types.Header) (*types.Header, error) {
 				}
 
 				for {
-					current, err := w.chainreader.GetByHeight(current.Height - 1)
+					current, err := w.chainReader.GetByHeight(current.Height - 1)
 					if err != nil {
 						return nil, err
 					}
@@ -124,7 +124,7 @@ func (w *Worker) GetSharedAncestor(block *types.Header) (*types.Header, error) {
 	}
 
 	if header.Height < currentheight {
-		current, err := w.chainreader.GetByHeight(header.Height)
+		current, err := w.chainReader.GetByHeight(header.Height)
 		if err != nil {
 			return nil, err
 		}
@@ -134,7 +134,7 @@ func (w *Worker) GetSharedAncestor(block *types.Header) (*types.Header, error) {
 		}
 
 		for {
-			current, err := w.chainreader.GetByHeight(current.Height - 1)
+			current, err := w.chainReader.GetByHeight(current.Height - 1)
 			if err != nil {
 				return nil, err
 			}
@@ -161,26 +161,26 @@ func (w *Worker) GetBranch(root, leaf *types.Header) ([]*types.Header, [][]*type
 		return nil, nil, fmt.Errorf("branch is nil")
 	}
 
-	//rootheight := root.Height
-	//leaftheight := leaf.Height
+	// rootheight := root.Height
+	// leaftheight := leaf.Height
 
-	//depth := leaftheight - rootheight
+	// depth := leaftheight - rootheight
 	mainbranch := make([]*types.Header, 1)
 	ommerbranch := make([][]*types.Header, 1)
 
-	//h := depth - 1
+	// h := depth - 1
 	mainbranch[0] = leaf
 	ommerbranch[0] = make([]*types.Header, 0)
-	//var err error
+	// var err error
 
 	for i := leaf; !bytes.Equal(i.ParentHash, root.Hashes); {
-		//h -= 1
+		// h -= 1
 		parentBlock, err := w.getParentBlock(i)
 		if err != nil {
 			return nil, nil, err
 		}
 		mainbranch = append(mainbranch, parentBlock)
-		//ommerblock := make([]*types.Header, 0)
+		// ommerblock := make([]*types.Header, 0)
 		for k := 0; k < len(i.UncleHash); k++ {
 			ommer, err := w.getUncleBlock(i)
 			if err != nil {
@@ -203,7 +203,7 @@ func (w *Worker) chainResetAdvanced(branch []*types.Header) error {
 
 		height := branch[i].Height
 
-		w.chainreader.SetHeight(height, branch[i])
+		w.chainReader.SetHeight(height, branch[i])
 		branchstr = branchstr + "\t" + strconv.Itoa(int(height))
 	}
 	w.log.Infof("[PoT]\tepoch %d: the chain has been reset by branch %s", epoch, branchstr)
@@ -220,7 +220,7 @@ func (w *Worker) chainreset(branch []*types.Header) error {
 
 		height := branch[i].Height
 		if height != epoch {
-			w.chainreader.SetHeight(height, branch[i])
+			w.chainReader.SetHeight(height, branch[i])
 			branchstr = branchstr + "\t" + strconv.Itoa(int(height))
 		}
 	}
@@ -230,7 +230,7 @@ func (w *Worker) chainreset(branch []*types.Header) error {
 	w.log.Infof("[PoT]\tflag: %t", flag)
 	time := time2.Now()
 	if flag {
-		w.workflag = false
+		w.workFlag = false
 		close(w.abort)
 		w.wg.Wait()
 		w.log.Infof("[PoT]\tthe vdf1 work got abort for chain reset, need %d ms", time2.Since(time)/time2.Millisecond)
@@ -240,7 +240,7 @@ func (w *Worker) chainreset(branch []*types.Header) error {
 }
 
 func (w *Worker) isBehindHeight(height uint64, block *types.Header) bool {
-	b, err := w.chainreader.GetByHeight(height)
+	b, err := w.chainReader.GetByHeight(height)
 	if err != nil {
 		return false
 	}
