@@ -10,7 +10,7 @@ build_client:
 build_server:
 	go build -o upgradeable-consensus ./cmd/server
 
-win_bulid:
+win_build:
 	go build -o genkey.exe ./cmd/genkey
 	go build -o client.exe ./cmd/client
 	go build -o upgradeable-consensus.exe ./cmd/server
@@ -36,3 +36,6 @@ generate_key:
 
 win_generate_key: 
 	./genkey.exe -p keys/ -k 3 -l 4
+
+pot_test:
+	go build -o pot_test.exe ./cmd/pot_test
