@@ -7,7 +7,8 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/zzz136454872/upgradeable-consensus/config"
-	"github.com/zzz136454872/upgradeable-consensus/consensus/pot"
+	"github.com/zzz136454872/upgradeable-consensus/consensus"
+	"github.com/zzz136454872/upgradeable-consensus/consensus/model"
 	"github.com/zzz136454872/upgradeable-consensus/executor"
 	"github.com/zzz136454872/upgradeable-consensus/logging"
 	"github.com/zzz136454872/upgradeable-consensus/p2p"
@@ -18,8 +19,9 @@ import (
 )
 
 type Node struct {
-	id         int64
-	pot        *pot.PoTEngine
+	id int64
+	// pot        *pot.PoTEngine
+	consensus  model.Consensus
 	rpcServer  *grpc.Server
 	log        *logrus.Entry
 	p2pAdaptor p2p.P2PAdaptor
@@ -49,15 +51,27 @@ func NewNode(id int64) *Node {
 	log.WithField("nid", nid).Info("get network id")
 	utils.PanicOnError(err)
 	e := executor.BuildExecutor(cfg.Executor, log)
-	c := pot.NewEngine(id, 10001, cfg.Consensus, e, p, log)
+	c := consensus.BuildConsensus(id, 10001, cfg.Consensus, e, p, log)
+	if c == nil {
+		panic("Initialize consensus failed")
+	}
 	node := &Node{
 		id:                     id,
-		pot:                    c,
+		consensus:              c,
 		rpcServer:              rpcServer,
 		p2pAdaptor:             p,
 		log:                    log,
 		UnimplementedP2PServer: pb.UnimplementedP2PServer{},
 	}
+	// c := pot.NewEngine(id, 10001, cfg.Consensus, e, p, log)
+	// node := &Node{
+	// 	id:                     id,
+	// 	pot:                    c,
+	// 	rpcServer:              rpcServer,
+	// 	p2pAdaptor:             p,
+	// 	log:                    log,
+	// 	UnimplementedP2PServer: pb.UnimplementedP2PServer{},
+	// }
 	pb.RegisterP2PServer(rpcServer, node)
 	log.Infof("[UpgradeableConsensus] Server start at %s", listen.Addr().String())
 	go rpcServer.Serve(listen)
@@ -66,7 +80,8 @@ func NewNode(id int64) *Node {
 
 func (node *Node) Stop() {
 	node.rpcServer.Stop()
-	node.pot.Stop()
+	// node.pot.Stop()
+	node.consensus.Stop()
 	node.p2pAdaptor.Stop()
 }
 
@@ -75,7 +90,7 @@ func (node *Node) Send(ctx context.Context, in *pb.Packet) (*pb.Empty, error) {
 	if in.Type != pb.PacketType_CLIENTPACKET {
 		pbmsg := new(pb.PoTMessage)
 		_ = proto.Unmarshal(in.Msg, pbmsg)
-		node.pot.GetMsgByteEntrance() <- in.GetMsg()
+		node.consensus.GetMsgByteEntrance() <- in.GetMsg()
 		//protos := new(pb.HeaderRequest)
 		//_ = proto.Unmarshal(pbmsg.MsgByte, protos)
 		//node.log.Warn("[Node] packet type error ", hexutil.Encode(protos.Hashes))
@@ -86,7 +101,7 @@ func (node *Node) Send(ctx context.Context, in *pb.Packet) (*pb.Empty, error) {
 		node.log.WithError(err).Warn("[Node] decode request error")
 		return &pb.Empty{}, nil
 	}
-	node.pot.GetRequestEntrance() <- request
+	node.consensus.GetRequestEntrance() <- request
 	return &pb.Empty{}, nil
 }
 

@@ -2,7 +2,6 @@ package types
 
 import (
 	"container/list"
-	"fmt"
 	"sync"
 )
 
@@ -40,7 +39,7 @@ func (c *MemPool) showStatistic() {
 		}
 		p = p.Next()
 	}
-	fmt.Println("marked: ", marked, "unmarked: ", unmarked, "total: ", marked+unmarked)
+	// fmt.Println("marked: ", marked, "unmarked: ", unmarked, "total: ", marked+unmarked)
 }
 
 // Has return true if the given tx is in the mempool

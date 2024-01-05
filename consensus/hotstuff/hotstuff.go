@@ -75,6 +75,10 @@ func (hs *HotStuffImpl) Init(
 	hs.Executor = exec
 	hs.p2pAdaptor = p2pAdaptor
 	hs.Log = log.WithField("cid", cid)
+
+	hs.MsgByteEntrance = make(chan []byte, 10)
+	hs.RequestEntrance = make(chan *pb.Request, 10)
+
 	if p2pAdaptor != nil {
 		// p2pAdaptor.SetReceiver(hs)
 		p2pAdaptor.SetReceiver(hs.GetMsgByteEntrance())
@@ -82,8 +86,7 @@ func (hs *HotStuffImpl) Init(
 	} else {
 		hs.Log.Warn("p2p is nil, just for testing")
 	}
-	hs.MsgByteEntrance = make(chan []byte, 10)
-	hs.RequestEntrance = make(chan *pb.Request, 10)
+
 	hs.MemPool = types.NewMemPool()
 	hs.Log.Trace("[HOTSTUFF] Init block storage")
 	hs.BlockStorage = types.NewBlockStorageImpl(strconv.Itoa(int(cid)) + "-" + strconv.Itoa(int(id)))

@@ -60,7 +60,7 @@ func (sw *SimpleWhirlyImpl) OnReceiveNewLeaderNotify(newLeaderMsg *pb.NewLeaderN
 		return
 	}
 
-	sw.SetLeader(epoch, leader)
+	sw.SetLeader(epoch, peerId)
 	sw.Log.Trace("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] advance Epoch success!")
 
 	sw.voteLock.Lock()
@@ -69,13 +69,13 @@ func (sw *SimpleWhirlyImpl) OnReceiveNewLeaderNotify(newLeaderMsg *pb.NewLeaderN
 
 	echoMsg := sw.NewLeaderEchoMsg(leader, nil, sw.lockProof, sw.epoch, sw.vHeight)
 
-	if sw.leader[sw.epoch] == sw.ID {
+	if sw.leader[sw.epoch] == sw.GetPeerId() {
 		// echo self
 		sw.OnReceiveNewLeaderEcho(echoMsg)
 	} else {
 		// send vote to the leader
 		if sw.GetP2pAdaptorType() == "p2p" {
-			_ = sw.Unicast(sw.GetNetworkInfo()[sw.leader[sw.epoch]], echoMsg)
+			_ = sw.Unicast(sw.leader[sw.epoch], echoMsg)
 		} else {
 			_ = sw.Unicast(peerId, echoMsg)
 		}
@@ -130,7 +130,7 @@ type PoTSignal struct {
 
 func (sw *SimpleWhirlyImpl) testNewLeader() {
 	for i := 1; i < 100; i++ {
-		time.Sleep(time.Second * 3)
+		time.Sleep(time.Second * 5)
 		if i%4 != int(sw.ID) {
 			continue
 		}

@@ -47,6 +47,7 @@ func (e *PoTEngine) handlePacket(packet *pb.Packet) {
 			}
 		} else {
 			if e.UpperConsensus != nil && e.UpperConsensus.GetMsgByteEntrance() != nil {
+				// TODO: cache message
 				e.UpperConsensus.GetMsgByteEntrance() <- packet.GetMsg()
 			}
 		}
