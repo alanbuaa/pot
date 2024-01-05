@@ -123,9 +123,9 @@ func NewSimpleWhirly(
 	if sw.ID == 1 {
 		// TODO: ensure all nodes is ready before OnPropose
 		sw.SetLeader(sw.epoch, sw.GetPeerId())
-		time.Sleep(1 * time.Second)
+		// time.Sleep(1 * time.Second)
 		go sw.testNewLeader()
-		go sw.OnPropose()
+		// go sw.OnPropose()
 	} else {
 		go sw.testNewLeader()
 	}
@@ -504,7 +504,7 @@ func (sw *SimpleWhirlyImpl) OnPropose() {
 	// if sw.ID == 3 {
 	// 	return
 	// }
-	time.Sleep(2 * time.Second)
+	time.Sleep(1 * time.Second)
 	if sw.leader[sw.epoch] != sw.GetPeerId() {
 		sw.Log.WithFields(logrus.Fields{
 			"nowView": sw.View.ViewNum,

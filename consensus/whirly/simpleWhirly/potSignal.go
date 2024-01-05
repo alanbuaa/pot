@@ -10,7 +10,6 @@ import (
 )
 
 func (sw *SimpleWhirlyImpl) handlePoTSignal(potSignalBytes []byte) {
-	sw.Log.Info("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] new Epoch tirgger!")
 	potSignal := &PoTSignal{}
 	err := json.Unmarshal(potSignalBytes, potSignal)
 	if err != nil {
@@ -22,6 +21,20 @@ func (sw *SimpleWhirlyImpl) handlePoTSignal(potSignalBytes []byte) {
 		return
 	}
 
+	if potSignal.Command == "newLeader" {
+		sw.NewLeader(potSignal)
+	} else if potSignal.Command == "updateCommittee" {
+		sw.UpdateCommittee(potSignal)
+	} else if potSignal.Command == "stopNode" {
+		sw.StopNode()
+	} else {
+		sw.Log.Warn("error potSignal command")
+	}
+}
+
+func (sw *SimpleWhirlyImpl) NewLeader(potSignal *PoTSignal) {
+	sw.Log.Info("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] new Epoch tirgger!")
+
 	sw.echoLock.Lock()
 	sw.curEcho = make([]*pb.SimpleWhirlyProof, 0)
 	sw.echoLock.Unlock()
@@ -32,10 +45,25 @@ func (sw *SimpleWhirlyImpl) handlePoTSignal(potSignalBytes []byte) {
 		sw.handleMsg(newLeaderMsg)
 	}
 	// broadcast
-	err = sw.Broadcast(newLeaderMsg)
+	err := sw.Broadcast(newLeaderMsg)
 	if err != nil {
 		sw.Log.WithField("error", err.Error()).Warn("Broadcast newLeaderMsg failed.")
 	}
+}
+
+func (sw *SimpleWhirlyImpl) UpdateCommittee(potSignal *PoTSignal) {
+	sw.Log.Info("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] update committee tirgger!")
+
+	if len(potSignal.Committee) != len(sw.Config.Nodes) {
+		sw.Log.Warn("the committee size is error")
+		return
+	}
+}
+
+func (sw *SimpleWhirlyImpl) StopNode() {
+	sw.Log.Info("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] stop node tirgger!")
+
+	sw.Stop()
 }
 
 func (sw *SimpleWhirlyImpl) VerifyPoTProof(epoch int64, leader int64, proof []byte) bool {
@@ -122,6 +150,7 @@ func (sw *SimpleWhirlyImpl) OnReceiveNewLeaderEcho(msg *pb.WhirlyMsg) {
 type PoTSignal struct {
 	Epoch           int64
 	Proof           []byte
+	Command         string
 	ID              int64
 	LeaderNetworkId string
 	Committee       []string
@@ -131,14 +160,18 @@ type PoTSignal struct {
 func (sw *SimpleWhirlyImpl) testNewLeader() {
 	for i := 1; i < 100; i++ {
 		time.Sleep(time.Second * 5)
-		if i%4 != int(sw.ID) {
-			continue
-		}
-
 		potSignal := &PoTSignal{}
-		potSignal.Epoch = sw.epoch + 1
-		potSignal.Proof = nil
-		potSignal.ID = sw.ID
+		if i%4 != int(sw.ID) {
+			potSignal.Epoch = sw.epoch + 1
+			potSignal.Proof = nil
+			potSignal.Command = "updateCommittee"
+			potSignal.Committee = []string{"a", "b", "c", "d"}
+		} else {
+			potSignal.Epoch = sw.epoch + 1
+			potSignal.Proof = nil
+			potSignal.ID = sw.ID
+			potSignal.Command = "newLeader"
+		}
 
 		potSignalBytes, _ := json.Marshal(potSignal)
 		sw.PoTByteEntrance <- potSignalBytes
