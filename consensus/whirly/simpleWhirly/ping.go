@@ -34,7 +34,7 @@ func (sw *SimpleWhirlyImpl) sendPingMsg(ctx context.Context) {
 }
 
 func (sw *SimpleWhirlyImpl) handlePingMsg(msg *pb.WhirlyPing) {
-	if sw.GetPeerId() != sw.leader[sw.epoch] {
+	if sw.PeerId != sw.leader[sw.epoch] {
 		return
 	}
 	sw.Log.Info("Receive ping msg.")
@@ -57,7 +57,7 @@ func (sw *SimpleWhirlyImpl) handlePingMsg(msg *pb.WhirlyPing) {
 	}
 
 	if len(sw.readyNodes) == 2*sw.Config.F+1 {
-		if sw.GetPeerId() == sw.leader[sw.epoch] && sw.proposeView == 0 {
+		if sw.PeerId == sw.leader[sw.epoch] && sw.proposeView == 0 {
 			go sw.OnPropose()
 		}
 	}

@@ -34,7 +34,7 @@ type WhirlyUtilities interface {
 
 type WhirlyUtilitiesImpl struct {
 	ID              int64
-	peerId          string
+	PeerId          string
 	ConsensusID     int64
 	BlockStorage    types.WhirlyBlockStorage
 	View            *View
@@ -57,7 +57,7 @@ func (wu *WhirlyUtilitiesImpl) Init(
 	log *logrus.Entry,
 ) {
 	wu.ID = id
-	wu.peerId = p2pAdaptor.GetPeerID()
+	wu.PeerId = p2pAdaptor.GetPeerID()
 	wu.ConsensusID = cid
 	wu.Config = cfg
 	wu.Executor = exec
@@ -67,7 +67,7 @@ func (wu *WhirlyUtilitiesImpl) Init(
 	wu.RequestEntrance = make(chan *pb.Request, 10)
 	wu.MemPool = types.NewMemPool()
 	// wu.Log.Debugf("[HOTSTUFF] Init block storage")
-	wu.BlockStorage = types.NewBlockStorageImpl(strconv.Itoa(int(cid)) + "-" + strconv.Itoa(int(id)))
+	wu.BlockStorage = types.NewBlockStorageImpl(strconv.Itoa(int(cid)) + "-" + wu.PeerId)
 
 	// Set receiver
 	p2pAdaptor.SetReceiver(wu.GetMsgByteEntrance())
@@ -87,10 +87,6 @@ func (wu *WhirlyUtilitiesImpl) GetConsensusID() int64 {
 
 func (wu *WhirlyUtilitiesImpl) GetP2pAdaptorType() string {
 	return wu.p2pAdaptor.GetP2PType()
-}
-
-func (wu *WhirlyUtilitiesImpl) GetPeerId() string {
-	return wu.peerId
 }
 
 func (wu *WhirlyUtilitiesImpl) DecodeMsgByte(msgByte []byte) (*pb.WhirlyMsg, error) {

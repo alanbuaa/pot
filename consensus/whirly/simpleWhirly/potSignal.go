@@ -97,7 +97,7 @@ func (sw *SimpleWhirlyImpl) OnReceiveNewLeaderNotify(newLeaderMsg *pb.NewLeaderN
 
 	echoMsg := sw.NewLeaderEchoMsg(leader, nil, sw.lockProof, sw.epoch, sw.vHeight)
 
-	if sw.leader[sw.epoch] == sw.GetPeerId() {
+	if sw.leader[sw.epoch] == sw.PeerId {
 		// echo self
 		sw.OnReceiveNewLeaderEcho(echoMsg)
 	} else {
@@ -161,7 +161,7 @@ func (sw *SimpleWhirlyImpl) testNewLeader() {
 	for i := 1; i < 100; i++ {
 		time.Sleep(time.Second * 5)
 		potSignal := &PoTSignal{}
-		if i%4 != int(sw.ID) {
+		if sw.Config.Nodes[i%4].Address != sw.PeerId {
 			potSignal.Epoch = sw.epoch + 1
 			potSignal.Proof = nil
 			potSignal.Command = "updateCommittee"

@@ -120,9 +120,9 @@ func NewSimpleWhirly(
 	// 	go sw.sendPingMsg(sendCtx)
 	// }
 	sw.SetLeader(sw.epoch, cfg.Nodes[1].Address)
-	if sw.ID == 1 {
+	if sw.PeerId == cfg.Nodes[1].Address {
 		// TODO: ensure all nodes is ready before OnPropose
-		sw.SetLeader(sw.epoch, sw.GetPeerId())
+		sw.SetLeader(sw.epoch, sw.PeerId)
 		// time.Sleep(1 * time.Second)
 		go sw.testNewLeader()
 		// go sw.OnPropose()
@@ -179,7 +179,7 @@ func (sw *SimpleWhirlyImpl) Stop() {
 	sw.BlockStorage.Close()
 	close(sw.MsgByteEntrance)
 	close(sw.RequestEntrance)
-	_ = os.RemoveAll("dbfile/node" + strconv.Itoa(int(sw.ID)))
+	_ = os.RemoveAll("dbfile/node" + sw.PeerId)
 	_ = os.RemoveAll("store")
 }
 
@@ -221,7 +221,7 @@ func (sw *SimpleWhirlyImpl) handleMsg(msg *pb.WhirlyMsg) {
 		// put the cmd into the cmdset
 		sw.MemPool.Add(types.RawTransaction(request.Tx))
 		// send the request to the leader, if the replica is not the leader
-		if sw.GetPeerId() != sw.leader[sw.epoch] {
+		if sw.PeerId != sw.leader[sw.epoch] {
 			_ = sw.Unicast(sw.leader[sw.epoch], msg)
 			return
 		}
@@ -412,7 +412,7 @@ func (sw *SimpleWhirlyImpl) OnReceiveProposal(newBlock *pb.WhirlyBlock, swProof 
 
 	sw.AdvanceView(newBlock.Height)
 
-	if sw.leader[sw.epoch] == sw.GetPeerId() {
+	if sw.leader[sw.epoch] == sw.PeerId {
 		// vote self
 		sw.OnReceiveVote(voteMsg)
 	} else {
@@ -432,7 +432,7 @@ func (sw *SimpleWhirlyImpl) OnReceiveVote(msg *pb.WhirlyMsg) {
 		return
 	}
 
-	if sw.leader[sw.epoch] != sw.GetPeerId() {
+	if sw.leader[sw.epoch] != sw.PeerId {
 		sw.Log.WithFields(logrus.Fields{
 			"senderId":  whirlyVoteMsg.SenderId,
 			"getleader": sw.leader[sw.epoch],
@@ -505,7 +505,7 @@ func (sw *SimpleWhirlyImpl) OnPropose() {
 	// 	return
 	// }
 	time.Sleep(1 * time.Second)
-	if sw.leader[sw.epoch] != sw.GetPeerId() {
+	if sw.leader[sw.epoch] != sw.PeerId {
 		sw.Log.WithFields(logrus.Fields{
 			"nowView": sw.View.ViewNum,
 			"leader":  sw.leader[sw.epoch],
