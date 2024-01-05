@@ -1,6 +1,12 @@
 /.idea
 
 /dbfile
-
+/store
 /*.exe
+
+# Linux
+client
+genkey
+upgradeable-consensus
+
 
