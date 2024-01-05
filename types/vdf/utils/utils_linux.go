@@ -1,11 +1,13 @@
 package utils
 
 import (
+	"encoding/hex"
 	"fmt"
 	"io"
 	"os/exec"
 	"path"
 	"runtime"
+	"strconv"
 )
 
 var (
@@ -84,8 +86,59 @@ func ExecCmdAffinity(command string, ctrl *Controller) []byte {
 	}
 	return output
 }
+func ExecWesolowskiVDFAffinity(challenge []byte, iterations int, ctrl *Controller) []byte {
+	command := FilePath + " " + hex.EncodeToString(challenge) + " " + strconv.Itoa(iterations)
+	cmd := exec.Command("bash", "-c", command)
+
+	stdout, _ := cmd.StdoutPipe() // 创建输出管道
+	defer closeStdoutPipe(stdout)
+
+	if err := cmd.Start(); err != nil {
+		fmt.Printf("cmd.Start: %v\n", err)
+	}
+
+	ctrl.Pid = cmd.Process.Pid // 查看命令pid
+	// affinity
+	commandAffinity := fmt.Sprintf("taskset -pc %d %d", ctrl.CpuNo, ctrl.Pid)
+	cmdAffinity := exec.Command("bash", "-c", commandAffinity)
+	if err := cmdAffinity.Start(); err != nil {
+		fmt.Printf("cmdAffinity.Start: %v\n", err)
+	}
+
+	output, err := io.ReadAll(stdout) // 读取输出结果
+	if err != nil {
+		return nil
+	}
+	return output
+}
+
+func ExecPietrzakVDFAffinity(challenge []byte, iterations int, ctrl *Controller) []byte {
+	command := FilePath + " -tpietrzak " + hex.EncodeToString(challenge) + " " + strconv.Itoa(iterations)
+	cmd := exec.Command("bash", "-c", command)
+
+	stdout, _ := cmd.StdoutPipe() // 创建输出管道
+	defer closeStdoutPipe(stdout)
+
+	if err := cmd.Start(); err != nil {
+		fmt.Printf("cmd.Start: %v\n", err)
+	}
+
+	ctrl.Pid = cmd.Process.Pid // 查看命令pid
+	// affinity
+	commandAffinity := fmt.Sprintf("taskset -pc %d %d", ctrl.CpuNo, ctrl.Pid)
+	cmdAffinity := exec.Command("bash", "-c", commandAffinity)
+	if err := cmdAffinity.Start(); err != nil {
+		fmt.Printf("cmdAffinity.Start: %v\n", err)
+	}
+
+	output, err := io.ReadAll(stdout) // 读取输出结果
+	if err != nil {
+		return nil
+	}
+	return output
+}
 
 func KillProc(pid int) {
-	command := fmt.Sprintf("kill %d", ctrl.Pid)
+	command := fmt.Sprintf("kill %d", pid)
 	ExecCmd(command)
 }

@@ -111,7 +111,7 @@ func ExecWesolowskiVDFAffinity(challenge []byte, iterations int, ctrl *Controlle
 	return output
 }
 
-func ExecPietrzakVDF2ffinity(challenge []byte, iterations int, ctrl *Controller) []byte {
+func ExecPietrzakVDFAffinity(challenge []byte, iterations int, ctrl *Controller) []byte {
 	cmd := exec.Command(FilePath, "-tpietrzak", hex.EncodeToString(challenge), strconv.Itoa(iterations))
 	stdout, _ := cmd.StdoutPipe() // 创建输出管道
 	defer closeStdoutPipe(stdout)

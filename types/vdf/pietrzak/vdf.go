@@ -21,8 +21,7 @@ func Execute(challenge []byte, iterations int, ctrl *utils.Controller, cpuCounte
 		return nil
 	}
 	// 执行命令
-	// command := utils.FilePath + " -tpietrzak " + hex.EncodeToString(challenge) + " " + strconv.Itoa(iterations)
-	output := utils.ExecPietrzakVDF2ffinity(challenge, iterations, ctrl)
+	output := utils.ExecPietrzakVDFAffinity(challenge, iterations, ctrl)
 	// 释放CPU
 	cpuCounter.Release(ctrl)
 	// 中止的输出
