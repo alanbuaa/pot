@@ -21,11 +21,23 @@ func (sw *SimpleWhirlyImpl) handlePoTSignal(potSignalBytes []byte) {
 		return
 	}
 
-	if potSignal.Command == "newLeader" {
+	command := "stopNode"
+
+	for _, c := range potSignal.Committee {
+		if c == sw.PeerId {
+			command = "updateCommittee"
+		}
+	}
+
+	if potSignal.LeaderNetworkId == sw.PeerId {
+		command = "newLeader"
+	}
+
+	if command == "newLeader" {
 		sw.NewLeader(potSignal)
-	} else if potSignal.Command == "updateCommittee" {
+	} else if command == "updateCommittee" {
 		sw.UpdateCommittee(potSignal)
-	} else if potSignal.Command == "stopNode" {
+	} else if command == "stopNode" {
 		sw.StopNode()
 	} else {
 		sw.Log.Warn("error potSignal command")
@@ -150,7 +162,6 @@ func (sw *SimpleWhirlyImpl) OnReceiveNewLeaderEcho(msg *pb.WhirlyMsg) {
 type PoTSignal struct {
 	Epoch           int64
 	Proof           []byte
-	Command         string
 	ID              int64
 	LeaderNetworkId string
 	Committee       []string
@@ -164,13 +175,17 @@ func (sw *SimpleWhirlyImpl) testNewLeader() {
 		if sw.Config.Nodes[i%4].Address != sw.PeerId {
 			potSignal.Epoch = sw.epoch + 1
 			potSignal.Proof = nil
-			potSignal.Command = "updateCommittee"
-			potSignal.Committee = []string{"a", "b", "c", "d"}
+			potSignal.Committee = make([]string, len(sw.Config.Nodes))
+			for i := 0; i < len(sw.Config.Nodes); i++ {
+				potSignal.Committee[i] = sw.Config.Nodes[i].Address
+			}
+
+			// potSignal.Committee = []string{"a", "b", "c", "d"}
 		} else {
 			potSignal.Epoch = sw.epoch + 1
 			potSignal.Proof = nil
 			potSignal.ID = sw.ID
-			potSignal.Command = "newLeader"
+			potSignal.LeaderNetworkId = sw.PeerId
 		}
 
 		potSignalBytes, _ := json.Marshal(potSignal)

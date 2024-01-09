@@ -72,7 +72,7 @@ func (gc *Client) Send(ctx context.Context, in *pb.Packet) (*pb.Empty, error) {
 func NewClient(log *logrus.Entry) *Client {
 	cfg, err := config.NewConfig("config/configpot.yaml", 0)
 	utils.PanicOnError(err)
-	conn, err := grpc.Dial(cfg.Nodes[0].Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.Dial(cfg.Nodes[0].RpcAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		panic(err)
 	}
