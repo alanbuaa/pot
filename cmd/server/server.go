@@ -20,7 +20,7 @@ func main() {
 		syscall.SIGQUIT)
 
 	// node list
-	nodeNum := int64(1)
+	nodeNum := int64(4)
 	nodes := make([]*upgradeable_consensus.Node, nodeNum)
 	// create nodes
 	for i := int64(0); i < nodeNum; i++ {

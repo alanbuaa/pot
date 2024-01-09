@@ -62,6 +62,7 @@ type ConsensusConfig struct {
 	PoT         *PoTConfig        `yaml:"pot"`
 	Nodes       []*ReplicaInfo    // no need to have the following fields in config.yaml
 	Keys        *KeySet
+	Topic       string
 	F           int // initialize in NewConsensus if neeeded
 }
 
@@ -87,6 +88,7 @@ type Config struct {
 	Executor      *ExecutorConfig  `yaml:"executor"`
 	P2P           *P2PConfig       `yaml:"p2p"`
 	Consensus     *ConsensusConfig `yaml:"consensus"`
+	Topic         string           `yaml:"topic"`
 	Keys          *KeySet
 }
 
@@ -119,6 +121,7 @@ func NewConfig(path string, id int64) (*Config, error) {
 	cfg.Consensus.Nodes = cfg.Nodes
 	cfg.Consensus.Keys = keys
 	cfg.Consensus.F = (len(cfg.Nodes) - 1) / 3
+	cfg.Consensus.Topic = cfg.Topic
 	return cfg, nil
 }
 

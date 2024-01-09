@@ -72,6 +72,7 @@ func NewNetwork(port string, dhtPath string, keyPath string, bootstrapStrings []
 		libp2p.Identity(priv),
 		// support TLS connections
 		libp2p.Security(libp2ptls.ID, libp2ptls.New),
+		libp2p.WithDialTimeout(2*time.Second),
 	)
 	if err != nil {
 		return net, feedbackchan, errors.New(err.Error() + "New Host Error.")
@@ -201,6 +202,7 @@ func (n *Network) findTopicPeers(topic string) {
 	count := 0
 	for !anyConnected {
 		peerChan, err := routingDiscovery.FindPeers(n.ctx, topic)
+		// peerChan, err := routingDiscovery.FindPeers(n.ctx, topic, discovery.Limit(10))
 		if err != nil {
 			panic(err)
 		}

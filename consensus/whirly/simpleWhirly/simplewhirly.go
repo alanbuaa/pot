@@ -120,14 +120,17 @@ func NewSimpleWhirly(
 	// 	go sw.sendPingMsg(sendCtx)
 	// }
 	sw.SetLeader(sw.epoch, cfg.Nodes[1].Address)
+	// sw.SetLeader(sw.epoch, "1")
 	if sw.PeerId == cfg.Nodes[1].Address {
+		// if sw.ID == 1 {
 		// TODO: ensure all nodes is ready before OnPropose
 		sw.SetLeader(sw.epoch, sw.PeerId)
 		// time.Sleep(1 * time.Second)
 		go sw.testNewLeader()
-		// go sw.OnPropose()
+		go sw.OnPropose()
 	} else {
 		go sw.testNewLeader()
+		// go sw.OnPropose()
 	}
 
 	sw.Log.Info("[SIMPLE WHIRLY]\tstart to work")
@@ -413,6 +416,7 @@ func (sw *SimpleWhirlyImpl) OnReceiveProposal(newBlock *pb.WhirlyBlock, swProof 
 	sw.AdvanceView(newBlock.Height)
 
 	if sw.leader[sw.epoch] == sw.PeerId {
+		// if sw.GetLeader(int64(newBlock.Height)) == sw.ID {
 		// vote self
 		sw.OnReceiveVote(voteMsg)
 	} else {
@@ -433,6 +437,7 @@ func (sw *SimpleWhirlyImpl) OnReceiveVote(msg *pb.WhirlyMsg) {
 	}
 
 	if sw.leader[sw.epoch] != sw.PeerId {
+		// if sw.GetLeader(int64(whirlyVoteMsg.BlockView)) != sw.ID {
 		sw.Log.WithFields(logrus.Fields{
 			"senderId":  whirlyVoteMsg.SenderId,
 			"getleader": sw.leader[sw.epoch],
@@ -506,10 +511,11 @@ func (sw *SimpleWhirlyImpl) OnPropose() {
 	// }
 	time.Sleep(1 * time.Second)
 	if sw.leader[sw.epoch] != sw.PeerId {
+		// if sw.GetLeader(int64(1)) != sw.ID {
 		sw.Log.WithFields(logrus.Fields{
 			"nowView": sw.View.ViewNum,
 			"leader":  sw.leader[sw.epoch],
-		}).Info("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] OnPropose: not allow!")
+		}).Trace("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] OnPropose: not allow!")
 		return
 	}
 	sw.Log.Trace("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] OnPropose")
