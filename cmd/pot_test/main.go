@@ -15,7 +15,7 @@ var (
 )
 
 //
-//func main() {
+// func main() {
 //	outChan := make(chan []byte, 500)
 //
 //	vdf := types.NewVDF(outChan, pot.Vdf0Iteration)
@@ -26,9 +26,9 @@ var (
 //	vdf.Exec()
 //	wg.Wait()
 //
-//}
+// }
 //
-//func receiveChan(outpu chan []byte, vdf *types.VDF) {
+// func receiveChan(outpu chan []byte, vdf *types.VDF) {
 //	epoch := 0
 //	in := []byte("aa")
 //	for {
@@ -46,7 +46,7 @@ var (
 //			go vdf.Exec()
 //		}
 //	}
-//}
+// }
 
 func main() {
 	signal.Notify(sigChan, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM,
@@ -59,10 +59,6 @@ func main() {
 			nodes[index] = node.NewNode(index)
 		}(i)
 	}
-	//go func() {
-	//	log.Println(http.ListenAndServe("localhost:6060", nil))
-	//}()
-	//select {}
 	<-sigChan
 	logger.Info("[UpgradeableConsensus] Exit...")
 	for i := 0; i < total; i++ {

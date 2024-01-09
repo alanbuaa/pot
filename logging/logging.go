@@ -12,10 +12,10 @@ import (
 var logging *logrus.Logger
 
 func init() {
-	fcfg, err := config.NewConfig("config/configpot.yaml", 0)
+	fCfg, err := config.NewConfig("config/configpot.yaml", 0)
 	var cfg *config.LogConfig
 	if err == nil {
-		cfg = fcfg.Log
+		cfg = fCfg.Log
 	} else {
 		// for testing
 		cfg = &config.LogConfig{
@@ -44,7 +44,7 @@ func init() {
 	}
 }
 
-// should be called after InitLog
+// GetLogger should be called after InitLog
 func GetLogger() *logrus.Logger {
 	return logging
 }

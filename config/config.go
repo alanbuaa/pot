@@ -22,7 +22,7 @@ type KeySet struct {
 	PrivateKey *tcrsa.KeyShare
 }
 
-type PowConfig struct {
+type PoWConfig struct {
 	InitDifficulty *big.Int `yaml:"init_difficulty"`
 	Hash           string   `yaml:"hash"`
 }
@@ -34,7 +34,7 @@ type HotStuffConfig struct {
 	Timeout      int    `yaml:"timeout"`
 }
 
-type UpgradeableConfig struct {
+type UpgradableConfig struct {
 	InitConsensus *ConsensusConfig `yaml:"init_consensus"`
 	CommitTime    int              `yaml:"commit_time"`
 	NetworkType   NetworkType      `yaml:"network_type"` // 0=>synchronous 1=> asynchronous or partial synchronous
@@ -53,14 +53,14 @@ type PoTConfig struct {
 	Vdf1Iteration int    `yaml:"vdf1Iteration"`
 }
 type ConsensusConfig struct {
-	Type        string             `yaml:"type"`
-	ConsensusID int64              `yaml:"consensus_id"`
-	HotStuff    *HotStuffConfig    `yaml:"hotstuff"`
-	Pow         *PowConfig         `yaml:"pow"`
-	Upgradeable *UpgradeableConfig `yaml:"upgradeable"`
-	Whirly      *WhirlyConfig      `yaml:"whirly"`
-	PoT         *PoTConfig         `yaml:"pot"`
-	Nodes       []*ReplicaInfo     // no need to have the following fields in config.yaml
+	Type        string            `yaml:"type"`
+	ConsensusID int64             `yaml:"consensus_id"`
+	HotStuff    *HotStuffConfig   `yaml:"hotstuff"`
+	Pow         *PoWConfig        `yaml:"pow"`
+	Upgradeable *UpgradableConfig `yaml:"upgradeable"`
+	Whirly      *WhirlyConfig     `yaml:"whirly"`
+	PoT         *PoTConfig        `yaml:"pot"`
+	Nodes       []*ReplicaInfo    // no need to have the following fields in config.yaml
 	Keys        *KeySet
 	F           int // initialize in NewConsensus if neeeded
 }

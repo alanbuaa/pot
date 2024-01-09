@@ -178,7 +178,7 @@ func (w *Worker) OnGetVdf0Response() {
 			w.SetVdf0res(res.Epoch+1, res0)
 
 			// calculate the next epoch vdf
-			inputhash := crypto.Hash(res0)
+			inputHash := crypto.Hash(res0)
 
 			if !w.vdf0.Finished {
 				err := w.vdf0.Abort()
@@ -188,7 +188,7 @@ func (w *Worker) OnGetVdf0Response() {
 				w.log.Warnf("[PoT]\tepoch %d:vdf0 got abort for new epoch ", epoch+1)
 			}
 
-			err := w.vdf0.SetInput(inputhash, w.config.PoT.Vdf0Iteration)
+			err := w.vdf0.SetInput(inputHash, w.config.PoT.Vdf0Iteration)
 			if err != nil {
 				w.log.Errorf("[PoT]\tepoch %d:set vdf0 error for %t", epoch+1, err)
 
@@ -225,10 +225,10 @@ func (w *Worker) OnGetVdf0Response() {
 					w.log.Errorf("[PoT]\tepoch %d:parent block hash is nil,set nil block %s as parent", epoch+1, hex.EncodeToString(parentblock.Hashes))
 				}
 			}
-
-			if epoch > 1 {
-				w.simpleLeaderUpdate(parentblock)
-			}
+			//  TODO recover
+			// if epoch > 1 {
+			// 	w.simpleLeaderUpdate(parentblock)
+			// }
 
 			difficulty := w.calcDifficulty(parentblock, uncleblock)
 

@@ -280,7 +280,7 @@ func (c *Client) upgradeConsensus(nc string) {
 		cf.Whirly = wcf
 	case "pow":
 		bi := new(big.Int)
-		pcf := &config.PowConfig{
+		pcf := &config.PoWConfig{
 			InitDifficulty: bi.SetBytes([]byte(" 0x0000010000000000000000000000000000000000000000000000000000000000")),
 		}
 		cf.Type = "pow"

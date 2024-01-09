@@ -15,12 +15,15 @@ var (
 )
 
 func main() {
+	// signals to stop nodes
 	signal.Notify(sigChan, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM,
 		syscall.SIGQUIT)
-	total := 4
-	nodes := make([]*upgradeable_consensus.Node, total)
 
-	for i := int64(0); i < int64(total); i++ {
+	// node list
+	nodeNum := int64(1)
+	nodes := make([]*upgradeable_consensus.Node, nodeNum)
+	// create nodes
+	for i := int64(0); i < nodeNum; i++ {
 		go func(index int64) {
 			nodes[index] = upgradeable_consensus.NewNode(index)
 		}(i)
@@ -28,7 +31,7 @@ func main() {
 
 	<-sigChan
 	logger.Info("[UpgradeableConsensus] Exit...")
-	for i := 0; i < total; i++ {
+	for i := int64(0); i < nodeNum; i++ {
 		nodes[i].Stop()
 	}
 }

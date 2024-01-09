@@ -22,7 +22,7 @@ type PoTEngine struct {
 	// consensus config
 	consensusID int64
 	config      *config.ConsensusConfig
-	// consensus exector
+	// consensus executor
 	exec executor.Executor
 	log  *logrus.Entry
 	// network

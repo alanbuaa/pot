@@ -63,15 +63,6 @@ func NewNode(id int64) *Node {
 		log:                    log,
 		UnimplementedP2PServer: pb.UnimplementedP2PServer{},
 	}
-	// c := pot.NewEngine(id, 10001, cfg.Consensus, e, p, log)
-	// node := &Node{
-	// 	id:                     id,
-	// 	pot:                    c,
-	// 	rpcServer:              rpcServer,
-	// 	p2pAdaptor:             p,
-	// 	log:                    log,
-	// 	UnimplementedP2PServer: pb.UnimplementedP2PServer{},
-	// }
 	pb.RegisterP2PServer(rpcServer, node)
 	log.Infof("[UpgradeableConsensus] Server start at %s", listen.Addr().String())
 	go rpcServer.Serve(listen)
@@ -80,20 +71,19 @@ func NewNode(id int64) *Node {
 
 func (node *Node) Stop() {
 	node.rpcServer.Stop()
-	// node.pot.Stop()
 	node.consensus.Stop()
 	node.p2pAdaptor.Stop()
 }
 
 func (node *Node) Send(ctx context.Context, in *pb.Packet) (*pb.Empty, error) {
-	//node.log.Infoln("[node]\t receive request for header")
+	// node.log.Infoln("[node]\t receive request for header")
 	if in.Type != pb.PacketType_CLIENTPACKET {
-		pbmsg := new(pb.PoTMessage)
-		_ = proto.Unmarshal(in.Msg, pbmsg)
+		pbMsg := new(pb.PoTMessage)
+		_ = proto.Unmarshal(in.Msg, pbMsg)
 		node.consensus.GetMsgByteEntrance() <- in.GetMsg()
-		//protos := new(pb.HeaderRequest)
-		//_ = proto.Unmarshal(pbmsg.MsgByte, protos)
-		//node.log.Warn("[Node] packet type error ", hexutil.Encode(protos.Hashes))
+		// protos := new(pb.HeaderRequest)
+		// _ = proto.Unmarshal(pbMsg.MsgByte, protos)
+		// node.log.Warn("[Node] packet type error ", hexutil.Encode(protos.Hashes))
 		return &pb.Empty{}, nil
 	}
 	request := new(pb.Request)
@@ -105,7 +95,7 @@ func (node *Node) Send(ctx context.Context, in *pb.Packet) (*pb.Empty, error) {
 	return &pb.Empty{}, nil
 }
 
-//func (node *Node) Request(ctx context.Context, in *pb.HeaderRequest) (*pb.Header, error) {
+// func (node *Node) Request(ctx context.Context, in *pb.HeaderRequest) (*pb.Header, error) {
 //	node.log.Infoln("[node]\t receive request for header")
 //	hash := in.Hashes
 //	st := node.pot.GetStorage()
@@ -117,9 +107,9 @@ func (node *Node) Send(ctx context.Context, in *pb.Packet) (*pb.Empty, error) {
 //		return header.ToProto(), nil
 //	}
 //
-//}
+// }
 //
-//func (node *Node) PoTresRequest(ctx context.Context, request *pb.PoTRequest) (*pb.PoTResponse, error) {
+// func (node *Node) PoTresRequest(ctx context.Context, request *pb.PoTRequest) (*pb.PoTResponse, error) {
 //	node.log.Infoln("[node]\t receive request for header")
 //	epoch := request.GetEpoch()
 //	st := node.pot.GetStorage()
@@ -134,4 +124,4 @@ func (node *Node) Send(ctx context.Context, in *pb.Packet) (*pb.Empty, error) {
 //			Address: node.id,
 //		}, nil
 //	}
-//}
+// }
