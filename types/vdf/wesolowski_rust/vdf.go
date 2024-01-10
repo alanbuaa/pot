@@ -12,6 +12,7 @@ func Execute(challenge []byte, iterations int, ctrl *utils.Controller, cpuCounte
 	cpuCounter.Occupy(ctrl)
 	// 判断终止
 	if ctrl.IsAbort {
+		cpuCounter.Release(ctrl)
 		return nil
 	}
 	// 判断可执行文件
