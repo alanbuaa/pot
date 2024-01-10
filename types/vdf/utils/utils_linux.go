@@ -138,7 +138,8 @@ func ExecPietrzakVDFAffinity(challenge []byte, iterations int, ctrl *Controller)
 	return output
 }
 
-func KillProc(pid int) {
+func KillProc(pid int) error {
 	command := fmt.Sprintf("kill %d", pid)
-	ExecCmd(command)
+	cmd := exec.Command("bash", "-c", command)
+	return cmd.Run()
 }

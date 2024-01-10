@@ -53,7 +53,7 @@ func (c *CPUCounter) Release(ctrl *Controller) {
 	c.cond.L.Lock()
 	if c.cpuSet.Contains(ctrl.CpuNo) {
 		c.idleCpuList = append(c.idleCpuList, ctrl.CpuNo)
+		c.cond.Signal()
 	}
-	c.cond.Signal()
 	c.cond.L.Unlock()
 }

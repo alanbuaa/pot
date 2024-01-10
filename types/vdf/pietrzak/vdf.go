@@ -8,11 +8,11 @@ import (
 )
 
 func Execute(challenge []byte, iterations int, ctrl *utils.Controller, cpuCounter *utils.CPUCounter) []byte {
-
 	// 分配CPU，CPU不够则阻塞
 	cpuCounter.Occupy(ctrl)
 	// 判断终止
 	if ctrl.IsAbort {
+		cpuCounter.Release(ctrl)
 		return nil
 	}
 	// 判断可执行文件
