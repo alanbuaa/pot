@@ -46,15 +46,17 @@ func (vdf *Vdf) Verify(res []byte) bool {
 }
 
 func (vdf *Vdf) Abort() error {
-	ctrl := vdf.Controller
 	// 如果实例正在等待分配CPU，则停止等待
-	ctrl.IsAbort = true
+	vdf.Controller.IsAbort = true
 	// 如果实例正在执行,则终止该进程
-	if ctrl.IsAllocated {
-		utils.KillProc(ctrl.Pid)
+	if vdf.Controller.IsAllocated {
+		// TODO loop kill
+		return utils.KillProc(vdf.Controller.Pid)
+	} else {
+		// 如果实例执行完成正在释放CPU，不做处理
+		return nil
 	}
-	// 如果实例执行完成正在释放CPU，不做处理
-	return nil
+
 }
 
 func (vdf *Vdf) CheckVDF(input []byte, res []byte) bool {

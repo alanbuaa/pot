@@ -155,12 +155,9 @@ func ExecPietrzakVDFAffinity(challenge []byte, iterations int, ctrl *Controller)
 	return output
 }
 
-func KillProc(pid int) {
+func KillProc(pid int) error {
 	command := fmt.Sprintf("taskkill /f /pid %s", strconv.Itoa(pid))
+	fmt.Println(command)
 	taskkillCmd := exec.Command("cmd", "/C", command)
-	err := taskkillCmd.Run()
-	if err != nil {
-		fmt.Println("杀死进程失败:", err)
-		// os.Exit(1)
-	}
+	return taskkillCmd.Run()
 }
