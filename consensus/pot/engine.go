@@ -30,6 +30,7 @@ type PoTEngine struct {
 	isBaseP2P       bool
 	MsgByteEntrance chan []byte
 	RequestEntrance chan *pb.Request
+	Topic           []byte
 	// consensus work
 	Height         int64
 	worker         *Worker
@@ -54,13 +55,14 @@ func NewEngine(nid int64, cid int64, config *config.ConsensusConfig, exec execut
 		MsgByteEntrance: ch,
 		// Worker:          worker,
 		headerStorage: st,
+		Topic:         []byte(config.Topic),
 	}
 	st.Put(types.DefaultGenesisHeader())
 	worker := NewWorker(nid, config, log, st, e)
 	e.worker = worker
 	// adaptor.SetReceiver(e)
 	adaptor.SetReceiver(e.GetMsgByteEntrance())
-	err := adaptor.Subscribe([]byte("this-is-consensus-topic"))
+	err := adaptor.Subscribe([]byte(config.Topic))
 	if adaptor.GetP2PType() == "p2p" {
 		e.peerId = config.Nodes[nid].Address
 	}
@@ -122,7 +124,7 @@ func (e *PoTEngine) Broadcast(msgByte []byte) error {
 	}
 	bytePacket, err := proto.Marshal(packet)
 	utils.PanicOnError(err)
-	return e.Adaptor.Broadcast(bytePacket, e.consensusID, []byte("this-is-consensus-topic"))
+	return e.Adaptor.Broadcast(bytePacket, e.consensusID, e.Topic)
 }
 
 func (e *PoTEngine) Unicast(address string, msgByte []byte) error {
@@ -134,7 +136,8 @@ func (e *PoTEngine) Unicast(address string, msgByte []byte) error {
 	}
 	bytePacket, err := proto.Marshal(packet)
 	utils.PanicOnError(err)
-	return e.Adaptor.Unicast(address, bytePacket, e.consensusID, []byte("this-is-consensus-topic"))
+	//e.log.Infof("unicast byte:%s", hexutil.Encode(msgByte))
+	return e.Adaptor.Unicast(address, bytePacket, e.consensusID, e.Topic)
 }
 
 func (e *PoTEngine) GetHeaderStorage() *types.HeaderStorage {

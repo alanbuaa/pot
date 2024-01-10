@@ -40,7 +40,7 @@ func BuildP2P(cfg *config.P2PConfig, log *logrus.Entry, id int64) (P2PAdaptor, s
 }
 
 func NewP2pAdaptor(log *logrus.Entry, id int64) (*pad.NetworkAdaptor, string, error) {
-	cfg, err := config.NewConfig("config/config.yaml", id)
+	cfg, err := config.NewConfig("config/configpot.yaml", id)
 	utils.PanicOnError(err)
 	info := cfg.GetNodeInfo(id)
 	port := info.Address[strings.Index(info.Address, ":")+1:]
@@ -54,7 +54,7 @@ func NewP2pAdaptor(log *logrus.Entry, id int64) (*pad.NetworkAdaptor, string, er
 	}
 
 	peerid := nada.GetPeerID()
-	fmt.Println("PeerID: ", peerid)
+	fmt.Printf("id %d:PeerID:%s\n", id, peerid)
 
 	// Start unicast
 	err = nada.StartUnicast()
@@ -64,6 +64,6 @@ func NewP2pAdaptor(log *logrus.Entry, id int64) (*pad.NetworkAdaptor, string, er
 		return nil, "", err
 	}
 
-	fmt.Println("Unicast service started")
+	fmt.Printf("id %d: Unicast service started\n", id)
 	return nada, peerid, nil
 }

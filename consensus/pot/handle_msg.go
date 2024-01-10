@@ -25,6 +25,7 @@ func (e *PoTEngine) onReceiveMsg() {
 			packet, err := DecodePacket(msgByte)
 			if err != nil {
 				e.log.WithError(err).Warn("decode packet failed")
+				//e.log.Infof("Decode byte:%s", hexutil.Encode(msgByte))
 				continue
 			}
 			e.handlePacket(packet)

@@ -30,18 +30,23 @@ func NewCPUCounter(cpuList []uint8) (c *CPUCounter) {
 }
 
 func (c *CPUCounter) Occupy(ctrl *Controller) {
-	c.cond.L.Lock()
-	for len(c.idleCpuList) == 0 {
+
+	for {
 		if ctrl.IsAbort {
-			c.cond.L.Unlock()
-			return
+			break
 		}
-		c.cond.Wait()
+		c.cond.L.Lock()
+		if len(c.idleCpuList) == 0 {
+			c.cond.Wait()
+		}
+		ctrl.CpuNo = c.idleCpuList[0]
+		c.idleCpuList = c.idleCpuList[1:]
+		ctrl.IsAllocated = true
+		c.cond.L.Unlock()
+		if ctrl.IsAllocated {
+			break
+		}
 	}
-	ctrl.CpuNo = c.idleCpuList[0]
-	c.idleCpuList = c.idleCpuList[1:]
-	ctrl.IsAllocated = true
-	c.cond.L.Unlock()
 }
 
 func (c *CPUCounter) Release(ctrl *Controller) {

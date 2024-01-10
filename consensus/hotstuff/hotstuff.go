@@ -82,7 +82,7 @@ func (hs *HotStuffImpl) Init(
 	if p2pAdaptor != nil {
 		// p2pAdaptor.SetReceiver(hs)
 		p2pAdaptor.SetReceiver(hs.GetMsgByteEntrance())
-		p2pAdaptor.Subscribe([]byte("consensus"))
+		p2pAdaptor.Subscribe([]byte(hs.Config.Topic))
 	} else {
 		hs.Log.Warn("p2p is nil, just for testing")
 	}

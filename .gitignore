@@ -9,4 +9,7 @@ client
 genkey
 upgradeable-consensus
 
+/.vscode
+*.log
+
 

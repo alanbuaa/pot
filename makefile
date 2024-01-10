@@ -10,6 +10,9 @@ build_client:
 build_server:
 	go build -o upgradeable-consensus ./cmd/server
 
+build_test:
+	go build -o test ./cmd/pot_test
+
 win_build:
 	go build -o genkey.exe ./cmd/genkey
 	go build -o client.exe ./cmd/client

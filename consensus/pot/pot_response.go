@@ -150,6 +150,9 @@ func (w *Worker) getParentBlock(header *types.Header) (*types.Header, error) {
 	if header == nil {
 		return nil, fmt.Errorf("could not get parent from a nil block")
 	}
+	if header.Height == 1 {
+		return types.DefaultGenesisHeader(), nil
+	}
 	parentHash := header.ParentHash
 
 	if parentHash == nil {

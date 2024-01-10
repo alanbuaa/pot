@@ -89,7 +89,7 @@ func NewPowEngine(nid int64, cid int64, config *config.ConsensusConfig, exec exe
 	// rand.Seed(0)
 	// adaptor.SetReceiver(e)
 	adaptor.SetReceiver(e.GetMsgByteEntrance())
-	adaptor.Subscribe([]byte("consensus"))
+	adaptor.Subscribe([]byte(config.Topic))
 	go e.worker()
 	go e.receiveMsg()
 	e.blockChan <- e.createGenesisBlock()

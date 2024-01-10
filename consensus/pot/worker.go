@@ -27,10 +27,9 @@ import (
 var bigD = new(big.Int).Sub(big.NewInt(0).Exp(big.NewInt(2), big.NewInt(256), nil), big.NewInt(1))
 
 const (
-	Vdf0Iteration = 100000
-	vdf1Iteration = 60000
-	cpuCounter    = 1
-	NoParentD     = 2
+	Commiteelen = 4
+	cpuCounter  = 1
+	NoParentD   = 2
 )
 
 type Worker struct {
@@ -69,6 +68,7 @@ type Worker struct {
 	whirly        *simpleWhirly.SimpleWhirlyImpl
 	potSignalChan chan<- []byte
 	committee     *orderedmap.OrderedMap
+	Commitee      []string
 }
 
 func NewWorker(id int64, config *config.ConsensusConfig, logger *logrus.Entry, st *types.HeaderStorage, engine *PoTEngine) *Worker {
@@ -223,9 +223,28 @@ func (w *Worker) OnGetVdf0Response() {
 					w.chainReader.SetHeight(epoch, backupblock[0])
 					parentblock = backupblock[0]
 					w.log.Errorf("[PoT]\tepoch %d:parent block hash is nil,set nil block %s as parent", epoch+1, hex.EncodeToString(parentblock.Hashes))
+				} else {
+					grandblock, err := w.chainReader.GetByHeight(epoch - 1)
+					if err != nil {
+						continue
+					}
+					parentblock = &types.Header{
+						Height:     epoch - 1,
+						ParentHash: grandblock.Hash(),
+						UncleHash:  nil,
+						Mixdigest:  nil,
+						Difficulty: nil,
+						Nonce:      0,
+						Timestamp:  time.Time{},
+						PoTProof:   nil,
+						Address:    0,
+						Hashes:     nil,
+						PeerId:     w.PeerId,
+					}
+					parentblock.Hash()
 				}
 			}
-			//  TODO recover
+
 			// if epoch > 1 {
 			// 	w.simpleLeaderUpdate(parentblock)
 			// }
