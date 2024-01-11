@@ -47,6 +47,7 @@ type WhirlyUtilitiesImpl struct {
 	Log             *logrus.Entry
 	Executor        executor.Executor
 	Topic           string
+	Weight          int64
 }
 
 func (wu *WhirlyUtilitiesImpl) Init(
@@ -140,6 +141,7 @@ func (wu *WhirlyUtilitiesImpl) VoteMsg(blockView uint64, blockHash []byte, flag 
 		SwProof:    proof,
 		Epoch:      uint64(epoch),
 		PeerId:     wu.p2pAdaptor.GetPeerID(),
+		Weight:     uint64(wu.Weight),
 	}}
 	return wMsg
 }
@@ -154,14 +156,15 @@ func (wu *WhirlyUtilitiesImpl) NewViewMsg(qc *pb.QuorumCert, viewNum uint64) *pb
 	return wMsg
 }
 
-func (wu *WhirlyUtilitiesImpl) NewLeaderNotifyMsg(epoch int64, proof []byte) *pb.WhirlyMsg {
+func (wu *WhirlyUtilitiesImpl) NewLeaderNotifyMsg(epoch int64, proof []byte, committee []string) *pb.WhirlyMsg {
 	wMsg := &pb.WhirlyMsg{}
 
 	wMsg.Payload = &pb.WhirlyMsg_NewLeaderNotify{NewLeaderNotify: &pb.NewLeaderNotify{
-		Leader: uint64(wu.ID),
-		Epoch:  uint64(epoch),
-		Proof:  proof,
-		PeerId: wu.p2pAdaptor.GetPeerID(),
+		Leader:    uint64(wu.ID),
+		Epoch:     uint64(epoch),
+		Proof:     proof,
+		PeerId:    wu.p2pAdaptor.GetPeerID(),
+		Committee: committee,
 	}}
 	return wMsg
 }
