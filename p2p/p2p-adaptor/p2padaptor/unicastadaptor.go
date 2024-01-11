@@ -2,6 +2,7 @@ package p2padaptor
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"errors"
 	"log"
@@ -12,6 +13,8 @@ import (
 	libp2pnet "github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
+
+	"encoding/binary"
 )
 
 var (
@@ -44,13 +47,38 @@ func (uca *UnicastAdapter) StartUnicastService() {
 
 				// Read header
 				buf := bufio.NewReader(stream)
-				header, err := buf.ReadByte()
+				header0, err := buf.ReadByte()
 				if err != nil {
+					log.Println("Error reading header0 from buffer")
 					return
 				}
 
+				header1, err := buf.ReadByte()
+				if err != nil {
+					log.Println("Error reading header1 from buffer")
+					return
+				}
+
+				header2, err := buf.ReadByte()
+				if err != nil {
+					log.Println("Error reading header2 from buffer")
+					return
+				}
+
+				header3, err := buf.ReadByte()
+				if err != nil {
+					log.Println("Error reading header3 from buffer")
+					return
+				}
+
+				var header []byte
+				header = append(header, header0)
+				header = append(header, header1)
+				header = append(header, header2)
+				header = append(header, header3)
+
 				// Read payload
-				payload := make([]byte, header)
+				payload := make([]byte, BytesToInt(header))
 				_, err = io.ReadFull(buf, payload)
 				// fmt.Printf("payload has %d bytes", n)
 				if err != nil {
@@ -148,7 +176,7 @@ func (uca *UnicastAdapter) newStream(peerID peer.ID) (libp2pnet.Stream, error) {
 
 func (uca *UnicastAdapter) sendBytes(st libp2pnet.Stream, data []byte) error {
 	payload := data
-	header := []byte{byte(len(payload))}
+	header := IntToBytes(len(payload))
 
 	// Write header
 	_, err := st.Write(header)
@@ -163,4 +191,21 @@ func (uca *UnicastAdapter) sendBytes(st libp2pnet.Stream, data []byte) error {
 	}
 
 	return nil
+}
+
+func IntToBytes(n int) []byte {
+	x := int32(n)
+
+	bytesBuffer := bytes.NewBuffer([]byte{})
+	binary.Write(bytesBuffer, binary.BigEndian, x)
+	return bytesBuffer.Bytes()
+}
+
+func BytesToInt(b []byte) int {
+	bytesBuffer := bytes.NewBuffer(b)
+
+	var x int32
+	binary.Read(bytesBuffer, binary.BigEndian, &x)
+
+	return int(x)
 }
