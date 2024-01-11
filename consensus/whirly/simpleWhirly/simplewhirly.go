@@ -188,7 +188,7 @@ func NewSimpleWhirlyForLocalTest(
 	} else {
 
 	}
-	sw.testNewLeader2()
+	sw.testNewLeader()
 
 	sw.Log.Info("[SIMPLE WHIRLY]\tstart to work")
 	return sw

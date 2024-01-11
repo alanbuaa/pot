@@ -33,12 +33,6 @@ func (sw *SimpleWhirlyImpl) UpdateCommittee(committee []string, weight int) {
 
 	sw.Weight = int64(weight)
 	sw.inCommittee = true
-
-	if len(committee) != len(sw.Config.Nodes) {
-		sw.Log.Warn("the committee size is error")
-		return
-	}
-
 	sw.Committee = committee
 }
 
