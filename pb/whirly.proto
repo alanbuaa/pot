@@ -45,6 +45,7 @@ message WhirlyVote {
   SimpleWhirlyProof swProof = 8;
   uint64 epoch = 9;
   string peerId = 10;
+  uint64 weight = 11;
 }
 
 message WhirlyNewView {
