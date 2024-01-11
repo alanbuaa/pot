@@ -60,6 +60,7 @@ message NewLeaderNotify {
   uint64 epoch = 2;
   bytes proof = 3;
   string peerId = 4;
+  repeated string committee = 5;
 }
 
 message NewLeaderEcho {
