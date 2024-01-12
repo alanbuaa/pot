@@ -47,6 +47,7 @@ type WhirlyUtilitiesImpl struct {
 	Log             *logrus.Entry
 	Executor        executor.Executor
 	Topic           string
+	Weight          int64
 }
 
 func (wu *WhirlyUtilitiesImpl) Init(
@@ -73,13 +74,13 @@ func (wu *WhirlyUtilitiesImpl) Init(
 	// Set receiver
 	//p2pAdaptor.SetReceiver(wu.GetMsgByteEntrance())
 	wu.Topic = cfg.Topic
-	//// Subscribe topic
+	// Subscribe topic
 	//err := p2pAdaptor.Subscribe([]byte(wu.Topic))
 	//if err != nil {
 	//	wu.Log.Error("Subscribe error: ", err.Error())
 	//	return
 	//}
-	//wu.Log.Info("Joined to topic: ", wu.Topic)
+	wu.Log.Info("Joined to topic: ", wu.Topic)
 }
 
 func (wu *WhirlyUtilitiesImpl) GetConsensusID() int64 {
@@ -140,6 +141,7 @@ func (wu *WhirlyUtilitiesImpl) VoteMsg(blockView uint64, blockHash []byte, flag 
 		SwProof:    proof,
 		Epoch:      uint64(epoch),
 		PeerId:     wu.p2pAdaptor.GetPeerID(),
+		Weight:     uint64(wu.Weight),
 	}}
 	return wMsg
 }
@@ -154,14 +156,15 @@ func (wu *WhirlyUtilitiesImpl) NewViewMsg(qc *pb.QuorumCert, viewNum uint64) *pb
 	return wMsg
 }
 
-func (wu *WhirlyUtilitiesImpl) NewLeaderNotifyMsg(epoch int64, proof []byte) *pb.WhirlyMsg {
+func (wu *WhirlyUtilitiesImpl) NewLeaderNotifyMsg(epoch int64, proof []byte, committee []string) *pb.WhirlyMsg {
 	wMsg := &pb.WhirlyMsg{}
 
 	wMsg.Payload = &pb.WhirlyMsg_NewLeaderNotify{NewLeaderNotify: &pb.NewLeaderNotify{
-		Leader: uint64(wu.ID),
-		Epoch:  uint64(epoch),
-		Proof:  proof,
-		PeerId: wu.p2pAdaptor.GetPeerID(),
+		Leader:    uint64(wu.ID),
+		Epoch:     uint64(epoch),
+		Proof:     proof,
+		PeerId:    wu.p2pAdaptor.GetPeerID(),
+		Committee: committee,
 	}}
 	return wMsg
 }
@@ -274,16 +277,16 @@ func (wu *WhirlyUtilitiesImpl) Broadcast(msg *pb.WhirlyMsg) error {
 	// 	}
 	// }
 	// return nil
-	packet := &pb.Packet{
-		Msg:         msgByte,
-		ConsensusID: wu.ConsensusID,
-		Epoch:       0,
-		Type:        pb.PacketType_P2PPACKET,
-	}
-	bytePacket, err := proto.Marshal(packet)
-	utils.PanicOnError(err)
+	// packet := &pb.Packet{
+	// 	Msg:         msgByte,
+	// 	ConsensusID: wu.ConsensusID,
+	// 	Epoch:       0,
+	// 	Type:        pb.PacketType_P2PPACKET,
+	// }
+	// bytePacket, err := proto.Marshal(packet)
+	// utils.PanicOnError(err)
 	// return wu.p2pAdaptor.Broadcast(bytePacket, wu.ConsensusID, []byte("this-is-consensus-topic"))
-	return wu.p2pAdaptor.Broadcast(bytePacket, wu.ConsensusID, []byte(wu.Topic))
+	return wu.p2pAdaptor.Broadcast(msgByte, wu.ConsensusID, []byte(wu.Topic))
 }
 
 func (wu *WhirlyUtilitiesImpl) Unicast(address string, msg *pb.WhirlyMsg) error {

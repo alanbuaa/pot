@@ -17,31 +17,34 @@ func (sw *SimpleWhirlyImpl) handlePoTSignal(potSignalBytes []byte) {
 		return
 	}
 
-	if potSignal.Epoch < sw.epoch {
+	// Ignoring pot signals from old epochs
+	if potSignal.Epoch <= sw.epoch {
 		return
 	}
 
-	command := "stopNode"
-
-	for _, c := range potSignal.Committee {
-		if c == sw.PeerId {
-			command = "updateCommittee"
-		}
-	}
-
+	// Determine whether the node is a leader
 	if potSignal.LeaderNetworkId == sw.PeerId {
-		command = "newLeader"
-	}
-
-	if command == "newLeader" {
 		sw.NewLeader(potSignal)
-	} else if command == "updateCommittee" {
-		sw.UpdateCommittee(potSignal)
-	} else if command == "stopNode" {
-		sw.StopNode()
-	} else {
-		sw.Log.Warn("error potSignal command")
 	}
+}
+
+func (sw *SimpleWhirlyImpl) UpdateCommittee(committee []string, weight int) {
+	sw.Log.Info("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] update committee tirgger!")
+
+	sw.Weight = int64(weight)
+	sw.inCommittee = true
+	sw.Committee = committee
+}
+
+func (sw *SimpleWhirlyImpl) SleepNode() {
+	sw.Log.Info("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] sleep node tirgger!")
+
+	sw.Weight = 0
+	sw.inCommittee = false
+}
+
+func (sw *SimpleWhirlyImpl) VerifyPoTProof(epoch int64, leader int64, proof []byte) bool {
+	return true
 }
 
 func (sw *SimpleWhirlyImpl) NewLeader(potSignal *PoTSignal) {
@@ -52,7 +55,7 @@ func (sw *SimpleWhirlyImpl) NewLeader(potSignal *PoTSignal) {
 	sw.echoLock.Unlock()
 	sw.maxVHeight = sw.vHeight
 
-	newLeaderMsg := sw.NewLeaderNotifyMsg(potSignal.Epoch, potSignal.Proof)
+	newLeaderMsg := sw.NewLeaderNotifyMsg(potSignal.Epoch, potSignal.Proof, potSignal.Committee)
 	if sw.GetP2pAdaptorType() == "p2p" {
 		sw.handleMsg(newLeaderMsg)
 	}
@@ -63,29 +66,11 @@ func (sw *SimpleWhirlyImpl) NewLeader(potSignal *PoTSignal) {
 	}
 }
 
-func (sw *SimpleWhirlyImpl) UpdateCommittee(potSignal *PoTSignal) {
-	sw.Log.Info("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] update committee tirgger!")
-
-	if len(potSignal.Committee) != len(sw.Config.Nodes) {
-		sw.Log.Warn("the committee size is error")
-		return
-	}
-}
-
-func (sw *SimpleWhirlyImpl) StopNode() {
-	sw.Log.Info("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] stop node tirgger!")
-
-	sw.Stop()
-}
-
-func (sw *SimpleWhirlyImpl) VerifyPoTProof(epoch int64, leader int64, proof []byte) bool {
-	return true
-}
-
 func (sw *SimpleWhirlyImpl) OnReceiveNewLeaderNotify(newLeaderMsg *pb.NewLeaderNotify) {
 	epoch := int64(newLeaderMsg.Epoch)
 	leader := int64(newLeaderMsg.Leader)
 	peerId := newLeaderMsg.PeerId
+	committee := newLeaderMsg.Committee
 
 	sw.Log.WithFields(logrus.Fields{
 		"newEpoch":  epoch,
@@ -100,6 +85,7 @@ func (sw *SimpleWhirlyImpl) OnReceiveNewLeaderNotify(newLeaderMsg *pb.NewLeaderN
 		return
 	}
 
+	// Enter the current epoch and record the leader
 	sw.SetLeader(epoch, peerId)
 	sw.Log.Trace("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] advance Epoch success!")
 
@@ -107,6 +93,22 @@ func (sw *SimpleWhirlyImpl) OnReceiveNewLeaderNotify(newLeaderMsg *pb.NewLeaderN
 	sw.CleanVote()
 	sw.voteLock.Unlock()
 
+	// Calculate the weight of the node
+	weight := 0
+	for _, c := range committee {
+		if c == sw.PeerId {
+			weight += 1
+		}
+	}
+
+	// If the weight is not 0, it indicates that the node is in the committee
+	if weight > 0 {
+		sw.UpdateCommittee(committee, weight)
+	} else {
+		sw.SleepNode()
+	}
+
+	// Echo leader
 	echoMsg := sw.NewLeaderEchoMsg(leader, nil, sw.lockProof, sw.epoch, sw.vHeight)
 
 	if sw.leader[sw.epoch] == sw.PeerId {
@@ -152,7 +154,7 @@ func (sw *SimpleWhirlyImpl) OnReceiveNewLeaderEcho(msg *pb.WhirlyMsg) {
 	sw.UpdateLockProof(echoMsg.SwProof)
 	sw.lock.Unlock()
 
-	if len(sw.curEcho) == 2*sw.Config.F+1 {
+	if len(sw.curEcho) >= 2*sw.Config.F+1 {
 		sw.Log.Warn("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] begin propose.")
 		sw.AdvanceView(sw.maxVHeight)
 		go sw.OnPropose()
@@ -170,23 +172,35 @@ type PoTSignal struct {
 
 func (sw *SimpleWhirlyImpl) testNewLeader() {
 	for i := 1; i < 100; i++ {
+		time.Sleep(time.Second * 8)
+		potSignal := &PoTSignal{}
+
+		potSignal.Epoch = sw.epoch + 1
+		potSignal.Proof = nil
+		potSignal.LeaderNetworkId = sw.Config.Nodes[i%4].Address
+		potSignal.Committee = make([]string, len(sw.Config.Nodes))
+		for i := 0; i < len(sw.Config.Nodes); i++ {
+			potSignal.Committee[i] = sw.Config.Nodes[i].Address
+		}
+
+		potSignalBytes, _ := json.Marshal(potSignal)
+		sw.PoTByteEntrance <- potSignalBytes
+	}
+}
+
+func (sw *SimpleWhirlyImpl) testNewLeader2() {
+	for i := 1; i < 100; i++ {
 		time.Sleep(time.Second * 5)
 		potSignal := &PoTSignal{}
-		if sw.Config.Nodes[i%4].Address != sw.PeerId {
-			potSignal.Epoch = sw.epoch + 1
-			potSignal.Proof = nil
-			potSignal.Committee = make([]string, len(sw.Config.Nodes))
-			for i := 0; i < len(sw.Config.Nodes); i++ {
-				potSignal.Committee[i] = sw.Config.Nodes[i].Address
-			}
 
-			// potSignal.Committee = []string{"a", "b", "c", "d"}
-		} else {
-			potSignal.Epoch = sw.epoch + 1
-			potSignal.Proof = nil
-			potSignal.ID = sw.ID
-			potSignal.LeaderNetworkId = sw.PeerId
+		potSignal.Epoch = sw.epoch + 1
+		potSignal.Proof = nil
+		potSignal.LeaderNetworkId = sw.Config.Nodes[i%4].Address
+		potSignal.Committee = make([]string, len(sw.Config.Nodes))
+		for i := 0; i < len(sw.Config.Nodes); i++ {
+			potSignal.Committee[i] = sw.Config.Nodes[i].Address
 		}
+		potSignal.Committee[(i-1)%4] = sw.Config.Nodes[(i+1)%4].Address
 
 		potSignalBytes, _ := json.Marshal(potSignal)
 		sw.PoTByteEntrance <- potSignalBytes
