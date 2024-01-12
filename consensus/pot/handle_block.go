@@ -72,23 +72,29 @@ func (w *Worker) handleCurrentBlock(block *types.Header) error {
 	if !w.isBehindHeight(block.Height-1, block) {
 		if block.ParentHash != nil {
 			w.log.Errorf("[PoT]\tfind fork at epoch %d block %s with parents %s,current epoch %d parent %s", block.Height, hexutil.Encode(block.Hashes), hexutil.Encode(block.ParentHash), w.chainReader.GetCurrentHeight(), hexutil.Encode(w.chainReader.GetCurrentBlock().Hashes))
-			b, err := w.GetSharedAncestor(block)
+
+			currentblock := w.chainReader.GetCurrentBlock()
+			ances, err := w.GetSharedAncestor(block, currentblock)
+
 			if err != nil {
 				w.log.Error(err)
 				return err
 			}
-			c, err := w.chainReader.GetByHeight(b.Height)
+			c, err := w.chainReader.GetByHeight(ances.Height)
 			if err != nil {
 				w.log.Error(err)
 				return err
 			}
-			w.log.Errorf("[PoT]\tthe shared ancestor of fork is %s at %d,match %t", hexutil.Encode(b.Hashes), b.Height, bytes.Equal(c.Hashes, b.Hashes))
-			nowBranch, _, err := w.GetBranch(b, w.chainReader.GetCurrentBlock())
-			forkBranch, _, err := w.GetBranch(b, block)
+
+			w.log.Errorf("[PoT]\tthe shared ancestor of fork is %s at %d,match %t", hexutil.Encode(ances.Hashes), ances.Height, bytes.Equal(c.Hashes, ances.Hashes))
+			nowBranch, _, err := w.GetBranch(ances, currentblock)
+			forkBranch, _, err := w.GetBranch(ances, block)
+
 			if err != nil {
 				w.log.Error(err)
 				return err
 			}
+
 			for i := 0; i < len(nowBranch); i++ {
 				w.log.Errorf("[PoT]\tthe nowBranch at height %d: %s", nowBranch[i].Height, hexutil.Encode(nowBranch[i].Hashes))
 			}
@@ -96,9 +102,10 @@ func (w *Worker) handleCurrentBlock(block *types.Header) error {
 				w.log.Errorf("[PoT]\tthe fork chain at height %d: %s", forkBranch[i].Height, hexutil.Encode(forkBranch[i].Hashes))
 			}
 
-			w1 := w.calculateChainWeight(b, w.chainReader.GetCurrentBlock())
-			w2 := w.calculateChainWeight(b, block)
+			w1 := w.calculateChainWeight(ances, w.chainReader.GetCurrentBlock())
+			w2 := w.calculateChainWeight(ances, block)
 			w.log.Errorf("[PoT]\tthe chain weight %d, the fork chain weight %d", w1.Int64(), w2.Int64())
+
 			if w1.Int64() < w2.Int64() {
 				err := w.chainreset(forkBranch)
 				if err != nil {
@@ -130,8 +137,8 @@ func (w *Worker) handleCurrentBlock(block *types.Header) error {
 }
 
 func (w *Worker) handleAdvancedBlock(epoch uint64, header *types.Header) {
-
-	ances, err := w.GetSharedAncestor(header)
+	current := w.chainReader.GetCurrentBlock()
+	ances, err := w.GetSharedAncestor(header, current)
 	if err != nil {
 		return
 	}

@@ -45,11 +45,12 @@ func (w *Worker) calculateChainWeight(root, leaf *types.Header) *big.Int {
 	// total = new(big.Int).Add(total, root.Difficulty)
 }
 
-func (w *Worker) GetSharedAncestor(block *types.Header) (*types.Header, error) {
-	current := w.chainReader.GetCurrentBlock()
-	currentheight := w.chainReader.GetCurrentHeight()
+func (w *Worker) GetSharedAncestor(forkblock *types.Header, currentblock *types.Header) (*types.Header, error) {
 
-	header := block
+	current := currentblock
+	currentheight := currentblock.Height
+
+	header := forkblock
 
 	if header.Height == currentheight {
 
@@ -101,14 +102,16 @@ func (w *Worker) GetSharedAncestor(block *types.Header) (*types.Header, error) {
 				}
 
 				for {
-					current, err := w.chainReader.GetByHeight(current.Height - 1)
-					if err != nil {
-						return nil, err
-					}
 					if headerahead.Height == 0 {
 						return types.DefaultGenesisHeader(), nil
 					}
+
 					headeraheadparent, err := w.getParentBlock(headerahead)
+					if err != nil {
+						return nil, err
+					}
+
+					current, err := w.chainReader.GetByHeight(headeraheadparent.Height)
 					if err != nil {
 						return nil, err
 					}
@@ -116,6 +119,7 @@ func (w *Worker) GetSharedAncestor(block *types.Header) (*types.Header, error) {
 					if bytes.Equal(current.Hashes, headeraheadparent.Hashes) {
 						return current, nil
 					}
+
 					headerahead = headeraheadparent
 				}
 			} else {

@@ -187,25 +187,6 @@ func (w *Worker) OnGetVdf0Response() {
 				}
 				w.log.Warnf("[PoT]\tepoch %d:vdf0 got abort for new epoch ", epoch+1)
 			}
-
-			err := w.vdf0.SetInput(inputHash, w.config.PoT.Vdf0Iteration)
-			if err != nil {
-				w.log.Errorf("[PoT]\tepoch %d:set vdf0 error for %t", epoch+1, err)
-
-				continue
-			}
-			// TODO: handle vdf error
-
-			w.log.Infof("[PoT]\tepoch %d:Start epoch %d vdf0", epoch+1, epoch+1)
-			w.timestamp = time.Now()
-
-			go func() {
-				err = w.vdf0.Exec(epoch + 1)
-				if err != nil {
-					w.log.Infof("")
-				}
-			}()
-
 			backupblock, err := w.storage.GetbyHeight(epoch)
 
 			w.log.Infof("[PoT]\tepoch %d:epoch %d block num %d", epoch+1, epoch, len(backupblock))
@@ -214,6 +195,21 @@ func (w *Worker) OnGetVdf0Response() {
 				w.log.Warn("[PoT]\tget backup block error :", err)
 				continue
 			}
+
+			err = w.vdf0.SetInput(inputHash, w.config.PoT.Vdf0Iteration)
+			if err != nil {
+				w.log.Errorf("[PoT]\tepoch %d:set vdf0 error for %t", epoch+1, err)
+				continue
+			}
+
+			w.log.Infof("[PoT]\tepoch %d:Start epoch %d vdf0", epoch+1, epoch+1)
+			w.timestamp = time.Now()
+			go func() {
+				err = w.vdf0.Exec(epoch + 1)
+				if err != nil {
+					w.log.Info("[PoT]\texecute vdf error for :", err)
+				}
+			}()
 
 			parentblock, uncleblock := w.blockSelection(backupblock, res0, epoch)
 			if parentblock != nil {
