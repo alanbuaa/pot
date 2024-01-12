@@ -44,7 +44,7 @@ func BuildConsensus(
 		case "basic":
 			c = whirly.NewWhirly(nid, cid, cfg, exec, p2pAdaptor, log)
 		case "simple":
-			c = simpleWhirly.NewSimpleWhirlyForLocalTest(nid, cid, cfg, exec, p2pAdaptor, log)
+			c = simpleWhirly.NewSimpleWhirly(nid, cid, cfg, exec, p2pAdaptor, log)
 		default:
 			log.Warnf("whirly type not supported: %s", cfg.Whirly.Type)
 		}

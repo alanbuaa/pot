@@ -38,7 +38,6 @@ type SimpleWhirlyImpl struct {
 	leader       map[int64]string
 	lock         sync.Mutex
 	voteLock     sync.Mutex
-	proposalLock sync.Mutex
 	curYesVote   []*pb.WhirlyVote
 	curNoVote    []*pb.SimpleWhirlyProof
 	proposeView  uint64
@@ -54,8 +53,6 @@ type SimpleWhirlyImpl struct {
 	curEcho         []*pb.SimpleWhirlyProof
 	echoLock        sync.Mutex
 	maxVHeight      uint64
-	inCommittee     bool
-	Committee       []string
 
 	// Ping
 	readyNodes     []string
@@ -100,7 +97,6 @@ func NewSimpleWhirly(
 	sw.Log.WithField("replicaID", id).Debug("[SIMPLE WHIRLY] Init command cache.")
 
 	sw.CleanVote()
-	sw.inCommittee = false
 	sw.epoch = 1
 	sw.proposeView = 0
 	// ensure p2pAdaptor of SimpleWhirly is same as PoT
@@ -123,72 +119,19 @@ func NewSimpleWhirly(
 	// 	sw.sendPingCancel = sendCancel
 	// 	go sw.sendPingMsg(sendCtx)
 	// }
-
-	sw.Log.Info("[SIMPLE WHIRLY]\tstart to work")
-	return sw
-}
-
-func NewSimpleWhirlyForLocalTest(
-	id int64,
-	cid int64,
-	cfg *config.ConsensusConfig,
-	exec executor.Executor,
-	p2pAdaptor p2p.P2PAdaptor,
-	log *logrus.Entry,
-) *SimpleWhirlyImpl {
-	log.WithField("consensus id", cid).Debug("[SIMPLE WHIRLY] starting")
-	log.WithField("consensus id", cid).Trace("[SIMPLE WHIRLY] Generate genesis block")
-	genesisBlock := whirlyUtilities.GenerateGenesisBlock()
-	ctx, cancel := context.WithCancel(context.Background())
-	sw := &SimpleWhirlyImpl{
-		bLock:     genesisBlock,
-		bExec:     genesisBlock,
-		lockProof: nil,
-		vHeight:   genesisBlock.Height,
-		// pendingUpdate: make(chan *pb.SimpleWhirlyProof, 1),
-		cancel:      cancel,
-		inCommittee: true,
-	}
-
-	sw.Weight = 1
-	sw.inCommittee = true
-
-	sw.Init(id, cid, cfg, exec, p2pAdaptor, log)
-	err := sw.BlockStorage.Put(genesisBlock)
-	if err != nil {
-		sw.Log.Fatal("Store genesis block failed!")
-	}
-
-	// make view number equal to 0 to create genesis block proof
-	sw.View = whirlyUtilities.NewView(0, 1)
-	sw.lockProof = sw.Proof(sw.View.ViewNum, nil, genesisBlock.Hash)
-
-	// view number add 1
-	sw.View.ViewNum++
-	sw.waitProposal = sync.NewCond(&sw.lock)
-	sw.Log.WithField("replicaID", id).Debug("[SIMPLE WHIRLY] Init block storage.")
-	sw.Log.WithField("replicaID", id).Debug("[SIMPLE WHIRLY] Init command cache.")
-
-	sw.CleanVote()
-	sw.epoch = 1
-	sw.proposeView = 0
-	// ensure p2pAdaptor of SimpleWhirly is same as PoT
-
-	sw.leader = make(map[int64]string)
-	sw.PoTByteEntrance = make(chan []byte, 10)
-
-	// go sw.updateAsync(ctx)
-	go sw.receiveMsg(ctx)
-
 	sw.SetLeader(sw.epoch, cfg.Nodes[1].Address)
+	// sw.SetLeader(sw.epoch, "1")
 	if sw.PeerId == cfg.Nodes[1].Address {
+		// if sw.ID == 1 {
 		// TODO: ensure all nodes is ready before OnPropose
 		sw.SetLeader(sw.epoch, sw.PeerId)
+		// time.Sleep(1 * time.Second)
+		go sw.testNewLeader()
 		go sw.OnPropose()
 	} else {
-
+		go sw.testNewLeader()
+		// go sw.OnPropose()
 	}
-	sw.testNewLeader()
 
 	sw.Log.Info("[SIMPLE WHIRLY]\tstart to work")
 	return sw
@@ -448,21 +391,6 @@ func (sw *SimpleWhirlyImpl) OnReceiveProposal(newBlock *pb.WhirlyBlock, swProof 
 		return
 	}
 
-	sw.Log.Debug("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "]  OnReceiveProposal: Accepted block.")
-	// update vHeight
-	sw.vHeight = newBlock.Height
-	sw.MemPool.MarkProposed(types.RawTxArrayFromBytes(newBlock.Txs))
-
-	sw.waitProposal.Broadcast()
-
-	sw.Update(swProof)
-	sw.AdvanceView(newBlock.Height)
-
-	if !sw.inCommittee {
-		sw.Log.Trace("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "]  OnReceiveProposal: Not in Committee.")
-		return
-	}
-
 	// vote for proposal
 	var voteFlag bool
 	var voteProof *pb.SimpleWhirlyProof
@@ -473,7 +401,19 @@ func (sw *SimpleWhirlyImpl) OnReceiveProposal(newBlock *pb.WhirlyBlock, swProof 
 		voteFlag = false
 		voteProof = sw.lockProof
 	}
+
+	sw.Log.Debug("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "]  OnReceiveProposal: Accepted block.")
+	// update vHeight
+	sw.vHeight = newBlock.Height
+	sw.MemPool.MarkProposed(types.RawTxArrayFromBytes(newBlock.Txs))
+
+	sw.waitProposal.Broadcast()
+
+	sw.Update(swProof)
+
 	voteMsg := sw.VoteMsg(newBlock.Height, newBlock.Hash, voteFlag, nil, nil, voteProof, sw.epoch)
+
+	sw.AdvanceView(newBlock.Height)
 
 	if sw.leader[sw.epoch] == sw.PeerId {
 		// if sw.GetLeader(int64(newBlock.Height)) == sw.ID {
@@ -520,33 +460,28 @@ func (sw *SimpleWhirlyImpl) OnReceiveVote(msg *pb.WhirlyMsg) {
 		"blockView":    whirlyVoteMsg.BlockView,
 		"flag":         whirlyVoteMsg.Flag,
 		"len(YesVote)": len(sw.curYesVote),
-		"weight":       whirlyVoteMsg.Weight,
 	}).Trace("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] OnReceiveVote.")
 	// sw.Log.Trace("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] OnReceiveVote.")
 
 	if whirlyVoteMsg.Flag {
 		sw.voteLock.Lock()
-		sw.proposalLock.Lock()
 		if whirlyVoteMsg.BlockView >= sw.proposeView {
-			for i := 0; i < int(whirlyVoteMsg.Weight); i++ {
-				sw.curYesVote = append(sw.curYesVote, whirlyVoteMsg)
-			}
+			sw.curYesVote = append(sw.curYesVote, whirlyVoteMsg)
 		}
-		sw.proposalLock.Unlock()
+		sw.voteLock.Unlock()
 
 	} else {
 		// TODO: verfiySwProof
 		sw.voteLock.Lock()
-		for i := 0; i < int(whirlyVoteMsg.Weight); i++ {
-			sw.curNoVote = append(sw.curNoVote, whirlyVoteMsg.SwProof)
-		}
+		sw.curNoVote = append(sw.curNoVote, whirlyVoteMsg.SwProof)
+		sw.voteLock.Unlock()
 		sw.lock.Lock()
 		sw.UpdateLockProof(whirlyVoteMsg.SwProof)
 		sw.lock.Unlock()
 	}
 
-	if len(sw.curYesVote)+len(sw.curNoVote) >= 2*sw.Config.F+1 {
-		if len(sw.curYesVote) >= 2*sw.Config.F+1 {
+	if len(sw.curYesVote)+len(sw.curNoVote) == 2*sw.Config.F+1 {
+		if len(sw.curYesVote) == 2*sw.Config.F+1 {
 			proof := sw.Proof(whirlyVoteMsg.BlockView, sw.curYesVote, whirlyVoteMsg.BlockHash)
 			sw.Log.WithFields(logrus.Fields{
 				"proofView": proof.ViewNum,
@@ -565,7 +500,6 @@ func (sw *SimpleWhirlyImpl) OnReceiveVote(msg *pb.WhirlyMsg) {
 		sw.AdvanceView(whirlyVoteMsg.BlockView)
 		go sw.OnPropose()
 	}
-	sw.voteLock.Unlock()
 }
 
 func (sw *SimpleWhirlyImpl) OnPropose() {
@@ -576,23 +510,14 @@ func (sw *SimpleWhirlyImpl) OnPropose() {
 	// 	return
 	// }
 	time.Sleep(1 * time.Second)
-	sw.proposalLock.Lock()
-	if sw.leader[sw.epoch] != sw.PeerId || sw.proposeView >= sw.View.ViewNum {
+	if sw.leader[sw.epoch] != sw.PeerId {
 		// if sw.GetLeader(int64(1)) != sw.ID {
 		sw.Log.WithFields(logrus.Fields{
 			"nowView": sw.View.ViewNum,
 			"leader":  sw.leader[sw.epoch],
 		}).Trace("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] OnPropose: not allow!")
-		sw.proposalLock.Unlock()
 		return
 	}
-	sw.proposeView = sw.View.ViewNum
-	sw.proposalLock.Unlock()
-
-	sw.voteLock.Lock()
-	sw.CleanVote()
-	sw.voteLock.Unlock()
-
 	sw.Log.Trace("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] OnPropose")
 	txs := sw.MemPool.GetFirst(int(sw.Config.Whirly.BatchSize))
 	if len(txs) != 0 {
@@ -602,6 +527,11 @@ func (sw *SimpleWhirlyImpl) OnPropose() {
 		// Produce empty blocks when there is no tx
 		// return
 	}
+
+	sw.proposeView = sw.View.ViewNum
+	sw.voteLock.Lock()
+	sw.CleanVote()
+	sw.voteLock.Unlock()
 
 	// create node
 	proposal := sw.createProposal(txs)
@@ -632,15 +562,15 @@ func (sw *SimpleWhirlyImpl) OnPropose() {
 // expectBlock looks for a block with the given Hash, or waits for the next proposal to arrive
 // sw.lock must be locked when calling this function
 func (sw *SimpleWhirlyImpl) expectBlock(hash []byte) (*pb.WhirlyBlock, error) {
-	for {
-		block, err := sw.BlockStorage.Get(hash)
-		if err == nil {
-			return block, nil
-		} else {
-			_ = 1
-		}
-		sw.waitProposal.Wait()
+	block, err := sw.BlockStorage.Get(hash)
+	if err == nil {
+		return block, nil
+	} else {
+		// sw.Log.WithField("error", err.Error()).Error("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] wait block.")
+		_ = 1
 	}
+	sw.waitProposal.Wait()
+	return sw.BlockStorage.Get(hash)
 }
 
 // createProposal create a new proposal

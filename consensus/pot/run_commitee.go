@@ -2,7 +2,6 @@ package pot
 
 import (
 	"encoding/json"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/zzz136454872/upgradeable-consensus/config"
 	"github.com/zzz136454872/upgradeable-consensus/consensus/whirly/simpleWhirly"
 	"github.com/zzz136454872/upgradeable-consensus/types"
@@ -31,7 +30,7 @@ func (w *Worker) simpleLeaderUpdate(parent *types.Header) {
 			}
 			s := simpleWhirly.NewSimpleWhirly(w.ID, 1009, whirlyConfig, w.Engine.exec, w.Engine.Adaptor, w.log)
 			w.whirly = s
-			w.Engine.SetWhirly(s)
+			//w.Engine.SetWhirly(s)
 			w.potSignalChan = w.whirly.GetPoTByteEntrance()
 			w.log.Errorf("[PoT]\t Start committee consensus at epoch %d", parent.Height+1)
 			return
@@ -69,57 +68,39 @@ func (w *Worker) GetPeerQueue() chan *types.Header {
 	return w.peerMsgQueue
 }
 
-func (w *Worker) CommiteeUpdate(parent *types.Header, epoch uint64) {
-
-	if parent != nil && parent.Difficulty.Cmp(common.Big0) == 0 {
-		parentid := parent.PeerId
-
-		if !w.CommiteeLenCheck() {
-			w.AppendCommitee(parentid)
-			if w.CommiteeLenCheck() && w.whirly == nil {
-				whirlyConfig := &config.ConsensusConfig{
-					Type:        "whirly",
-					ConsensusID: 1009,
-					Whirly: &config.WhirlyConfig{
-						Type:      "simple",
-						BatchSize: 10,
-						Timeout:   2000,
-					},
-					Nodes: w.config.Nodes,
-					Keys:  w.config.Keys,
-					F:     w.config.F,
-				}
-				s := simpleWhirly.NewSimpleWhirly(w.ID, 1009, whirlyConfig, w.Engine.exec, w.Engine.Adaptor, w.log)
-				w.whirly = s
-				w.Engine.SetWhirly(s)
-				w.potSignalChan = w.whirly.GetPoTByteEntrance()
-				w.log.Infof("[PoT]\t epoch %d:Start committee consensus whirly", parent.Height+1)
+func (w *Worker) CommiteeUpdate(epoch uint64) {
+	if epoch >= 6+Commiteelen {
+		commitee := make([]string, Commiteelen)
+		for i := uint64(0); i < Commiteelen; i++ {
+			block, err := w.chainReader.GetByHeight(epoch - 6 - i)
+			if err != nil {
 				return
 			}
-		} else {
-			w.UpdateCommitee(parentid)
+			if block != nil {
+				commitee[i] = block.PeerId
+			}
 		}
-
 		potsignal := &simpleWhirly.PoTSignal{
-			Epoch:           int64(parent.Height),
-			Proof:           parent.Hash(),
-			ID:              parent.Address,
-			LeaderNetworkId: parentid,
-			Committee:       w.Commitee,
+			Epoch:           int64(epoch),
+			Proof:           nil,
+			ID:              0,
+			LeaderNetworkId: commitee[0],
+			Committee:       commitee,
 			CryptoElements:  nil,
 		}
-
 		b, err := json.Marshal(potsignal)
 		if err != nil {
 			w.log.WithError(err)
 			return
 		}
-
 		if w.potSignalChan != nil {
 			w.potSignalChan <- b
 		}
-
 	}
+}
+func (w *Worker) SetWhirly(impl *simpleWhirly.SimpleWhirlyImpl) {
+	w.whirly = impl
+	w.potSignalChan = impl.GetPoTByteEntrance()
 }
 
 func (w *Worker) CommiteeLenCheck() bool {

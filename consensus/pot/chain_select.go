@@ -105,7 +105,9 @@ func (w *Worker) GetSharedAncestor(block *types.Header) (*types.Header, error) {
 					if err != nil {
 						return nil, err
 					}
-
+					if headerahead.Height == 0 {
+						return types.DefaultGenesisHeader(), nil
+					}
 					headeraheadparent, err := w.getParentBlock(headerahead)
 					if err != nil {
 						return nil, err

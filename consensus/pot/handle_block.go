@@ -49,6 +49,10 @@ func (w *Worker) handleBlock() {
 						err := w.handleCurrentBlock(header)
 						if err != nil {
 							w.log.Errorf("[PoT]\tepoch %d:handle current block err for %s", epoch, err)
+							for true {
+
+								break
+							}
 						}
 					}()
 

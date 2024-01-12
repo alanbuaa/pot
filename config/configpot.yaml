@@ -28,9 +28,9 @@ executor:
 
 p2p:
   type: p2p-adaptor # p2p-adaptor currently only supports simple-whirly # sudo sysctl -w net.core.rmem_max=2500000
-  # type: p2p
+  #type: p2p
 
-topic: this-is-consensus-topic-012
+topic: this-is-consensus-topic-008
 
 consensus:
   # type: "upgradeable"
@@ -47,13 +47,13 @@ consensus:
       #   batch_size: 10
       #   batch_timeout: 1
       #   timeout: 2
-    #  type: whirly
-    #  consensus_id: 1009
-    #  whirly:
-    #    type: simple
-    #    # type: basic
-    #    batch_size: 10
-    #    timeout: 2
+#      type: whirly
+#      consensus_id: 1009
+#      whirly:
+#        type: simple
+#        # type: basic
+#        batch_size: 10
+#        timeout: 2
   #     # type: pow
   #     # consensus_id: 1008
   #     # pow:

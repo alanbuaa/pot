@@ -60,11 +60,14 @@ func NewEngine(nid int64, cid int64, config *config.ConsensusConfig, exec execut
 	st.Put(types.DefaultGenesisHeader())
 	worker := NewWorker(nid, config, log, st, e)
 	e.worker = worker
+
 	// adaptor.SetReceiver(e)
 	adaptor.SetReceiver(e.GetMsgByteEntrance())
 	err := adaptor.Subscribe([]byte(config.Topic))
 	if adaptor.GetP2PType() == "p2p" {
 		e.peerId = config.Nodes[nid].Address
+	} else {
+		e.peerId = adaptor.GetPeerID()
 	}
 	if err != nil {
 		return nil
@@ -74,7 +77,9 @@ func NewEngine(nid int64, cid int64, config *config.ConsensusConfig, exec execut
 	return e
 }
 func (e *PoTEngine) start() {
-	e.log.Infof("PoT Consensus Engine istart working")
+	e.log.Infof("[PoT]\tPoT Consensus Engine starts working")
+	whirly := e.StartCommitee()
+	e.worker.SetWhirly(whirly)
 	go e.worker.OnGetVdf0Response()
 	go e.worker.Work()
 
@@ -152,6 +157,25 @@ func (e *PoTEngine) SetWhirly(whirly2 *simpleWhirly.SimpleWhirlyImpl) {
 	e.UpperConsensus = whirly2
 }
 
+func (e *PoTEngine) StartCommitee() *simpleWhirly.SimpleWhirlyImpl {
+	whirlyconfig := &config.ConsensusConfig{
+		Type:        "whirly",
+		ConsensusID: 1009,
+		Whirly: &config.WhirlyConfig{
+			Type:      "simple",
+			BatchSize: 10,
+			Timeout:   2000,
+		},
+		Nodes: e.config.Nodes,
+		Keys:  e.config.Keys,
+		Topic: e.config.Topic,
+		F:     e.config.F,
+	}
+	s := simpleWhirly.NewSimpleWhirly(e.id, 1009, whirlyconfig, e.exec, e.Adaptor, e.log)
+	e.UpperConsensus = s
+	e.log.Infof("[PoT]\tCommitee consensus whirly get prepared")
+	return s
+}
 func (e *PoTEngine) GetPeerID() string {
 	return e.peerId
 }

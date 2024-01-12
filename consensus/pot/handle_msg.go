@@ -1,6 +1,7 @@
 package pot
 
 import (
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/zzz136454872/upgradeable-consensus/pb"
 	"github.com/zzz136454872/upgradeable-consensus/types"
 	"google.golang.org/protobuf/proto"
@@ -25,7 +26,7 @@ func (e *PoTEngine) onReceiveMsg() {
 			packet, err := DecodePacket(msgByte)
 			if err != nil {
 				e.log.WithError(err).Warn("decode packet failed")
-				//e.log.Infof("Decode byte:%s", hexutil.Encode(msgByte))
+				e.log.Infof("Decode byte:%s", hexutil.Encode(msgByte))
 				continue
 			}
 			e.handlePacket(packet)

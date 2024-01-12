@@ -1,4 +1,4 @@
-build: build_genkey build_client build_server
+build: build_genkey build_client build_server build_test
 	@:
 
 build_genkey:
