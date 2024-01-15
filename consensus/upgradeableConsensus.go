@@ -37,7 +37,7 @@ type UpgradeableConsensus struct {
 	msgBuffer map[int64][][]byte // protects msgBuffer
 	msgLock   *sync.Mutex
 
-	outputBuffer map[int64][]types.Block
+	outputBuffer map[int64][]types.ConsensusBlock
 	outputLock   *sync.Mutex // protects outputBuffer
 
 	upgradeBuffer map[types.TxHash]*config.ConsensusConfig
@@ -76,7 +76,7 @@ func NewUpgradeableConsensus(nid int64, cid int64, cfg *config.ConsensusConfig, 
 		msgBuffer: map[int64][][]byte{},
 		msgLock:   new(sync.Mutex),
 
-		outputBuffer: map[int64][]types.Block{},
+		outputBuffer: map[int64][]types.ConsensusBlock{},
 		outputLock:   new(sync.Mutex),
 
 		upgradeBuffer: map[types.TxHash]*config.ConsensusConfig{},
@@ -337,7 +337,7 @@ func (uc *UpgradeableConsensus) upgradeConsensusTo(nextCid int64) {
 
 	// clear outputBuffer
 	uc.outputLock.Lock()
-	uc.outputBuffer = map[int64][]types.Block{}
+	uc.outputBuffer = map[int64][]types.ConsensusBlock{}
 	uc.outputLock.Unlock()
 
 	if uc.config.Upgradeable.NetworkType == config.NetworkAsync {

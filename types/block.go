@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-type Block interface {
+type ConsensusBlock interface {
 	GetTxs() [][]byte
 	protoreflect.ProtoMessage
 }
@@ -25,8 +25,14 @@ type Header struct {
 
 	PoTProof [][]byte
 	Address  int64
+	TxHash   []byte
 	Hashes   []byte
 	PeerId   string
+}
+
+type Block struct {
+	Header Header
+	Data   []RawTransaction
 }
 
 func (b *Header) Hash() []byte {

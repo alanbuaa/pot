@@ -277,16 +277,16 @@ func (wu *WhirlyUtilitiesImpl) Broadcast(msg *pb.WhirlyMsg) error {
 	// 	}
 	// }
 	// return nil
-	// packet := &pb.Packet{
-	// 	Msg:         msgByte,
-	// 	ConsensusID: wu.ConsensusID,
-	// 	Epoch:       0,
-	// 	Type:        pb.PacketType_P2PPACKET,
-	// }
-	// bytePacket, err := proto.Marshal(packet)
-	// utils.PanicOnError(err)
+	packet := &pb.Packet{
+		Msg:         msgByte,
+		ConsensusID: wu.ConsensusID,
+		Epoch:       0,
+		Type:        pb.PacketType_P2PPACKET,
+	}
+	bytePacket, err := proto.Marshal(packet)
+	utils.PanicOnError(err)
 	// return wu.p2pAdaptor.Broadcast(bytePacket, wu.ConsensusID, []byte("this-is-consensus-topic"))
-	return wu.p2pAdaptor.Broadcast(msgByte, wu.ConsensusID, []byte(wu.Topic))
+	return wu.p2pAdaptor.Broadcast(bytePacket, wu.ConsensusID, []byte(wu.Topic))
 }
 
 func (wu *WhirlyUtilitiesImpl) Unicast(address string, msg *pb.WhirlyMsg) error {
@@ -296,16 +296,16 @@ func (wu *WhirlyUtilitiesImpl) Unicast(address string, msg *pb.WhirlyMsg) error 
 	}
 	msgByte, err := proto.Marshal(msg)
 	utils.PanicOnError(err)
-	// packet := &pb.Packet{
-	// 	Msg:         msgByte,
-	// 	ConsensusID: wu.ConsensusID,
-	// 	Epoch:       0,
-	// 	Type:        pb.PacketType_P2PPACKET,
-	// }
-	// bytePacket, err := proto.Marshal(packet)
+	packet := &pb.Packet{
+		Msg:         msgByte,
+		ConsensusID: wu.ConsensusID,
+		Epoch:       0,
+		Type:        pb.PacketType_P2PPACKET,
+	}
+	bytePacket, err := proto.Marshal(packet)
 	// utils.PanicOnError(err)
 	// return wu.p2pAdaptor.Unicast(address, bytePacket, wu.ConsensusID, []byte("this-is-consensus-topic"))
-	return wu.p2pAdaptor.Unicast(address, msgByte, wu.ConsensusID, []byte(wu.Topic))
+	return wu.p2pAdaptor.Unicast(address, bytePacket, wu.ConsensusID, []byte(wu.Topic))
 }
 
 func (wu *WhirlyUtilitiesImpl) ProcessProposal(b *pb.WhirlyBlock, p []byte) {

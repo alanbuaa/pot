@@ -77,12 +77,13 @@ func NewEngine(nid int64, cid int64, config *config.ConsensusConfig, exec execut
 	return e
 }
 func (e *PoTEngine) start() {
+
 	e.log.Infof("[PoT]\tPoT Consensus Engine starts working")
 	whirly := e.StartCommitee()
 	e.worker.SetWhirly(whirly)
+
 	go e.worker.OnGetVdf0Response()
 	go e.worker.Work()
-
 	go e.onReceiveMsg()
 }
 func (e *PoTEngine) GetRequestEntrance() chan<- *pb.Request {

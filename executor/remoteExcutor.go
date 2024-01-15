@@ -31,7 +31,7 @@ func NewRemoteExecutor(cfg *config.ExecutorConfig, uplog *logrus.Entry) *RemoteE
 	}
 }
 
-func (e *RemoteExecutor) CommitBlock(block types.Block, proof []byte, cid int64) {
+func (e *RemoteExecutor) CommitBlock(block types.ConsensusBlock, proof []byte, cid int64) {
 	eb := &pb.ExecBlock{
 		Txs: block.GetTxs(),
 	}

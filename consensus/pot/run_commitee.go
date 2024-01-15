@@ -69,10 +69,10 @@ func (w *Worker) GetPeerQueue() chan *types.Header {
 }
 
 func (w *Worker) CommiteeUpdate(epoch uint64) {
-	if epoch >= 6+Commiteelen {
+	if epoch >= CommiteeDelay+Commiteelen {
 		commitee := make([]string, Commiteelen)
 		for i := uint64(0); i < Commiteelen; i++ {
-			block, err := w.chainReader.GetByHeight(epoch - 6 - i)
+			block, err := w.chainReader.GetByHeight(epoch - CommiteeDelay - i)
 			if err != nil {
 				return
 			}

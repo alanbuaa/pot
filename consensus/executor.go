@@ -16,7 +16,7 @@ func (uc *UpgradeableConsensus) VerifyTx(rtx types.RawTransaction) bool {
 	return uc.executor.VerifyTx(rtx)
 }
 
-func (uc *UpgradeableConsensus) executeNormalTx(block types.Block, proof []byte, cid int64) {
+func (uc *UpgradeableConsensus) executeNormalTx(block types.ConsensusBlock, proof []byte, cid int64) {
 	ntxs := [][]byte{}
 	for _, rbtx := range block.GetTxs() {
 		rtx := types.RawTransaction(rbtx)
@@ -42,7 +42,7 @@ func (uc *UpgradeableConsensus) executeNormalTx(block types.Block, proof []byte,
 	uc.executor.CommitBlock(&pb.ExecBlock{Txs: ntxs}, GenProof(block, proof, uc.cid), uc.cid)
 }
 
-func (uc *UpgradeableConsensus) CommitBlock(block types.Block, proof []byte, cid int64) {
+func (uc *UpgradeableConsensus) CommitBlock(block types.ConsensusBlock, proof []byte, cid int64) {
 	// uc.log.WithField("cid", cid).Debug("commit block")
 	if cid == uc.working.GetConsensusID() {
 		go uc.executeNormalTx(block, proof, cid)
@@ -177,7 +177,7 @@ func (uc *UpgradeableConsensus) CommitBlock(block types.Block, proof []byte, cid
 		uc.outputLock.Lock()
 		if _, ok := uc.outputBuffer[cid]; !ok {
 			//first commit
-			uc.outputBuffer[cid] = []types.Block{}
+			uc.outputBuffer[cid] = []types.ConsensusBlock{}
 			go uc.sendLockTx(block, proof, cid)
 		}
 		uc.outputBuffer[cid] = append(uc.outputBuffer[cid], block)
@@ -204,7 +204,7 @@ func (uc *UpgradeableConsensus) sendTimeVote(h types.TxHash) {
 	uc.working.GetRequestEntrance() <- request
 }
 
-func (uc *UpgradeableConsensus) sendLockTx(block types.Block, proof []byte, cid int64) {
+func (uc *UpgradeableConsensus) sendLockTx(block types.ConsensusBlock, proof []byte, cid int64) {
 	bblock, err := proto.Marshal(block)
 	utils.PanicOnError(err)
 	lock := &Lock{

@@ -27,9 +27,10 @@ import (
 var bigD = new(big.Int).Sub(big.NewInt(0).Exp(big.NewInt(2), big.NewInt(256), nil), big.NewInt(1))
 
 const (
-	Commiteelen = 4
-	cpuCounter  = 1
-	NoParentD   = 2
+	Commiteelen   = 4
+	CommiteeDelay = 6
+	cpuCounter    = 1
+	NoParentD     = 2
 )
 
 type Worker struct {
@@ -240,7 +241,7 @@ func (w *Worker) OnGetVdf0Response() {
 					parentblock.Hash()
 				}
 			}
-
+			w.CommiteeUpdate(epoch)
 			// if epoch > 1 {
 			// 	w.simpleLeaderUpdate(parentblock)
 			// }

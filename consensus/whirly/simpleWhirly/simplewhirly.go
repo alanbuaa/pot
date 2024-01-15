@@ -239,6 +239,7 @@ func (sw *SimpleWhirlyImpl) Stop() {
 	sw.BlockStorage.Close()
 	close(sw.MsgByteEntrance)
 	close(sw.RequestEntrance)
+	close(sw.PoTByteEntrance)
 	_ = os.RemoveAll("dbfile/node" + sw.PeerId)
 	_ = os.RemoveAll("store")
 }
@@ -267,6 +268,7 @@ func (sw *SimpleWhirlyImpl) receiveMsg(ctx context.Context) {
 			if !ok {
 				return // closed
 			}
+			//sw.Log.Info("receive pot signal")
 			go sw.handlePoTSignal(potSignal)
 		}
 	}
@@ -575,7 +577,7 @@ func (sw *SimpleWhirlyImpl) OnPropose() {
 	// if sw.ID == 3 {
 	// 	return
 	// }
-	time.Sleep(1 * time.Second)
+	time.Sleep(2 * time.Second)
 	sw.proposalLock.Lock()
 	if sw.leader[sw.epoch] != sw.PeerId || sw.proposeView >= sw.View.ViewNum {
 		// if sw.GetLeader(int64(1)) != sw.ID {

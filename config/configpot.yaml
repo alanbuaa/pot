@@ -30,7 +30,7 @@ p2p:
   type: p2p-adaptor # p2p-adaptor currently only supports simple-whirly # sudo sysctl -w net.core.rmem_max=2500000
   #type: p2p
 
-topic: this-is-consensus-topic-008
+topic: this-is-consensus-topic-014
 
 consensus:
   # type: "upgradeable"
@@ -63,5 +63,5 @@ consensus:
    pot:
      snum : 2
      sysPara: 123456789
-     vdf0Iteration: 200000
-     vdf1Iteration: 120000
+     vdf0Iteration: 300000
+     vdf1Iteration: 180000

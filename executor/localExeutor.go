@@ -27,7 +27,7 @@ func NewLocalExecutor(cfg *config.ExecutorConfig, uplog *logrus.Entry) *LocalExe
 	}
 }
 
-func (e *LocalExecutor) CommitBlock(block types.Block, proof []byte, cid int64) {
+func (e *LocalExecutor) CommitBlock(block types.ConsensusBlock, proof []byte, cid int64) {
 	for _, rtx := range block.GetTxs() {
 		tx, err := types.RawTransaction(rtx).ToTx()
 		if tx.Type != pb.TransactionType_NORMAL {

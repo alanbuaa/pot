@@ -70,7 +70,7 @@ type Proof struct {
 	Cid   int64  `json:"cid"`
 }
 
-func GenProof(lowerBlock types.Block, lowerProof []byte, cid int64) []byte {
+func GenProof(lowerBlock types.ConsensusBlock, lowerProof []byte, cid int64) []byte {
 	bblock, err := json.Marshal(lowerBlock)
 	utils.PanicOnError(err)
 	proof := &Proof{

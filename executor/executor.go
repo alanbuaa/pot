@@ -8,8 +8,8 @@ import (
 
 type Executor interface {
 	// CommitTx(tx types.RawTransaction, comsensusID int64)
-	// CommitTx(tx types.RawTransaction, idx int64, block types.Block, proof []byte, comsensusID int64)
-	CommitBlock(block types.Block, proof []byte, consensusID int64)
+	// CommitTx(tx types.RawTransaction, idx int64, block types.ConsensusBlock, proof []byte, comsensusID int64)
+	CommitBlock(block types.ConsensusBlock, proof []byte, consensusID int64)
 	VerifyTx(tx types.RawTransaction) bool
 }
 
