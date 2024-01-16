@@ -111,13 +111,13 @@ func (sw *SimpleWhirlyImpl) OnReceiveNewLeaderNotify(newLeaderMsg *pb.NewLeaderN
 	// Echo leader
 	echoMsg := sw.NewLeaderEchoMsg(leader, nil, sw.lockProof, sw.epoch, sw.vHeight)
 
-	if sw.leader[sw.epoch] == sw.PeerId {
+	if sw.GetLeader(sw.epoch) == sw.PeerId {
 		// echo self
 		sw.OnReceiveNewLeaderEcho(echoMsg)
 	} else {
 		// send vote to the leader
 		if sw.GetP2pAdaptorType() == "p2p" {
-			_ = sw.Unicast(sw.leader[sw.epoch], echoMsg)
+			_ = sw.Unicast(sw.GetLeader(sw.epoch), echoMsg)
 		} else {
 			_ = sw.Unicast(peerId, echoMsg)
 		}
