@@ -32,18 +32,18 @@ type PoTEngine struct {
 	RequestEntrance chan *pb.Request
 	Topic           []byte
 	// consensus work
-	Height         int64
-	worker         *Worker
-	headerStorage  *types.HeaderStorage
-	potStorage     *types.PoTBlockStorage
+	Height int64
+	worker *Worker
+	//headerStorage  *types.HeaderStorage
+	blockStorage   *types.BlockStorage
 	chainReader    *types.ChainReader
 	UpperConsensus *simpleWhirly.SimpleWhirlyImpl
 }
 
 func NewEngine(nid int64, cid int64, config *config.ConsensusConfig, exec executor.Executor, adaptor p2p.P2PAdaptor, log *logrus.Entry) *PoTEngine {
 	ch := make(chan []byte, 1024)
-	st := types.NewHeaderStorage(nid)
-
+	//st := types.NewHeaderStorage(nid)
+	bst := types.NewBlockStorage(nid)
 	e := &PoTEngine{
 		id:              nid,
 		peerId:          adaptor.GetPeerID(),
@@ -54,11 +54,12 @@ func NewEngine(nid int64, cid int64, config *config.ConsensusConfig, exec execut
 		config:          config,
 		MsgByteEntrance: ch,
 		// Worker:          worker,
-		headerStorage: st,
-		Topic:         []byte(config.Topic),
+		//headerStorage: st,
+		blockStorage: bst,
+		Topic:        []byte(config.Topic),
 	}
-	st.Put(types.DefaultGenesisHeader())
-	worker := NewWorker(nid, config, log, st, e)
+	bst.Put(types.DefaultGenesisBlock())
+	worker := NewWorker(nid, config, log, bst, e)
 	e.worker = worker
 
 	// adaptor.SetReceiver(e)
@@ -146,12 +147,8 @@ func (e *PoTEngine) Unicast(address string, msgByte []byte) error {
 	return e.Adaptor.Unicast(address, bytePacket, e.consensusID, e.Topic)
 }
 
-func (e *PoTEngine) GetHeaderStorage() *types.HeaderStorage {
-	return e.headerStorage
-}
-
-func (e *PoTEngine) GetPoTStorage() *types.PoTBlockStorage {
-	return e.potStorage
+func (e *PoTEngine) GetBlockStorage() *types.BlockStorage {
+	return e.blockStorage
 }
 
 func (e *PoTEngine) SetWhirly(whirly2 *simpleWhirly.SimpleWhirlyImpl) {

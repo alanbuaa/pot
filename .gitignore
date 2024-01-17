@@ -10,6 +10,6 @@ genkey
 upgradeable-consensus
 
 /.vscode
-*.log
+/*.log
 
 

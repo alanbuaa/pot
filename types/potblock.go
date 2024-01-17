@@ -8,12 +8,12 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-type PoTBlockStorage struct {
+type BlockStorage struct {
 	db        *leveldb.DB
 	heightmap map[uint64][][]byte
 }
 
-func NewPoTBlockStorage(id int64) *PoTBlockStorage {
+func NewBlockStorage(id int64) *BlockStorage {
 	sint := fmt.Sprintf("%d", id)
 	db, err := leveldb.OpenFile("dbfile/node0-"+sint, nil)
 	if err != nil {
@@ -21,11 +21,12 @@ func NewPoTBlockStorage(id int64) *PoTBlockStorage {
 		panic(err)
 	}
 
-	return &PoTBlockStorage{db: db, heightmap: make(map[uint64][][]byte)}
+	return &BlockStorage{db: db, heightmap: make(map[uint64][][]byte)}
 }
 
-func (s *PoTBlockStorage) Put(header *Header) error {
-	protos := header.ToProto()
+func (s *BlockStorage) Put(block *Block) error {
+	header := block.GetHeader()
+	protos := block.ToProto()
 	b, err := proto.Marshal(protos)
 	if err != nil {
 		return err
@@ -40,21 +41,21 @@ func (s *PoTBlockStorage) Put(header *Header) error {
 	return err
 }
 
-func (s *PoTBlockStorage) Get(hash []byte) (*Header, error) {
+func (s *BlockStorage) Get(hash []byte) (*Block, error) {
 	blockByte, err := s.db.Get(hash, nil)
 	if err != nil {
 		return nil, err
 	}
-	block := &pb.Header{}
+	block := &pb.Block{}
 	err = proto.Unmarshal(blockByte, block)
 
 	if err != nil {
 		return nil, err
 	}
-	return ToHeader(block), nil
+	return ToBlock(block), nil
 }
 
-func (s *PoTBlockStorage) HasBlock(hash []byte) bool {
+func (s *BlockStorage) HasBlock(hash []byte) bool {
 	blockByte, err := s.db.Get(hash, nil)
 	if err != nil {
 		return false
@@ -66,9 +67,9 @@ func (s *PoTBlockStorage) HasBlock(hash []byte) bool {
 	}
 }
 
-func (s *PoTBlockStorage) GetbyHeight(height uint64) ([]*Header, error) {
+func (s *BlockStorage) GetbyHeight(height uint64) ([]*Block, error) {
 	if height == 0 {
-		return []*Header{DefaultGenesisHeader()}, nil
+		return []*Block{DefaultGenesisBlock()}, nil
 	}
 	values, exists := s.getHeightHash(height)
 	if exists == leveldb.ErrNotFound {
@@ -77,23 +78,23 @@ func (s *PoTBlockStorage) GetbyHeight(height uint64) ([]*Header, error) {
 		return nil, exists
 	}
 
-	headers := make([]*Header, 0)
+	headers := make([]*Block, 0)
 	for _, hash := range values {
 		pbheader, err := s.db.Get(hash, nil)
 		if err != nil {
 			return nil, err
 		}
-		block := &pb.Header{}
+		block := &pb.Block{}
 		err = proto.Unmarshal(pbheader, block)
 		if err != nil {
 			return nil, err
 		}
-		headers = append(headers, ToHeader(block))
+		headers = append(headers, ToBlock(block))
 	}
 	return headers, nil
 }
 
-func (s *PoTBlockStorage) getHeightHash(height uint64) ([][]byte, error) {
+func (s *BlockStorage) getHeightHash(height uint64) ([][]byte, error) {
 	keys := []byte(fmt.Sprintf("height:%d", height))
 
 	values, err := s.db.Get(keys, nil)
@@ -108,7 +109,7 @@ func (s *PoTBlockStorage) getHeightHash(height uint64) ([][]byte, error) {
 	return decodeData, nil
 }
 
-func (s *PoTBlockStorage) putHeightHash(height uint64, hash []byte) error {
+func (s *BlockStorage) putHeightHash(height uint64, hash []byte) error {
 	data, err := s.getHeightHash(height)
 	if err != leveldb.ErrNotFound && err != nil {
 		return err
@@ -127,13 +128,13 @@ func (s *PoTBlockStorage) putHeightHash(height uint64, hash []byte) error {
 	return err
 }
 
-func (s *PoTBlockStorage) SetVdfRes(epoch uint64, vdfres []byte) error {
+func (s *BlockStorage) SetVDFres(epoch uint64, vdfres []byte) error {
 	key := []byte(fmt.Sprintf("epoch:%d", epoch))
 	err := s.db.Put(key, vdfres, nil)
 	return err
 }
 
-func (s *PoTBlockStorage) GetPoTbyEpoch(epoch uint64) ([]byte, error) {
+func (s *BlockStorage) GetVDFresbyEpoch(epoch uint64) ([]byte, error) {
 	key := []byte(fmt.Sprintf("epoch:%d", epoch))
 	value, err := s.db.Get(key, nil)
 	if err != nil {

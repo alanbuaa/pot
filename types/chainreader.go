@@ -3,7 +3,6 @@ package types
 import (
 	"bytes"
 	"fmt"
-	"github.com/syndtr/goleveldb/leveldb"
 	"sync"
 )
 
@@ -12,24 +11,24 @@ ChainReader is used to store chain state for the pot chain
 */
 
 type ChainReader struct {
-	storage *HeaderStorage
-	chain   map[uint64]*Header
+	storage *BlockStorage
+	chain   map[uint64]*Block
 	height  uint64
 	sync    *sync.RWMutex
 }
 
-func NewChainReader(storage *HeaderStorage) *ChainReader {
+func NewChainReader(storage *BlockStorage) *ChainReader {
 	c := &ChainReader{
 		storage: storage,
-		chain:   make(map[uint64]*Header),
+		chain:   make(map[uint64]*Block),
 		height:  0,
 		sync:    new(sync.RWMutex),
 	}
-	c.chain[0] = DefaultGenesisHeader()
+	c.chain[0] = DefaultGenesisBlock()
 	return c
 }
 
-func (c *ChainReader) SetHeight(height uint64, block *Header) {
+func (c *ChainReader) SetHeight(height uint64, block *Block) {
 	c.sync.Lock()
 	defer c.sync.Unlock()
 	c.chain[height] = block
@@ -38,7 +37,7 @@ func (c *ChainReader) SetHeight(height uint64, block *Header) {
 	}
 }
 
-func (c *ChainReader) GetByHeight(height uint64) (*Header, error) {
+func (c *ChainReader) GetByHeight(height uint64) (*Block, error) {
 	c.sync.RLock()
 	defer c.sync.RUnlock()
 	if height > c.height {
@@ -51,20 +50,7 @@ func (c *ChainReader) GetByHeight(height uint64) (*Header, error) {
 	}
 }
 
-func (c *ChainReader) GetParentOf(block *Header) (*Header, error) {
-	header := block
-	height := header.Height
-	parent, err := c.GetByHeight(height - 1)
-	if err != nil {
-		return nil, err
-	}
-	if !bytes.Equal(parent.Hashes, block.ParentHash) {
-		return nil, fmt.Errorf("block's parent doesn't match, may get a wrong block")
-	}
-	return parent, nil
-}
-
-func (c *ChainReader) GetCurrentBlock() *Header {
+func (c *ChainReader) GetCurrentBlock() *Block {
 	height := c.GetCurrentHeight()
 	parent, err := c.GetByHeight(height)
 	if err != nil {
@@ -83,71 +69,16 @@ func (c *ChainReader) ValidateBlock(block *Header) bool {
 	return true
 }
 
-func (c *ChainReader) GetSharedAncestor(block *Header) (*Header, error) {
-	current := c.GetCurrentBlock()
-	currentheight := c.GetCurrentHeight()
-	header := block
-
-	if header.Height == currentheight {
-		if bytes.Equal(current.Hashes, header.Hashes) {
-			return current, nil
-		}
-		for {
-			current, err := c.GetByHeight(current.Height - 1)
-			if err != nil {
-				return nil, err
-			}
-			header, err := c.storage.Get(header.ParentHash)
-			if err == leveldb.ErrNotFound {
-				return nil, err
-			}
-			if bytes.Equal(current.Hashes, header.Hashes) {
-				return current, nil
-			}
-		}
-	}
-	if header.Height > currentheight {
-		headerahead, err := c.storage.Get(header.ParentHash)
-		if err != nil {
-			return nil, err
-		}
-		return c.GetSharedAncestor(headerahead)
-	}
-	if header.Height < currentheight {
-		current, err := c.GetByHeight(header.Height)
-		if err != nil {
-			return nil, err
-		}
-		if bytes.Equal(current.Hashes, header.Hashes) {
-			return current, nil
-		}
-		for {
-			current, err := c.GetByHeight(current.Height - 1)
-			if err != nil {
-				return nil, err
-			}
-			header, err := c.storage.Get(header.ParentHash)
-			if err != nil {
-				return nil, err
-			}
-			if bytes.Equal(current.Hashes, header.Hashes) {
-				return current, nil
-			}
-		}
-	}
-	return nil, fmt.Errorf("get ancestor error for unknown end")
-}
-
-func (c *ChainReader) IsBehindCurrent(header *Header) bool {
+func (c *ChainReader) IsBehindCurrent(block *Block) bool {
 	currentheight := c.GetCurrentHeight()
 	if currentheight == 0 {
 		return true
 	}
-	if currentheight+1 != header.Height {
+	if currentheight+1 != block.GetHeader().Height {
 		return false
 	}
 	current := c.GetCurrentBlock()
-	if !bytes.Equal(current.Hashes, header.ParentHash) {
+	if !bytes.Equal(current.GetHeader().Hashes, block.GetHeader().ParentHash) {
 		return false
 	}
 	return true

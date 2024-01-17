@@ -64,39 +64,39 @@ func (w *Worker) committeeSizeCheck() bool {
 	return w.committee.Len() == 4
 }
 
-func (w *Worker) GetPeerQueue() chan *types.Header {
+func (w *Worker) GetPeerQueue() chan *types.Block {
 	return w.peerMsgQueue
 }
 
 func (w *Worker) CommiteeUpdate(epoch uint64) {
-	if epoch >= CommiteeDelay+Commiteelen {
-		commitee := make([]string, Commiteelen)
-		for i := uint64(0); i < Commiteelen; i++ {
-			block, err := w.chainReader.GetByHeight(epoch - CommiteeDelay - i)
-			if err != nil {
-				return
-			}
-			if block != nil {
-				commitee[i] = block.PeerId
-			}
-		}
-		potsignal := &simpleWhirly.PoTSignal{
-			Epoch:           int64(epoch),
-			Proof:           nil,
-			ID:              0,
-			LeaderNetworkId: commitee[0],
-			Committee:       commitee,
-			CryptoElements:  nil,
-		}
-		b, err := json.Marshal(potsignal)
-		if err != nil {
-			w.log.WithError(err)
-			return
-		}
-		if w.potSignalChan != nil {
-			w.potSignalChan <- b
-		}
-	}
+	//if epoch >= CommiteeDelay+Commiteelen {
+	//	commitee := make([]string, Commiteelen)
+	//	for i := uint64(0); i < Commiteelen; i++ {
+	//		block, err := w.chainReader.GetByHeight(epoch - CommiteeDelay - i)
+	//		if err != nil {
+	//			return
+	//		}
+	//		if block != nil {
+	//			commitee[i] = block.GetHeader().PeerId
+	//		}
+	//	}
+	//	potsignal := &simpleWhirly.PoTSignal{
+	//		Epoch:           int64(epoch),
+	//		Proof:           nil,
+	//		ID:              0,
+	//		LeaderNetworkId: commitee[0],
+	//		Committee:       commitee,
+	//		CryptoElements:  nil,
+	//	}
+	//	b, err := json.Marshal(potsignal)
+	//	if err != nil {
+	//		w.log.WithError(err)
+	//		return
+	//	}
+	//	if w.potSignalChan != nil {
+	//		w.potSignalChan <- b
+	//	}
+	//}
 }
 func (w *Worker) SetWhirly(impl *simpleWhirly.SimpleWhirlyImpl) {
 	w.whirly = impl

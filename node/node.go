@@ -98,7 +98,7 @@ func (node *Node) Send(ctx context.Context, in *pb.Packet) (*pb.Empty, error) {
 // func (node *Node) Request(ctx context.Context, in *pb.HeaderRequest) (*pb.Header, error) {
 //	node.log.Infoln("[node]\t receive request for header")
 //	hash := in.Hashes
-//	st := node.pot.GetStorage()
+//	st := node.pot.GetBlockStorage()
 //	header, err := st.Get(hash)
 //	if err != nil {
 //		node.log.Error("get block err for ", err)
@@ -112,8 +112,8 @@ func (node *Node) Send(ctx context.Context, in *pb.Packet) (*pb.Empty, error) {
 // func (node *Node) PoTresRequest(ctx context.Context, request *pb.PoTRequest) (*pb.PoTResponse, error) {
 //	node.log.Infoln("[node]\t receive request for header")
 //	epoch := request.GetEpoch()
-//	st := node.pot.GetStorage()
-//	res, err := st.GetPoTbyEpoch(epoch)
+//	st := node.pot.GetBlockStorage()
+//	res, err := st.GetVDFresbyEpoch(epoch)
 //	if err != nil {
 //		node.log.Error("[node]\t get PoTProof error ", err)
 //		return nil, err

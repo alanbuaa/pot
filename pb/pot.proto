@@ -4,12 +4,16 @@ package pb;
 option go_package="./pb";
 
 enum MessageType{
-  Header_Data = 0;
-  Header_Request = 1;
-  Header_Response = 2;
+  Block_Data = 0;
+  Block_Request = 1;
+  Block_Response = 2;
   PoT_Request = 3;
   PoT_Response = 4;
   PoT_Proof = 5;
+}
+message Block {
+  Header Header = 1;
+  repeated Tx Txs = 2;
 }
 
 message PoTMessage {
@@ -31,13 +35,11 @@ message Header{
   string PeerId = 11;
 }
 
-message PoTBlock {
-  Header Header = 1;
-  repeated bytes Txs = 2;
+message Tx{
+  bytes TxData = 1;
 }
 
-message HeaderRequest {
-
+message BlockRequest {
   uint64 Height = 1;
   bytes  Hashes = 2;
   int64  srcid = 3;
@@ -45,8 +47,9 @@ message HeaderRequest {
   string src =5;
   string des = 6;
 }
-message HeaderResponse{
-  Header header =1;
+
+message BlockResponse{
+  Block block =1;
   string src = 2;
   string des = 3;
   int64  srcid = 4;
@@ -76,5 +79,9 @@ message PoTResponse{
   int64  Srcid = 4;
   string Src = 5 ;
   bytes  Proof = 6;
+}
+
+message PoTWork{
+
 }
 

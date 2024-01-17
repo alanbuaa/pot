@@ -91,48 +91,48 @@ func (e *PoTEngine) handleRequest(request *pb.Request) {
 
 func (e *PoTEngine) handlePoTMsg(message *pb.PoTMessage) error {
 	switch message.MsgType {
-	case pb.MessageType_Header_Data:
+	case pb.MessageType_Block_Data:
 		bytes := message.GetMsgByte()
-		pbHeader := new(pb.Header)
+		pbHeader := new(pb.Block)
 		err := proto.Unmarshal(bytes, pbHeader)
 		if err != nil {
 			return err
 		}
-		header := types.ToHeader(pbHeader)
-		e.handleHeader(header)
-	case pb.MessageType_Header_Request:
+		b := types.ToBlock(pbHeader)
+		e.handleblock(b)
+	case pb.MessageType_Block_Request:
 		bytes := message.GetMsgByte()
-		request := new(pb.HeaderRequest)
+		request := new(pb.BlockRequest)
 		err := proto.Unmarshal(bytes, request)
 		if err != nil {
 			return err
 		}
-		// e.log.Infof("[Engine]\treceive header request from %s ", request.Src)
+		// e.log.Infof("[Engine]\treceive block request from %s ", request.Src)
 		hashes := request.GetHashes()
-		st := e.GetHeaderStorage()
-		header, err := st.Get(hashes)
+		st := e.GetBlockStorage()
+		block, err := st.Get(hashes)
 
 		if err != nil {
 			e.log.Errorf("get block err for %s", err)
 			return err
 		}
-		pbHeader := header.ToProto()
-		pbResponse := &pb.HeaderResponse{}
+		pbblock := block.ToProto()
+		pbResponse := &pb.BlockResponse{}
 		if e.isBaseP2P {
-			pbResponse = &pb.HeaderResponse{
-				Header: pbHeader,
-				Src:    e.peerId,
-				Des:    request.GetSrc(),
-				Srcid:  e.id,
-				Desid:  request.GetSrcid(),
+			pbResponse = &pb.BlockResponse{
+				Block: pbblock,
+				Src:   e.peerId,
+				Des:   request.GetSrc(),
+				Srcid: e.id,
+				Desid: request.GetSrcid(),
 			}
 		} else {
-			pbResponse = &pb.HeaderResponse{
-				Header: pbHeader,
-				Src:    e.peerId,
-				Des:    request.GetSrc(),
-				Srcid:  e.id,
-				Desid:  request.GetSrcid(),
+			pbResponse = &pb.BlockResponse{
+				Block: pbblock,
+				Src:   e.peerId,
+				Des:   request.GetSrc(),
+				Srcid: e.id,
+				Desid: request.GetSrcid(),
 			}
 		}
 		bytes, err = proto.Marshal(pbResponse)
@@ -140,7 +140,7 @@ func (e *PoTEngine) handlePoTMsg(message *pb.PoTMessage) error {
 			return err
 		}
 		potMsg := &pb.PoTMessage{
-			MsgType: pb.MessageType_Header_Response,
+			MsgType: pb.MessageType_Block_Response,
 			MsgByte: bytes,
 		}
 		msgByte, err := proto.Marshal(potMsg)
@@ -151,17 +151,17 @@ func (e *PoTEngine) handlePoTMsg(message *pb.PoTMessage) error {
 		if err != nil {
 			return err
 		}
-	case pb.MessageType_Header_Response:
+	case pb.MessageType_Block_Response:
 		// TODO: choose channel to put the response
 
 		bytes := message.GetMsgByte()
-		response := new(pb.HeaderResponse)
+		response := new(pb.BlockResponse)
 		err := proto.Unmarshal(bytes, response)
-		// e.log.Infof("[Engine]\treceive header response from %s ", response.Src)
+
 		if err != nil {
 			return err
 		}
-		err = e.worker.handleHeaderResponse(response)
+		err = e.worker.handleBlockResponse(response)
 		if err != nil {
 			return err
 		}
@@ -174,7 +174,7 @@ func (e *PoTEngine) handlePoTMsg(message *pb.PoTMessage) error {
 		}
 		e.log.Infof("[Engine]\treceive pot request from %s ", request.Src)
 		epoch := request.GetEpoch()
-		proof, err := e.headerStorage.GetPoTbyEpoch(epoch)
+		proof, err := e.blockStorage.GetVDFresbyEpoch(epoch)
 		if err != nil {
 			return err
 		}
@@ -209,7 +209,7 @@ func (e *PoTEngine) handlePoTMsg(message *pb.PoTMessage) error {
 		if err != nil {
 			return err
 		}
-		e.log.Infof("[Engine]\treceive pot response from %s ", response.Src)
+		//e.log.Infof("[Engine]\treceive pot response from %s ", response.Src)
 		err = e.worker.handlePoTResponse(response)
 		if err != nil {
 			return err
@@ -219,10 +219,10 @@ func (e *PoTEngine) handlePoTMsg(message *pb.PoTMessage) error {
 	return nil
 }
 
-func (e *PoTEngine) handleHeader(header *types.Header) {
-	if header != nil {
+func (e *PoTEngine) handleblock(b *types.Block) {
+	if b != nil {
 		channel := e.worker.GetPeerQueue()
-		channel <- header
+		channel <- b
 	}
 
 }

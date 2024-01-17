@@ -17,22 +17,77 @@ type Header struct {
 	Height     uint64
 	ParentHash []byte
 	UncleHash  [][]byte
-
 	Mixdigest  []byte
 	Difficulty *big.Int
 	Nonce      int64
 	Timestamp  time.Time
-
-	PoTProof [][]byte
-	Address  int64
-	TxHash   []byte
-	Hashes   []byte
-	PeerId   string
+	PoTProof   [][]byte
+	Address    int64
+	PeerId     string
+	TxHash     []byte
+	Hashes     []byte
 }
 
 type Block struct {
-	Header Header
-	Data   []RawTransaction
+	Header *Header
+	Txs    []*Tx
+}
+
+func (b *Block) Hash() []byte {
+	if b != nil {
+		if b.GetHeader() != nil {
+			return b.GetHeader().Hash()
+		}
+	}
+	return nil
+}
+
+func (b *Block) GetHeader() *Header {
+	if b.Header != nil {
+		return b.Header
+	}
+	return nil
+}
+
+func (b *Block) GetTxs() []*Tx {
+	if len(b.Txs) != 0 {
+		return b.Txs
+	} else {
+		return nil
+	}
+}
+
+func (b *Block) ToProto() *pb.Block {
+	pbheader := b.GetHeader().ToProto()
+	if b.Txs != nil {
+		txs := make([]*pb.Tx, len(b.Txs))
+		for i := 0; i < len(b.Txs); i++ {
+			txs[i] = b.Txs[i].ToProto()
+		}
+		pbblock := &pb.Block{
+			Header: pbheader,
+			Txs:    txs,
+		}
+		return pbblock
+	} else {
+		pbblock := &pb.Block{
+			Header: pbheader,
+			Txs:    nil,
+		}
+		return pbblock
+	}
+}
+
+func ToBlock(block *pb.Block) *Block {
+	pbheader := block.GetHeader()
+	pbtxs := block.GetTxs()
+
+	header := ToHeader(pbheader)
+	txs := ToTxs(pbtxs)
+	return &Block{
+		Header: header,
+		Txs:    txs,
+	}
 }
 
 func (b *Header) Hash() []byte {
@@ -141,8 +196,9 @@ func DefaultGenesisHeader() *Header {
 	return h
 }
 
-type PoTBlock struct {
-	Header *Header
-	//Data   Data
-	Txs [][]byte
+func DefaultGenesisBlock() *Block {
+	return &Block{
+		Header: DefaultGenesisHeader(),
+		Txs:    TestTxs(),
+	}
 }
