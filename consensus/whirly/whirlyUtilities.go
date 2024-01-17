@@ -3,6 +3,7 @@ package whirlyUtilities
 import (
 	"encoding/json"
 	"strconv"
+	"strings"
 
 	"github.com/niclabs/tcrsa"
 	"github.com/sirupsen/logrus"
@@ -69,7 +70,9 @@ func (wu *WhirlyUtilitiesImpl) Init(
 	wu.RequestEntrance = make(chan *pb.Request, 10)
 	wu.MemPool = types.NewMemPool()
 	// wu.Log.Debugf("[HOTSTUFF] Init block storage")
-	wu.BlockStorage = types.NewBlockStorageImpl(strconv.Itoa(int(cid)) + "-" + wu.PeerId)
+	newPeerId1 := strings.Replace(wu.PeerId, ".", "", -1)
+	newPeerId2 := strings.Replace(newPeerId1, ":", "", -1)
+	wu.BlockStorage = types.NewBlockStorageImpl(strconv.Itoa(int(cid)) + "-" + newPeerId2)
 
 	// Set receiver
 	//p2pAdaptor.SetReceiver(wu.GetMsgByteEntrance())
@@ -80,6 +83,41 @@ func (wu *WhirlyUtilitiesImpl) Init(
 	//	wu.Log.Error("Subscribe error: ", err.Error())
 	//	return
 	//}
+	wu.Log.Info("Joined to topic: ", wu.Topic)
+}
+
+func (wu *WhirlyUtilitiesImpl) InitForLocalTest(
+	id int64,
+	cid int64,
+	cfg *config.ConsensusConfig,
+	exec executor.Executor,
+	p2pAdaptor p2p.P2PAdaptor,
+	log *logrus.Entry,
+) {
+	wu.ID = id
+	wu.PeerId = p2pAdaptor.GetPeerID()
+	wu.ConsensusID = cid
+	wu.Config = cfg
+	wu.Executor = exec
+	wu.p2pAdaptor = p2pAdaptor
+	wu.Log = log.WithField("consensus id", cid)
+	wu.MsgByteEntrance = make(chan []byte, 10)
+	wu.RequestEntrance = make(chan *pb.Request, 10)
+	wu.MemPool = types.NewMemPool()
+	// wu.Log.Debugf("[HOTSTUFF] Init block storage")
+	newPeerId1 := strings.Replace(wu.PeerId, ".", "", -1)
+	newPeerId2 := strings.Replace(newPeerId1, ":", "", -1)
+	wu.BlockStorage = types.NewBlockStorageImpl(strconv.Itoa(int(cid)) + "-" + newPeerId2)
+
+	// Set receiver
+	p2pAdaptor.SetReceiver(wu.GetMsgByteEntrance())
+	wu.Topic = cfg.Topic
+	// Subscribe topic
+	err := p2pAdaptor.Subscribe([]byte(wu.Topic))
+	if err != nil {
+		wu.Log.Error("Subscribe error: ", err.Error())
+		return
+	}
 	wu.Log.Info("Joined to topic: ", wu.Topic)
 }
 

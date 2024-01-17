@@ -84,7 +84,7 @@ func NewWhirly(
 		eventChannels: make([]chan Event, 0),
 	}
 
-	whi.Init(id, cid, cfg, exec, p2pAdaptor, log)
+	whi.InitForLocalTest(id, cid, cfg, exec, p2pAdaptor, log)
 	err := whi.BlockStorage.Put(genesisBlock)
 	if err != nil {
 		whi.Log.Fatal("Store genesis block failed!")

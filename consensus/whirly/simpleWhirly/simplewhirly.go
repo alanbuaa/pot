@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -36,6 +37,7 @@ type SimpleWhirlyImpl struct {
 	whirlyUtilities.WhirlyUtilitiesImpl
 	epoch        int64
 	leader       map[int64]string
+	leaderLock   sync.Mutex
 	lock         sync.Mutex
 	voteLock     sync.Mutex
 	proposalLock sync.Mutex
@@ -153,7 +155,7 @@ func NewSimpleWhirlyForLocalTest(
 	sw.Weight = 1
 	sw.inCommittee = true
 
-	sw.Init(id, cid, cfg, exec, p2pAdaptor, log)
+	sw.InitForLocalTest(id, cid, cfg, exec, p2pAdaptor, log)
 	err := sw.BlockStorage.Put(genesisBlock)
 	if err != nil {
 		sw.Log.Fatal("Store genesis block failed!")
@@ -188,15 +190,27 @@ func NewSimpleWhirlyForLocalTest(
 	} else {
 
 	}
-	sw.testNewLeader()
+	// sw.testNewLeader()
 
 	sw.Log.Info("[SIMPLE WHIRLY]\tstart to work")
 	return sw
 }
 
 func (sw *SimpleWhirlyImpl) SetLeader(epoch int64, leaderID string) {
+	sw.leaderLock.Lock()
 	sw.epoch = epoch
 	sw.leader[epoch] = leaderID
+	sw.leaderLock.Unlock()
+}
+
+func (sw *SimpleWhirlyImpl) GetLeader(epoch int64) string {
+	sw.leaderLock.Lock()
+	leaderID, ok := sw.leader[epoch]
+	sw.leaderLock.Unlock()
+	if !ok {
+		return ""
+	}
+	return leaderID
 }
 
 func (sw *SimpleWhirlyImpl) CleanVote() {
@@ -240,7 +254,9 @@ func (sw *SimpleWhirlyImpl) Stop() {
 	close(sw.MsgByteEntrance)
 	close(sw.RequestEntrance)
 	close(sw.PoTByteEntrance)
-	_ = os.RemoveAll("dbfile/node" + sw.PeerId)
+	newPeerId1 := strings.Replace(sw.PeerId, ".", "", -1)
+	newPeerId2 := strings.Replace(newPeerId1, ":", "", -1)
+	_ = os.RemoveAll("dbfile/node" + newPeerId2)
 	_ = os.RemoveAll("store")
 }
 
@@ -283,8 +299,8 @@ func (sw *SimpleWhirlyImpl) handleMsg(msg *pb.WhirlyMsg) {
 		// put the cmd into the cmdset
 		sw.MemPool.Add(types.RawTransaction(request.Tx))
 		// send the request to the leader, if the replica is not the leader
-		if sw.PeerId != sw.leader[sw.epoch] {
-			_ = sw.Unicast(sw.leader[sw.epoch], msg)
+		if sw.PeerId != sw.GetLeader(sw.epoch) {
+			_ = sw.Unicast(sw.GetLeader(sw.epoch), msg)
 			return
 		}
 	case *pb.WhirlyMsg_WhirlyProposal:
@@ -477,14 +493,14 @@ func (sw *SimpleWhirlyImpl) OnReceiveProposal(newBlock *pb.WhirlyBlock, swProof 
 	}
 	voteMsg := sw.VoteMsg(newBlock.Height, newBlock.Hash, voteFlag, nil, nil, voteProof, sw.epoch)
 
-	if sw.leader[sw.epoch] == sw.PeerId {
+	if sw.GetLeader(sw.epoch) == sw.PeerId {
 		// if sw.GetLeader(int64(newBlock.Height)) == sw.ID {
 		// vote self
 		sw.OnReceiveVote(voteMsg)
 	} else {
 		// send vote to the leader
 		if sw.GetP2pAdaptorType() == "p2p" {
-			_ = sw.Unicast(sw.leader[sw.epoch], voteMsg)
+			_ = sw.Unicast(sw.GetLeader(sw.epoch), voteMsg)
 		} else {
 			_ = sw.Unicast(peerId, voteMsg)
 		}
@@ -498,11 +514,11 @@ func (sw *SimpleWhirlyImpl) OnReceiveVote(msg *pb.WhirlyMsg) {
 		return
 	}
 
-	if sw.leader[sw.epoch] != sw.PeerId {
+	if sw.GetLeader(sw.epoch) != sw.PeerId {
 		// if sw.GetLeader(int64(whirlyVoteMsg.BlockView)) != sw.ID {
 		sw.Log.WithFields(logrus.Fields{
 			"senderId":  whirlyVoteMsg.SenderId,
-			"getleader": sw.leader[sw.epoch],
+			"getleader": sw.GetLeader(sw.epoch),
 			"blockView": whirlyVoteMsg.BlockView,
 			"sw.ID":     sw.ID,
 			"Flag":      whirlyVoteMsg.Flag,
@@ -579,11 +595,11 @@ func (sw *SimpleWhirlyImpl) OnPropose() {
 	// }
 	time.Sleep(2 * time.Second)
 	sw.proposalLock.Lock()
-	if sw.leader[sw.epoch] != sw.PeerId || sw.proposeView >= sw.View.ViewNum {
+	if sw.GetLeader(sw.epoch) != sw.PeerId || sw.proposeView >= sw.View.ViewNum {
 		// if sw.GetLeader(int64(1)) != sw.ID {
 		sw.Log.WithFields(logrus.Fields{
 			"nowView": sw.View.ViewNum,
-			"leader":  sw.leader[sw.epoch],
+			"leader":  sw.GetLeader(sw.epoch),
 		}).Trace("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] OnPropose: not allow!")
 		sw.proposalLock.Unlock()
 		return
