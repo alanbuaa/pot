@@ -71,7 +71,7 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 	// _, _ = w.checkblock(header)
 	if !w.isBehindHeight(header.Height-1, block) {
 		if header.ParentHash != nil {
-			w.log.Errorf("[PoT]\tfind fork at epoch %d block %s with parents %s,current epoch %d parent %s", block.GetHeader().Height, hexutil.Encode(block.Hash()), hexutil.Encode(block.GetHeader().ParentHash), w.chainReader.GetCurrentHeight(), hexutil.Encode(w.chainReader.GetCurrentBlock().Hash()))
+			w.log.Errorf("[PoT]\tfind fork at epoch %d block %s with parents %s,current epoch %d %s", block.GetHeader().Height, hexutil.Encode(block.Hash()), hexutil.Encode(block.GetHeader().ParentHash), w.chainReader.GetCurrentHeight(), hexutil.Encode(w.chainReader.GetCurrentBlock().Hash()))
 
 			currentblock := w.chainReader.GetCurrentBlock()
 			ances, err := w.GetSharedAncestor(block, currentblock)
