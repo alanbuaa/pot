@@ -42,3 +42,9 @@ win_generate_key:
 
 pot_test:
 	go build -o pot_test.exe ./cmd/pot_test
+
+docker_build:
+	docker build -t pot:v1.0 .
+
+docker_run:
+	docker run -it pot:v1.0

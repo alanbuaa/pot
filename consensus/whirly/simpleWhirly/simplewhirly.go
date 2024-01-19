@@ -354,10 +354,12 @@ func (sw *SimpleWhirlyImpl) Update(swProof *pb.SimpleWhirlyProof) {
 	}
 
 	if block2.Height+1 == block1.Height {
-		sw.Log.WithFields(logrus.Fields{
-			"blockHash":   hex.EncodeToString(block2.Hash),
-			"blockHeight": block2.Height,
-		}).Info("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] [SIMPLE WHIRLY] COMMIT.")
+		if sw.View.ViewNum%5 == 0 {
+			sw.Log.WithFields(logrus.Fields{
+				"blockHash":   hex.EncodeToString(block2.Hash),
+				"blockHeight": block2.Height,
+			}).Info("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] [SIMPLE WHIRLY] COMMIT.")
+		}
 		// sw.Log.WithField(
 		// 	"blockHash", hex.EncodeToString(block2.Hash)).Trace("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] [SIMPLE WHIRLY] COMMIT.")
 		sw.OnCommit(block2)

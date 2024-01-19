@@ -141,7 +141,7 @@ func (client *Client) receiveReply() {
 			cmd := command(tx.Payload)
 			var duration time.Duration
 			if sTime, ok := client.getSendTime(cmd); !ok {
-				client.log.Warn("the reply message has not been sent")
+				client.log.Trace("the reply message has not been sent")
 				continue
 			} else {
 				duration = time.Since(sTime)

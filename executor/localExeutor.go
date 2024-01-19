@@ -57,7 +57,7 @@ func (e *LocalExecutor) CommitBlock(block types.ConsensusBlock, proof []byte, ci
 		}
 
 		if _, err = client.Send(context.Background(), packet); err != nil {
-			e.log.Warn("send to ", address, "failed")
+			e.log.Trace("send to ", address, "failed")
 		}
 		conn.Close()
 	}
