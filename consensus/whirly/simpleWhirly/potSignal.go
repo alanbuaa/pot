@@ -149,7 +149,6 @@ func (sw *SimpleWhirlyImpl) OnReceiveNewLeaderEcho(msg *pb.WhirlyMsg) {
 
 	sw.echoLock.Lock()
 	sw.curEcho = append(sw.curEcho, echoMsg.SwProof)
-	sw.echoLock.Unlock()
 	sw.lock.Lock()
 	sw.UpdateLockProof(echoMsg.SwProof)
 	sw.lock.Unlock()
@@ -159,6 +158,7 @@ func (sw *SimpleWhirlyImpl) OnReceiveNewLeaderEcho(msg *pb.WhirlyMsg) {
 		sw.AdvanceView(sw.maxVHeight)
 		go sw.OnPropose()
 	}
+	sw.echoLock.Unlock()
 }
 
 type PoTSignal struct {
