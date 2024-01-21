@@ -2,6 +2,9 @@ package pot
 
 import (
 	"fmt"
+	"os"
+	"strconv"
+
 	"github.com/sirupsen/logrus"
 	"github.com/zzz136454872/upgradeable-consensus/config"
 	"github.com/zzz136454872/upgradeable-consensus/consensus/whirly/simpleWhirly"
@@ -11,8 +14,6 @@ import (
 	"github.com/zzz136454872/upgradeable-consensus/types"
 	"github.com/zzz136454872/upgradeable-consensus/utils"
 	"google.golang.org/protobuf/proto"
-	"os"
-	"strconv"
 )
 
 type PoTEngine struct {
@@ -169,7 +170,7 @@ func (e *PoTEngine) StartCommitee() *simpleWhirly.SimpleWhirlyImpl {
 		Topic: e.config.Topic,
 		F:     e.config.F,
 	}
-	s := simpleWhirly.NewSimpleWhirly(e.id, 1009, whirlyconfig, e.exec, e.Adaptor, e.log)
+	s := simpleWhirly.NewSimpleWhirly(e.id, 1009, whirlyconfig, e.exec, e.Adaptor, e.log, "", nil)
 	e.UpperConsensus = s
 	e.log.Infof("[PoT]\tCommitee consensus whirly get prepared")
 	return s

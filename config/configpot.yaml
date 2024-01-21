@@ -17,6 +17,8 @@ nodes:
     private_key_path: keys/r4.key
 public_key_path: keys/pub.key
 
+total: 4
+
 log: 
   level: info
   to_file: false

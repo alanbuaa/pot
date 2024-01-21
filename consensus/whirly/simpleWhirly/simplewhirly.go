@@ -52,12 +52,13 @@ type SimpleWhirlyImpl struct {
 	cancel       context.CancelFunc
 
 	// PoT
-	PoTByteEntrance chan []byte // receive msg
-	curEcho         []*pb.SimpleWhirlyProof
-	echoLock        sync.Mutex
-	maxVHeight      uint64
-	inCommittee     bool
-	Committee       []string
+	// PoTByteEntrance chan []byte // receive msg
+	curEcho      []*pb.SimpleWhirlyProof
+	echoLock     sync.Mutex
+	maxVHeight   uint64
+	inCommittee  bool
+	Committee    []string
+	stopEntrance chan string
 
 	// Ping
 	readyNodes     []string
@@ -71,6 +72,8 @@ func NewSimpleWhirly(
 	exec executor.Executor,
 	p2pAdaptor p2p.P2PAdaptor,
 	log *logrus.Entry,
+	publicAddress string,
+	stopEntrance chan string,
 ) *SimpleWhirlyImpl {
 	log.WithField("consensus id", cid).Debug("[SIMPLE WHIRLY] starting")
 	log.WithField("consensus id", cid).Trace("[SIMPLE WHIRLY] Generate genesis block")
@@ -82,10 +85,11 @@ func NewSimpleWhirly(
 		lockProof: nil,
 		vHeight:   genesisBlock.Height,
 		// pendingUpdate: make(chan *pb.SimpleWhirlyProof, 1),
-		cancel: cancel,
+		cancel:       cancel,
+		stopEntrance: stopEntrance,
 	}
 
-	sw.Init(id, cid, cfg, exec, p2pAdaptor, log)
+	sw.Init(id, cid, cfg, exec, p2pAdaptor, log, publicAddress)
 	err := sw.BlockStorage.Put(genesisBlock)
 	if err != nil {
 		sw.Log.Fatal("Store genesis block failed!")
@@ -108,7 +112,7 @@ func NewSimpleWhirly(
 	// ensure p2pAdaptor of SimpleWhirly is same as PoT
 
 	sw.leader = make(map[int64]string)
-	sw.PoTByteEntrance = make(chan []byte, 10)
+	// sw.PoTByteEntrance = make(chan []byte, 10)
 
 	// go sw.updateAsync(ctx)
 	go sw.receiveMsg(ctx)
@@ -177,15 +181,15 @@ func NewSimpleWhirlyForLocalTest(
 	// ensure p2pAdaptor of SimpleWhirly is same as PoT
 
 	sw.leader = make(map[int64]string)
-	sw.PoTByteEntrance = make(chan []byte, 10)
+	// sw.PoTByteEntrance = make(chan []byte, 10)
 
 	// go sw.updateAsync(ctx)
 	go sw.receiveMsg(ctx)
 
-	sw.SetLeader(sw.epoch, cfg.Nodes[1].Address)
-	if sw.PeerId == cfg.Nodes[1].Address {
+	// sw.SetLeader(sw.epoch, cfg.Nodes[1].Address)
+	if sw.GetPeerID() == cfg.Nodes[1].Address {
 		// TODO: ensure all nodes is ready before OnPropose
-		sw.SetLeader(sw.epoch, sw.PeerId)
+		sw.SetLeader(sw.epoch, sw.GetPeerID())
 		go sw.OnPropose()
 	} else {
 
@@ -244,17 +248,17 @@ func (sw *SimpleWhirlyImpl) GetLockProof() *pb.SimpleWhirlyProof {
 	return sw.lockProof
 }
 
-func (sw *SimpleWhirlyImpl) GetPoTByteEntrance() chan<- []byte {
-	return sw.PoTByteEntrance
-}
+// func (sw *SimpleWhirlyImpl) GetPoTByteEntrance() chan<- []byte {
+// 	return sw.PoTByteEntrance
+// }
 
 func (sw *SimpleWhirlyImpl) Stop() {
 	sw.cancel()
 	sw.BlockStorage.Close()
 	close(sw.MsgByteEntrance)
 	close(sw.RequestEntrance)
-	close(sw.PoTByteEntrance)
-	newPeerId1 := strings.Replace(sw.PeerId, ".", "", -1)
+	// close(sw.PoTByteEntrance)
+	newPeerId1 := strings.Replace(sw.PublicAddress, ".", "", -1)
 	newPeerId2 := strings.Replace(newPeerId1, ":", "", -1)
 	_ = os.RemoveAll("dbfile/node" + newPeerId2)
 	_ = os.RemoveAll("store")
@@ -280,12 +284,12 @@ func (sw *SimpleWhirlyImpl) receiveMsg(ctx context.Context) {
 				return // closed
 			}
 			go sw.handleMsg(&pb.WhirlyMsg{Payload: &pb.WhirlyMsg_Request{Request: request}})
-		case potSignal, ok := <-sw.PoTByteEntrance:
-			if !ok {
-				return // closed
-			}
-			//sw.Log.Info("receive pot signal")
-			go sw.handlePoTSignal(potSignal)
+			// case potSignal, ok := <-sw.PoTByteEntrance:
+			// 	if !ok {
+			// 		return // closed
+			// 	}
+			// 	//sw.Log.Info("receive pot signal")
+			// 	go sw.handlePoTSignal(potSignal)
 		}
 	}
 }
@@ -299,7 +303,7 @@ func (sw *SimpleWhirlyImpl) handleMsg(msg *pb.WhirlyMsg) {
 		// put the cmd into the cmdset
 		sw.MemPool.Add(types.RawTransaction(request.Tx))
 		// send the request to the leader, if the replica is not the leader
-		if sw.PeerId != sw.GetLeader(sw.epoch) {
+		if sw.PublicAddress != sw.GetLeader(sw.epoch) {
 			_ = sw.Unicast(sw.GetLeader(sw.epoch), msg)
 			return
 		}
@@ -308,7 +312,7 @@ func (sw *SimpleWhirlyImpl) handleMsg(msg *pb.WhirlyMsg) {
 		if int64(proposalMsg.Epoch) < sw.epoch {
 			return
 		}
-		sw.OnReceiveProposal(proposalMsg.Block, proposalMsg.SwProof, proposalMsg.PeerId)
+		sw.OnReceiveProposal(proposalMsg.Block, proposalMsg.SwProof, proposalMsg.PublicAddress)
 	case *pb.WhirlyMsg_WhirlyVote:
 		sw.OnReceiveVote(msg)
 	case *pb.WhirlyMsg_NewLeaderNotify:
@@ -417,7 +421,7 @@ func (sw *SimpleWhirlyImpl) verfiySwProof(swProof *pb.SimpleWhirlyProof) bool {
 	return true
 }
 
-func (sw *SimpleWhirlyImpl) OnReceiveProposal(newBlock *pb.WhirlyBlock, swProof *pb.SimpleWhirlyProof, peerId string) {
+func (sw *SimpleWhirlyImpl) OnReceiveProposal(newBlock *pb.WhirlyBlock, swProof *pb.SimpleWhirlyProof, publicAddress string) {
 	sw.Log.WithFields(logrus.Fields{
 		"blockHeight": newBlock.Height,
 		"proofView":   swProof.ViewNum,
@@ -495,7 +499,7 @@ func (sw *SimpleWhirlyImpl) OnReceiveProposal(newBlock *pb.WhirlyBlock, swProof 
 	}
 	voteMsg := sw.VoteMsg(newBlock.Height, newBlock.Hash, voteFlag, nil, nil, voteProof, sw.epoch)
 
-	if sw.GetLeader(sw.epoch) == sw.PeerId {
+	if sw.GetLeader(sw.epoch) == sw.PublicAddress {
 		// if sw.GetLeader(int64(newBlock.Height)) == sw.ID {
 		// vote self
 		sw.OnReceiveVote(voteMsg)
@@ -504,7 +508,7 @@ func (sw *SimpleWhirlyImpl) OnReceiveProposal(newBlock *pb.WhirlyBlock, swProof 
 		if sw.GetP2pAdaptorType() == "p2p" {
 			_ = sw.Unicast(sw.GetLeader(sw.epoch), voteMsg)
 		} else {
-			_ = sw.Unicast(peerId, voteMsg)
+			_ = sw.Unicast(publicAddress, voteMsg)
 		}
 	}
 }
@@ -516,7 +520,7 @@ func (sw *SimpleWhirlyImpl) OnReceiveVote(msg *pb.WhirlyMsg) {
 		return
 	}
 
-	if sw.GetLeader(sw.epoch) != sw.PeerId {
+	if sw.GetLeader(sw.epoch) != sw.PublicAddress {
 		// if sw.GetLeader(int64(whirlyVoteMsg.BlockView)) != sw.ID {
 		sw.Log.WithFields(logrus.Fields{
 			"senderId":  whirlyVoteMsg.SenderId,
@@ -597,7 +601,7 @@ func (sw *SimpleWhirlyImpl) OnPropose() {
 	// }
 	time.Sleep(2 * time.Second)
 	sw.proposalLock.Lock()
-	if sw.GetLeader(sw.epoch) != sw.PeerId || sw.proposeView >= sw.View.ViewNum {
+	if sw.GetLeader(sw.epoch) != sw.PublicAddress || sw.proposeView >= sw.View.ViewNum {
 		// if sw.GetLeader(int64(1)) != sw.ID {
 		sw.Log.WithFields(logrus.Fields{
 			"nowView": sw.View.ViewNum,

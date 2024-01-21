@@ -31,7 +31,7 @@ message WhirlyProposal {
   QuorumCert highQC = 4;
   SimpleWhirlyProof swProof = 5;
   uint64 epoch = 6;
-  string peerId = 7;
+  string publicAddress = 7;
 }
 
 message WhirlyVote {
@@ -44,7 +44,7 @@ message WhirlyVote {
   bytes partialSig = 7;
   SimpleWhirlyProof swProof = 8;
   uint64 epoch = 9;
-  string peerId = 10;
+  string publicAddress = 10;
   uint64 weight = 11;
 }
 
@@ -52,14 +52,14 @@ message WhirlyNewView {
   QuorumCert lockQC = 1;
   uint64 viewNum = 2;
   uint64 epoch = 3;
-  string peerId = 4;
+  string publicAddress = 4;
 }
 
 message NewLeaderNotify {
   uint64 leader = 1;
   uint64 epoch = 2;
   bytes proof = 3;
-  string peerId = 4;
+  string publicAddress = 4;
   repeated string committee = 5;
 }
 
@@ -70,10 +70,10 @@ message NewLeaderEcho {
   WhirlyBlock block = 4;
   SimpleWhirlyProof swProof = 5;
   uint64 vHeight = 6;
-  string peerId = 7;
+  string publicAddress = 7;
 }
 
 message WhirlyPing {
   uint64 id = 1;
-  string peerId = 2;
+  string publicAddress = 2;
 }

@@ -2,6 +2,7 @@ package pot
 
 import (
 	"encoding/json"
+
 	"github.com/zzz136454872/upgradeable-consensus/config"
 	"github.com/zzz136454872/upgradeable-consensus/consensus/whirly/simpleWhirly"
 	"github.com/zzz136454872/upgradeable-consensus/types"
@@ -28,18 +29,18 @@ func (w *Worker) simpleLeaderUpdate(parent *types.Header) {
 				Keys:  w.config.Keys,
 				F:     w.config.F,
 			}
-			s := simpleWhirly.NewSimpleWhirly(w.ID, 1009, whirlyConfig, w.Engine.exec, w.Engine.Adaptor, w.log)
+			s := simpleWhirly.NewSimpleWhirly(w.ID, 1009, whirlyConfig, w.Engine.exec, w.Engine.Adaptor, w.log, "", nil)
 			w.whirly = s
 			//w.Engine.SetWhirly(s)
-			w.potSignalChan = w.whirly.GetPoTByteEntrance()
+			// w.potSignalChan = w.whirly.GetPoTByteEntrance()
 			w.log.Errorf("[PoT]\t Start committee consensus at epoch %d", parent.Height+1)
 			return
 		}
 		potSignal := &simpleWhirly.PoTSignal{
-			Epoch:           int64(parent.Height),
-			Proof:           parent.PoTProof[0],
-			ID:              parent.Address,
-			LeaderNetworkId: parent.PeerId,
+			Epoch:               int64(parent.Height),
+			Proof:               parent.PoTProof[0],
+			ID:                  parent.Address,
+			LeaderPublicAddress: parent.PeerId,
 		}
 		b, err := json.Marshal(potSignal)
 		if err != nil {
@@ -81,12 +82,12 @@ func (w *Worker) CommiteeUpdate(epoch uint64) {
 			}
 		}
 		potsignal := &simpleWhirly.PoTSignal{
-			Epoch:           int64(epoch),
-			Proof:           nil,
-			ID:              0,
-			LeaderNetworkId: commitee[0],
-			Committee:       commitee,
-			CryptoElements:  nil,
+			Epoch:               int64(epoch),
+			Proof:               nil,
+			ID:                  0,
+			LeaderPublicAddress: commitee[0],
+			Committee:           commitee,
+			CryptoElements:      nil,
 		}
 		b, err := json.Marshal(potsignal)
 		if err != nil {
@@ -100,7 +101,7 @@ func (w *Worker) CommiteeUpdate(epoch uint64) {
 }
 func (w *Worker) SetWhirly(impl *simpleWhirly.SimpleWhirlyImpl) {
 	w.whirly = impl
-	w.potSignalChan = impl.GetPoTByteEntrance()
+	// w.potSignalChan = impl.GetPoTByteEntrance()
 }
 
 func (w *Worker) CommiteeLenCheck() bool {

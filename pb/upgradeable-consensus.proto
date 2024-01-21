@@ -17,6 +17,7 @@ message Packet {
   int64 epoch = 3;
   int32 chainID = 4;
   PacketType type = 5;
+  string receiverPublicAddress = 6;
 }
 
 enum TransactionType{

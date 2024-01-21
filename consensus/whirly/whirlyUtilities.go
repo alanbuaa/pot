@@ -35,7 +35,7 @@ type WhirlyUtilities interface {
 
 type WhirlyUtilitiesImpl struct {
 	ID              int64
-	PeerId          string
+	PublicAddress   string
 	ConsensusID     int64
 	BlockStorage    types.WhirlyBlockStorage
 	View            *View
@@ -58,9 +58,10 @@ func (wu *WhirlyUtilitiesImpl) Init(
 	exec executor.Executor,
 	p2pAdaptor p2p.P2PAdaptor,
 	log *logrus.Entry,
+	publicAddress string,
 ) {
 	wu.ID = id
-	wu.PeerId = p2pAdaptor.GetPeerID()
+	wu.PublicAddress = publicAddress
 	wu.ConsensusID = cid
 	wu.Config = cfg
 	wu.Executor = exec
@@ -70,7 +71,7 @@ func (wu *WhirlyUtilitiesImpl) Init(
 	wu.RequestEntrance = make(chan *pb.Request, 10)
 	wu.MemPool = types.NewMemPool()
 	// wu.Log.Debugf("[HOTSTUFF] Init block storage")
-	newPeerId1 := strings.Replace(wu.PeerId, ".", "", -1)
+	newPeerId1 := strings.Replace(wu.PublicAddress, ".", "", -1)
 	newPeerId2 := strings.Replace(newPeerId1, ":", "", -1)
 	wu.BlockStorage = types.NewBlockStorageImpl(strconv.Itoa(int(cid)) + "-" + newPeerId2)
 
@@ -95,7 +96,7 @@ func (wu *WhirlyUtilitiesImpl) InitForLocalTest(
 	log *logrus.Entry,
 ) {
 	wu.ID = id
-	wu.PeerId = p2pAdaptor.GetPeerID()
+	wu.PublicAddress = p2pAdaptor.GetPeerID()
 	wu.ConsensusID = cid
 	wu.Config = cfg
 	wu.Executor = exec
@@ -105,7 +106,7 @@ func (wu *WhirlyUtilitiesImpl) InitForLocalTest(
 	wu.RequestEntrance = make(chan *pb.Request, 10)
 	wu.MemPool = types.NewMemPool()
 	// wu.Log.Debugf("[HOTSTUFF] Init block storage")
-	newPeerId1 := strings.Replace(wu.PeerId, ".", "", -1)
+	newPeerId1 := strings.Replace(wu.PublicAddress, ".", "", -1)
 	newPeerId2 := strings.Replace(newPeerId1, ":", "", -1)
 	wu.BlockStorage = types.NewBlockStorageImpl(strconv.Itoa(int(cid)) + "-" + newPeerId2)
 
@@ -156,12 +157,12 @@ func (wu *WhirlyUtilitiesImpl) ProposalMsg(block *pb.WhirlyBlock, qc *pb.QuorumC
 	wMsg := &pb.WhirlyMsg{}
 
 	wMsg.Payload = &pb.WhirlyMsg_WhirlyProposal{WhirlyProposal: &pb.WhirlyProposal{
-		SenderId: uint64(wu.ID),
-		Block:    block,
-		HighQC:   qc,
-		SwProof:  proof,
-		Epoch:    uint64(epoch),
-		PeerId:   wu.p2pAdaptor.GetPeerID(),
+		SenderId:      uint64(wu.ID),
+		Block:         block,
+		HighQC:        qc,
+		SwProof:       proof,
+		Epoch:         uint64(epoch),
+		PublicAddress: wu.PublicAddress,
 	}}
 	return wMsg
 }
@@ -170,16 +171,16 @@ func (wu *WhirlyUtilitiesImpl) VoteMsg(blockView uint64, blockHash []byte, flag 
 	wMsg := &pb.WhirlyMsg{}
 
 	wMsg.Payload = &pb.WhirlyMsg_WhirlyVote{WhirlyVote: &pb.WhirlyVote{
-		SenderId:   uint64(wu.ID),
-		BlockView:  blockView,
-		BlockHash:  blockHash,
-		Flag:       flag,
-		Qc:         qc,
-		PartialSig: partSig,
-		SwProof:    proof,
-		Epoch:      uint64(epoch),
-		PeerId:     wu.p2pAdaptor.GetPeerID(),
-		Weight:     uint64(wu.Weight),
+		SenderId:      uint64(wu.ID),
+		BlockView:     blockView,
+		BlockHash:     blockHash,
+		Flag:          flag,
+		Qc:            qc,
+		PartialSig:    partSig,
+		SwProof:       proof,
+		Epoch:         uint64(epoch),
+		PublicAddress: wu.PublicAddress,
+		Weight:        uint64(wu.Weight),
 	}}
 	return wMsg
 }
@@ -198,11 +199,11 @@ func (wu *WhirlyUtilitiesImpl) NewLeaderNotifyMsg(epoch int64, proof []byte, com
 	wMsg := &pb.WhirlyMsg{}
 
 	wMsg.Payload = &pb.WhirlyMsg_NewLeaderNotify{NewLeaderNotify: &pb.NewLeaderNotify{
-		Leader:    uint64(wu.ID),
-		Epoch:     uint64(epoch),
-		Proof:     proof,
-		PeerId:    wu.p2pAdaptor.GetPeerID(),
-		Committee: committee,
+		Leader:        uint64(wu.ID),
+		Epoch:         uint64(epoch),
+		Proof:         proof,
+		PublicAddress: wu.PublicAddress,
+		Committee:     committee,
 	}}
 	return wMsg
 }
@@ -224,8 +225,8 @@ func (wu *WhirlyUtilitiesImpl) NewLeaderEchoMsg(leader int64, block *pb.WhirlyBl
 func (wu *WhirlyUtilitiesImpl) PingMsg() *pb.WhirlyMsg {
 	wMsg := &pb.WhirlyMsg{}
 	wMsg.Payload = &pb.WhirlyMsg_WhirlyPing{WhirlyPing: &pb.WhirlyPing{
-		Id:     uint64(wu.ID),
-		PeerId: wu.p2pAdaptor.GetPeerID(),
+		Id:            uint64(wu.ID),
+		PublicAddress: wu.PublicAddress,
 	}}
 	return wMsg
 }
@@ -315,16 +316,16 @@ func (wu *WhirlyUtilitiesImpl) Broadcast(msg *pb.WhirlyMsg) error {
 	// 	}
 	// }
 	// return nil
-	packet := &pb.Packet{
-		Msg:         msgByte,
-		ConsensusID: wu.ConsensusID,
-		Epoch:       0,
-		Type:        pb.PacketType_P2PPACKET,
-	}
-	bytePacket, err := proto.Marshal(packet)
-	utils.PanicOnError(err)
+	// packet := &pb.Packet{
+	// 	Msg:         msgByte,
+	// 	ConsensusID: wu.ConsensusID,
+	// 	Epoch:       0,
+	// 	Type:        pb.PacketType_P2PPACKET,
+	// }
+	// bytePacket, err := proto.Marshal(packet)
+	// utils.PanicOnError(err)
 	// return wu.p2pAdaptor.Broadcast(bytePacket, wu.ConsensusID, []byte("this-is-consensus-topic"))
-	return wu.p2pAdaptor.Broadcast(bytePacket, wu.ConsensusID, []byte(wu.Topic))
+	return wu.p2pAdaptor.Broadcast(msgByte, wu.ConsensusID, []byte(wu.Topic))
 }
 
 func (wu *WhirlyUtilitiesImpl) Unicast(address string, msg *pb.WhirlyMsg) error {
@@ -334,16 +335,16 @@ func (wu *WhirlyUtilitiesImpl) Unicast(address string, msg *pb.WhirlyMsg) error 
 	}
 	msgByte, err := proto.Marshal(msg)
 	utils.PanicOnError(err)
-	packet := &pb.Packet{
-		Msg:         msgByte,
-		ConsensusID: wu.ConsensusID,
-		Epoch:       0,
-		Type:        pb.PacketType_P2PPACKET,
-	}
-	bytePacket, err := proto.Marshal(packet)
+	// packet := &pb.Packet{
+	// 	Msg:         msgByte,
+	// 	ConsensusID: wu.ConsensusID,
+	// 	Epoch:       0,
+	// 	Type:        pb.PacketType_P2PPACKET,
+	// }
+	// bytePacket, err := proto.Marshal(packet)
 	// utils.PanicOnError(err)
 	// return wu.p2pAdaptor.Unicast(address, bytePacket, wu.ConsensusID, []byte("this-is-consensus-topic"))
-	return wu.p2pAdaptor.Unicast(address, bytePacket, wu.ConsensusID, []byte(wu.Topic))
+	return wu.p2pAdaptor.Unicast(address, msgByte, wu.ConsensusID, []byte(wu.Topic))
 }
 
 func (wu *WhirlyUtilitiesImpl) ProcessProposal(b *pb.WhirlyBlock, p []byte) {
@@ -385,4 +386,8 @@ func (wu *WhirlyUtilitiesImpl) GetWeight(nid int64) float64 {
 
 func (wu *WhirlyUtilitiesImpl) GetMaxAdversaryWeight() float64 {
 	return 1.0 / 3.0
+}
+
+func (wu *WhirlyUtilitiesImpl) GetPeerID() string {
+	return wu.p2pAdaptor.GetPeerID()
 }
