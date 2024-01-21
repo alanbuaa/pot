@@ -48,8 +48,11 @@ func (sw *SimpleWhirlyImpl) NewLeader(potSignal *PoTSignal) {
 func (sw *SimpleWhirlyImpl) UpdateCommittee(committee []string, weight int) {
 	sw.Log.Info("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] update committee tirgger!")
 
-	sw.Weight = int64(weight)
-	sw.inCommittee = true
+	if sw.PublicAddress != DaemonNodePublicAddress {
+		sw.Weight = int64(weight)
+		sw.inCommittee = true
+	}
+
 	sw.Committee = committee
 }
 
@@ -59,10 +62,9 @@ func (sw *SimpleWhirlyImpl) SleepNode() {
 	sw.Weight = 0
 	sw.inCommittee = false
 
-	// Report to the controller that this node should be stopped, and the daemon node should never be stopped
-	if sw.PublicAddress != DaemonNodePublicAddress {
-		sw.stopEntrance <- sw.PublicAddress
-	}
+	// Report to the controller that this node should be stopped
+	sw.stopEntrance <- sw.PublicAddress
+
 }
 
 func (sw *SimpleWhirlyImpl) VerifyPoTProof(epoch int64, leader int64, proof []byte) bool {
@@ -105,7 +107,8 @@ func (sw *SimpleWhirlyImpl) OnReceiveNewLeaderNotify(newLeaderMsg *pb.NewLeaderN
 	}
 
 	// If the weight is not 0, it indicates that the node is in the committee
-	if weight > 0 {
+	// The daemon node should never be stopped
+	if weight > 0 || sw.PublicAddress != DaemonNodePublicAddress {
 		sw.UpdateCommittee(committee, weight)
 	} else {
 		sw.SleepNode()

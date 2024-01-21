@@ -43,6 +43,7 @@ type NodeController struct {
 	cancel          context.CancelFunc
 
 	epoch  int
+	total  int
 	active int
 
 	// PoT
@@ -72,13 +73,14 @@ func NewNodeController(
 		Log:         log.WithField("consensus id", cid),
 		cancel:      cancel,
 		epoch:       1,
+		total:       1,
+		active:      0,
 	}
 
 	// The daemonNode is always sleep, it only forwards requests to the leader
 	nc.nodesLock.Lock()
 	simpleWhirly := NewSimpleWhirly(1, cid, cfg, exec, p2pAdaptor, log, DaemonNodePublicAddress, nil)
 	nc.WhrilyNodes[DaemonNodePublicAddress] = simpleWhirly
-	nc.active = 0
 	nc.nodesLock.Unlock()
 
 	nc.MsgByteEntrance = make(chan []byte, 10)
@@ -256,7 +258,8 @@ func (nc *NodeController) handlePotSignal(potSignalBytes []byte) {
 			// The leader belongs to this controller, create a new simpleWhirly node
 			nc.nodesLock.Lock()
 			nc.active += 1
-			simpleWhirly := NewSimpleWhirly(int64(nc.active+1), nc.ConsensusID, nc.Config, nc.Executor, nc.p2pAdaptor, nc.Log, address, nc.StopEntrance)
+			nc.total += 1
+			simpleWhirly := NewSimpleWhirly(int64(nc.total), nc.ConsensusID, nc.Config, nc.Executor, nc.p2pAdaptor, nc.Log, address, nc.StopEntrance)
 			nc.WhrilyNodes[address] = simpleWhirly
 			nc.nodesLock.Unlock()
 
