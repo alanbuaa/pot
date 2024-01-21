@@ -287,8 +287,10 @@ func (c *Client) upgradeConsensus(nc string) {
 		cf.Pow = pcf
 	case "pot":
 		ptcf := &config.PoTConfig{
-			Snum:    2,
-			SysPara: "123456789",
+			Snum:          2,
+			SysPara:       "123456789",
+			Vdf0Iteration: 200000,
+			Vdf1Iteration: 160000,
 		}
 		cf.Type = "pot"
 		cf.PoT = ptcf

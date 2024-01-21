@@ -51,20 +51,22 @@ type Worker struct {
 	abort      chan struct{}
 	wg         *sync.WaitGroup
 	workFlag   bool
+
 	// rand seed
 	rand         *rand.Rand
 	blockCounter int
 
-	Engine  *PoTEngine
-	stopCh  chan struct{}
-	mutex   sync.Mutex
-	storage *types.HeaderStorage
+	Engine *PoTEngine
+	stopCh chan struct{}
+	mutex  sync.Mutex
 
+	// communication
 	peerMsgQueue      chan *types.Block
 	blockResponseChan chan *pb.BlockResponse
 	potResponseCh     chan *pb.PoTResponse
 	blockStorage      *types.BlockStorage
 	chainReader       *types.ChainReader
+
 	// upper consensus
 	whirly        *simpleWhirly.SimpleWhirlyImpl
 	potSignalChan chan<- []byte
@@ -141,6 +143,10 @@ func (w *Worker) Work() {
 		return
 	}
 }
+func (w *Worker) WaitandReset(res *types.VDF0res) {
+	time.Sleep(5 * time.Second)
+	w.vdf0Chan <- res
+}
 
 func (w *Worker) OnGetVdf0Response() {
 	go w.handleBlock()
@@ -155,6 +161,16 @@ func (w *Worker) OnGetVdf0Response() {
 
 			if epoch > res.Epoch {
 				w.log.Errorf("[PoT]\tthe epoch already set")
+				continue
+			}
+
+			backupblock, err := w.blockStorage.GetbyHeight(epoch)
+
+			w.log.Infof("[PoT]\tepoch %d:epoch %d block num %d", epoch+1, epoch, len(backupblock))
+
+			if err != nil {
+				w.log.Warn("[PoT]\tget backup block error :", err)
+				go w.WaitandReset(res)
 				continue
 			}
 
@@ -179,14 +195,6 @@ func (w *Worker) OnGetVdf0Response() {
 					w.log.Errorf("[PoT]\tepoch %d: vdf0 abort error for %s", epoch+1, err)
 				}
 				w.log.Warnf("[PoT]\tepoch %d:vdf0 got abort for new epoch ", epoch+1)
-			}
-			backupblock, err := w.blockStorage.GetbyHeight(epoch)
-
-			w.log.Infof("[PoT]\tepoch %d:epoch %d block num %d", epoch+1, epoch, len(backupblock))
-
-			if err != nil {
-				w.log.Warn("[PoT]\tget backup block error :", err)
-				continue
 			}
 
 			w.increaseEpoch()
@@ -214,27 +222,7 @@ func (w *Worker) OnGetVdf0Response() {
 					parentblock = backupblock[0]
 					w.log.Errorf("[PoT]\tepoch %d:parent block hash is nil,set nil block %s as parent", epoch+1, hex.EncodeToString(parentblock.GetHeader().Hashes))
 				} else {
-					grandblock, err := w.chainReader.GetByHeight(epoch - 1)
-					if err != nil {
-						continue
-					}
-					parentblock = &types.Block{
-						Header: &types.Header{
-							Height:     epoch - 1,
-							ParentHash: grandblock.Hash(),
-							UncleHash:  nil,
-							Mixdigest:  nil,
-							Difficulty: nil,
-							Nonce:      0,
-							Timestamp:  time.Time{},
-							PoTProof:   nil,
-							Address:    0,
-							Hashes:     nil,
-							PeerId:     w.PeerId,
-						},
-						Txs: types.TestTxs(),
-					}
-					parentblock.Header.Hash()
+
 				}
 			}
 
@@ -249,20 +237,19 @@ func (w *Worker) OnGetVdf0Response() {
 			w.abort = make(chan struct{})
 			w.wg.Add(cpuCounter)
 			for i := 0; i < cpuCounter; i++ {
-				go w.mine(res0, rand.Int63(), i, w.abort, difficulty, parentblock, uncleblock, w.wg)
+				go w.mine(epoch+1, res0, rand.Int63(), i, w.abort, difficulty, parentblock, uncleblock, w.wg)
 			}
 
 		}
 	}
 }
 
-func (w *Worker) mine(vdf0res []byte, nonce int64, workerid int, abort chan struct{}, difficulty *big.Int, parentblock *types.Block, uncleblock []*types.Block, wg *sync.WaitGroup) *types.Block {
+func (w *Worker) mine(epoch uint64, vdf0res []byte, nonce int64, workerid int, abort chan struct{}, difficulty *big.Int, parentblock *types.Block, uncleblock []*types.Block, wg *sync.WaitGroup) *types.Block {
 	defer w.setWorkFlagFalse()
 	defer wg.Done()
 
-	epoch := w.getEpoch()
 	w.log.Infof("[PoT]\tepoch %d:Start run vdf1 %d to mine", epoch, workerid)
-	mixdigest := w.calcMixdigest(epoch, parentblock, uncleblock, difficulty, w.ID)
+	mixdigest := w.calcMixdigest(epoch, parentblock, uncleblock, difficulty, w.PeerId)
 	tmp := new(big.Int)
 	tmp.SetInt64(nonce)
 	noncebyte := tmp.Bytes()
@@ -285,7 +272,7 @@ func (w *Worker) mine(vdf0res []byte, nonce int64, workerid int, abort chan stru
 			if tmp.Cmp(target) >= 0 {
 
 				block := w.createnilBlock(epoch, parentblock, uncleblock, difficulty, mixdigest, nonce, vdf0res, res1)
-				w.log.Infof("[PoT]\tepoch %d:fail to find a %d block, create a nil block %s", epoch, difficulty.Int64(), hexutil.Encode(block.Hash()))
+				w.log.Infof("[PoT]\tepoch %d:workerid %d fail to find a %d block, create a nil block %s", epoch, workerid, difficulty.Int64(), hexutil.Encode(block.Hash()))
 				w.blockStorage.Put(block)
 				w.peerMsgQueue <- block
 				// w.workFlag = false
@@ -344,6 +331,7 @@ func (w *Worker) createBlock(epoch uint64, parentBlock *types.Block, uncleBlock 
 }
 
 func (w *Worker) GetTxs() []*types.Tx {
+	//
 	return types.TestTxs()
 }
 
@@ -451,16 +439,19 @@ func (w *Worker) calcDifficulty(parentblock *types.Block, uncleBlock []*types.Bl
 		header := block.GetHeader()
 		diff.Add(diff, header.Difficulty)
 	}
+
 	snum := new(big.Int)
 	snum.SetInt64(w.config.PoT.Snum)
 	diffculty := diff.Div(diff, snum)
+	//w.log.Infof("[PoT]\tSum difficulty is %d and blocks num is %d, next is %d", diff.Int64(), len(uncleBlock)+1, diffculty.Int64())
+
 	if diffculty.Cmp(big.NewInt(0)) == 0 {
 		return diffculty.SetInt64(1)
 	}
 	return diffculty
 }
 
-func (w *Worker) calcMixdigest(epoch uint64, parentblock *types.Block, uncleblock []*types.Block, difficulty *big.Int, ID int64) []byte {
+func (w *Worker) calcMixdigest(epoch uint64, parentblock *types.Block, uncleblock []*types.Block, difficulty *big.Int, peerid string) []byte {
 	parentblockhash := make([]byte, 0)
 	if parentblock != nil {
 		parentblockhash = parentblock.Hash()
@@ -473,8 +464,8 @@ func (w *Worker) calcMixdigest(epoch uint64, parentblock *types.Block, unclebloc
 	tmp := new(big.Int)
 	tmp.Set(difficulty)
 	difficultyBytes := tmp.Bytes()
-	tmp.SetInt64(ID)
-	IDBytes := tmp.Bytes()
+	//tmp.SetInt64(ID)
+	IDBytes := []byte(peerid)
 	tmp.SetInt64(int64(epoch))
 	epochBytes := tmp.Bytes()
 	hashinput := bytes.Join([][]byte{epochBytes, parentblockhash, uncleblockhash, difficultyBytes, IDBytes}, []byte(""))
@@ -543,7 +534,7 @@ func (w *Worker) blockSelection(blocks []*types.Block, vdf0res []byte, height ui
 	readyblocks := make([]*types.Block, 0)
 	for _, block := range blocks {
 		blockheader := block.GetHeader()
-		if bytes.Equal(current.GetHeader().Hashes, blockheader.ParentHash) || blockheader.ParentHash == nil {
+		if (bytes.Equal(current.GetHeader().Hashes, blockheader.ParentHash) && block.GetHeader().Difficulty.Cmp(common.Big0) != 0) || blockheader.ParentHash == nil {
 			readyblocks = append(readyblocks, block)
 			hashinput := append(block.Hash(), sr...)
 			tmp := new(big.Int).Div(bigD, new(big.Int).SetBytes(crypto.Hash(hashinput)))

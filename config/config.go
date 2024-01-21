@@ -89,7 +89,6 @@ type Config struct {
 	P2P           *P2PConfig       `yaml:"p2p"`
 	Consensus     *ConsensusConfig `yaml:"consensus"`
 	Topic         string           `yaml:"topic"`
-	Total         int              `yaml:"total"`
 	Keys          *KeySet
 }
 
@@ -121,7 +120,7 @@ func NewConfig(path string, id int64) (*Config, error) {
 	cfg.Keys = keys
 	cfg.Consensus.Nodes = cfg.Nodes
 	cfg.Consensus.Keys = keys
-	cfg.Consensus.F = (cfg.Total - 1) / 3
+	cfg.Consensus.F = (len(cfg.Nodes) - 1) / 3
 	cfg.Consensus.Topic = cfg.Topic
 	return cfg, nil
 }
@@ -142,13 +141,6 @@ func (c *Config) GetNodeInfo(id int64) *ReplicaInfo {
 		}
 	}
 	panic(fmt.Sprintf("node %d does not exist", id))
-}
-
-func DefaultPoTConfig() *PoTConfig {
-	return &PoTConfig{
-		Snum:    2,
-		SysPara: "aa",
-	}
 }
 
 func DefaultWhirlyConfig() *ConsensusConfig {

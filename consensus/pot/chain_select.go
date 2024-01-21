@@ -80,16 +80,7 @@ func (w *Worker) GetSharedAncestor(forkblock *types.Block, currentblock *types.B
 	}
 
 	if header.Height > currentheight {
-		// headerahead, err := w.storage.Get(header.ParentHash)
-		// if err == leveldb.ErrNotFound {
-		//	headerahead, err = w.getParentBlock(header)
-		//	if err != nil {
-		//		return nil, err
-		//	}
-		// } else if err != nil {
-		//	return nil, err
-		// }
-		// return w.GetSharedAncestor(headerahead)
+
 		for true {
 			forkahead, err := w.getParentBlock(fork)
 			if err != nil {
@@ -229,7 +220,7 @@ func (w *Worker) chainreset(branch []*types.Block) error {
 
 	w.log.Infof("[PoT]\tepoch %d: the chain has been reset by branch %s", epoch, branchstr)
 	flag := w.isMinerWorking()
-	w.log.Infof("[PoT]\tflag: %t", flag)
+	//w.log.Infof("[PoT]\tflag: %t", flag)
 	time := time2.Now()
 	if flag {
 		w.workFlag = false

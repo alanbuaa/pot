@@ -2,6 +2,8 @@ package types
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/zzz136454872/upgradeable-consensus/crypto"
 	"github.com/zzz136454872/upgradeable-consensus/pb"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -119,10 +121,39 @@ func (b *Header) Hash() []byte {
 	return hashes
 }
 
-func (b *Header) Verify() bool {
+func (b *Header) BasicVerify() bool {
 	// TODO: compare with genesis block
 	if b.Height == 0 {
 		return true
+	}
+	if b.ParentHash == nil {
+		return false
+	}
+	if len(b.ParentHash) != crypto.Hashlen {
+		return false
+	}
+	if b.Difficulty.Cmp(common.Big0) < 0 {
+		return false
+	}
+
+	unclehash := make([]byte, 0)
+	for i := 0; i < len(b.UncleHash); i++ {
+		if len(b.UncleHash[i]) != crypto.Hashlen {
+			return false
+		}
+		unclehash = append(unclehash, b.UncleHash[i]...)
+	}
+	// mixdigest verify
+	tmp := new(big.Int)
+	tmp.Set(b.Difficulty)
+	difficultybyte := tmp.Bytes()
+	idbyte := []byte(b.PeerId)
+	tmp.SetInt64(int64(b.Height))
+	epochbyte := tmp.Bytes()
+	hashinput := bytes.Join([][]byte{epochbyte, b.ParentHash, unclehash, difficultybyte, idbyte}, []byte(""))
+	res := sha256.Sum256(hashinput)
+	if !bytes.Equal(res[:], b.Mixdigest) {
+		return false
 	}
 
 	return true

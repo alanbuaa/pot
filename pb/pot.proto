@@ -85,3 +85,18 @@ message PoTWork{
 
 }
 
+message GetTxRequest{
+  uint64 Height = 1;
+  string Des = 2;
+}
+
+message GetTxResponse{
+  uint64 Start = 1;
+  uint64 End = 2;
+  repeated ExecuteBlock Blocks = 3;
+}
+
+message ExecuteBlock {
+
+}
+

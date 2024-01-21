@@ -803,6 +803,162 @@ func (*PoTWork) Descriptor() ([]byte, []int) {
 	return file_pb_pot_proto_rawDescGZIP(), []int{9}
 }
 
+type GetTxRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Height uint64 `protobuf:"varint,1,opt,name=Height,proto3" json:"Height,omitempty"`
+	Des    string `protobuf:"bytes,2,opt,name=Des,proto3" json:"Des,omitempty"`
+}
+
+func (x *GetTxRequest) Reset() {
+	*x = GetTxRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_pb_pot_proto_msgTypes[10]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *GetTxRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetTxRequest) ProtoMessage() {}
+
+func (x *GetTxRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_pb_pot_proto_msgTypes[10]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetTxRequest.ProtoReflect.Descriptor instead.
+func (*GetTxRequest) Descriptor() ([]byte, []int) {
+	return file_pb_pot_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *GetTxRequest) GetHeight() uint64 {
+	if x != nil {
+		return x.Height
+	}
+	return 0
+}
+
+func (x *GetTxRequest) GetDes() string {
+	if x != nil {
+		return x.Des
+	}
+	return ""
+}
+
+type GetTxResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Start  uint64          `protobuf:"varint,1,opt,name=Start,proto3" json:"Start,omitempty"`
+	End    uint64          `protobuf:"varint,2,opt,name=End,proto3" json:"End,omitempty"`
+	Blocks []*ExecuteBlock `protobuf:"bytes,3,rep,name=Blocks,proto3" json:"Blocks,omitempty"`
+}
+
+func (x *GetTxResponse) Reset() {
+	*x = GetTxResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_pb_pot_proto_msgTypes[11]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *GetTxResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetTxResponse) ProtoMessage() {}
+
+func (x *GetTxResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_pb_pot_proto_msgTypes[11]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetTxResponse.ProtoReflect.Descriptor instead.
+func (*GetTxResponse) Descriptor() ([]byte, []int) {
+	return file_pb_pot_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *GetTxResponse) GetStart() uint64 {
+	if x != nil {
+		return x.Start
+	}
+	return 0
+}
+
+func (x *GetTxResponse) GetEnd() uint64 {
+	if x != nil {
+		return x.End
+	}
+	return 0
+}
+
+func (x *GetTxResponse) GetBlocks() []*ExecuteBlock {
+	if x != nil {
+		return x.Blocks
+	}
+	return nil
+}
+
+type ExecuteBlock struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+}
+
+func (x *ExecuteBlock) Reset() {
+	*x = ExecuteBlock{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_pb_pot_proto_msgTypes[12]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *ExecuteBlock) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExecuteBlock) ProtoMessage() {}
+
+func (x *ExecuteBlock) ProtoReflect() protoreflect.Message {
+	mi := &file_pb_pot_proto_msgTypes[12]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExecuteBlock.ProtoReflect.Descriptor instead.
+func (*ExecuteBlock) Descriptor() ([]byte, []int) {
+	return file_pb_pot_proto_rawDescGZIP(), []int{12}
+}
+
 var File_pb_pot_proto protoreflect.FileDescriptor
 
 var file_pb_pot_proto_rawDesc = []byte{
@@ -877,16 +1033,27 @@ var file_pb_pot_proto_rawDesc = []byte{
 	0x20, 0x01, 0x28, 0x03, 0x52, 0x05, 0x53, 0x72, 0x63, 0x69, 0x64, 0x12, 0x10, 0x0a, 0x03, 0x53,
 	0x72, 0x63, 0x18, 0x05, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x53, 0x72, 0x63, 0x12, 0x14, 0x0a,
 	0x05, 0x50, 0x72, 0x6f, 0x6f, 0x66, 0x18, 0x06, 0x20, 0x01, 0x28, 0x0c, 0x52, 0x05, 0x50, 0x72,
-	0x6f, 0x6f, 0x66, 0x22, 0x09, 0x0a, 0x07, 0x50, 0x6f, 0x54, 0x57, 0x6f, 0x72, 0x6b, 0x2a, 0x76,
-	0x0a, 0x0b, 0x4d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x54, 0x79, 0x70, 0x65, 0x12, 0x0e, 0x0a,
-	0x0a, 0x42, 0x6c, 0x6f, 0x63, 0x6b, 0x5f, 0x44, 0x61, 0x74, 0x61, 0x10, 0x00, 0x12, 0x11, 0x0a,
-	0x0d, 0x42, 0x6c, 0x6f, 0x63, 0x6b, 0x5f, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x10, 0x01,
-	0x12, 0x12, 0x0a, 0x0e, 0x42, 0x6c, 0x6f, 0x63, 0x6b, 0x5f, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e,
-	0x73, 0x65, 0x10, 0x02, 0x12, 0x0f, 0x0a, 0x0b, 0x50, 0x6f, 0x54, 0x5f, 0x52, 0x65, 0x71, 0x75,
-	0x65, 0x73, 0x74, 0x10, 0x03, 0x12, 0x10, 0x0a, 0x0c, 0x50, 0x6f, 0x54, 0x5f, 0x52, 0x65, 0x73,
-	0x70, 0x6f, 0x6e, 0x73, 0x65, 0x10, 0x04, 0x12, 0x0d, 0x0a, 0x09, 0x50, 0x6f, 0x54, 0x5f, 0x50,
-	0x72, 0x6f, 0x6f, 0x66, 0x10, 0x05, 0x42, 0x06, 0x5a, 0x04, 0x2e, 0x2f, 0x70, 0x62, 0x62, 0x06,
-	0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x6f, 0x6f, 0x66, 0x22, 0x09, 0x0a, 0x07, 0x50, 0x6f, 0x54, 0x57, 0x6f, 0x72, 0x6b, 0x22, 0x38,
+	0x0a, 0x0c, 0x47, 0x65, 0x74, 0x54, 0x78, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x16,
+	0x0a, 0x06, 0x48, 0x65, 0x69, 0x67, 0x68, 0x74, 0x18, 0x01, 0x20, 0x01, 0x28, 0x04, 0x52, 0x06,
+	0x48, 0x65, 0x69, 0x67, 0x68, 0x74, 0x12, 0x10, 0x0a, 0x03, 0x44, 0x65, 0x73, 0x18, 0x02, 0x20,
+	0x01, 0x28, 0x09, 0x52, 0x03, 0x44, 0x65, 0x73, 0x22, 0x61, 0x0a, 0x0d, 0x47, 0x65, 0x74, 0x54,
+	0x78, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x14, 0x0a, 0x05, 0x53, 0x74, 0x61,
+	0x72, 0x74, 0x18, 0x01, 0x20, 0x01, 0x28, 0x04, 0x52, 0x05, 0x53, 0x74, 0x61, 0x72, 0x74, 0x12,
+	0x10, 0x0a, 0x03, 0x45, 0x6e, 0x64, 0x18, 0x02, 0x20, 0x01, 0x28, 0x04, 0x52, 0x03, 0x45, 0x6e,
+	0x64, 0x12, 0x28, 0x0a, 0x06, 0x42, 0x6c, 0x6f, 0x63, 0x6b, 0x73, 0x18, 0x03, 0x20, 0x03, 0x28,
+	0x0b, 0x32, 0x10, 0x2e, 0x70, 0x62, 0x2e, 0x45, 0x78, 0x65, 0x63, 0x75, 0x74, 0x65, 0x42, 0x6c,
+	0x6f, 0x63, 0x6b, 0x52, 0x06, 0x42, 0x6c, 0x6f, 0x63, 0x6b, 0x73, 0x22, 0x0e, 0x0a, 0x0c, 0x45,
+	0x78, 0x65, 0x63, 0x75, 0x74, 0x65, 0x42, 0x6c, 0x6f, 0x63, 0x6b, 0x2a, 0x76, 0x0a, 0x0b, 0x4d,
+	0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x54, 0x79, 0x70, 0x65, 0x12, 0x0e, 0x0a, 0x0a, 0x42, 0x6c,
+	0x6f, 0x63, 0x6b, 0x5f, 0x44, 0x61, 0x74, 0x61, 0x10, 0x00, 0x12, 0x11, 0x0a, 0x0d, 0x42, 0x6c,
+	0x6f, 0x63, 0x6b, 0x5f, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x10, 0x01, 0x12, 0x12, 0x0a,
+	0x0e, 0x42, 0x6c, 0x6f, 0x63, 0x6b, 0x5f, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x10,
+	0x02, 0x12, 0x0f, 0x0a, 0x0b, 0x50, 0x6f, 0x54, 0x5f, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74,
+	0x10, 0x03, 0x12, 0x10, 0x0a, 0x0c, 0x50, 0x6f, 0x54, 0x5f, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e,
+	0x73, 0x65, 0x10, 0x04, 0x12, 0x0d, 0x0a, 0x09, 0x50, 0x6f, 0x54, 0x5f, 0x50, 0x72, 0x6f, 0x6f,
+	0x66, 0x10, 0x05, 0x42, 0x06, 0x5a, 0x04, 0x2e, 0x2f, 0x70, 0x62, 0x62, 0x06, 0x70, 0x72, 0x6f,
+	0x74, 0x6f, 0x33,
 }
 
 var (
@@ -902,7 +1069,7 @@ func file_pb_pot_proto_rawDescGZIP() []byte {
 }
 
 var file_pb_pot_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_pb_pot_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
+var file_pb_pot_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
 var file_pb_pot_proto_goTypes = []interface{}{
 	(MessageType)(0),      // 0: pb.MessageType
 	(*Block)(nil),         // 1: pb.Block
@@ -915,17 +1082,21 @@ var file_pb_pot_proto_goTypes = []interface{}{
 	(*PotProof)(nil),      // 8: pb.PotProof
 	(*PoTResponse)(nil),   // 9: pb.PoTResponse
 	(*PoTWork)(nil),       // 10: pb.PoTWork
+	(*GetTxRequest)(nil),  // 11: pb.GetTxRequest
+	(*GetTxResponse)(nil), // 12: pb.GetTxResponse
+	(*ExecuteBlock)(nil),  // 13: pb.ExecuteBlock
 }
 var file_pb_pot_proto_depIdxs = []int32{
-	3, // 0: pb.Block.Header:type_name -> pb.Header
-	4, // 1: pb.Block.Txs:type_name -> pb.Tx
-	0, // 2: pb.PoTMessage.MsgType:type_name -> pb.MessageType
-	1, // 3: pb.BlockResponse.block:type_name -> pb.Block
-	4, // [4:4] is the sub-list for method output_type
-	4, // [4:4] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	3,  // 0: pb.Block.Header:type_name -> pb.Header
+	4,  // 1: pb.Block.Txs:type_name -> pb.Tx
+	0,  // 2: pb.PoTMessage.MsgType:type_name -> pb.MessageType
+	1,  // 3: pb.BlockResponse.block:type_name -> pb.Block
+	13, // 4: pb.GetTxResponse.Blocks:type_name -> pb.ExecuteBlock
+	5,  // [5:5] is the sub-list for method output_type
+	5,  // [5:5] is the sub-list for method input_type
+	5,  // [5:5] is the sub-list for extension type_name
+	5,  // [5:5] is the sub-list for extension extendee
+	0,  // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_pb_pot_proto_init() }
@@ -1054,6 +1225,42 @@ func file_pb_pot_proto_init() {
 				return nil
 			}
 		}
+		file_pb_pot_proto_msgTypes[10].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*GetTxRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_pb_pot_proto_msgTypes[11].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*GetTxResponse); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_pb_pot_proto_msgTypes[12].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*ExecuteBlock); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -1061,7 +1268,7 @@ func file_pb_pot_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_pb_pot_proto_rawDesc,
 			NumEnums:      1,
-			NumMessages:   10,
+			NumMessages:   13,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
