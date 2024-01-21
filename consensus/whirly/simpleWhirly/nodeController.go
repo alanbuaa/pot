@@ -79,7 +79,7 @@ func NewNodeController(
 
 	// The daemonNode is always sleep, it only forwards requests to the leader
 	nc.nodesLock.Lock()
-	simpleWhirly := NewSimpleWhirly(1, cid, cfg, exec, p2pAdaptor, log, DaemonNodePublicAddress, nil)
+	simpleWhirly := NewSimpleWhirly(1, cid, cfg, exec, nc, log, DaemonNodePublicAddress, nil)
 	nc.WhrilyNodes[DaemonNodePublicAddress] = simpleWhirly
 	nc.nodesLock.Unlock()
 
@@ -161,8 +161,8 @@ func (nc *NodeController) handleMsg(msg *ControllerMessage) {
 		nc.nodesLock.Unlock()
 	} else {
 		nc.nodesLock.Lock()
-		node, ok2 := nc.WhrilyNodes[msg.Receiver]
-		if !ok2 {
+		node, ok := nc.WhrilyNodes[msg.Receiver]
+		if !ok {
 			nc.Log.Trace("ignore message")
 		} else {
 			node.GetMsgByteEntrance() <- msg.Data
@@ -259,7 +259,7 @@ func (nc *NodeController) handlePotSignal(potSignalBytes []byte) {
 			nc.nodesLock.Lock()
 			nc.active += 1
 			nc.total += 1
-			simpleWhirly := NewSimpleWhirly(int64(nc.total), nc.ConsensusID, nc.Config, nc.Executor, nc.p2pAdaptor, nc.Log, address, nc.StopEntrance)
+			simpleWhirly := NewSimpleWhirly(int64(nc.total), nc.ConsensusID, nc.Config, nc.Executor, nc, nc.Log, address, nc.StopEntrance)
 			nc.WhrilyNodes[address] = simpleWhirly
 			nc.nodesLock.Unlock()
 
