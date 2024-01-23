@@ -33,10 +33,12 @@ message Header{
   int64 Address = 9;
   bytes Hashes =10;
   string PeerId = 11;
+  bytes Pubkey = 12;
 }
 
 message Tx{
-  bytes TxData = 1;
+  bytes TxHash = 1;
+  uint64 Height = 2;
 }
 
 message BlockRequest {
@@ -96,7 +98,29 @@ message GetTxResponse{
   repeated ExecuteBlock Blocks = 3;
 }
 
-message ExecuteBlock {
+message VerifyTxRequest{
 
 }
 
+message VerifyTxResponse{
+
+}
+
+message ExecuteBlock {
+  ExecuteHeader Header = 1;
+  repeated ExecutedTx Txs= 2;
+}
+
+message ExecuteHeader {
+  uint64 Height = 1;
+}
+
+message ExecutedTx{
+  bytes TxHash = 1;
+  bytes Data = 2;
+}
+
+service PoTExecutor {
+  rpc   GetTxs(GetTxRequest) returns (GetTxResponse){}
+  rpc   VerifyTxs(VerifyTxRequest) returns (VerifyTxResponse){}
+}

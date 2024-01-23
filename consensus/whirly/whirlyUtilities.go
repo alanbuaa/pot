@@ -71,9 +71,11 @@ func (wu *WhirlyUtilitiesImpl) Init(
 	wu.RequestEntrance = make(chan *pb.Request, 10)
 	wu.MemPool = types.NewMemPool()
 	// wu.Log.Debugf("[HOTSTUFF] Init block storage")
+
 	newPeerId1 := strings.Replace(wu.PublicAddress, ".", "", -1)
 	newPeerId2 := strings.Replace(newPeerId1, ":", "", -1)
-	wu.BlockStorage = types.NewBlockStorageImpl(strconv.Itoa(int(cid)) + "-" + newPeerId2)
+
+	wu.BlockStorage = types.NewBlockStorageImpl(strconv.Itoa(int(cid)) + "-" + newPeerId2 + strconv.Itoa(int(id)))
 
 	// Set receiver
 	//p2pAdaptor.SetReceiver(wu.GetMsgByteEntrance())
@@ -212,12 +214,13 @@ func (wu *WhirlyUtilitiesImpl) NewLeaderEchoMsg(leader int64, block *pb.WhirlyBl
 	wMsg := &pb.WhirlyMsg{}
 
 	wMsg.Payload = &pb.WhirlyMsg_NewLeaderEcho{NewLeaderEcho: &pb.NewLeaderEcho{
-		Leader:   uint64(leader),
-		SenderId: uint64(wu.ID),
-		Epoch:    uint64(epoch),
-		Block:    block,
-		SwProof:  proof,
-		VHeight:  vHeghit,
+		Leader:        uint64(leader),
+		SenderId:      uint64(wu.ID),
+		Epoch:         uint64(epoch),
+		Block:         block,
+		SwProof:       proof,
+		VHeight:       vHeghit,
+		PublicAddress: wu.PublicAddress,
 	}}
 	return wMsg
 }

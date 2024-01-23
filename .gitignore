@@ -8,6 +8,7 @@
 client
 genkey
 upgradeable-consensus
+test
 
 /.vscode
 /*.log

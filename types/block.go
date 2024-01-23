@@ -2,6 +2,7 @@ package types
 
 import (
 	"bytes"
+	"crypto/rand"
 	"crypto/sha256"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/zzz136454872/upgradeable-consensus/crypto"
@@ -28,6 +29,7 @@ type Header struct {
 	PeerId     string
 	TxHash     []byte
 	Hashes     []byte
+	PublicKey  []byte
 }
 
 type Block struct {
@@ -119,6 +121,7 @@ func (b *Header) Hash() []byte {
 	hashes := crypto.Hash(hashinput)
 	b.Hashes = hashes
 	return hashes
+
 }
 
 func (b *Header) BasicVerify() bool {
@@ -181,6 +184,7 @@ func ToHeader(header *pb.Header) *Header {
 		Address:    header.GetAddress(),
 		Hashes:     header.GetHashes(),
 		PeerId:     header.GetPeerId(),
+		PublicKey:  header.GetPubkey(),
 	}
 	return h
 }
@@ -206,6 +210,7 @@ func (b *Header) ToProto() *pb.Header {
 		Address:    b.Address,
 		Hashes:     b.Hashes,
 		PeerId:     b.PeerId,
+		Pubkey:     b.PublicKey,
 	}
 }
 
@@ -232,4 +237,10 @@ func DefaultGenesisBlock() *Block {
 		Header: DefaultGenesisHeader(),
 		Txs:    TestTxs(),
 	}
+}
+
+func RandByte() []byte {
+	res := make([]byte, 32)
+	_, _ = rand.Read(res)
+	return res
 }

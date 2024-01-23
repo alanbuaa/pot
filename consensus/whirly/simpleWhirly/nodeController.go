@@ -33,16 +33,17 @@ type PoTSignal struct {
 }
 
 type NodeController struct {
-	PeerId          string
-	ConsensusID     int64
-	MsgByteEntrance chan []byte // receive msg
-	p2pAdaptor      p2p.P2PAdaptor
-	Log             *logrus.Entry
-	Executor        executor.Executor
-	Config          *config.ConsensusConfig
-	cancel          context.CancelFunc
+	PeerId              string
+	ConsensusID         int64
+	MsgByteEntrance     chan []byte // receive msg
+	RequestByteEntrance chan *pb.Request
+	p2pAdaptor          p2p.P2PAdaptor
+	Log                 *logrus.Entry
+	Executor            executor.Executor
+	Config              *config.ConsensusConfig
+	cancel              context.CancelFunc
 
-	epoch  int
+	epoch  int64
 	total  int
 	active int
 
@@ -56,6 +57,7 @@ type NodeController struct {
 }
 
 func NewNodeController(
+	id int64,
 	cid int64,
 	cfg *config.ConsensusConfig,
 	exec executor.Executor,
@@ -75,15 +77,17 @@ func NewNodeController(
 		epoch:       1,
 		total:       1,
 		active:      0,
+		WhrilyNodes: make(map[string]*SimpleWhirlyImpl),
 	}
 
 	// The daemonNode is always sleep, it only forwards requests to the leader
 	nc.nodesLock.Lock()
-	simpleWhirly := NewSimpleWhirly(1, cid, cfg, exec, nc, log, DaemonNodePublicAddress, nil)
+	simpleWhirly := NewSimpleWhirly(id, cid, nc.epoch, cfg, exec, nc, log, DaemonNodePublicAddress, nil)
 	nc.WhrilyNodes[DaemonNodePublicAddress] = simpleWhirly
 	nc.nodesLock.Unlock()
 
 	nc.MsgByteEntrance = make(chan []byte, 10)
+	nc.RequestByteEntrance = make(chan *pb.Request, 10)
 	nc.PoTByteEntrance = make(chan []byte, 10)
 	nc.StopEntrance = make(chan string, 10)
 
@@ -94,6 +98,13 @@ func NewNodeController(
 
 func (nc *NodeController) GetPoTByteEntrance() chan<- []byte {
 	return nc.PoTByteEntrance
+}
+
+func (nc *NodeController) GetMsgByteEntrance() chan<- []byte {
+	return nc.MsgByteEntrance
+}
+func (nc *NodeController) GetRequestEntrance() chan<- *pb.Request {
+	return nc.RequestByteEntrance
 }
 
 func (nc *NodeController) DecodeMsgByte(msgByte []byte) (*ControllerMessage, error) {
@@ -108,6 +119,7 @@ func (nc *NodeController) DecodeMsgByte(msgByte []byte) (*ControllerMessage, err
 func (nc *NodeController) Stop() {
 	nc.cancel()
 	close(nc.MsgByteEntrance)
+	close(nc.RequestByteEntrance)
 	close(nc.PoTByteEntrance)
 	close(nc.StopEntrance)
 }
@@ -117,6 +129,17 @@ func (nc *NodeController) receiveMsg(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
+		case msgByte, ok := <-nc.RequestByteEntrance:
+			if !ok {
+				return // closed
+			}
+			nc.nodesLock.Lock()
+			for _, node := range nc.WhrilyNodes {
+				go func(n *SimpleWhirlyImpl) {
+					n.GetRequestEntrance() <- msgByte
+				}(node)
+			}
+			nc.nodesLock.Unlock()
 		case msgByte, ok := <-nc.MsgByteEntrance:
 			if !ok {
 				return // closed
@@ -183,13 +206,13 @@ func (nc *NodeController) Broadcast(msgByte []byte, consensusID int64, topic []b
 	bytePacket, err := proto.Marshal(packet)
 	utils.PanicOnError(err)
 
-	nc.nodesLock.Lock()
-	for _, node := range nc.WhrilyNodes {
-		go func(n *SimpleWhirlyImpl) {
-			n.GetMsgByteEntrance() <- msgByte
-		}(node)
-	}
-	nc.nodesLock.Unlock()
+	//nc.nodesLock.Lock()
+	//for _, node := range nc.WhrilyNodes {
+	//	go func(n *SimpleWhirlyImpl) {
+	//		n.GetMsgByteEntrance() <- msgByte
+	//	}(node)
+	//}
+	//nc.nodesLock.Unlock()
 
 	return nc.p2pAdaptor.Broadcast(bytePacket, -1, topic)
 }
@@ -248,8 +271,10 @@ func (nc *NodeController) handlePotSignal(potSignalBytes []byte) {
 	}
 
 	// Ignoring pot signals from old epochs
-	if potSignal.Epoch <= int64(nc.epoch) {
+	if potSignal.Epoch <= nc.epoch {
 		return
+	} else {
+		nc.epoch = potSignal.Epoch
 	}
 
 	// Determine whether the leader belongs to oneself
@@ -259,9 +284,11 @@ func (nc *NodeController) handlePotSignal(potSignalBytes []byte) {
 			nc.nodesLock.Lock()
 			nc.active += 1
 			nc.total += 1
-			simpleWhirly := NewSimpleWhirly(int64(nc.total), nc.ConsensusID, nc.Config, nc.Executor, nc, nc.Log, address, nc.StopEntrance)
+			simpleWhirly := NewSimpleWhirly(int64(nc.total), nc.ConsensusID, nc.epoch, nc.Config, nc.Executor, nc, nc.Log, address, nc.StopEntrance)
 			nc.WhrilyNodes[address] = simpleWhirly
 			nc.nodesLock.Unlock()
+
+			nc.Log.Info("create a new committee node")
 
 			// This new simpleWhirly node attempts to become a leader
 			simpleWhirly.NewLeader(potSignal)

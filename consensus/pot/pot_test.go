@@ -1,17 +1,14 @@
 package pot
 
 import (
-	"fmt"
-	"github.com/shirou/gopsutil/cpu"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/zzz136454872/upgradeable-consensus/crypto"
+	"github.com/zzz136454872/upgradeable-consensus/types"
 	"testing"
 )
 
-func TestPoTMsgReceive(t *testing.T) {
-	cpuInfo, err := cpu.Info()
-	if err != nil {
-		fmt.Printf("Failed to get CPU info: %v", err)
-		return
+func TestPrivkey(t *testing.T) {
+	for i := 0; i < 10; i++ {
+		t.Log(hexutil.Encode(crypto.CreatePriKey(types.RandByte()).Public().Pubkey))
 	}
-	fmt.Printf("CPU info: %+v\n", cpuInfo)
-
 }

@@ -68,6 +68,7 @@ type SimpleWhirlyImpl struct {
 func NewSimpleWhirly(
 	id int64,
 	cid int64,
+	epoch int64,
 	cfg *config.ConsensusConfig,
 	exec executor.Executor,
 	p2pAdaptor p2p.P2PAdaptor,
@@ -358,10 +359,11 @@ func (sw *SimpleWhirlyImpl) Update(swProof *pb.SimpleWhirlyProof) {
 	}
 
 	if block2.Height+1 == block1.Height {
-		if sw.View.ViewNum%5 == 0 {
+		if sw.View.ViewNum%2 == 0 {
 			sw.Log.WithFields(logrus.Fields{
 				"blockHash":   hex.EncodeToString(block2.Hash),
 				"blockHeight": block2.Height,
+				"myAddress":   sw.PublicAddress,
 			}).Info("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] [SIMPLE WHIRLY] COMMIT.")
 		}
 		// sw.Log.WithField(
@@ -468,6 +470,7 @@ func (sw *SimpleWhirlyImpl) OnReceiveProposal(newBlock *pb.WhirlyBlock, swProof 
 		sw.Log.WithFields(logrus.Fields{
 			"blockHeight": newBlock.Height,
 			"vHeight":     sw.vHeight,
+			"myAddress":   sw.PublicAddress,
 		}).Info("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] OnReceiveProposal: WhirlyBlock height less than vHeight.")
 		return
 	}
@@ -514,6 +517,10 @@ func (sw *SimpleWhirlyImpl) OnReceiveProposal(newBlock *pb.WhirlyBlock, swProof 
 }
 
 func (sw *SimpleWhirlyImpl) OnReceiveVote(msg *pb.WhirlyMsg) {
+	if !sw.inCommittee {
+		sw.Log.Trace("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "]  OnReceiveVote: Not in Committee.")
+		return
+	}
 	whirlyVoteMsg := msg.GetWhirlyVote()
 
 	if int64(whirlyVoteMsg.Epoch) < sw.epoch {

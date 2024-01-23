@@ -38,7 +38,7 @@ type PoTEngine struct {
 	//headerStorage  *types.HeaderStorage
 	blockStorage   *types.BlockStorage
 	chainReader    *types.ChainReader
-	UpperConsensus *simpleWhirly.SimpleWhirlyImpl
+	UpperConsensus *simpleWhirly.NodeController
 }
 
 func NewEngine(nid int64, cid int64, config *config.ConsensusConfig, exec executor.Executor, adaptor p2p.P2PAdaptor, log *logrus.Entry) *PoTEngine {
@@ -152,11 +152,11 @@ func (e *PoTEngine) GetBlockStorage() *types.BlockStorage {
 	return e.blockStorage
 }
 
-func (e *PoTEngine) SetWhirly(whirly2 *simpleWhirly.SimpleWhirlyImpl) {
+func (e *PoTEngine) SetWhirly(whirly2 *simpleWhirly.NodeController) {
 	e.UpperConsensus = whirly2
 }
 
-func (e *PoTEngine) StartCommitee() *simpleWhirly.SimpleWhirlyImpl {
+func (e *PoTEngine) StartCommitee() *simpleWhirly.NodeController {
 	whirlyconfig := &config.ConsensusConfig{
 		Type:        "whirly",
 		ConsensusID: 1009,
@@ -170,7 +170,9 @@ func (e *PoTEngine) StartCommitee() *simpleWhirly.SimpleWhirlyImpl {
 		Topic: e.config.Topic,
 		F:     e.config.F,
 	}
-	s := simpleWhirly.NewSimpleWhirly(e.id, 1009, whirlyconfig, e.exec, e.Adaptor, e.log, "", nil)
+
+	//s := simpleWhirly.NewSimpleWhirly(e.id, 1009, whirlyconfig, e.exec, e.Adaptor, e.log, "", nil)
+	s := simpleWhirly.NewNodeController(e.id, 1009, whirlyconfig, e.exec, e.Adaptor, e.log)
 	e.UpperConsensus = s
 	e.log.Infof("[PoT]\tCommitee consensus whirly get prepared")
 	return s

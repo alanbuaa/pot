@@ -42,24 +42,25 @@ type Worker struct {
 	epoch  uint64
 
 	// vdf work
-	timestamp  time.Time
-	vdf0       *types.VDF
-	vdf0Chan   chan *types.VDF0res
-	vdf1       []*types.VDF
-	vdf1Chan   chan *types.VDF0res
-	vdfChecker *vdf.Vdf
-	abort      chan struct{}
-	wg         *sync.WaitGroup
-	workFlag   bool
-
+	timestamp     time.Time
+	vdf0          *types.VDF
+	vdf0Chan      chan *types.VDF0res
+	vdf1          []*types.VDF
+	vdf1Chan      chan *types.VDF0res
+	vdfChecker    *vdf.Vdf
+	abort         chan struct{}
+	wg            *sync.WaitGroup
+	workFlag      bool
+	keyblockmap   map[[crypto.PrivateKeyLen]byte][]byte
+	executeheight uint64
 	// rand seed
 	rand         *rand.Rand
 	blockCounter int
 
-	Engine *PoTEngine
-	stopCh chan struct{}
-	mutex  sync.Mutex
-
+	Engine  *PoTEngine
+	stopCh  chan struct{}
+	mutex   *sync.Mutex
+	rwmutex *sync.RWMutex
 	// communication
 	peerMsgQueue      chan *types.Block
 	blockResponseChan chan *pb.BlockResponse
@@ -68,7 +69,7 @@ type Worker struct {
 	chainReader       *types.ChainReader
 
 	// upper consensus
-	whirly        *simpleWhirly.SimpleWhirlyImpl
+	whirly        *simpleWhirly.NodeController
 	potSignalChan chan<- []byte
 	committee     *orderedmap.OrderedMap
 	Commitee      []string
@@ -91,21 +92,24 @@ func NewWorker(id int64, config *config.ConsensusConfig, logger *logrus.Entry, b
 	}
 
 	peer := make(chan *types.Block, 5)
-
+	keyblockmap := make(map[[crypto.PrivateKeyLen]byte][]byte)
 	w := &Worker{
-		abort:        make(chan struct{}),
-		Engine:       engine,
-		config:       config,
-		ID:           id,
-		log:          logger,
-		epoch:        0,
-		vdf0:         vdf0,
-		vdf0Chan:     ch0,
-		vdf1:         vdf1,
-		vdf1Chan:     ch1,
-		wg:           new(sync.WaitGroup),
-		rand:         rands,
-		peerMsgQueue: peer,
+		abort:         make(chan struct{}),
+		Engine:        engine,
+		config:        config,
+		ID:            id,
+		log:           logger,
+		epoch:         0,
+		vdf0:          vdf0,
+		vdf0Chan:      ch0,
+		vdf1:          vdf1,
+		vdf1Chan:      ch1,
+		wg:            new(sync.WaitGroup),
+		rand:          rands,
+		peerMsgQueue:  peer,
+		mutex:         new(sync.Mutex),
+		rwmutex:       new(sync.RWMutex),
+		executeheight: uint64(0),
 		//storage:      st,
 		blockStorage: bst,
 		committee:    orderedmap.NewOrderedMap(),
@@ -113,6 +117,7 @@ func NewWorker(id int64, config *config.ConsensusConfig, logger *logrus.Entry, b
 		chainReader:  types.NewChainReader(bst),
 		PeerId:       engine.GetPeerID(),
 		workFlag:     false,
+		keyblockmap:  keyblockmap,
 	}
 	w.Init()
 
@@ -302,6 +307,7 @@ func (w *Worker) mine(epoch uint64, vdf0res []byte, nonce int64, workerid int, a
 }
 
 func (w *Worker) createBlock(epoch uint64, parentBlock *types.Block, uncleBlock []*types.Block, difficulty *big.Int, mixdigest []byte, nonce int64, vdf0res []byte, vdf1res []byte) *types.Block {
+	Txs := w.GetTxs()
 	parentblockhash := make([]byte, 0)
 	if parentBlock != nil {
 		parentblockhash = parentBlock.Hash()
@@ -310,7 +316,12 @@ func (w *Worker) createBlock(epoch uint64, parentBlock *types.Block, uncleBlock 
 	for i := 0; i < len(uncleBlock); i++ {
 		uncleBlockhash[i] = uncleBlock[i].Hash()
 	}
+
 	Potproof := [][]byte{vdf0res, vdf1res}
+	privkey := crypto.CreatePriKey(types.RandByte())
+	pubkey := privkey.Public()
+	pubkeybyte := crypto.Convert(pubkey.Pubkey)
+
 	h := &types.Header{
 		Height:     epoch,
 		ParentHash: parentblockhash,
@@ -321,18 +332,36 @@ func (w *Worker) createBlock(epoch uint64, parentBlock *types.Block, uncleBlock 
 		Address:    w.ID,
 		PoTProof:   Potproof,
 		PeerId:     w.PeerId,
+		PublicKey:  pubkey.Pubkey,
 	}
+
 	h.Hashes = h.Hash()
+	w.SetKeyBlockMap(pubkeybyte, h.Hash())
 
 	return &types.Block{
 		Header: h,
-		Txs:    w.GetTxs(),
+		Txs:    Txs,
 	}
 }
 
 func (w *Worker) GetTxs() []*types.Tx {
-	//
-	return types.TestTxs()
+
+	// TODO: Get executed blocks from executor
+
+	executeblocks := types.TestExecuteBlock(w.executeheight)
+	txs := make([]*types.Tx, 0)
+	for i := 0; i < len(executeblocks); i++ {
+		height := executeblocks[i].GetHeader().GetHeight()
+		executedTxs := executeblocks[i].GetTxs()
+		for _, executedtx := range executedTxs {
+			tx := &types.Tx{
+				TxHash: executedtx.GetTxHash(),
+				Height: height,
+			}
+			txs = append(txs, tx)
+		}
+	}
+	return txs
 }
 
 func (w *Worker) createnilBlock(epoch uint64, parentBlock *types.Block, uncleBlock []*types.Block, difficulty *big.Int, mixdigest []byte, nonce int64, vdf0res []byte, vdf1res []byte) *types.Block {
@@ -345,6 +374,9 @@ func (w *Worker) createnilBlock(epoch uint64, parentBlock *types.Block, uncleBlo
 		uncleBlockhash[i] = uncleBlock[i].Hash()
 	}
 	Potproof := [][]byte{vdf0res, vdf1res}
+	privkey := crypto.CreatePriKey(types.RandByte())
+	pubkey := privkey.Public()
+	punkeybyte := crypto.Convert(pubkey.Pubkey)
 
 	h := &types.Header{
 		Height:     epoch,
@@ -356,12 +388,32 @@ func (w *Worker) createnilBlock(epoch uint64, parentBlock *types.Block, uncleBlo
 		Address:    w.ID,
 		PoTProof:   Potproof,
 		PeerId:     w.PeerId,
+		PublicKey:  pubkey.Pubkey,
 	}
 	h.Hashes = h.Hash()
+
+	w.SetKeyBlockMap(punkeybyte, h.Hash())
 
 	return &types.Block{
 		Header: h,
 		Txs:    nil,
+	}
+}
+
+func (w *Worker) SetKeyBlockMap(pubkey [crypto.PrivateKeyLen]byte, blockhash []byte) {
+	w.rwmutex.Lock()
+	defer w.rwmutex.Unlock()
+	w.keyblockmap[pubkey] = blockhash
+}
+
+func (w *Worker) TryFindKey(pubkey [crypto.PrivateKeyLen]byte) (bool, []byte) {
+	w.rwmutex.RLock()
+	blockhash := w.keyblockmap[pubkey]
+	w.rwmutex.RUnlock()
+	if blockhash != nil {
+		return true, blockhash
+	} else {
+		return false, nil
 	}
 }
 

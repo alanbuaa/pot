@@ -27,7 +27,9 @@ import (
 // }
 
 func (sw *SimpleWhirlyImpl) NewLeader(potSignal *PoTSignal) {
-	sw.Log.Info("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] new Epoch tirgger!")
+	sw.Log.WithFields(logrus.Fields{
+		"address": sw.PublicAddress,
+	}).Info("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] new Epoch tirgger!")
 
 	sw.echoLock.Lock()
 	sw.curEcho = make([]*pb.SimpleWhirlyProof, 0)
@@ -46,9 +48,11 @@ func (sw *SimpleWhirlyImpl) NewLeader(potSignal *PoTSignal) {
 }
 
 func (sw *SimpleWhirlyImpl) UpdateCommittee(committee []string, weight int) {
-	sw.Log.Info("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] update committee tirgger!")
 
 	if sw.PublicAddress != DaemonNodePublicAddress {
+		sw.Log.WithFields(logrus.Fields{
+			"address": sw.PublicAddress,
+		}).Info("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] update committee tirgger!")
 		sw.Weight = int64(weight)
 		sw.inCommittee = true
 	}
@@ -57,7 +61,9 @@ func (sw *SimpleWhirlyImpl) UpdateCommittee(committee []string, weight int) {
 }
 
 func (sw *SimpleWhirlyImpl) SleepNode() {
-	sw.Log.Info("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] sleep node tirgger!")
+	sw.Log.WithFields(logrus.Fields{
+		"address": sw.PublicAddress,
+	}).Info("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] sleep node tirgger!")
 
 	sw.Weight = 0
 	sw.inCommittee = false
@@ -76,11 +82,6 @@ func (sw *SimpleWhirlyImpl) OnReceiveNewLeaderNotify(newLeaderMsg *pb.NewLeaderN
 	leader := int64(newLeaderMsg.Leader)
 	publicAddress := newLeaderMsg.PublicAddress
 	committee := newLeaderMsg.Committee
-
-	sw.Log.WithFields(logrus.Fields{
-		"newEpoch":  epoch,
-		"newLeader": leader,
-	}).Info("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] OnReceive Notify.")
 
 	if epoch < sw.epoch {
 		return
@@ -108,11 +109,22 @@ func (sw *SimpleWhirlyImpl) OnReceiveNewLeaderNotify(newLeaderMsg *pb.NewLeaderN
 
 	// If the weight is not 0, it indicates that the node is in the committee
 	// The daemon node should never be stopped
-	if weight > 0 || sw.PublicAddress != DaemonNodePublicAddress {
+	if weight > 0 || sw.PublicAddress == DaemonNodePublicAddress {
 		sw.UpdateCommittee(committee, weight)
+		// The daemon node should never echo
+		if sw.PublicAddress == DaemonNodePublicAddress {
+			return
+		}
 	} else {
 		sw.SleepNode()
+		return
 	}
+
+	sw.Log.WithFields(logrus.Fields{
+		"newEpoch":  epoch,
+		"newLeader": publicAddress,
+		"myAddress": sw.PublicAddress,
+	}).Info("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] OnReceive Notify.")
 
 	// Echo leader
 	echoMsg := sw.NewLeaderEchoMsg(leader, nil, sw.lockProof, sw.epoch, sw.vHeight)
@@ -128,6 +140,7 @@ func (sw *SimpleWhirlyImpl) OnReceiveNewLeaderNotify(newLeaderMsg *pb.NewLeaderN
 			_ = sw.Unicast(publicAddress, echoMsg)
 		}
 	}
+
 }
 
 func (sw *SimpleWhirlyImpl) OnReceiveNewLeaderEcho(msg *pb.WhirlyMsg) {
@@ -138,10 +151,12 @@ func (sw *SimpleWhirlyImpl) OnReceiveNewLeaderEcho(msg *pb.WhirlyMsg) {
 	}
 
 	sw.Log.WithFields(logrus.Fields{
-		"senderId":     echoMsg.SenderId,
+		"sender":       echoMsg.PublicAddress,
 		"epoch":        echoMsg.Epoch,
 		"leader":       echoMsg.Leader,
 		"len(curEcho)": len(sw.curEcho),
+		"VHeight":      echoMsg.VHeight,
+		"myAddress":    sw.PublicAddress,
 	}).Info("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] OnReceiveEcho.")
 
 	if !sw.verfiySwProof(echoMsg.SwProof) {
@@ -155,16 +170,17 @@ func (sw *SimpleWhirlyImpl) OnReceiveNewLeaderEcho(msg *pb.WhirlyMsg) {
 
 	sw.echoLock.Lock()
 	sw.curEcho = append(sw.curEcho, echoMsg.SwProof)
-	sw.echoLock.Unlock()
+
 	sw.lock.Lock()
 	sw.UpdateLockProof(echoMsg.SwProof)
 	sw.lock.Unlock()
 
-	if len(sw.curEcho) >= 2*sw.Config.F+1 {
-		sw.Log.Warn("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] begin propose.")
+	if len(sw.curEcho) == 2*sw.Config.F+1 {
 		sw.AdvanceView(sw.maxVHeight)
+		sw.Log.Warn("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] begin propose.")
 		go sw.OnPropose()
 	}
+	sw.echoLock.Unlock()
 }
 
 // func (sw *SimpleWhirlyImpl) testNewLeader() {
