@@ -54,7 +54,7 @@ type SimpleWhirlyImpl struct {
 	// PoT
 	// PoTByteEntrance chan []byte // receive msg
 	curEcho      []*pb.SimpleWhirlyProof
-	echoLock     sync.Mutex
+	curEchoLock  sync.Mutex
 	maxVHeight   uint64
 	inCommittee  bool
 	Committee    []string
@@ -359,7 +359,7 @@ func (sw *SimpleWhirlyImpl) Update(swProof *pb.SimpleWhirlyProof) {
 	}
 
 	if block2.Height+1 == block1.Height {
-		if sw.View.ViewNum%2 == 0 {
+		if sw.View.ViewNum%2 == 0 && sw.ID == 0 {
 			sw.Log.WithFields(logrus.Fields{
 				"blockHash":   hex.EncodeToString(block2.Hash),
 				"blockHeight": block2.Height,

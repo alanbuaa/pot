@@ -48,8 +48,8 @@ consensus:
       type: whirly
       consensus_id: 1009
       whirly:
-        # type: simple
-        type: basic
+        type: simple
+        # type: basic
         batch_size: 10
         timeout: 2
       # type: pow
