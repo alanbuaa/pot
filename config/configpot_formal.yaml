@@ -3,18 +3,18 @@ nodes:
     address: 127.0.0.1:8080
     rpc_address: 127.0.0.1:9080
     private_key_path: keys/r1.key
-  - id: 1
-    address: 127.0.0.1:8081
-    rpc_address: 127.0.0.1:9081
-    private_key_path: keys/r2.key
-  - id: 2
-    address: 127.0.0.1:8082
-    rpc_address: 127.0.0.1:9082
-    private_key_path: keys/r3.key
-  - id: 3
-    address: 127.0.0.1:8083
-    rpc_address: 127.0.0.1:9083
-    private_key_path: keys/r4.key
+  # - id: 1
+  #   address: 127.0.0.1:8081
+  #   rpc_address: 127.0.0.1:9081
+  #   private_key_path: keys/r2.key
+  # - id: 2
+  #   address: 127.0.0.1:8082
+  #   rpc_address: 127.0.0.1:9082
+  #   private_key_path: keys/r3.key
+  # - id: 3
+  #   address: 127.0.0.1:8083
+  #   rpc_address: 127.0.0.1:9083
+  #   private_key_path: keys/r4.key
 public_key_path: keys/pub.key
 
 total: 4
@@ -29,8 +29,8 @@ executor:
   address: 127.0.0.1:9876
 
 p2p:
-  # type: p2p-adaptor # p2p-adaptor currently only supports simple-whirly # sudo sysctl -w net.core.rmem_max=2500000
-  type: p2p
+  type: p2p-adaptor # p2p-adaptor currently only supports simple-whirly # sudo sysctl -w net.core.rmem_max=2500000
+  #type: p2p
 
 topic: this-is-consensus-topic-128
 
@@ -49,21 +49,21 @@ consensus:
       #   batch_size: 10
       #   batch_timeout: 1
       #   timeout: 2
-     type: whirly
-     consensus_id: 1009
-     whirly:
-       type: simple
-       # type: basic
-       batch_size: 10
-       timeout: 2
+#      type: whirly
+#      consensus_id: 1009
+#      whirly:
+#        type: simple
+#        # type: basic
+#        batch_size: 10
+#        timeout: 2
   #     # type: pow
   #     # consensus_id: 1008
   #     # pow:
   #     #   init_difficulty: 0x0010000000000000000000000000000000000000000000000000000000000000
-  #  type: "pot"
-  #  consensus_id: 10001
-  #  pot:
-  #    snum : 2
-  #    sysPara: 2
-  #    vdf0Iteration: 200000
-  #    vdf1Iteration: 120000
+   type: "pot"
+   consensus_id: 10001
+   pot:
+     snum : 2
+     sysPara: 2
+     vdf0Iteration: 200000
+     vdf1Iteration: 120000

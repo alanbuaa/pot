@@ -31,9 +31,9 @@ func (sw *SimpleWhirlyImpl) NewLeader(potSignal *PoTSignal) {
 		"address": sw.PublicAddress,
 	}).Info("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] new Epoch tirgger!")
 
-	sw.echoLock.Lock()
+	sw.curEchoLock.Lock()
 	sw.curEcho = make([]*pb.SimpleWhirlyProof, 0)
-	sw.echoLock.Unlock()
+	sw.curEchoLock.Unlock()
 	sw.maxVHeight = sw.vHeight
 
 	newLeaderMsg := sw.NewLeaderNotifyMsg(potSignal.Epoch, potSignal.Proof, potSignal.Committee)
@@ -124,10 +124,15 @@ func (sw *SimpleWhirlyImpl) OnReceiveNewLeaderNotify(newLeaderMsg *pb.NewLeaderN
 		"newEpoch":  epoch,
 		"newLeader": publicAddress,
 		"myAddress": sw.PublicAddress,
-	}).Info("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] OnReceive Notify.")
+	}).Trace("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] OnReceive Notify.")
+
+	block, err := sw.BlockStorage.Get(sw.lockProof.BlockHash)
+	if err != nil {
+		sw.Log.Trace("no block for ehco message")
+	}
 
 	// Echo leader
-	echoMsg := sw.NewLeaderEchoMsg(leader, nil, sw.lockProof, sw.epoch, sw.vHeight)
+	echoMsg := sw.NewLeaderEchoMsg(leader, block, sw.lockProof, sw.epoch, sw.vHeight)
 
 	if sw.GetLeader(sw.epoch) == sw.PublicAddress {
 		// echo self
@@ -147,20 +152,33 @@ func (sw *SimpleWhirlyImpl) OnReceiveNewLeaderEcho(msg *pb.WhirlyMsg) {
 	echoMsg := msg.GetNewLeaderEcho()
 
 	if int64(echoMsg.Epoch) < sw.epoch {
+		sw.Log.WithFields(logrus.Fields{
+			"echoMsg.epoch": echoMsg.Epoch,
+			"myEpoch":       sw.epoch,
+		}).Warn("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] the epoch of echo message is too old.")
 		return
 	}
 
+	sw.curEchoLock.Lock()
 	sw.Log.WithFields(logrus.Fields{
 		"sender":       echoMsg.PublicAddress,
 		"epoch":        echoMsg.Epoch,
 		"leader":       echoMsg.Leader,
 		"len(curEcho)": len(sw.curEcho),
 		"VHeight":      echoMsg.VHeight,
-		"myAddress":    sw.PublicAddress,
+		// "myAddress":    sw.PublicAddress,
 	}).Info("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] OnReceiveEcho.")
+
+	err := sw.BlockStorage.Put(echoMsg.Block)
+	if err != nil {
+		sw.Log.WithError(err).Info("Store the new block from echo message failed.")
+		sw.curEchoLock.Unlock()
+		return
+	}
 
 	if !sw.verfiySwProof(echoMsg.SwProof) {
 		sw.Log.Warn("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] echo proof is wrong.")
+		sw.curEchoLock.Unlock()
 		return
 	}
 
@@ -168,19 +186,21 @@ func (sw *SimpleWhirlyImpl) OnReceiveNewLeaderEcho(msg *pb.WhirlyMsg) {
 		sw.maxVHeight = echoMsg.VHeight
 	}
 
-	sw.echoLock.Lock()
 	sw.curEcho = append(sw.curEcho, echoMsg.SwProof)
 
 	sw.lock.Lock()
 	sw.UpdateLockProof(echoMsg.SwProof)
 	sw.lock.Unlock()
 
-	if len(sw.curEcho) == 2*sw.Config.F+1 {
+	if len(sw.curEcho) >= 2*sw.Config.F+1 {
 		sw.AdvanceView(sw.maxVHeight)
 		sw.Log.Warn("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] begin propose.")
+		sw.curEcho = make([]*pb.SimpleWhirlyProof, 0)
+		sw.curEchoLock.Unlock()
 		go sw.OnPropose()
+		return
 	}
-	sw.echoLock.Unlock()
+	sw.curEchoLock.Unlock()
 }
 
 // func (sw *SimpleWhirlyImpl) testNewLeader() {

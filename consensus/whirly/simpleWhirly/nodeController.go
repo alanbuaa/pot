@@ -168,7 +168,7 @@ func (nc *NodeController) receiveMsg(ctx context.Context) {
 			if !ok {
 				return // closed
 			}
-			nc.handlePotSignal(potSignal)
+			go nc.handlePotSignal(potSignal)
 		}
 	}
 }
@@ -221,11 +221,17 @@ func (nc *NodeController) Unicast(address string, msgByte []byte, consensusID in
 	nc.nodesLock.Lock()
 	for publicAddress, node := range nc.WhrilyNodes {
 		if publicAddress == address {
-			node.GetMsgByteEntrance() <- msgByte
+			if node.GetMsgByteEntrance() != nil {
+				// nc.Log.Info("Unicast by channel")
+				node.GetMsgByteEntrance() <- msgByte
+			} else {
+				nc.Log.Warn("the MsgByteEntrance of node is nil")
+			}
 			nc.nodesLock.Unlock()
 			return nil
 		}
 	}
+	// nc.Log.Info("Unicast by p2padptor")
 	nc.nodesLock.Unlock()
 
 	packet := &pb.Packet{
@@ -288,10 +294,15 @@ func (nc *NodeController) handlePotSignal(potSignalBytes []byte) {
 			nc.WhrilyNodes[address] = simpleWhirly
 			nc.nodesLock.Unlock()
 
-			nc.Log.Info("create a new committee node")
+			nc.Log.WithFields(logrus.Fields{
+				// "sender":       echoMsg.PublicAddress,
+				"epoch":       potSignal.Epoch,
+				"nodeAddress": address,
+			}).Info("create a new committee node")
 
 			// This new simpleWhirly node attempts to become a leader
 			simpleWhirly.NewLeader(potSignal)
+			return
 		}
 	}
 }

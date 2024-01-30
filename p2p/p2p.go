@@ -25,7 +25,7 @@ type BaseP2p struct {
 }
 
 func NewBaseP2p(log *logrus.Entry, id int64) (*BaseP2p, string, error) {
-	cfg, err := config.NewConfig("config/config.yaml", id)
+	cfg, err := config.NewConfig("config/configpot.yaml", id)
 	utils.PanicOnError(err)
 	info := cfg.GetNodeInfo(id)
 	port := info.Address[strings.Index(info.Address, ":"):]
