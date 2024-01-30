@@ -97,10 +97,10 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 			}
 
 			//for i := 0; i < len(nowBranch); i++ {
-			//	w.log.Errorf("[PoT]\tthe nowBranch at height %d: %s", nowBranch[i].GetHeader().Height, hexutil.Encode(nowBranch[i].Hash()))
+			//	w.log.Errorf("[PoT]\tthe nowBranch at height %d: %s", nowBranch[i].GetHeader().ExecHeight, hexutil.Encode(nowBranch[i].Hash()))
 			//}
 			//for i := 0; i < len(forkBranch); i++ {
-			//	w.log.Errorf("[PoT]\tthe fork chain at height %d: %s", forkBranch[i].GetHeader().Height, hexutil.Encode(forkBranch[i].Hash()))
+			//	w.log.Errorf("[PoT]\tthe fork chain at height %d: %s", forkBranch[i].GetHeader().ExecHeight, hexutil.Encode(forkBranch[i].Hash()))
 			//}
 
 			w1 := w.calculateChainWeight(ances, currentblock)
@@ -141,6 +141,22 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 
 func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) {
 	current := w.chainReader.GetCurrentBlock()
+
+	if epoch+100 < block.GetHeader().Height {
+		err := w.setVDF0epoch(block.GetHeader().Height - 1)
+		if err != nil {
+			w.log.Warnf("[PoT]\tset vdf error for %s:", err)
+			return
+		}
+		res := &types.VDF0res{
+			Res:   block.GetHeader().PoTProof[0],
+			Epoch: block.GetHeader().Height - 1,
+		}
+		w.vdf0Chan <- res
+		w.log.Infof("[PoT]\tepoch %d:set vdf complete. Start from epoch %d with res %s", epoch, block.GetHeader().Height-1, hexutil.Encode(crypto.Hash(res.Res)))
+		return
+	}
+
 	ances, err := w.GetSharedAncestor(block, current)
 	if err != nil {
 		return
@@ -163,7 +179,7 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) {
 	}
 
 	//for i := 0; i < len(branch); i++ {
-	//	w.log.Infof("[PoT]\tthe nowbranch at height %d: %s", branch[i].GetHeader().Height, hexutil.Encode(branch[i].Hash()))
+	//	w.log.Infof("[PoT]\tthe nowbranch at height %d: %s", branch[i].GetHeader().ExecHeight, hexutil.Encode(branch[i].Hash()))
 	//}
 
 	err = w.chainResetAdvanced(branch)

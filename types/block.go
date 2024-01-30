@@ -116,7 +116,7 @@ func (b *Header) Hash() []byte {
 		height, b.ParentHash, unclehash,
 		b.Mixdigest, difficulty, nonce,
 		timestamp, b.PoTProof[0], b.PoTProof[1],
-		address, peeridbyte,
+		address, peeridbyte, b.PublicKey,
 	}, []byte(""))
 	hashes := crypto.Hash(hashinput)
 	b.Hashes = hashes

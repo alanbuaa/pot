@@ -12,8 +12,8 @@ Tx 用于定义交易一系列结构与操作
 */
 
 type Tx struct {
-	TxHash []byte
-	Height uint64
+	TxHash     []byte
+	ExecHeight uint64
 }
 
 func (t *Tx) Validate() bool {
@@ -21,11 +21,11 @@ func (t *Tx) Validate() bool {
 }
 
 func (t *Tx) ToProto() *pb.Tx {
-	return &pb.Tx{TxHash: t.TxHash, Height: t.Height}
+	return &pb.Tx{TxHash: t.TxHash, Height: t.ExecHeight}
 }
 
 func ToTx(tx *pb.Tx) *Tx {
-	return &Tx{TxHash: tx.GetTxHash(), Height: tx.GetHeight()}
+	return &Tx{TxHash: tx.GetTxHash(), ExecHeight: tx.GetHeight()}
 }
 
 func ToTxs(tx []*pb.Tx) []*Tx {
@@ -62,4 +62,8 @@ func TestExecuteBlock(start uint64) []*pb.ExecuteBlock {
 		}
 	}
 	return res
+}
+
+func (t *Tx) Hash() [crypto.Hashlen]byte {
+	return crypto.Convert(t.TxHash)
 }

@@ -430,7 +430,7 @@ func (sw *SimpleWhirlyImpl) OnReceiveProposal(newBlock *pb.WhirlyBlock, swProof 
 	}).Trace("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] OnReceiveProposal.")
 	// sw.Log.WithField("blockHash", hex.EncodeToString(newBlock.Hash)).Trace("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] OnReceiveProposal.")
 
-	// if newBlock.Height == 1 && sw.GetP2pAdaptorType() != "p2p" {
+	// if newBlock.ExecHeight == 1 && sw.GetP2pAdaptorType() != "p2p" {
 	// 	// TODO: ensure to cancel send pingMsg when a proposal is received the first time
 	// 	sw.stopSendPing()
 	// }
@@ -464,7 +464,7 @@ func (sw *SimpleWhirlyImpl) OnReceiveProposal(newBlock *pb.WhirlyBlock, swProof 
 		return
 	}
 
-	// verfiy Height
+	// verfiy ExecHeight
 	if v <= sw.vHeight {
 		// info log rathee than warn
 		sw.Log.WithFields(logrus.Fields{
@@ -503,7 +503,7 @@ func (sw *SimpleWhirlyImpl) OnReceiveProposal(newBlock *pb.WhirlyBlock, swProof 
 	voteMsg := sw.VoteMsg(newBlock.Height, newBlock.Hash, voteFlag, nil, nil, voteProof, sw.epoch)
 
 	if sw.GetLeader(sw.epoch) == sw.PublicAddress {
-		// if sw.GetLeader(int64(newBlock.Height)) == sw.ID {
+		// if sw.GetLeader(int64(newBlock.ExecHeight)) == sw.ID {
 		// vote self
 		sw.OnReceiveVote(voteMsg)
 	} else {

@@ -193,7 +193,7 @@ type Header struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Height     uint64   `protobuf:"varint,1,opt,name=Height,proto3" json:"Height,omitempty"`
+	Height     uint64   `protobuf:"varint,1,opt,name=ExecHeight,proto3" json:"ExecHeight,omitempty"`
 	ParentHash []byte   `protobuf:"bytes,2,opt,name=ParentHash,proto3" json:"ParentHash,omitempty"`
 	UncleHash  [][]byte `protobuf:"bytes,3,rep,name=UncleHash,proto3" json:"UncleHash,omitempty"`
 	Mixdigest  []byte   `protobuf:"bytes,4,opt,name=Mixdigest,proto3" json:"Mixdigest,omitempty"`
@@ -329,7 +329,7 @@ type Tx struct {
 	unknownFields protoimpl.UnknownFields
 
 	TxHash []byte `protobuf:"bytes,1,opt,name=TxHash,proto3" json:"TxHash,omitempty"`
-	Height uint64 `protobuf:"varint,2,opt,name=Height,proto3" json:"Height,omitempty"`
+	Height uint64 `protobuf:"varint,2,opt,name=ExecHeight,proto3" json:"ExecHeight,omitempty"`
 }
 
 func (x *Tx) Reset() {
@@ -383,7 +383,7 @@ type BlockRequest struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Height uint64 `protobuf:"varint,1,opt,name=Height,proto3" json:"Height,omitempty"`
+	Height uint64 `protobuf:"varint,1,opt,name=ExecHeight,proto3" json:"ExecHeight,omitempty"`
 	Hashes []byte `protobuf:"bytes,2,opt,name=Hashes,proto3" json:"Hashes,omitempty"`
 	Srcid  int64  `protobuf:"varint,3,opt,name=srcid,proto3" json:"srcid,omitempty"`
 	Desid  int64  `protobuf:"varint,4,opt,name=desid,proto3" json:"desid,omitempty"`
@@ -824,7 +824,7 @@ type GetTxRequest struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Height uint64 `protobuf:"varint,1,opt,name=Height,proto3" json:"Height,omitempty"`
+	Height uint64 `protobuf:"varint,1,opt,name=ExecHeight,proto3" json:"ExecHeight,omitempty"`
 	Des    string `protobuf:"bytes,2,opt,name=Des,proto3" json:"Des,omitempty"`
 }
 
@@ -1073,7 +1073,7 @@ type ExecuteHeader struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Height uint64 `protobuf:"varint,1,opt,name=Height,proto3" json:"Height,omitempty"`
+	Height uint64 `protobuf:"varint,1,opt,name=ExecHeight,proto3" json:"ExecHeight,omitempty"`
 }
 
 func (x *ExecuteHeader) Reset() {

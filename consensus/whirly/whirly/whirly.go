@@ -327,7 +327,7 @@ func (whi *WhirlyImpl) OnReceiveProposal(newBlock *pb.WhirlyBlock, qc *pb.Quorum
 		return
 	}
 
-	// verfiy Height
+	// verfiy ExecHeight
 	if v <= whi.vHeight {
 		// info log rathee than warn
 		whi.Log.WithFields(logrus.Fields{

@@ -154,8 +154,8 @@ func (w *Worker) GetBranch(root, leaf *types.Block) ([]*types.Block, [][]*types.
 		return nil, nil, fmt.Errorf("branch is nil")
 	}
 
-	// rootheight := root.Height
-	// leaftheight := leaf.Height
+	// rootheight := root.ExecHeight
+	// leaftheight := leaf.ExecHeight
 
 	// depth := leaftheight - rootheight
 	mainbranch := make([]*types.Block, 1)

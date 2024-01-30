@@ -36,10 +36,7 @@ message Header{
   bytes Pubkey = 12;
 }
 
-message Tx{
-  bytes TxHash = 1;
-  uint64 Height = 2;
-}
+
 
 message BlockRequest {
   uint64 Height = 1;
@@ -88,7 +85,7 @@ message PoTWork{
 }
 
 message GetTxRequest{
-  uint64 Height = 1;
+  uint64 StartHeight = 1;
   string Des = 2;
 }
 
@@ -99,11 +96,17 @@ message GetTxResponse{
 }
 
 message VerifyTxRequest{
-
+  repeated Tx Txs = 1;
 }
 
 message VerifyTxResponse{
+  repeated Tx Txs = 1;
+  repeated bool flag =2;
+}
 
+message Tx {
+  bytes  TxHash = 1;
+  uint64 Height = 2;
 }
 
 message ExecuteBlock {
@@ -116,8 +119,9 @@ message ExecuteHeader {
 }
 
 message ExecutedTx{
-  bytes TxHash = 1;
-  bytes Data = 2;
+  bytes   TxHash = 1;
+  uint64  Height = 2;
+  bytes   Data = 3;
 }
 
 service PoTExecutor {

@@ -3815,3 +3815,11 @@
 [31mERRO[0m[2023-12-22 08:25:33.882] [PoT]	epoch 112:Receive epoch 112 vdf0 res 0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855, use 20736 ms  [31mid[0m=2
 [36mINFO[0m[2023-12-22 08:25:33.882] [PoT]	epoch 113:Start epoch 113 vdf0          [36mid[0m=2
 [36mINFO[0m[2023-12-22 08:25:33.882] [PoT]	epoch 113:epoch 112 block num 0         [36mid[0m=2
+panic: runtime error: invalid memory address or nil pointer dereference
+[signal SIGSEGV: segmentation violation code=0x1 addr=0x18 pc=0x1049f39]
+
+goroutine 1 [running]:
+github.com/zzz136454872/upgradeable-consensus/node.(*Node).Stop(0x0)
+	/work/node/node.go:73 +0x19
+main.main()
+	/work/cmd/pot_test/main.go:65 +0x1df

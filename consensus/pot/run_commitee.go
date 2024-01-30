@@ -1,11 +1,6 @@
 package pot
 
 import (
-	"bytes"
-	"encoding/json"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/zzz136454872/upgradeable-consensus/crypto"
-
 	"github.com/zzz136454872/upgradeable-consensus/consensus/whirly/simpleWhirly"
 	"github.com/zzz136454872/upgradeable-consensus/types"
 )
@@ -35,11 +30,11 @@ import (
 //			w.whirly = s
 //			//w.Engine.SetWhirly(s)
 //			// w.potSignalChan = w.whirly.GetPoTByteEntrance()
-//			w.log.Errorf("[PoT]\t Start committee consensus at epoch %d", parent.Height+1)
+//			w.log.Errorf("[PoT]\t Start committee consensus at epoch %d", parent.ExecHeight+1)
 //			return
 //		}
 //		potSignal := &simpleWhirly.PoTSignal{
-//			Epoch:               int64(parent.Height),
+//			Epoch:               int64(parent.ExecHeight),
 //			Proof:               parent.PoTProof[0],
 //			ID:                  parent.Address,
 //			LeaderPublicAddress: parent.PeerId,
@@ -72,41 +67,41 @@ func (w *Worker) GetPeerQueue() chan *types.Block {
 }
 
 func (w *Worker) CommiteeUpdate(epoch uint64) {
-	if epoch >= CommiteeDelay+Commiteelen {
-		commitee := make([]string, Commiteelen)
-		selfaddress := make([]string, 0)
-		for i := uint64(0); i < Commiteelen; i++ {
-			block, err := w.chainReader.GetByHeight(epoch - CommiteeDelay - i)
-			if err != nil {
-				return
-			}
-			if block != nil {
-				header := block.GetHeader()
-				commitee[i] = hexutil.Encode(header.PublicKey)
-				flag, blockhash := w.TryFindKey(crypto.Convert(header.PublicKey))
-				if flag && bytes.Equal(blockhash, header.Hash()) {
-					selfaddress = append(selfaddress, hexutil.Encode(header.PublicKey))
-				}
-			}
-		}
-		potsignal := &simpleWhirly.PoTSignal{
-			Epoch:               int64(epoch),
-			Proof:               nil,
-			ID:                  0,
-			LeaderPublicAddress: commitee[0],
-			Committee:           commitee,
-			SelfPublicAddress:   selfaddress,
-			CryptoElements:      nil,
-		}
-		b, err := json.Marshal(potsignal)
-		if err != nil {
-			w.log.WithError(err)
-			return
-		}
-		if w.potSignalChan != nil {
-			w.potSignalChan <- b
-		}
-	}
+	//if epoch >= CommiteeDelay+Commiteelen {
+	//	commitee := make([]string, Commiteelen)
+	//	selfaddress := make([]string, 0)
+	//	for i := uint64(0); i < Commiteelen; i++ {
+	//		block, err := w.chainReader.GetByHeight(epoch - CommiteeDelay - i)
+	//		if err != nil {
+	//			return
+	//		}
+	//		if block != nil {
+	//			header := block.GetHeader()
+	//			commitee[i] = hexutil.Encode(header.PublicKey)
+	//			flag, blockhash := w.TryFindKey(crypto.Convert(header.PublicKey))
+	//			if flag && bytes.Equal(blockhash, header.Hash()) {
+	//				selfaddress = append(selfaddress, hexutil.Encode(header.PublicKey))
+	//			}
+	//		}
+	//	}
+	//	potsignal := &simpleWhirly.PoTSignal{
+	//		Epoch:               int64(epoch),
+	//		Proof:               nil,
+	//		ID:                  0,
+	//		LeaderPublicAddress: commitee[0],
+	//		Committee:           commitee,
+	//		SelfPublicAddress:   selfaddress,
+	//		CryptoElements:      nil,
+	//	}
+	//	b, err := json.Marshal(potsignal)
+	//	if err != nil {
+	//		w.log.WithError(err)
+	//		return
+	//	}
+	//	if w.potSignalChan != nil {
+	//		w.potSignalChan <- b
+	//	}
+	//}
 }
 func (w *Worker) SetWhirly(impl *simpleWhirly.NodeController) {
 	w.whirly = impl

@@ -53,6 +53,8 @@ type Worker struct {
 	workFlag      bool
 	keyblockmap   map[[crypto.PrivateKeyLen]byte][]byte
 	executeheight uint64
+	mempool       *Mempool
+
 	// rand seed
 	rand         *rand.Rand
 	blockCounter int
@@ -93,6 +95,7 @@ func NewWorker(id int64, config *config.ConsensusConfig, logger *logrus.Entry, b
 
 	peer := make(chan *types.Block, 5)
 	keyblockmap := make(map[[crypto.PrivateKeyLen]byte][]byte)
+	mempool := NewMempool()
 	w := &Worker{
 		abort:         make(chan struct{}),
 		Engine:        engine,
@@ -111,6 +114,7 @@ func NewWorker(id int64, config *config.ConsensusConfig, logger *logrus.Entry, b
 		rwmutex:       new(sync.RWMutex),
 		executeheight: uint64(0),
 		//storage:      st,
+		mempool:      mempool,
 		blockStorage: bst,
 		committee:    orderedmap.NewOrderedMap(),
 		vdfChecker:   vdf.New("wesolowski_rust", []byte(""), potconfig.Vdf0Iteration, id),
@@ -219,6 +223,7 @@ func (w *Worker) OnGetVdf0Response() {
 			}()
 
 			parentblock, uncleblock := w.blockSelection(backupblock, res0, epoch)
+
 			if parentblock != nil {
 				w.log.Errorf("[PoT]\tepoch %d:parent block hash is : %s Difficulty %d from %d", epoch+1, hex.EncodeToString(parentblock.Hash()), parentblock.GetHeader().Difficulty.Int64(), parentblock.GetHeader().Address)
 			} else {
@@ -350,14 +355,16 @@ func (w *Worker) GetTxs() []*types.Tx {
 
 	executeblocks := types.TestExecuteBlock(w.executeheight)
 	txs := make([]*types.Tx, 0)
+
 	for i := 0; i < len(executeblocks); i++ {
 		height := executeblocks[i].GetHeader().GetHeight()
 		executedTxs := executeblocks[i].GetTxs()
 		for _, executedtx := range executedTxs {
 			tx := &types.Tx{
-				TxHash: executedtx.GetTxHash(),
-				Height: height,
+				TxHash:     executedtx.GetTxHash(),
+				ExecHeight: height,
 			}
+			w.mempool.Add(tx)
 			txs = append(txs, tx)
 		}
 	}
