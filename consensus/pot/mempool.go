@@ -15,14 +15,14 @@ type WrappedTx struct {
 type Mempool struct {
 	mutex *sync.RWMutex
 	order *list.List
-	set   map[[crypto.Hashlen]byte]*list.Element
+	set   map[[crypto.HashLen]byte]*list.Element
 }
 
 func NewMempool() *Mempool {
 	c := &Mempool{
 		mutex: new(sync.RWMutex),
 		order: new(list.List),
-		set:   make(map[[crypto.Hashlen]byte]*list.Element),
+		set:   make(map[[crypto.HashLen]byte]*list.Element),
 	}
 	c.order.Init()
 	return c

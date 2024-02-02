@@ -64,6 +64,6 @@ func TestExecuteBlock(start uint64) []*pb.ExecuteBlock {
 	return res
 }
 
-func (t *Tx) Hash() [crypto.Hashlen]byte {
+func (t *Tx) Hash() [crypto.HashLen]byte {
 	return crypto.Convert(t.TxHash)
 }
