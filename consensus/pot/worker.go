@@ -323,9 +323,9 @@ func (w *Worker) createBlock(epoch uint64, parentBlock *types.Block, uncleBlock 
 	}
 
 	PotProof := [][]byte{vdf0res, vdf1res}
-	privKey := crypto.GenerateKey()
-	pubKey := privKey.PublicKey
-	pubKeyByte := crypto.Convert(pubKey)
+	privateKey := crypto.GenerateKey()
+	publicKeyBytes := privateKey.PublicKeyBytes()
+	publicKeyBytes32 := crypto.Convert(publicKeyBytes)
 
 	h := &types.Header{
 		Height:     epoch,
@@ -337,11 +337,11 @@ func (w *Worker) createBlock(epoch uint64, parentBlock *types.Block, uncleBlock 
 		Address:    w.ID,
 		PoTProof:   PotProof,
 		PeerId:     w.PeerId,
-		PublicKey:  pubKey,
+		PublicKey:  publicKeyBytes,
 	}
 
 	h.Hashes = h.Hash()
-	w.SetKeyBlockMap(pubKeyByte, h.Hash())
+	w.SetKeyBlockMap(publicKeyBytes32, h.Hash())
 
 	return &types.Block{
 		Header: h,
@@ -382,8 +382,8 @@ func (w *Worker) createNilBlock(epoch uint64, parentBlock *types.Block, uncleBlo
 	}
 	Potproof := [][]byte{vdf0res, vdf1res}
 	privateKey := crypto.GenerateKey()
-	publicKey := privateKey.PublicKey
-	publicKeyByte := crypto.Convert(publicKey)
+	publicKeyBytes := privateKey.PublicKeyBytes()
+	publicKeyBytes32 := crypto.Convert(publicKeyBytes)
 
 	h := &types.Header{
 		Height:     epoch,
@@ -395,11 +395,11 @@ func (w *Worker) createNilBlock(epoch uint64, parentBlock *types.Block, uncleBlo
 		Address:    w.ID,
 		PoTProof:   Potproof,
 		PeerId:     w.PeerId,
-		PublicKey:  publicKey,
+		PublicKey:  publicKeyBytes,
 	}
 	h.Hashes = h.Hash()
 
-	w.SetKeyBlockMap(publicKeyByte, h.Hash())
+	w.SetKeyBlockMap(publicKeyBytes32, h.Hash())
 
 	return &types.Block{
 		Header: h,
