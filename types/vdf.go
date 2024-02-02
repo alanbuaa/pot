@@ -3,8 +3,8 @@ package types
 
 import (
 	"errors"
-	"github.com/zzz136454872/upgradeable-consensus/types/vdf"
-	"github.com/zzz136454872/upgradeable-consensus/types/vdf/wesolowski_rust"
+	"github.com/zzz136454872/upgradeable-consensus/crypto/vdf"
+	"github.com/zzz136454872/upgradeable-consensus/crypto/vdf/wesolowski_rust"
 )
 
 type VDF0res struct {
