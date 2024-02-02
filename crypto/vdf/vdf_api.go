@@ -1,9 +1,9 @@
 package vdf
 
 import (
-	"github.com/zzz136454872/upgradeable-consensus/types/vdf/pietrzak"
-	"github.com/zzz136454872/upgradeable-consensus/types/vdf/utils"
-	"github.com/zzz136454872/upgradeable-consensus/types/vdf/wesolowski_rust"
+	"github.com/zzz136454872/upgradeable-consensus/crypto/vdf/pietrzak"
+	"github.com/zzz136454872/upgradeable-consensus/crypto/vdf/utils"
+	"github.com/zzz136454872/upgradeable-consensus/crypto/vdf/wesolowski_rust"
 )
 
 var cpuList = []uint8{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}

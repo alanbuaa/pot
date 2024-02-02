@@ -3,7 +3,7 @@ package wesolowski_rust
 import (
 	"encoding/hex"
 	"fmt"
-	"github.com/zzz136454872/upgradeable-consensus/types/vdf/utils"
+	"github.com/zzz136454872/upgradeable-consensus/crypto/vdf/utils"
 	"strconv"
 )
 
