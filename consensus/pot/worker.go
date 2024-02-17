@@ -31,6 +31,7 @@ const (
 	CommiteeDelay = 6
 	cpuCounter    = 1
 	NoParentD     = 2
+	Batchsize     = 10
 )
 
 type Worker struct {
@@ -327,6 +328,8 @@ func (w *Worker) createBlock(epoch uint64, parentBlock *types.Block, uncleBlock 
 	publicKeyBytes := privateKey.PublicKeyBytes()
 	publicKeyBytes32 := crypto.Convert(publicKeyBytes)
 
+	coinbasetx := w.GenerateCoinbaseTx(publicKeyBytes)
+	Txs = append([]*types.Tx{coinbasetx}, Txs...)
 	h := &types.Header{
 		Height:     epoch,
 		ParentHash: parentblockhash,
@@ -349,25 +352,43 @@ func (w *Worker) createBlock(epoch uint64, parentBlock *types.Block, uncleBlock 
 	}
 }
 
+func (w *Worker) GenerateCoinbaseTx(pubkeybyte []byte) *types.Tx {
+	coinbasetx := &types.RawTx{
+		ChainID:  big.NewInt(0),
+		Nonce:    0,
+		GasPrice: big.NewInt(0),
+		Gas:      0,
+		To:       pubkeybyte,
+		Data:     big.NewInt(0).Bytes(),
+		V:        big.NewInt(0),
+		R:        big.NewInt(0),
+		S:        big.NewInt(0),
+	}
+	txdata, _ := coinbasetx.EncodeToByte()
+	return &types.Tx{Data: txdata}
+}
+
 func (w *Worker) GetTxs() []*types.Tx {
 
 	// TODO: Get executed blocks from executor
 
 	executeblocks := types.TestExecuteBlock(w.executeheight)
-	txs := make([]*types.Tx, 0)
-
 	for i := 0; i < len(executeblocks); i++ {
 		height := executeblocks[i].GetHeader().GetHeight()
 		executedTxs := executeblocks[i].GetTxs()
 		for _, executedtx := range executedTxs {
+			exectx := &types.ExecutedTxData{
+				ExecutedHeight: height,
+				TxHash:         executedtx.GetTxHash(),
+			}
+			exectxdata, _ := exectx.EncodeToByte()
 			tx := &types.Tx{
-				TxHash:     executedtx.GetTxHash(),
-				ExecHeight: height,
+				Data: exectxdata,
 			}
 			w.mempool.Add(tx)
-			txs = append(txs, tx)
 		}
 	}
+	txs := w.mempool.GetFirstN(Batchsize)
 	return txs
 }
 

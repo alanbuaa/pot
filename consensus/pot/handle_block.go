@@ -121,6 +121,8 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 			_ = w.blockStorage.Put(block)
 			w.mutex.Unlock()
 
+			//txs := block.GetTxs()
+			//w.mempool.MarkProposed(txs)
 		}
 	} else {
 		w.mutex.Lock()
@@ -190,8 +192,9 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) {
 	w.log.Infof("[PoT]\tMinew Work flag: %t", flag)
 
 	if w.isMinerWorking() {
-		w.workFlag = false
+
 		close(w.abort)
+		w.workFlag = false
 		w.wg.Wait()
 	}
 

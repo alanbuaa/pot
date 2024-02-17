@@ -29,8 +29,8 @@ executor:
   address: 127.0.0.1:9876
 
 p2p:
-  # type: p2p-adaptor # p2p-adaptor currently only supports simple-whirly # sudo sysctl -w net.core.rmem_max=2500000
-  type: p2p
+   type: p2p-adaptor # p2p-adaptor currently only supports simple-whirly # sudo sysctl -w net.core.rmem_max=2500000
+  #type: p2p
 
 topic: this-is-consensus-topic-128
 
@@ -49,21 +49,22 @@ consensus:
       #   batch_size: 10
       #   batch_timeout: 1
       #   timeout: 2
-     type: whirly
-     consensus_id: 1009
-     whirly:
-       type: simple
-       # type: basic
-       batch_size: 10
-       timeout: 2
+#     type: whirly
+#     consensus_id: 1009
+#     whirly:
+#       type: simple
+#       # type: basic
+#       batch_size: 10
+#       timeout: 2
   #     # type: pow
   #     # consensus_id: 1008
   #     # pow:
   #     #   init_difficulty: 0x0010000000000000000000000000000000000000000000000000000000000000
-  #  type: "pot"
-  #  consensus_id: 10001
-  #  pot:
-  #    snum : 2
-  #    sysPara: 2
-  #    vdf0Iteration: 200000
-  #    vdf1Iteration: 120000
+    type: "pot"
+    consensus_id: 10001
+    pot:
+      snum : 2
+      sysPara: 2
+      vdf0Iteration: 300000
+      vdf1Iteration: 180000
+

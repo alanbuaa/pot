@@ -16,6 +16,10 @@ message Block {
   repeated Tx Txs = 2;
 }
 
+message Tx{
+  bytes data = 1;
+}
+
 message PoTMessage {
   MessageType  MsgType = 1;
   bytes  MsgByte = 2;
@@ -80,10 +84,6 @@ message PoTResponse{
   bytes  Proof = 6;
 }
 
-message PoTWork{
-
-}
-
 message GetTxRequest{
   uint64 StartHeight = 1;
   string Des = 2;
@@ -96,17 +96,22 @@ message GetTxResponse{
 }
 
 message VerifyTxRequest{
-  repeated Tx Txs = 1;
+  repeated RawTxData Txs = 1;
 }
 
 message VerifyTxResponse{
-  repeated Tx Txs = 1;
+  repeated RawTxData Txs = 1;
   repeated bool flag =2;
 }
 
-message Tx {
-  bytes  TxHash = 1;
-  uint64 Height = 2;
+enum TxDataType{
+  RawTx = 0;
+  ExcutedTx = 1;
+}
+
+message TxData {
+  TxDataType TxDataType= 1;
+  bytes TxData = 2;
 }
 
 message ExecuteBlock {
@@ -127,4 +132,22 @@ message ExecutedTx{
 service PoTExecutor {
   rpc   GetTxs(GetTxRequest) returns (GetTxResponse){}
   rpc   VerifyTxs(VerifyTxRequest) returns (VerifyTxResponse){}
+}
+
+message RawTxData {
+  bytes ChainID = 1;
+  uint64 Nonce = 2;
+  bytes GasPrice = 3;
+  uint64 Gas = 4;
+  bytes To =5;
+  bytes Data =6;
+  bytes Value = 7;
+  bytes V = 8;
+  bytes R = 9;
+  bytes S = 10;
+}
+
+message ExecutedTxData{
+  uint64 ExecutedHeight = 1;
+  bytes TxHash = 2;
 }

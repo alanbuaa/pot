@@ -51,6 +51,7 @@ type PoTConfig struct {
 	SysPara       string `yaml:"sysPara"`
 	Vdf0Iteration int    `yaml:"vdf0Iteration"`
 	Vdf1Iteration int    `yaml:"vdf1Iteration"`
+	Batchsize     int    `yaml:"batchsize"`
 }
 type ConsensusConfig struct {
 	Type        string            `yaml:"type"`
