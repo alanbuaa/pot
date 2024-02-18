@@ -132,7 +132,7 @@ func (b *Header) BasicVerify() bool {
 	if b.ParentHash == nil {
 		return false
 	}
-	if len(b.ParentHash) != crypto.HashLen {
+	if len(b.ParentHash) != crypto.Hashlen {
 		return false
 	}
 	if b.Difficulty.Cmp(common.Big0) < 0 {
@@ -141,7 +141,7 @@ func (b *Header) BasicVerify() bool {
 
 	unclehash := make([]byte, 0)
 	for i := 0; i < len(b.UncleHash); i++ {
-		if len(b.UncleHash[i]) != crypto.HashLen {
+		if len(b.UncleHash[i]) != crypto.Hashlen {
 			return false
 		}
 		unclehash = append(unclehash, b.UncleHash[i]...)
