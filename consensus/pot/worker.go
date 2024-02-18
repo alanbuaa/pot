@@ -360,6 +360,7 @@ func (w *Worker) GenerateCoinbaseTx(pubkeybyte []byte) *types.Tx {
 		Gas:      0,
 		To:       pubkeybyte,
 		Data:     big.NewInt(0).Bytes(),
+		Value:    big.NewInt(0),
 		V:        big.NewInt(0),
 		R:        big.NewInt(0),
 		S:        big.NewInt(0),
