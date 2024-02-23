@@ -352,7 +352,10 @@ func (wu *WhirlyUtilitiesImpl) Unicast(address string, msg *pb.WhirlyMsg) error 
 
 func (wu *WhirlyUtilitiesImpl) ProcessProposal(b *pb.WhirlyBlock, p []byte) {
 	// wu.Log.Debugf("[whu] Process proposal")
-	wu.Executor.CommitBlock(b, p, wu.ConsensusID)
+	if wu.ID == 0 {
+		wu.Executor.CommitBlock(b, p, wu.ConsensusID)
+	}
+
 	// wu.Log.Debugf("[whu] after Process proposal")
 	// for _, tx := range txs {
 	// 	wu.Executor.CommitTx(tx, wu.ConsensusID)
