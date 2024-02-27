@@ -6,31 +6,36 @@ import (
 	"math/big"
 )
 
-const ()
+const (
+	RawTxType     = 0x01
+	ExcutedTxType = 0x02
+)
 
 type RawTx struct {
-	ChainID  *big.Int
-	Nonce    uint64
-	GasPrice *big.Int // wei per gas
-	Gas      uint64   // gas limit
-	To       []byte
-	Data     []byte   // contract invocation input Data
-	Value    *big.Int // wei amount
-	V, R, S  *big.Int // signature values
+	ChainID    *big.Int
+	Nonce      uint64
+	GasPrice   *big.Int // wei per gas
+	Gas        uint64   // gas limit
+	To         []byte
+	Data       []byte   // contract invocation input Data
+	Value      *big.Int // wei amount
+	V, R, S    *big.Int // signature values
+	Accesslist []byte
 }
 
 func (r *RawTx) ToProto() *pb.RawTxData {
 	pbrawtx := &pb.RawTxData{
-		ChainID:  r.ChainID.Bytes(),
-		Nonce:    r.Nonce,
-		GasPrice: r.GasPrice.Bytes(),
-		Gas:      r.Gas,
-		To:       r.To,
-		Data:     r.Data,
-		Value:    r.Value.Bytes(),
-		V:        r.V.Bytes(),
-		R:        r.R.Bytes(),
-		S:        r.S.Bytes(),
+		ChainID:    r.ChainID.Bytes(),
+		Nonce:      r.Nonce,
+		GasPrice:   r.GasPrice.Bytes(),
+		Gas:        r.Gas,
+		To:         r.To,
+		Data:       r.Data,
+		Value:      r.Value.Bytes(),
+		V:          r.V.Bytes(),
+		R:          r.R.Bytes(),
+		S:          r.S.Bytes(),
+		Accesslist: r.Accesslist,
 	}
 	return pbrawtx
 }

@@ -4,11 +4,12 @@ import (
 	"crypto/rand"
 	"github.com/zzz136454872/upgradeable-consensus/crypto"
 	"github.com/zzz136454872/upgradeable-consensus/pb"
+	"google.golang.org/protobuf/proto"
 	"math/big"
 )
 
 /*
-Tx 用于定义交易一系列结构与操作
+PT Txs o
 */
 
 type Tx struct {
@@ -71,4 +72,25 @@ func TestExecuteBlock(start uint64) []*pb.ExecuteBlock {
 func (t *Tx) Hash() [crypto.Hashlen]byte {
 	hash := crypto.Hash(t.Data)
 	return crypto.Convert(hash)
+}
+
+func Txs2Bytes(txs []*Tx) [][]byte {
+	if txs != nil {
+		txsbyte := make([][]byte, len(txs))
+		for i := 0; i < len(txs); i++ {
+			txsbyte[i] = txs[i].Data
+		}
+		return txsbyte
+	} else {
+		return nil
+	}
+}
+
+func (t *Tx) GetTxType() pb.TxDataType {
+	txdata := new(pb.TxData)
+	err := proto.Unmarshal(t.Data, txdata)
+	if err != nil {
+		return txdata.TxDataType
+	}
+	return 0
 }

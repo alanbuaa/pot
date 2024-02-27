@@ -6,11 +6,14 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/zzz136454872/upgradeable-consensus/pb"
 	"google.golang.org/protobuf/proto"
+	"sync"
 )
 
 type BlockStorage struct {
-	db        *leveldb.DB
-	heightmap map[uint64][][]byte
+	db *leveldb.DB
+
+	vdfheight uint64
+	rwmutex   *sync.RWMutex
 }
 
 func NewBlockStorage(id int64) *BlockStorage {
@@ -21,7 +24,12 @@ func NewBlockStorage(id int64) *BlockStorage {
 		panic(err)
 	}
 
-	return &BlockStorage{db: db, heightmap: make(map[uint64][][]byte)}
+	return &BlockStorage{
+		db: db,
+
+		vdfheight: 0,
+		rwmutex:   new(sync.RWMutex),
+	}
 }
 
 func (s *BlockStorage) Put(block *Block) error {
@@ -57,6 +65,7 @@ func (s *BlockStorage) Get(hash []byte) (*Block, error) {
 
 func (s *BlockStorage) HasBlock(hash []byte) bool {
 	blockByte, err := s.db.Get(hash, nil)
+
 	if err != nil {
 		return false
 	}
@@ -95,6 +104,7 @@ func (s *BlockStorage) GetbyHeight(height uint64) ([]*Block, error) {
 }
 
 func (s *BlockStorage) getHeightHash(height uint64) ([][]byte, error) {
+
 	keys := []byte(fmt.Sprintf("height:%d", height))
 
 	values, err := s.db.Get(keys, nil)
@@ -131,6 +141,11 @@ func (s *BlockStorage) putHeightHash(height uint64, hash []byte) error {
 func (s *BlockStorage) SetVDFres(epoch uint64, vdfres []byte) error {
 	key := []byte(fmt.Sprintf("epoch:%d", epoch))
 	err := s.db.Put(key, vdfres, nil)
+	if epoch > s.vdfheight {
+		s.rwmutex.Lock()
+		s.vdfheight = epoch
+		s.rwmutex.Unlock()
+	}
 	return err
 }
 
@@ -141,4 +156,10 @@ func (s *BlockStorage) GetVDFresbyEpoch(epoch uint64) ([]byte, error) {
 		return nil, err
 	}
 	return value, nil
+}
+
+func (s *BlockStorage) GetVDFHeight() uint64 {
+	s.rwmutex.RLock()
+	defer s.rwmutex.RUnlock()
+	return s.vdfheight
 }

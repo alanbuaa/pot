@@ -384,7 +384,7 @@ func (sw *SimpleWhirlyImpl) OnCommit(block *pb.WhirlyBlock) {
 			sw.Log.WithField("error", err.Error()).Fatal("Update block state failed")
 		}
 		// }()
-		// sw.Log.WithField("blockHash", hex.EncodeToString(block.Hash)).Trace("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] [SIMPLE WHIRLY] EXEC.")
+		//sw.Log.WithField("blockHash", hex.EncodeToString(block.Hash)).Trace("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] [SIMPLE WHIRLY] EXEC.")
 		go sw.ProcessProposal(block, []byte{})
 	}
 }

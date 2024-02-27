@@ -52,7 +52,7 @@ type Worker struct {
 	abort         chan struct{}
 	wg            *sync.WaitGroup
 	workFlag      bool
-	blockKeyMap   map[[crypto.PrivateKeyLen]byte][]byte
+	blockKeyMap   map[[crypto.Hashlen]byte][]byte
 	executeheight uint64
 	mempool       *Mempool
 
@@ -64,6 +64,7 @@ type Worker struct {
 	stopCh  chan struct{}
 	mutex   *sync.Mutex
 	rwmutex *sync.RWMutex
+
 	// communication
 	peerMsgQueue      chan *types.Block
 	blockResponseChan chan *pb.BlockResponse
@@ -95,7 +96,7 @@ func NewWorker(id int64, config *config.ConsensusConfig, logger *logrus.Entry, b
 	}
 
 	peer := make(chan *types.Block, 5)
-	keyblockmap := make(map[[crypto.PrivateKeyLen]byte][]byte)
+	keyblockmap := make(map[[crypto.Hashlen]byte][]byte)
 	mempool := NewMempool()
 	w := &Worker{
 		abort:         make(chan struct{}),
@@ -285,7 +286,7 @@ func (w *Worker) mine(epoch uint64, vdf0res []byte, nonce int64, workerid int, a
 				block := w.createNilBlock(epoch, parentblock, uncleblock, difficulty, mixdigest, nonce, vdf0res, res1)
 				w.log.Infof("[PoT]\tepoch %d:workerid %d fail to find a %d block, create a nil block %s", epoch, workerid, difficulty.Int64(), hexutil.Encode(block.Hash()))
 				w.blockStorage.Put(block)
-				w.peerMsgQueue <- block
+				//w.peerMsgQueue <- block
 				// w.workFlag = false
 
 				return block
@@ -324,27 +325,32 @@ func (w *Worker) createBlock(epoch uint64, parentBlock *types.Block, uncleBlock 
 	}
 
 	PotProof := [][]byte{vdf0res, vdf1res}
+
 	privateKey := crypto.GenerateKey()
 	publicKeyBytes := privateKey.PublicKeyBytes()
-	publicKeyBytes32 := crypto.Convert(publicKeyBytes)
+	//publicKeyBytes32 := crypto.Convert(publicKeyBytes)
 
 	coinbasetx := w.GenerateCoinbaseTx(publicKeyBytes)
 	Txs = append([]*types.Tx{coinbasetx}, Txs...)
+	txshash := crypto.ComputeMerkleRoot(types.Txs2Bytes(Txs))
 	h := &types.Header{
 		Height:     epoch,
 		ParentHash: parentblockhash,
 		UncleHash:  uncleBlockhash,
-		Nonce:      nonce,
-		Difficulty: difficulty,
 		Mixdigest:  mixdigest,
-		Address:    w.ID,
+		Difficulty: difficulty,
+		Nonce:      nonce,
+		Timestamp:  time.Now(),
 		PoTProof:   PotProof,
+		Address:    w.ID,
 		PeerId:     w.PeerId,
+		TxHash:     txshash,
+		Hashes:     nil,
 		PublicKey:  publicKeyBytes,
 	}
 
 	h.Hashes = h.Hash()
-	w.SetKeyBlockMap(publicKeyBytes32, h.Hash())
+	w.SetKeyBlockMap(privateKey.Private(), crypto.Convert(h.Hash()))
 
 	return &types.Block{
 		Header: h,
@@ -354,16 +360,17 @@ func (w *Worker) createBlock(epoch uint64, parentBlock *types.Block, uncleBlock 
 
 func (w *Worker) GenerateCoinbaseTx(pubkeybyte []byte) *types.Tx {
 	coinbasetx := &types.RawTx{
-		ChainID:  big.NewInt(0),
-		Nonce:    0,
-		GasPrice: big.NewInt(0),
-		Gas:      0,
-		To:       pubkeybyte,
-		Data:     big.NewInt(0).Bytes(),
-		Value:    big.NewInt(0),
-		V:        big.NewInt(0),
-		R:        big.NewInt(0),
-		S:        big.NewInt(0),
+		ChainID:    big.NewInt(0),
+		Nonce:      0,
+		GasPrice:   big.NewInt(0),
+		Gas:        0,
+		To:         pubkeybyte,
+		Data:       big.NewInt(0).Bytes(),
+		Value:      big.NewInt(0),
+		V:          big.NewInt(0),
+		R:          big.NewInt(0),
+		S:          big.NewInt(0),
+		Accesslist: []byte(""),
 	}
 	txdata, _ := coinbasetx.EncodeToByte()
 	return &types.Tx{Data: txdata}
@@ -402,45 +409,49 @@ func (w *Worker) createNilBlock(epoch uint64, parentBlock *types.Block, uncleBlo
 	for i := 0; i < len(uncleBlock); i++ {
 		uncleBlockhash[i] = uncleBlock[i].Hash()
 	}
+
 	Potproof := [][]byte{vdf0res, vdf1res}
 	privateKey := crypto.GenerateKey()
 	publicKeyBytes := privateKey.PublicKeyBytes()
-	publicKeyBytes32 := crypto.Convert(publicKeyBytes)
+	//privkeybyte32 := crypto.Convert(privateKey.Private())
 
 	h := &types.Header{
 		Height:     epoch,
 		ParentHash: parentblockhash,
 		UncleHash:  uncleBlockhash,
-		Nonce:      0,
-		Difficulty: big.NewInt(0),
 		Mixdigest:  mixdigest,
-		Address:    w.ID,
+		Difficulty: big.NewInt(0),
+		Nonce:      0,
+		Timestamp:  time.Now(),
 		PoTProof:   Potproof,
+		Address:    w.ID,
 		PeerId:     w.PeerId,
+		TxHash:     crypto.NilTxsHash,
+		Hashes:     nil,
 		PublicKey:  publicKeyBytes,
 	}
 	h.Hashes = h.Hash()
 
-	w.SetKeyBlockMap(publicKeyBytes32, h.Hash())
+	w.SetKeyBlockMap(privateKey.Private(), crypto.Convert(h.Hash()))
 
 	return &types.Block{
 		Header: h,
-		Txs:    nil,
+		Txs:    make([]*types.Tx, 0),
 	}
 }
 
-func (w *Worker) SetKeyBlockMap(pubkey [crypto.PrivateKeyLen]byte, blockhash []byte) {
+func (w *Worker) SetKeyBlockMap(privatekey []byte, blockhash [crypto.Hashlen]byte) {
 	w.rwmutex.Lock()
 	defer w.rwmutex.Unlock()
-	w.blockKeyMap[pubkey] = blockhash
+	w.blockKeyMap[blockhash] = privatekey
 }
 
-func (w *Worker) TryFindKey(pubkey [crypto.PrivateKeyLen]byte) (bool, []byte) {
+func (w *Worker) TryFindKey(blockhash [crypto.PrivateKeyLen]byte) (bool, []byte) {
 	w.rwmutex.RLock()
-	blockhash := w.blockKeyMap[pubkey]
+	prikey := w.blockKeyMap[blockhash]
 	w.rwmutex.RUnlock()
-	if blockhash != nil {
-		return true, blockhash
+	if prikey != nil {
+		return true, prikey
 	} else {
 		return false, nil
 	}
@@ -503,6 +514,7 @@ func (w *Worker) getEpoch() uint64 {
 	epoch := w.epoch
 	return epoch
 }
+
 func (w *Worker) increaseEpoch() {
 	w.mutex.Lock()
 	w.epoch += 1

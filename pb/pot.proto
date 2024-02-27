@@ -38,6 +38,7 @@ message Header{
   bytes Hashes =10;
   string PeerId = 11;
   bytes Pubkey = 12;
+  bytes Txhash = 13;
 }
 
 
@@ -145,6 +146,7 @@ message RawTxData {
   bytes V = 8;
   bytes R = 9;
   bytes S = 10;
+  bytes Accesslist = 11;
 }
 
 message ExecutedTxData{

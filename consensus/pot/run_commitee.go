@@ -1,7 +1,6 @@
 package pot
 
 import (
-	"bytes"
 	"encoding/json"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/zzz136454872/upgradeable-consensus/consensus/whirly/simpleWhirly"
@@ -82,8 +81,8 @@ func (w *Worker) CommiteeUpdate(epoch uint64) {
 			if block != nil {
 				header := block.GetHeader()
 				commitee[i] = hexutil.Encode(header.PublicKey)
-				flag, blockhash := w.TryFindKey(crypto.Convert(header.PublicKey))
-				if flag && bytes.Equal(blockhash, header.Hash()) {
+				flag, _ := w.TryFindKey(crypto.Convert(header.Hash()))
+				if flag {
 					selfaddress = append(selfaddress, hexutil.Encode(header.PublicKey))
 				}
 			}
