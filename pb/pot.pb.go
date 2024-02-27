@@ -1652,9 +1652,9 @@ var file_pb_pot_proto_depIdxs = []int32{
 	1,  // 7: pb.TxData.TxDataType:type_name -> pb.TxDataType
 	17, // 8: pb.ExecuteBlock.Header:type_name -> pb.ExecuteHeader
 	18, // 9: pb.ExecuteBlock.Txs:type_name -> pb.ExecutedTx
-	11, // 10: pb.PoTExecutor.GetTxs:input_type -> pb.GetTxRequest
+	11, // 10: pb.PoTExecutor.GetExcutedTxs:input_type -> pb.GetTxRequest
 	13, // 11: pb.PoTExecutor.VerifyTxs:input_type -> pb.VerifyTxRequest
-	12, // 12: pb.PoTExecutor.GetTxs:output_type -> pb.GetTxResponse
+	12, // 12: pb.PoTExecutor.GetExcutedTxs:output_type -> pb.GetTxResponse
 	14, // 13: pb.PoTExecutor.VerifyTxs:output_type -> pb.VerifyTxResponse
 	12, // [12:14] is the sub-list for method output_type
 	10, // [10:12] is the sub-list for method input_type

@@ -1,6 +1,7 @@
 package types
 
 import (
+	"github.com/zzz136454872/upgradeable-consensus/crypto"
 	"github.com/zzz136454872/upgradeable-consensus/pb"
 	"google.golang.org/protobuf/proto"
 	"math/big"
@@ -84,4 +85,12 @@ func (e *ExecutedTxData) EncodeToByte() ([]byte, error) {
 		return nil, err
 	}
 	return b, nil
+}
+
+func (e *ExecutedTxData) Hash() [crypto.Hashlen]byte {
+	if e.TxHash != nil {
+		return crypto.Convert(e.TxHash)
+	} else {
+		return crypto.Convert(crypto.NilTxsHash)
+	}
 }

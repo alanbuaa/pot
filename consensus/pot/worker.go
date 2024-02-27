@@ -242,7 +242,7 @@ func (w *Worker) OnGetVdf0Response() {
 			// if epoch > 1 {
 			// 	w.simpleLeaderUpdate(parentblock)
 			// }
-
+			_ = w.handleBlockExcutedTx(parentblock)
 			difficulty := w.calcDifficulty(parentblock, uncleblock)
 
 			w.startWorking()
@@ -314,7 +314,7 @@ func (w *Worker) mine(epoch uint64, vdf0res []byte, nonce int64, workerid int, a
 }
 
 func (w *Worker) createBlock(epoch uint64, parentBlock *types.Block, uncleBlock []*types.Block, difficulty *big.Int, mixdigest []byte, nonce int64, vdf0res []byte, vdf1res []byte) *types.Block {
-	Txs := w.GetTxs()
+	Txs := w.GetExcutedTxs()
 	parentblockhash := make([]byte, 0)
 	if parentBlock != nil {
 		parentblockhash = parentBlock.Hash()
@@ -376,7 +376,7 @@ func (w *Worker) GenerateCoinbaseTx(pubkeybyte []byte) *types.Tx {
 	return &types.Tx{Data: txdata}
 }
 
-func (w *Worker) GetTxs() []*types.Tx {
+func (w *Worker) GetExcutedTxs() []*types.Tx {
 
 	// TODO: Get executed blocks from executor
 
@@ -389,15 +389,21 @@ func (w *Worker) GetTxs() []*types.Tx {
 				ExecutedHeight: height,
 				TxHash:         executedtx.GetTxHash(),
 			}
-			exectxdata, _ := exectx.EncodeToByte()
-			tx := &types.Tx{
-				Data: exectxdata,
-			}
-			w.mempool.Add(tx)
+			//exectxdata, _ := exectx.EncodeToByte()
+			w.mempool.Add(exectx)
 		}
 	}
-	txs := w.mempool.GetFirstN(Batchsize)
-	return txs
+	excutedTxDatas := w.mempool.GetFirstN(Batchsize)
+	excutedtxs := make([]*types.Tx, 0)
+	for i := 0; i < len(excutedTxDatas); i++ {
+		txdata, err := excutedTxDatas[i].EncodeToByte()
+		if err != nil {
+			break
+		}
+		tx := &types.Tx{Data: txdata}
+		excutedtxs = append(excutedtxs, tx)
+	}
+	return excutedtxs
 }
 
 func (w *Worker) createNilBlock(epoch uint64, parentBlock *types.Block, uncleBlock []*types.Block, difficulty *big.Int, mixdigest []byte, nonce int64, vdf0res []byte, vdf1res []byte) *types.Block {
@@ -675,4 +681,10 @@ func (w *Worker) setWorkFlagFalse() {
 func (w *Worker) SetEngine(engine *PoTEngine) {
 	w.Engine = engine
 	w.PeerId = w.Engine.GetPeerID()
+}
+
+func (w *Worker) handleBlockExcutedTx(block *types.Block) error {
+	excutedtx := block.GetExcutedTx()
+	w.mempool.MarkProposed(excutedtx)
+	return nil
 }

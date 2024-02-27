@@ -19,7 +19,7 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	PoTExecutor_GetTxs_FullMethodName    = "/pb.PoTExecutor/GetTxs"
+	PoTExecutor_GetTxs_FullMethodName    = "/pb.PoTExecutor/GetExcutedTxs"
 	PoTExecutor_VerifyTxs_FullMethodName = "/pb.PoTExecutor/VerifyTxs"
 )
 
@@ -71,7 +71,7 @@ type UnimplementedPoTExecutorServer struct {
 }
 
 func (UnimplementedPoTExecutorServer) GetTxs(context.Context, *GetTxRequest) (*GetTxResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetTxs not implemented")
+	return nil, status.Errorf(codes.Unimplemented, "method GetExcutedTxs not implemented")
 }
 func (UnimplementedPoTExecutorServer) VerifyTxs(context.Context, *VerifyTxRequest) (*VerifyTxResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method VerifyTxs not implemented")
@@ -133,7 +133,7 @@ var PoTExecutor_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*PoTExecutorServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "GetTxs",
+			MethodName: "GetExcutedTxs",
 			Handler:    _PoTExecutor_GetTxs_Handler,
 		},
 		{

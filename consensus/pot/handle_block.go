@@ -140,7 +140,7 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 			_ = w.blockStorage.Put(block)
 			w.mutex.Unlock()
 
-			//txs := block.GetTxs()
+			//txs := block.GetExcutedTxs()
 			//w.mempool.MarkProposed(txs)
 		}
 	} else {
