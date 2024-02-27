@@ -136,20 +136,20 @@ service PoTExecutor {
 }
 
 message RawTxData {
-  bytes ChainID = 1;
-  uint64 Nonce = 2;
-  bytes GasPrice = 3;
-  uint64 Gas = 4;
-  bytes To =5;
-  bytes Data =6;
-  bytes Value = 7;
-  bytes V = 8;
-  bytes R = 9;
-  bytes S = 10;
-  bytes Accesslist = 11;
+  bytes   ChainID = 1;
+  uint64  Nonce = 2;
+  bytes   GasPrice = 3;
+  uint64  Gas = 4;
+  bytes   To =5;
+  bytes   Data =6;
+  bytes   Value = 7;
+  bytes   V = 8;
+  bytes   R = 9;
+  bytes   S = 10;
+  bytes   Accesslist = 11;
 }
 
 message ExecutedTxData{
-  uint64 ExecutedHeight = 1;
-  bytes TxHash = 2;
+  uint64  ExecutedHeight = 1;
+  bytes   TxHash = 2;
 }

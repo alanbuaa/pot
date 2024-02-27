@@ -23,18 +23,22 @@ type PoTEngine struct {
 	// consensus config
 	consensusID int64
 	config      *config.ConsensusConfig
+
 	// consensus executor
 	exec executor.Executor
 	log  *logrus.Entry
+
 	// network
 	Adaptor         p2p.P2PAdaptor
 	isBaseP2P       bool
 	MsgByteEntrance chan []byte
 	RequestEntrance chan *pb.Request
 	Topic           []byte
+
 	// consensus work
 	Height int64
 	worker *Worker
+
 	//headerStorage  *types.HeaderStorage
 	blockStorage   *types.BlockStorage
 	chainReader    *types.ChainReader

@@ -89,8 +89,56 @@ func Txs2Bytes(txs []*Tx) [][]byte {
 func (t *Tx) GetTxType() pb.TxDataType {
 	txdata := new(pb.TxData)
 	err := proto.Unmarshal(t.Data, txdata)
-	if err != nil {
+	if err == nil {
 		return txdata.TxDataType
 	}
 	return 0
+}
+
+func (t *Tx) GetExcutedTxData() *ExecutedTxData {
+	txdata := new(pb.TxData)
+	err := proto.Unmarshal(t.Data, txdata)
+	if err == nil && txdata.GetTxDataType() == pb.TxDataType_ExcutedTx {
+		excutedtxdata := new(pb.ExecutedTxData)
+		err = proto.Unmarshal(txdata.GetTxData(), excutedtxdata)
+		if err != nil {
+			return nil
+		} else {
+			return &ExecutedTxData{
+				ExecutedHeight: excutedtxdata.ExecutedHeight,
+				TxHash:         excutedtxdata.GetTxHash(),
+			}
+		}
+	} else {
+		return nil
+	}
+}
+
+func (t *Tx) GetRawTxData() *RawTx {
+	txdata := new(pb.TxData)
+	err := proto.Unmarshal(t.Data, txdata)
+	if err == nil && txdata.GetTxDataType() == pb.TxDataType_RawTx {
+		RawTxData := new(pb.RawTxData)
+		err = proto.Unmarshal(txdata.GetTxData(), RawTxData)
+		if err != nil {
+			return nil
+		} else {
+			tmp := new(big.Int)
+			return &RawTx{
+				ChainID:    tmp.SetBytes(RawTxData.GetChainID()),
+				Nonce:      RawTxData.GetNonce(),
+				GasPrice:   tmp.SetBytes(RawTxData.GetGasPrice()),
+				Gas:        RawTxData.GetGas(),
+				To:         RawTxData.GetTo(),
+				Data:       RawTxData.GetData(),
+				Value:      tmp.SetBytes(RawTxData.GetValue()),
+				V:          tmp.SetBytes(RawTxData.GetV()),
+				R:          tmp.SetBytes(RawTxData.GetR()),
+				S:          tmp.SetBytes(RawTxData.GetS()),
+				Accesslist: RawTxData.GetAccesslist(),
+			}
+		}
+	} else {
+		return nil
+	}
 }

@@ -1,11 +1,13 @@
 package pot
 
 import (
+	"context"
 	"encoding/json"
-
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/zzz136454872/upgradeable-consensus/pb"
 	"github.com/zzz136454872/upgradeable-consensus/types"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -244,6 +246,20 @@ func (e *PoTEngine) handleblock(b *types.Block) {
 
 }
 
-func (e *PoTEngine) broadcastHeader() {
-
+func (e *PoTEngine) GetTxsFromExecutor(Height uint64) ([]*pb.ExecuteBlock, error) {
+	conn, err := grpc.Dial("127.0.0.1:9876", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		return nil, err
+	}
+	client := pb.NewPoTExecutorClient(conn)
+	request := &pb.GetTxRequest{
+		StartHeight: Height,
+		Des:         "127.0.0.1:9876",
+	}
+	response, err := client.GetTxs(context.Background(), request)
+	if err != nil {
+		return nil, err
+	}
+	excuteblock := response.GetBlocks()
+	return excuteblock, nil
 }

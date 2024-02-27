@@ -76,7 +76,7 @@ func (b *Block) ToProto() *pb.Block {
 	} else {
 		pbblock := &pb.Block{
 			Header: pbheader,
-			Txs:    nil,
+			Txs:    make([]*pb.Tx, 0),
 		}
 		return pbblock
 	}
@@ -296,6 +296,8 @@ func DefaultGenesisHeader() *Header {
 		Address:    0,
 		Hashes:     nil,
 		PeerId:     "0",
+		PublicKey:  RandByte(),
+		TxHash:     crypto.NilTxsHash,
 	}
 	h.Hash()
 	return h
@@ -312,4 +314,36 @@ func RandByte() []byte {
 	res := make([]byte, 32)
 	_, _ = rand.Read(res)
 	return res
+}
+
+func (b *Block) GetExcutedTx() []*ExecutedTxData {
+	txs := b.GetTxs()
+	excutedtx := make([]*ExecutedTxData, 0)
+	if txs != nil {
+		for i := 0; i < len(txs); i++ {
+			if txs[i].GetTxType() == pb.TxDataType_ExcutedTx {
+				excuteddata := txs[i].GetExcutedTxData()
+				if excuteddata != nil {
+					excutedtx = append(excutedtx, excuteddata)
+				}
+			}
+		}
+	}
+	return excutedtx
+}
+
+func (b *Block) GetRawTx() []*RawTx {
+	txs := b.GetTxs()
+	rawtxs := make([]*RawTx, 0)
+	if txs != nil {
+		for i := 0; i < len(txs); i++ {
+			if txs[i].GetTxType() == pb.TxDataType_RawTx {
+				rawtx := txs[i].GetRawTxData()
+				if rawtx != nil {
+					rawtxs = append(rawtxs, rawtx)
+				}
+			}
+		}
+	}
+	return rawtxs
 }
