@@ -153,8 +153,8 @@ func (w *Worker) getParentBlock(block *types.Block) (*types.Block, error) {
 	if block.GetHeader().Height == 1 {
 		return types.DefaultGenesisBlock(), nil
 	}
-	parentHash := block.GetHeader().ParentHash
 
+	parentHash := block.GetHeader().ParentHash
 	if parentHash == nil {
 		return nil, fmt.Errorf("the epcoh %d block %s from %d without parent", block.GetHeader().Height, hexutil.Encode(block.Hash()), block.GetHeader().Address)
 	}

@@ -85,26 +85,6 @@ message PoTResponse{
   bytes  Proof = 6;
 }
 
-message GetTxRequest{
-  uint64 StartHeight = 1;
-  string Des = 2;
-}
-
-message GetTxResponse{
-  uint64 Start = 1;
-  uint64 End = 2;
-  repeated ExecuteBlock Blocks = 3;
-}
-
-message VerifyTxRequest{
-  repeated RawTxData Txs = 1;
-}
-
-message VerifyTxResponse{
-  repeated RawTxData Txs = 1;
-  repeated bool flag =2;
-}
-
 enum TxDataType{
   RawTx = 0;
   ExcutedTx = 1;
@@ -115,25 +95,7 @@ message TxData {
   bytes TxData = 2;
 }
 
-message ExecuteBlock {
-  ExecuteHeader Header = 1;
-  repeated ExecutedTx Txs= 2;
-}
 
-message ExecuteHeader {
-  uint64 Height = 1;
-}
-
-message ExecutedTx{
-  bytes   TxHash = 1;
-  uint64  Height = 2;
-  bytes   Data = 3;
-}
-
-service PoTExecutor {
-  rpc   GetTxs(GetTxRequest) returns (GetTxResponse){}
-  rpc   VerifyTxs(VerifyTxRequest) returns (VerifyTxResponse){}
-}
 
 message RawTxData {
   bytes   ChainID = 1;
@@ -152,4 +114,52 @@ message RawTxData {
 message ExecutedTxData{
   uint64  ExecutedHeight = 1;
   bytes   TxHash = 2;
+}
+message ExecuteBlock {
+  ExecuteHeader Header = 1;
+  repeated ExecutedTx Txs= 2;
+}
+
+message ExecuteHeader {
+  uint64 Height = 1;
+}
+
+message ExecutedTx{
+  bytes   TxHash = 1;
+  uint64  Height = 2;
+  bytes   Data = 3;
+}
+
+service PoTExecutor {
+  rpc   GetTxs(GetTxRequest) returns (GetTxResponse){}
+  rpc   VerifyTxs(VerifyTxRequest) returns (VerifyTxResponse){}
+  rpc   CommitTxs(CommitTxsRequest) returns (CommitTxsResponse){}
+}
+
+message GetTxRequest{
+  uint64 StartHeight = 1;
+  string Des = 2;
+}
+
+message GetTxResponse{
+  uint64 Start = 1;
+  uint64 End = 2;
+  repeated ExecuteBlock Blocks = 3;
+}
+
+message VerifyTxRequest{
+  repeated ExecutedTxData Txs = 1;
+}
+
+message VerifyTxResponse{
+  repeated ExecutedTxData Txs = 1;
+  repeated bool flag =2;
+}
+
+message CommitTxsRequest{
+  repeated RawTxData Txs = 1;
+}
+
+message CommitTxsResponse{
+
 }

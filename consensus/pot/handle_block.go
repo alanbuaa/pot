@@ -93,6 +93,7 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 				w.log.Error(err)
 				return err
 			}
+
 			c, err := w.chainReader.GetByHeight(ances.GetHeader().Height)
 			if err != nil {
 				w.log.Error(err)
@@ -104,7 +105,7 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 
 			forkBranch, _, err := w.GetBranch(ances, block)
 			if err != nil {
-				w.log.Error(err)
+				w.log.Errorf("Get Branch error for %s", err)
 				return err
 			}
 

@@ -613,6 +613,9 @@ func (w *Worker) caldifficultyExp(parentblock *types.Block, uncleBlock []*types.
 }
 
 func (w *Worker) blockSelection(blocks []*types.Block, vdf0res []byte, height uint64) (parent *types.Block, uncle []*types.Block) {
+	if height == 0 {
+		return types.DefaultGenesisBlock(), nil
+	}
 	sr := crypto.Hash(vdf0res)
 	maxweight := big.NewInt(0)
 	max := -1

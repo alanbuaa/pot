@@ -25,8 +25,7 @@ func NewBlockStorage(id int64) *BlockStorage {
 	}
 
 	return &BlockStorage{
-		db: db,
-
+		db:        db,
 		vdfheight: 0,
 		rwmutex:   new(sync.RWMutex),
 	}

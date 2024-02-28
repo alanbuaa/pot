@@ -296,7 +296,7 @@ func DefaultGenesisHeader() *Header {
 		Address:    0,
 		Hashes:     nil,
 		PeerId:     "0",
-		PublicKey:  RandByte(),
+		PublicKey:  []byte(""),
 		TxHash:     crypto.NilTxsHash,
 	}
 	h.Hash()

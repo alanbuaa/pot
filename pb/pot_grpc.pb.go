@@ -19,8 +19,9 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	PoTExecutor_GetTxs_FullMethodName    = "/pb.PoTExecutor/GetExcutedTxs"
+	PoTExecutor_GetTxs_FullMethodName    = "/pb.PoTExecutor/GetTxs"
 	PoTExecutor_VerifyTxs_FullMethodName = "/pb.PoTExecutor/VerifyTxs"
+	PoTExecutor_CommitTxs_FullMethodName = "/pb.PoTExecutor/CommitTxs"
 )
 
 // PoTExecutorClient is the client API for PoTExecutor service.
@@ -29,6 +30,7 @@ const (
 type PoTExecutorClient interface {
 	GetTxs(ctx context.Context, in *GetTxRequest, opts ...grpc.CallOption) (*GetTxResponse, error)
 	VerifyTxs(ctx context.Context, in *VerifyTxRequest, opts ...grpc.CallOption) (*VerifyTxResponse, error)
+	CommitTxs(ctx context.Context, in *CommitTxsRequest, opts ...grpc.CallOption) (*CommitTxsResponse, error)
 }
 
 type poTExecutorClient struct {
@@ -57,12 +59,22 @@ func (c *poTExecutorClient) VerifyTxs(ctx context.Context, in *VerifyTxRequest, 
 	return out, nil
 }
 
+func (c *poTExecutorClient) CommitTxs(ctx context.Context, in *CommitTxsRequest, opts ...grpc.CallOption) (*CommitTxsResponse, error) {
+	out := new(CommitTxsResponse)
+	err := c.cc.Invoke(ctx, PoTExecutor_CommitTxs_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // PoTExecutorServer is the server API for PoTExecutor service.
 // All implementations must embed UnimplementedPoTExecutorServer
 // for forward compatibility
 type PoTExecutorServer interface {
 	GetTxs(context.Context, *GetTxRequest) (*GetTxResponse, error)
 	VerifyTxs(context.Context, *VerifyTxRequest) (*VerifyTxResponse, error)
+	CommitTxs(context.Context, *CommitTxsRequest) (*CommitTxsResponse, error)
 	mustEmbedUnimplementedPoTExecutorServer()
 }
 
@@ -71,10 +83,13 @@ type UnimplementedPoTExecutorServer struct {
 }
 
 func (UnimplementedPoTExecutorServer) GetTxs(context.Context, *GetTxRequest) (*GetTxResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetExcutedTxs not implemented")
+	return nil, status.Errorf(codes.Unimplemented, "method GetTxs not implemented")
 }
 func (UnimplementedPoTExecutorServer) VerifyTxs(context.Context, *VerifyTxRequest) (*VerifyTxResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method VerifyTxs not implemented")
+}
+func (UnimplementedPoTExecutorServer) CommitTxs(context.Context, *CommitTxsRequest) (*CommitTxsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CommitTxs not implemented")
 }
 func (UnimplementedPoTExecutorServer) mustEmbedUnimplementedPoTExecutorServer() {}
 
@@ -125,6 +140,24 @@ func _PoTExecutor_VerifyTxs_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PoTExecutor_CommitTxs_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CommitTxsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PoTExecutorServer).CommitTxs(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PoTExecutor_CommitTxs_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PoTExecutorServer).CommitTxs(ctx, req.(*CommitTxsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // PoTExecutor_ServiceDesc is the grpc.ServiceDesc for PoTExecutor service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -133,12 +166,16 @@ var PoTExecutor_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*PoTExecutorServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "GetExcutedTxs",
+			MethodName: "GetTxs",
 			Handler:    _PoTExecutor_GetTxs_Handler,
 		},
 		{
 			MethodName: "VerifyTxs",
 			Handler:    _PoTExecutor_VerifyTxs_Handler,
+		},
+		{
+			MethodName: "CommitTxs",
+			Handler:    _PoTExecutor_CommitTxs_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
