@@ -59,6 +59,6 @@ func (vdf *Vdf) Abort() error {
 
 func (vdf *Vdf) CheckVDF(input []byte, res []byte) bool {
 	// return pietrzak.CpuVerify(input, vdf.Iterations, &vdf.Controller, cpuChecker, res)
-	// return wesolowski_rust.CPUverify(input, vdf.Iterations, &vdf.Controller, cpuChecker, res)
-	return true
+	return wesolowski_rust.Verify(input, vdf.Iterations, res)
+	//return true
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/zzz136454872/upgradeable-consensus/pb"
 	"github.com/zzz136454872/upgradeable-consensus/types"
 	"google.golang.org/protobuf/proto"
+	"time"
 )
 
 func (w *Worker) handleBlock() {
@@ -133,6 +134,7 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 					w.log.Errorf("[PoT]\tchain reset error for %s", err)
 				}
 			}
+
 			w.mutex.Lock()
 			// w.backupBlock = append(w.backupBlock, header)
 
@@ -145,6 +147,11 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 			//w.mempool.MarkProposed(txs)
 		}
 	} else {
+		flag, err = header.BasicVerify()
+		if !flag {
+			return err
+		}
+
 		w.mutex.Lock()
 		// w.backupBlock = append(w.backupBlock, header)
 
@@ -298,12 +305,11 @@ func (w *Worker) CheckVDF0ForBranch(branch []*types.Block) (bool, error) {
 			}
 			vdfinput := crypto.Hash(vdfres)
 			vdfoutput := header.PoTProof[0]
-
-			//times := time.Now()
+			times := time.Now()
 			if !w.vdfChecker.CheckVDF(vdfinput, vdfoutput) {
 				return false, fmt.Errorf("the vdf0 proof is wrong ")
 			}
-			//w.log.Infof("[PoT]\tVDF Check need %d ms", time.Since(times)/time.Millisecond)
+			w.log.Infof("[PoT]\tVDF Check need %d ms", time.Since(times)/time.Millisecond)
 			w.blockStorage.SetVDFres(header.Height, header.PoTProof[0])
 		}
 	}
@@ -320,11 +326,11 @@ func (w *Worker) checkHeaderVDF0(block *types.Block) (bool, error) {
 
 		vdfInput := crypto.Hash(vdfRes)
 		vdfOutput := block.GetHeader().PoTProof[0]
-
+		times := time.Now()
 		if !w.vdfChecker.CheckVDF(vdfInput, vdfOutput) {
 			return false, fmt.Errorf("the vdf0 proof of block is wrong")
 		}
-
+		w.log.Infof("[PoT]\tVDF Check need %d ms", time.Since(times)/time.Millisecond)
 		return true, nil
 	}
 	return true, nil

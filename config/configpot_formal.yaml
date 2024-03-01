@@ -25,7 +25,7 @@ log:
   filename: upgradeable_consensus.log
 
 executor:
-  type: local
+  type: remote
   address: 127.0.0.1:9876
 
 p2p:

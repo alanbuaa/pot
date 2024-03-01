@@ -300,7 +300,10 @@ func (sw *SimpleWhirlyImpl) handleMsg(msg *pb.WhirlyMsg) {
 	switch msg.Payload.(type) {
 	case *pb.WhirlyMsg_Request:
 		request := msg.GetRequest()
-		// sw.Log.WithField("content", request.String()).Debug("[SIMPLE WHIRLY] Get request msg.")
+		//if sw.ID == 0 {
+		//	sw.Log.WithField("content", request.String()).Error("[SIMPLE WHIRLY] Get request msg.")
+		//}
+
 		// put the cmd into the cmdset
 		sw.MemPool.Add(types.RawTransaction(request.Tx))
 		// send the request to the leader, if the replica is not the leader

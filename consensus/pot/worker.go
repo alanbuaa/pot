@@ -2,6 +2,7 @@ package pot
 
 import (
 	"bytes"
+	"context"
 	crand "crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
@@ -17,6 +18,8 @@ import (
 	"github.com/zzz136454872/upgradeable-consensus/crypto/vdf"
 	"github.com/zzz136454872/upgradeable-consensus/pb"
 	"github.com/zzz136454872/upgradeable-consensus/types"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"math"
 	"math/big"
 	"math/rand"
@@ -28,10 +31,10 @@ var bigD = new(big.Int).Sub(big.NewInt(0).Exp(big.NewInt(2), big.NewInt(256), ni
 
 const (
 	Commiteelen   = 4
-	CommiteeDelay = 6
+	CommiteeDelay = 1
 	cpuCounter    = 1
 	NoParentD     = 2
-	Batchsize     = 10
+	Batchsize     = 100
 )
 
 type Worker struct {
@@ -98,6 +101,7 @@ func NewWorker(id int64, config *config.ConsensusConfig, logger *logrus.Entry, b
 	peer := make(chan *types.Block, 5)
 	keyblockmap := make(map[[crypto.Hashlen]byte][]byte)
 	mempool := NewMempool()
+
 	w := &Worker{
 		abort:         make(chan struct{}),
 		Engine:        engine,
@@ -314,7 +318,7 @@ func (w *Worker) mine(epoch uint64, vdf0res []byte, nonce int64, workerid int, a
 }
 
 func (w *Worker) createBlock(epoch uint64, parentBlock *types.Block, uncleBlock []*types.Block, difficulty *big.Int, mixdigest []byte, nonce int64, vdf0res []byte, vdf1res []byte) *types.Block {
-	Txs := w.GetExcutedTxs()
+	Txs := w.GetExcutedTxs(epoch)
 	parentblockhash := make([]byte, 0)
 	if parentBlock != nil {
 		parentblockhash = parentBlock.Hash()
@@ -376,11 +380,16 @@ func (w *Worker) GenerateCoinbaseTx(pubkeybyte []byte) *types.Tx {
 	return &types.Tx{Data: txdata}
 }
 
-func (w *Worker) GetExcutedTxs() []*types.Tx {
+func (w *Worker) GetExcutedTxs(epoch uint64) []*types.Tx {
 
 	// TODO: Get executed blocks from executor
 
-	executeblocks := types.TestExecuteBlock(w.executeheight)
+	executeblocks, err := w.GetTxsFromExecutor(epoch)
+	if err != nil {
+		w.log.Errorf("[PoT]\tGet Txs from executor error for %s", err)
+		return make([]*types.Tx, 0)
+	}
+
 	for i := 0; i < len(executeblocks); i++ {
 		height := executeblocks[i].GetHeader().GetHeight()
 		executedTxs := executeblocks[i].GetTxs()
@@ -393,6 +402,7 @@ func (w *Worker) GetExcutedTxs() []*types.Tx {
 			w.mempool.Add(exectx)
 		}
 	}
+
 	excutedTxDatas := w.mempool.GetFirstN(Batchsize)
 	excutedtxs := make([]*types.Tx, 0)
 	for i := 0; i < len(excutedTxDatas); i++ {
@@ -404,6 +414,34 @@ func (w *Worker) GetExcutedTxs() []*types.Tx {
 		excutedtxs = append(excutedtxs, tx)
 	}
 	return excutedtxs
+}
+
+func (w *Worker) GetTxsFromExecutor(epoch uint64) ([]*pb.ExecuteBlock, error) {
+	if epoch > Commiteelen+CommiteeDelay {
+		conn, err := grpc.Dial(w.config.PoT.ExcutorAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		if err != nil {
+			return nil, err
+		}
+		client := pb.NewPoTExecutorClient(conn)
+		request := &pb.GetTxRequest{
+			StartHeight: w.executeheight,
+			Des:         w.config.PoT.ExcutorAddress,
+		}
+		response, err := client.GetTxs(context.Background(), request)
+		if err != nil {
+			//w.log.Errorf("[PoT]\tGet Txs from executor error for %s",err)
+			return nil, err
+		}
+
+		excutorblock := response.GetBlocks()
+		excuteheight := response.GetEnd()
+		if excuteheight > w.executeheight {
+			w.executeheight = excuteheight
+		}
+		return excutorblock, nil
+
+	}
+	return make([]*pb.ExecuteBlock, 0), nil
 }
 
 func (w *Worker) createNilBlock(epoch uint64, parentBlock *types.Block, uncleBlock []*types.Block, difficulty *big.Int, mixdigest []byte, nonce int64, vdf0res []byte, vdf1res []byte) *types.Block {

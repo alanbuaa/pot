@@ -2,7 +2,6 @@ package executor
 
 import (
 	"context"
-
 	"github.com/sirupsen/logrus"
 	"github.com/zzz136454872/upgradeable-consensus/config"
 	"github.com/zzz136454872/upgradeable-consensus/pb"
@@ -18,7 +17,7 @@ type RemoteExecutor struct {
 }
 
 func NewRemoteExecutor(cfg *config.ExecutorConfig, uplog *logrus.Entry) *RemoteExecutor {
-	log := uplog.WithField("app", "local executor")
+	log := uplog.WithField("app", "remote executor")
 	conn, err := grpc.Dial(cfg.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Warn("connect to ", cfg.Address, "failed")
@@ -34,6 +33,10 @@ func NewRemoteExecutor(cfg *config.ExecutorConfig, uplog *logrus.Entry) *RemoteE
 func (e *RemoteExecutor) CommitBlock(block types.ConsensusBlock, proof []byte, cid int64) {
 	eb := &pb.ExecBlock{
 		Txs: block.GetTxs(),
+	}
+	if eb.Txs == nil {
+		e.log.Debug("block txs is nil ")
+		return
 	}
 	if _, err := e.client.CommitBlock(context.Background(), eb); err != nil {
 		e.log.WithError(err).Warn("commit block failed")

@@ -290,7 +290,7 @@ func (nc *NodeController) handlePotSignal(potSignalBytes []byte) {
 			nc.nodesLock.Lock()
 			nc.active += 1
 			nc.total += 1
-			simpleWhirly := NewSimpleWhirly(int64(nc.total), nc.ConsensusID, nc.epoch, nc.Config, nc.Executor, nc, nc.Log, address, nc.StopEntrance)
+			simpleWhirly := NewSimpleWhirly(int64(nc.total), nc.ConsensusID, nc.epoch, nc.Config, nil, nc, nc.Log, address, nc.StopEntrance)
 			nc.WhrilyNodes[address] = simpleWhirly
 			nc.nodesLock.Unlock()
 

@@ -47,11 +47,12 @@ type WhirlyConfig struct {
 }
 
 type PoTConfig struct {
-	Snum          int64  `yaml:"snum"`
-	SysPara       string `yaml:"sysPara"`
-	Vdf0Iteration int    `yaml:"vdf0Iteration"`
-	Vdf1Iteration int    `yaml:"vdf1Iteration"`
-	Batchsize     int    `yaml:"batchsize"`
+	Snum           int64  `yaml:"snum"`
+	SysPara        string `yaml:"sysPara"`
+	Vdf0Iteration  int    `yaml:"vdf0Iteration"`
+	Vdf1Iteration  int    `yaml:"vdf1Iteration"`
+	Batchsize      int    `yaml:"batchsize"`
+	ExcutorAddress string `yaml:"excutorAddress"`
 }
 type ConsensusConfig struct {
 	Type        string            `yaml:"type"`
