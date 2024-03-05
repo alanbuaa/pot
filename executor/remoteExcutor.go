@@ -22,7 +22,9 @@ func NewRemoteExecutor(cfg *config.ExecutorConfig, uplog *logrus.Entry) *RemoteE
 	if err != nil {
 		log.Warn("connect to ", cfg.Address, "failed")
 	}
+
 	client := pb.NewExecutorClient(conn)
+
 	return &RemoteExecutor{
 		log:     log,
 		address: cfg.Address,

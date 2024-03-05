@@ -214,6 +214,7 @@ func (w *Worker) chainreset(branch []*types.Block) error {
 		height := branch[i].GetHeader().Height
 		if height != epoch {
 			w.chainReader.SetHeight(height, branch[i])
+			//w.blockStorage.SetVDFres(height, branch[i].GetHeader().PoTProof[0])
 			branchstr = branchstr + "\t" + strconv.Itoa(int(height))
 		}
 	}

@@ -7,9 +7,11 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/zzz136454872/upgradeable-consensus/crypto"
+	"github.com/zzz136454872/upgradeable-consensus/crypto/vdf/wesolowski_rust"
 	"github.com/zzz136454872/upgradeable-consensus/pb"
 	"github.com/zzz136454872/upgradeable-consensus/types"
 	"google.golang.org/protobuf/proto"
+	"math/big"
 	"time"
 )
 
@@ -27,6 +29,7 @@ func (w *Worker) handleBlock() {
 			}
 
 			flag, err := block.Header.BasicVerify()
+
 			if !flag {
 				w.log.Errorf("[PoT]\tepoch %d:Receive error block from node %d for %s", epoch, block.GetHeader().Address, err)
 				continue
@@ -85,7 +88,7 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 
 	if !w.isBehindHeight(header.Height-1, block) {
 		if header.ParentHash != nil {
-			w.log.Errorf("[PoT]\tfind fork at epoch %d block %s with parents %s,current epoch %d %s", block.GetHeader().Height, hexutil.Encode(block.Hash()), hexutil.Encode(block.GetHeader().ParentHash), w.chainReader.GetCurrentHeight(), hexutil.Encode(w.chainReader.GetCurrentBlock().Hash()))
+			w.log.Warnf("[PoT]\tfind fork at epoch %d block %s with parents %s,current epoch %d %s", block.GetHeader().Height, hexutil.Encode(block.Hash()), hexutil.Encode(block.GetHeader().ParentHash), w.chainReader.GetCurrentHeight(), hexutil.Encode(w.chainReader.GetCurrentBlock().Hash()))
 
 			currentblock := w.chainReader.GetCurrentBlock()
 			ances, err := w.GetSharedAncestor(block, currentblock)
@@ -101,7 +104,7 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 				return err
 			}
 
-			w.log.Errorf("[PoT]\tthe shared ancestor of fork is %s at %d,match %t", hexutil.Encode(ances.GetHeader().Hashes), ances.GetHeader().Height, bytes.Equal(c.GetHeader().Hashes, ances.GetHeader().Hashes))
+			w.log.Infof("[PoT]\tthe shared ancestor of fork is %s at %d,match %t", hexutil.Encode(ances.GetHeader().Hashes), ances.GetHeader().Height, bytes.Equal(c.GetHeader().Hashes, ances.GetHeader().Hashes))
 			//nowBranch, _, err := w.GetBranch(ances, currentblock)
 
 			forkBranch, _, err := w.GetBranch(ances, block)
@@ -190,13 +193,6 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 	if err != nil {
 		return err
 	}
-	w.mutex.Lock()
-	// w.backupBlock = append(w.backupBlock, block)
-
-	w.blockCounter += 1
-	//err = w.storage.Put(block)
-	err = w.blockStorage.Put(block)
-	w.mutex.Unlock()
 
 	w.log.Infof("[PoT]\tGet shared ancestor of block %s is %s at height %d", hexutil.Encode(block.Hash()), hexutil.Encode(ances.Hash()), ances.GetHeader().Height)
 
@@ -233,12 +229,21 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 		w.log.Warnf("[PoT]\tset vdf error for %s:", err)
 		return err
 	}
+	w.mutex.Lock()
+	// w.backupBlock = append(w.backupBlock, block)
+
+	w.blockCounter += 1
+	//err = w.storage.Put(block)
+	err = w.blockStorage.Put(block)
+	w.mutex.Unlock()
+
 	res := &types.VDF0res{
 		Res:   block.GetHeader().PoTProof[0],
 		Epoch: block.GetHeader().Height - 1,
 	}
 	w.vdf0Chan <- res
 	w.log.Infof("[PoT]\tepoch %d:set vdf complete. Start from epoch %d with res %s", epoch, block.GetHeader().Height-1, hexutil.Encode(crypto.Hash(res.Res)))
+
 	return nil
 }
 
@@ -334,4 +339,45 @@ func (w *Worker) checkHeaderVDF0(block *types.Block) (bool, error) {
 		return true, nil
 	}
 	return true, nil
+}
+
+func (w *Worker) CheckHeaderVDF1(block *types.Block) (bool, error) {
+	b := block.GetHeader()
+	mixdigest := b.Mixdigest
+	noncebyte := new(big.Int).SetInt64(b.Nonce).Bytes()
+
+	if b.PoTProof == nil {
+		return false, fmt.Errorf("the block without pot proof")
+	}
+	vdf0res := b.PoTProof[0]
+	input := bytes.Join([][]byte{noncebyte, vdf0res, mixdigest}, []byte(""))
+	hashinput := crypto.Hash(input)
+	output := b.PoTProof[1]
+	flag := wesolowski_rust.Verify(hashinput, w.config.PoT.Vdf1Iteration, output)
+	if !flag {
+		return false, fmt.Errorf("the block vdf1 proof is wrong")
+	}
+
+	target := new(big.Int).Set(bigD)
+	target = target.Div(bigD, b.Difficulty)
+	tmp := new(big.Int).SetBytes(output)
+	if tmp.Cmp(target) >= 0 {
+		return false, fmt.Errorf("the difficulty check fail")
+	}
+	return true, nil
+}
+
+func (w *Worker) CheckBlock(block *types.Block) (bool, error) {
+	header := block.GetHeader()
+	flag, err := header.BasicVerify()
+	if err != nil {
+		return flag, err
+	}
+	flag, err = w.CheckHeaderVDF1(block)
+	if err != nil {
+		return flag, err
+	}
+	return true, nil
+	//excutedtxs := block.GetExcutedTx()
+
 }

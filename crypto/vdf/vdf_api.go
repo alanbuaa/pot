@@ -6,12 +6,12 @@ import (
 	"github.com/zzz136454872/upgradeable-consensus/crypto/vdf/wesolowski_rust"
 )
 
-var cpuList = []uint8{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
+var cpuList = []uint8{0, 1, 2}
 var cpuCounter = utils.NewCPUCounter(cpuList)
 var cpuChecker = utils.NewCPUCounter([]uint8{4, 5})
 
 type Vdf struct {
-	// Id         uint64
+	//Id         uint64
 	Type       string
 	Challenge  []byte
 	Iterations int
@@ -46,12 +46,11 @@ func (vdf *Vdf) Verify(res []byte) bool {
 }
 
 func (vdf *Vdf) Abort() error {
-	ctrl := vdf.Controller
 	// 如果实例正在等待分配CPU，则停止等待
-	ctrl.IsAbort = true
+	vdf.Controller.IsAbort = true
 	// 如果实例正在执行,则终止该进程
-	if ctrl.IsAllocated {
-		utils.KillProc(ctrl.Pid)
+	if vdf.Controller.IsAllocated {
+		utils.KillProc(vdf.Controller.Pid)
 	}
 	// 如果实例执行完成正在释放CPU，不做处理
 	return nil

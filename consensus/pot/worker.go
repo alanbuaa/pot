@@ -172,7 +172,7 @@ func (w *Worker) OnGetVdf0Response() {
 		case res := <-w.vdf0Chan:
 			epoch := w.getEpoch()
 			timer := time.Since(w.timestamp) / time.Millisecond
-			w.log.Errorf("[PoT]\tepoch %d:Receive epoch %d vdf0 res %s, use %d ms\n", epoch, res.Epoch, hexutil.Encode(crypto.Hash(res.Res)), timer)
+			w.log.Infof("[PoT]\tepoch %d:Receive epoch %d vdf0 res %s, use %d ms\n", epoch, res.Epoch, hexutil.Encode(crypto.Hash(res.Res)), timer)
 
 			if epoch > res.Epoch {
 				w.log.Errorf("[PoT]\tthe epoch already set")
@@ -231,7 +231,7 @@ func (w *Worker) OnGetVdf0Response() {
 			parentblock, uncleblock := w.blockSelection(backupblock, res0, epoch)
 
 			if parentblock != nil {
-				w.log.Errorf("[PoT]\tepoch %d:parent block hash is : %s Difficulty %d from %d", epoch+1, hex.EncodeToString(parentblock.Hash()), parentblock.GetHeader().Difficulty.Int64(), parentblock.GetHeader().Address)
+				w.log.Infof("[PoT]\tepoch %d:parent block hash is : %s Difficulty %d from %d", epoch+1, hex.EncodeToString(parentblock.Hash()), parentblock.GetHeader().Difficulty.Int64(), parentblock.GetHeader().Address)
 			} else {
 				if len(backupblock) != 0 {
 					w.chainReader.SetHeight(epoch, backupblock[0])
