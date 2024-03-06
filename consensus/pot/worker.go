@@ -264,7 +264,6 @@ func (w *Worker) mine(epoch uint64, vdf0res []byte, nonce int64, workerid int, a
 	defer w.setWorkFlagFalse()
 	defer wg.Done()
 
-	w.log.Infof("[PoT]\tepoch %d:Start run vdf1 %d to mine", epoch, workerid)
 	mixdigest := w.calcMixdigest(epoch, parentblock, uncleblock, difficulty, w.PeerId)
 	tmp := new(big.Int)
 	tmp.SetInt64(nonce)
@@ -276,7 +275,14 @@ func (w *Worker) mine(epoch uint64, vdf0res []byte, nonce int64, workerid int, a
 		return nil
 	}
 	vdfCh := w.vdf1Chan
-	go w.vdf1[workerid].Exec(epoch)
+	go func() {
+		w.log.Infof("[PoT]\tepoch %d:Start run vdf1 %d to mine", epoch, workerid)
+		err := w.vdf1[workerid].Exec(epoch)
+		if err != nil {
+			w.log.Errorf("[PoT]\tepoch %d:vdf1 %d mine error for %s", epoch, workerid, err)
+		}
+	}()
+
 	for {
 		select {
 		case res := <-vdfCh:
@@ -307,6 +313,7 @@ func (w *Worker) mine(epoch uint64, vdf0res []byte, nonce int64, workerid int, a
 		case <-abort:
 			err := w.vdf1[workerid].Abort()
 			if err != nil {
+				w.log.Errorf("[PoT]\tepoch %d:vdf1 %d mine abort error for %t", epoch, workerid, err)
 				return nil
 			}
 			w.log.Infof("[PoT]\tepoch %d:vdf1 workerid %d got abort", epoch, workerid)

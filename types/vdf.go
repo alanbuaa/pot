@@ -25,7 +25,10 @@ func NewVDF(outch chan *VDF0res, iteration int, id int64) *VDF {
 
 func (v *VDF) Exec(epoch uint64) error {
 	v.Finished = false
-	res := v.Vdf.Execute()
+	res, err := v.Vdf.Execute()
+	if err != nil {
+		return err
+	}
 	vdfRes := &VDF0res{
 		Res:   res,
 		Epoch: epoch,

@@ -27,7 +27,7 @@ func New(vdfType string, challenge []byte, iterations int, id int64) *Vdf {
 	}
 }
 
-func (vdf *Vdf) Execute() []byte {
+func (vdf *Vdf) Execute() ([]byte, error) {
 	switch vdf.Type {
 	case "pietrzak":
 		return pietrzak.Execute(vdf.Challenge, vdf.Iterations, &vdf.Controller, cpuCounter)

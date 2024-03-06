@@ -1,10 +1,7 @@
 package pot
 
 import (
-	"encoding/json"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/zzz136454872/upgradeable-consensus/consensus/whirly/simpleWhirly"
-	"github.com/zzz136454872/upgradeable-consensus/crypto"
 	"github.com/zzz136454872/upgradeable-consensus/types"
 )
 
@@ -70,41 +67,41 @@ func (w *Worker) GetPeerQueue() chan *types.Block {
 }
 
 func (w *Worker) CommiteeUpdate(epoch uint64) {
-	if epoch >= CommiteeDelay+Commiteelen {
-		commitee := make([]string, Commiteelen)
-		selfaddress := make([]string, 0)
-		for i := uint64(0); i < Commiteelen; i++ {
-			block, err := w.chainReader.GetByHeight(epoch - CommiteeDelay - i)
-			if err != nil {
-				return
-			}
-			if block != nil {
-				header := block.GetHeader()
-				commitee[i] = hexutil.Encode(header.PublicKey)
-				flag, _ := w.TryFindKey(crypto.Convert(header.Hash()))
-				if flag {
-					selfaddress = append(selfaddress, hexutil.Encode(header.PublicKey))
-				}
-			}
-		}
-		potsignal := &simpleWhirly.PoTSignal{
-			Epoch:               int64(epoch),
-			Proof:               nil,
-			ID:                  0,
-			LeaderPublicAddress: commitee[0],
-			Committee:           commitee,
-			SelfPublicAddress:   selfaddress,
-			CryptoElements:      nil,
-		}
-		b, err := json.Marshal(potsignal)
-		if err != nil {
-			w.log.WithError(err)
-			return
-		}
-		if w.potSignalChan != nil {
-			w.potSignalChan <- b
-		}
-	}
+	//if epoch >= CommiteeDelay+Commiteelen {
+	//	commitee := make([]string, Commiteelen)
+	//	selfaddress := make([]string, 0)
+	//	for i := uint64(0); i < Commiteelen; i++ {
+	//		block, err := w.chainReader.GetByHeight(epoch - CommiteeDelay - i)
+	//		if err != nil {
+	//			return
+	//		}
+	//		if block != nil {
+	//			header := block.GetHeader()
+	//			commitee[i] = hexutil.Encode(header.PublicKey)
+	//			flag, _ := w.TryFindKey(crypto.Convert(header.Hash()))
+	//			if flag {
+	//				selfaddress = append(selfaddress, hexutil.Encode(header.PublicKey))
+	//			}
+	//		}
+	//	}
+	//	potsignal := &simpleWhirly.PoTSignal{
+	//		Epoch:               int64(epoch),
+	//		Proof:               nil,
+	//		ID:                  0,
+	//		LeaderPublicAddress: commitee[0],
+	//		Committee:           commitee,
+	//		SelfPublicAddress:   selfaddress,
+	//		CryptoElements:      nil,
+	//	}
+	//	b, err := json.Marshal(potsignal)
+	//	if err != nil {
+	//		w.log.WithError(err)
+	//		return
+	//	}
+	//	if w.potSignalChan != nil {
+	//		w.potSignalChan <- b
+	//	}
+	//}
 }
 func (w *Worker) SetWhirly(impl *simpleWhirly.NodeController) {
 	w.whirly = impl

@@ -86,7 +86,7 @@ func ExecCmdAffinity(command string, ctrl *Controller) []byte {
 	}
 	return output
 }
-func ExecWesolowskiVDFAffinity(challenge []byte, iterations int, ctrl *Controller) []byte {
+func ExecWesolowskiVDFAffinity(challenge []byte, iterations int, ctrl *Controller) ([]byte, error) {
 	vdfCmd := exec.Command(FilePath, hex.EncodeToString(challenge), strconv.Itoa(iterations))
 
 	stdout, _ := vdfCmd.StdoutPipe() // 创建输出管道
@@ -94,6 +94,7 @@ func ExecWesolowskiVDFAffinity(challenge []byte, iterations int, ctrl *Controlle
 
 	if err := vdfCmd.Start(); err != nil {
 		fmt.Printf("vdfCmd.Start: %v\n", err)
+		return nil, err
 	}
 
 	ctrl.Pid = vdfCmd.Process.Pid // 查看命令pid
@@ -102,11 +103,12 @@ func ExecWesolowskiVDFAffinity(challenge []byte, iterations int, ctrl *Controlle
 	tasksetCmd := exec.Command("bash", "-c", fmt.Sprintf("taskset -pc %d %d", ctrl.CpuNo, ctrl.Pid))
 	if err := tasksetCmd.Run(); err != nil {
 		fmt.Printf("tasksetCmd.Start: %v\n", err)
+		return nil, err
 	}
 	output, err := io.ReadAll(stdout) // 读取输出结果
 	if err != nil {
 		fmt.Println("read output", err)
-		return nil
+		return nil, err
 	}
 	err = vdfCmd.Wait()
 	if err != nil {
@@ -125,20 +127,23 @@ func ExecWesolowskiVDFAffinity(challenge []byte, iterations int, ctrl *Controlle
 			//		}
 			//	}
 			//}
+			return nil, err
 		}
+		return nil, err
 	}
-	return output
+	return output, nil
 }
 
-func ExecPietrzakVDFAffinity(challenge []byte, iterations int, ctrl *Controller) []byte {
+func ExecPietrzakVDFAffinity(challenge []byte, iterations int, ctrl *Controller) ([]byte, error) {
 	command := FilePath + " -tpietrzak " + hex.EncodeToString(challenge) + " " + strconv.Itoa(iterations)
 	cmd := exec.Command("bash", "-c", command)
 
 	stdout, _ := cmd.StdoutPipe() // 创建输出管道
-	defer closeStdoutPipe(stdout)
+	//defer closeStdoutPipe(stdout)
 
 	if err := cmd.Start(); err != nil {
 		fmt.Printf("cmd.Start: %v\n", err)
+		return nil, err
 	}
 
 	ctrl.Pid = cmd.Process.Pid // 查看命令pid
@@ -147,13 +152,14 @@ func ExecPietrzakVDFAffinity(challenge []byte, iterations int, ctrl *Controller)
 	cmdAffinity := exec.Command("bash", "-c", commandAffinity)
 	if err := cmdAffinity.Start(); err != nil {
 		fmt.Printf("cmdAffinity.Start: %v\n", err)
+		return nil, err
 	}
 
 	output, err := io.ReadAll(stdout) // 读取输出结果
 	if err != nil {
-		return nil
+		return nil, err
 	}
-	return output
+	return output, nil
 }
 
 func KillProc(pid int) error {
