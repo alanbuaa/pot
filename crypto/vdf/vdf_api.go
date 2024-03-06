@@ -6,7 +6,7 @@ import (
 	"github.com/zzz136454872/upgradeable-consensus/crypto/vdf/wesolowski_rust"
 )
 
-var cpuList = []uint8{0, 1, 2}
+var cpuList = []uint8{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
 var cpuCounter = utils.NewCPUCounter(cpuList)
 var cpuChecker = utils.NewCPUCounter([]uint8{4, 5})
 
@@ -50,7 +50,10 @@ func (vdf *Vdf) Abort() error {
 	vdf.Controller.IsAbort = true
 	// 如果实例正在执行,则终止该进程
 	if vdf.Controller.IsAllocated {
-		utils.KillProc(vdf.Controller.Pid)
+		err := utils.KillProc(vdf.Controller.Pid)
+		if err != nil {
+			return err
+		}
 	}
 	// 如果实例执行完成正在释放CPU，不做处理
 	return nil
