@@ -22,12 +22,12 @@ func Execute(challenge []byte, iterations int, ctrl *utils.Controller, cpuCounte
 	}
 	// 执行命令
 	output, err := utils.ExecWesolowskiVDFAffinity(challenge, iterations, ctrl)
+	// 释放CPU
+	cpuCounter.Release(ctrl)
 	if err != nil {
 		//fmt.Println("vdf result: ", err)
 		return nil, err
 	}
-	// 释放CPU
-	cpuCounter.Release(ctrl)
 	// 中止的输出
 	outputLen := len(output)
 	if outputLen == 0 {

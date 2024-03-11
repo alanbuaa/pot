@@ -48,13 +48,14 @@ func ExecCmd(command string) []byte {
 	cmd := exec.Command("bash", "-c", command)
 
 	stdout, _ := cmd.StdoutPipe() // 创建输出管道
-	defer closeStdoutPipe(stdout)
+	//defer closeStdoutPipe(stdout)
 
 	if err := cmd.Start(); err != nil {
 		fmt.Printf("cmd.Start: %v\n", err)
 	}
 
 	output, err := io.ReadAll(stdout) // 读取输出结果
+	cmd.Wait()
 	if err != nil {
 		fmt.Println("ExecCmd", err)
 		return nil
@@ -81,56 +82,38 @@ func ExecCmdAffinity(command string, ctrl *Controller) []byte {
 	}
 
 	output, err := io.ReadAll(stdout) // 读取输出结果
+	cmdAffinity.Wait()
 	if err != nil {
 		return nil
 	}
 	return output
 }
 func ExecWesolowskiVDFAffinity(challenge []byte, iterations int, ctrl *Controller) ([]byte, error) {
-	vdfCmd := exec.Command(FilePath, hex.EncodeToString(challenge), strconv.Itoa(iterations))
+	vdfcmd := FilePath + " " + hex.EncodeToString(challenge) + " " + strconv.Itoa(iterations)
+	command := exec.Command("bash", "-c", vdfcmd)
 
-	stdout, _ := vdfCmd.StdoutPipe() // 创建输出管道
+	stdout, _ := command.StdoutPipe() // 创建输出管道
 	//defer closeStdoutPipe(stdout)
 
-	if err := vdfCmd.Start(); err != nil {
-		fmt.Printf("vdfCmd.Start: %v\n", err)
-		return nil, err
+	if err := command.Start(); err != nil {
+		fmt.Printf("command.Start: %v\n", err)
 	}
 
-	ctrl.Pid = vdfCmd.Process.Pid // 查看命令pid
+	ctrl.Pid = command.Process.Pid // 查看命令pid
 	// affinity
-	//tasksetCmd := exec.Command("taskset", " -pc", strconv.Itoa(int(ctrl.CpuNo)), strconv.Itoa(ctrl.Pid))
-	tasksetCmd := exec.Command("bash", "-c", fmt.Sprintf("taskset -pc %d %d", ctrl.CpuNo, ctrl.Pid))
-	if err := tasksetCmd.Run(); err != nil {
-		fmt.Printf("tasksetCmd.Start: %v\n", err)
-		return nil, err
-	}
-	output, err := io.ReadAll(stdout) // 读取输出结果
-	if err != nil {
-		fmt.Println("read output", err)
-		return nil, err
-	}
-	err = vdfCmd.Wait()
-	if err != nil {
+	commandAffinity := fmt.Sprintf("taskset -pc %d %d", ctrl.CpuNo, ctrl.Pid)
+	tasksetcmd := exec.Command("bash", "-c", commandAffinity)
 
-		// 检查错误类型是否是 *exec.ExitError
-		if _, ok := err.(*exec.ExitError); !ok {
-			fmt.Printf("vdf cpu-%d wait:%v\n", ctrl.CpuNo, err)
-			//// 获取 WaitStatus
-			//if status, ok := exitError.Sys().(syscall.WaitStatus); ok {
-			//	// 检查是否为 Signaled
-			//	if status.Signaled() {
-			//		// 获取终止进程的信号
-			//		signal := status.Signal()
-			//		if signal == syscall.SIGTERM {
-			//			fmt.Println("Process was terminated by SIGTERM")
-			//		}
-			//	}
-			//}
-			return nil, err
-		}
-		return nil, err
+	if err := tasksetcmd.Run(); err != nil {
+		fmt.Printf("cmdAffinity.Start: %v\n", err)
 	}
+
+	output, err := io.ReadAll(stdout) // 读取输出结果
+	command.Wait()
+	if err != nil {
+		return nil, nil
+	}
+
 	return output, nil
 }
 
@@ -139,11 +122,10 @@ func ExecPietrzakVDFAffinity(challenge []byte, iterations int, ctrl *Controller)
 	cmd := exec.Command("bash", "-c", command)
 
 	stdout, _ := cmd.StdoutPipe() // 创建输出管道
-	//defer closeStdoutPipe(stdout)
+	defer closeStdoutPipe(stdout)
 
 	if err := cmd.Start(); err != nil {
 		fmt.Printf("cmd.Start: %v\n", err)
-		return nil, err
 	}
 
 	ctrl.Pid = cmd.Process.Pid // 查看命令pid
@@ -152,12 +134,11 @@ func ExecPietrzakVDFAffinity(challenge []byte, iterations int, ctrl *Controller)
 	cmdAffinity := exec.Command("bash", "-c", commandAffinity)
 	if err := cmdAffinity.Start(); err != nil {
 		fmt.Printf("cmdAffinity.Start: %v\n", err)
-		return nil, err
 	}
 
 	output, err := io.ReadAll(stdout) // 读取输出结果
 	if err != nil {
-		return nil, err
+		return nil, nil
 	}
 	return output, nil
 }

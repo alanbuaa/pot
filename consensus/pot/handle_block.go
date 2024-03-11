@@ -129,7 +129,7 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 
 			w1 := w.calculateChainWeight(ances, currentblock)
 			w2 := w.calculateChainWeight(ances, block)
-			w.log.Errorf("[PoT]\tthe chain weight %d, the fork chain weight %d", w1.Int64(), w2.Int64())
+			w.log.Infof("[PoT]\tthe chain weight %d, the fork chain weight %d", w1.Int64(), w2.Int64())
 
 			if w1.Int64() < w2.Int64() {
 				err := w.chainreset(forkBranch)
