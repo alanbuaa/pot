@@ -7,14 +7,15 @@ import (
 	"strconv"
 )
 
-func Execute(challenge []byte, iterations int, ctrl *utils.Controller, cpuCounter *utils.CPUCounter) ([]byte, error) {
+func Execute(challenge []byte, iterations int, ctrl *utils.Controller, cpuCounter *utils.CPUCounter, id string) ([]byte, error) {
 	// 分配CPU，CPU不够则阻塞
-	cpuCounter.Occupy(ctrl)
+	cpuCounter.Occupy(ctrl, id)
 	// 判断终止
 	if ctrl.IsAbort {
-		cpuCounter.Release(ctrl)
+		cpuCounter.Release(ctrl, id)
 		return nil, nil
 	}
+
 	// 判断可执行文件
 	if utils.CheckVDFExists() != nil {
 		fmt.Println("missing vdf executable file")
@@ -23,7 +24,7 @@ func Execute(challenge []byte, iterations int, ctrl *utils.Controller, cpuCounte
 	// 执行命令
 	output, err := utils.ExecWesolowskiVDFAffinity(challenge, iterations, ctrl)
 	// 释放CPU
-	cpuCounter.Release(ctrl)
+	cpuCounter.Release(ctrl, id)
 	if err != nil {
 		//fmt.Println("vdf result: ", err)
 		return nil, err

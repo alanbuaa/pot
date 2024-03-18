@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 )
 
 var (
@@ -56,6 +57,9 @@ func main() {
 
 	for i := int64(0); i < int64(total); i++ {
 		go func(index int64) {
+			if index == 3 {
+				time.Sleep(30 * time.Second)
+			}
 			nodes[index] = node.NewNode(index)
 		}(i)
 	}

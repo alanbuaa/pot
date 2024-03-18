@@ -101,6 +101,9 @@ func ExecWesolowskiVDFAffinity(challenge []byte, iterations int, ctrl *Controlle
 
 	ctrl.Pid = command.Process.Pid // 查看命令pid
 	// affinity
+
+	//now := time.Now()
+
 	commandAffinity := fmt.Sprintf("taskset -pc %d %d", ctrl.CpuNo, ctrl.Pid)
 	tasksetcmd := exec.Command("bash", "-c", commandAffinity)
 
@@ -109,6 +112,18 @@ func ExecWesolowskiVDFAffinity(challenge []byte, iterations int, ctrl *Controlle
 	}
 
 	output, err := io.ReadAll(stdout) // 读取输出结果
+	//if iterations == 300000 {
+	//	fmt.Println(time.Since(now) / time.Second)
+	//	fill, err := os.OpenFile("vdftime", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
+	//	if err != nil {
+	//		fmt.Println(err)
+	//	}
+	//	_, err = fill.WriteString(strconv.Itoa(int(time.Since(now)/time.Second)) + "\n")
+	//	if err != nil {
+	//		fmt.Println(err)
+	//	}
+	//	fill.Close()
+	//}
 	command.Wait()
 	if err != nil {
 		return nil, nil
@@ -146,5 +161,13 @@ func ExecPietrzakVDFAffinity(challenge []byte, iterations int, ctrl *Controller)
 func KillProc(pid int) error {
 	command := fmt.Sprintf("kill %d", pid)
 	cmd := exec.Command("bash", "-c", command)
-	return cmd.Run()
+	err := cmd.Start()
+	if err != nil {
+		return err
+	}
+	err = cmd.Wait()
+	if err != nil {
+		return err
+	}
+	return nil
 }

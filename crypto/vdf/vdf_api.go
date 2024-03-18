@@ -6,9 +6,10 @@ import (
 	"github.com/zzz136454872/upgradeable-consensus/crypto/vdf/wesolowski_rust"
 )
 
-var cpuList = []uint8{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
+var cpuList = []uint8{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
 var cpuCounter = utils.NewCPUCounter(cpuList)
-var cpuChecker = utils.NewCPUCounter([]uint8{4, 5})
+
+//var cpuChecker = utils.NewCPUCounter([]uint8{4, 5})
 
 type Vdf struct {
 	//Id         uint64
@@ -27,12 +28,12 @@ func New(vdfType string, challenge []byte, iterations int, id int64) *Vdf {
 	}
 }
 
-func (vdf *Vdf) Execute() ([]byte, error) {
+func (vdf *Vdf) Execute(id string) ([]byte, error) {
 	switch vdf.Type {
-	case "pietrzak":
-		return pietrzak.Execute(vdf.Challenge, vdf.Iterations, &vdf.Controller, cpuCounter)
+	//case "pietrzak":
+	//	return pietrzak.Execute(vdf.Challenge, vdf.Iterations, &vdf.Controller, cpuCounter)
 	default:
-		return wesolowski_rust.Execute(vdf.Challenge, vdf.Iterations, &vdf.Controller, cpuCounter)
+		return wesolowski_rust.Execute(vdf.Challenge, vdf.Iterations, &vdf.Controller, cpuCounter, id)
 	}
 }
 
@@ -46,13 +47,21 @@ func (vdf *Vdf) Verify(res []byte) bool {
 }
 
 func (vdf *Vdf) Abort() error {
+	//now := time.Now()
+	//fmt.Println("start abort")
 	ctrl := vdf.Controller
 	// 如果实例正在等待分配CPU，则停止等待
 	ctrl.IsAbort = true
 	// 如果实例正在执行,则终止该进程
 	if ctrl.IsAllocated {
 		utils.KillProc(ctrl.Pid)
+		ctrl.IsAllocated = false
 	}
+
+	//fmt.Println("exist pid:", string(utils.ExecCmd("pidof vdf-linux")))
+	//fmt.Println("this pid:", ctrl.Pid)
+
+	//fmt.Printf("Abort need %d ms\n", time.Since(now)/time.Millisecond)
 	// 如果实例执行完成正在释放CPU，不做处理
 	return nil
 }

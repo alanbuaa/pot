@@ -1,7 +1,9 @@
 package utils
 
 import (
+	"fmt"
 	"sync"
+	"time"
 )
 
 type CPUCounter struct {
@@ -29,30 +31,33 @@ func NewCPUCounter(cpuList []uint8) (c *CPUCounter) {
 	}
 }
 
-func (c *CPUCounter) Occupy(ctrl *Controller) {
-	for {
-		if ctrl.IsAbort {
-			break
-		}
-		c.cond.L.Lock()
-		if len(c.idleCpuList) == 0 {
-			c.cond.Wait()
-		}
+func (c *CPUCounter) Occupy(ctrl *Controller, id string) {
+	c.cond.L.Lock()
+	for len(c.idleCpuList) == 0 {
+		c.cond.Wait()
+	}
+	if !ctrl.IsAbort {
 		ctrl.CpuNo = c.idleCpuList[0]
+		fmt.Println(id, " occupy:", ctrl.CpuNo)
+		fmt.Println("before occupy, cpuList:", c.idleCpuList)
 		c.idleCpuList = c.idleCpuList[1:]
 		ctrl.IsAllocated = true
-		c.cond.L.Unlock()
-		if ctrl.IsAllocated {
-			break
-		}
+		fmt.Println("after occupy, cpuList: ", c.idleCpuList)
 	}
+	c.cond.L.Unlock()
 }
 
-func (c *CPUCounter) Release(ctrl *Controller) {
+func (c *CPUCounter) Release(ctrl *Controller, id string) {
+	start := time.Now()
 	c.cond.L.Lock()
+	fmt.Println(id, "release:", ctrl.CpuNo)
+	fmt.Println("before release, cpuList:", c.idleCpuList)
 	if c.cpuSet.Contains(ctrl.CpuNo) {
 		c.idleCpuList = append(c.idleCpuList, ctrl.CpuNo)
 		c.cond.Signal()
 	}
+	fmt.Println("after release, cpuList: ", c.idleCpuList)
+
 	c.cond.L.Unlock()
+	fmt.Println("release time :", time.Since(start)/time.Millisecond)
 }

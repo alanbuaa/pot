@@ -152,8 +152,8 @@ func (w *Worker) startWorking() {
 func (w *Worker) Work() {
 	w.timestamp = time.Now()
 	w.log.Infof("[PoT]\tStart epoch %d vdf0", w.getEpoch())
-
-	err := w.vdf0.Exec(0)
+	id := fmt.Sprintf("node %d worker %d", w.ID, 0)
+	err := w.vdf0.Exec(0, id)
 	if err != nil {
 		return
 	}
@@ -189,10 +189,10 @@ func (w *Worker) OnGetVdf0Response() {
 				continue
 			}
 
-			if w.isMinerWorking() {
+			if w.isVDF1Working() {
 				close(w.abort)
-				w.setWorkFlagFalse()
 				w.wg.Wait()
+				w.setWorkFlagFalse()
 				w.log.Infof("[PoT]\tepoch %d:the miner got abort for get in new epoch", epoch+1)
 			}
 
@@ -203,8 +203,8 @@ func (w *Worker) OnGetVdf0Response() {
 
 			// calculate the next epoch vdf
 			inputHash := crypto.Hash(res0)
-
-			if !w.vdf0.Finished {
+			w.log.Info(w.vdf0.Finished)
+			if !w.vdf0.IsFinished() {
 				err := w.vdf0.Abort()
 				if err != nil {
 					w.log.Errorf("[PoT]\tepoch %d: vdf0 abort error for %s", epoch+1, err)
@@ -222,7 +222,8 @@ func (w *Worker) OnGetVdf0Response() {
 			w.log.Infof("[PoT]\tepoch %d:Start epoch %d vdf0", epoch+1, epoch+1)
 			w.timestamp = time.Now()
 			go func() {
-				err = w.vdf0.Exec(epoch + 1)
+				id := fmt.Sprintf("epoch %d node %d vdf 0:", epoch+1, w.ID)
+				err = w.vdf0.Exec(epoch+1, id)
 				if err != nil {
 					w.log.Info("[PoT]\texecute vdf error for :", err)
 				}
@@ -261,8 +262,8 @@ func (w *Worker) OnGetVdf0Response() {
 }
 
 func (w *Worker) mine(epoch uint64, vdf0res []byte, nonce int64, workerid int, abort chan struct{}, difficulty *big.Int, parentblock *types.Block, uncleblock []*types.Block, wg *sync.WaitGroup) *types.Block {
-	defer w.setWorkFlagFalse()
 	defer wg.Done()
+	defer w.setWorkFlagFalse()
 
 	mixdigest := w.calcMixdigest(epoch, parentblock, uncleblock, difficulty, w.PeerId)
 	tmp := new(big.Int)
@@ -272,12 +273,14 @@ func (w *Worker) mine(epoch uint64, vdf0res []byte, nonce int64, workerid int, a
 	hashinput := crypto.Hash(input)
 	err := w.vdf1[workerid].SetInput(hashinput, w.config.PoT.Vdf1Iteration)
 	if err != nil {
+		w.log.Errorf("[PoT]\tepoch %d: vdf1 workerid %d mine error for set input err %s", epoch, workerid, err)
 		return nil
 	}
 	vdfCh := w.vdf1Chan
 	go func() {
 		w.log.Infof("[PoT]\tepoch %d:Start run vdf1 %d to mine", epoch, workerid)
-		err := w.vdf1[workerid].Exec(epoch)
+		id := fmt.Sprintf("epoch %d node %d vdf 1:", epoch, w.ID)
+		err := w.vdf1[workerid].Exec(epoch, id)
 		if err != nil {
 			w.log.Errorf("[PoT]\tepoch %d:vdf1 %d mine error for %s", epoch, workerid, err)
 		}
@@ -545,7 +548,7 @@ func (w *Worker) setVDF0epoch(epoch uint64) error {
 		return fmt.Errorf("[PoT]\tepoch %d: could not set for a outdated epoch %d", epochnow, epoch)
 	}
 
-	if w.isMinerWorking() {
+	if w.isVDF1Working() {
 		err := w.vdf0.Abort()
 		if err != nil {
 			return err
@@ -708,13 +711,14 @@ func (w *Worker) self() string {
 	return w.PeerId
 }
 
-func (w *Worker) isMinerWorking() bool {
+func (w *Worker) isVDF1Working() bool {
 
 	// for i := 0; i < len(w.vdf1); i++ {
 	//	if !w.vdf1[i].Finished {
 	//		return true
 	//	}
 	// }
+
 	w.mutex.Lock()
 	defer w.mutex.Unlock()
 	return w.workFlag
@@ -722,8 +726,12 @@ func (w *Worker) isMinerWorking() bool {
 
 func (w *Worker) setWorkFlagFalse() {
 	w.mutex.Lock()
-	w.mutex.Unlock()
-	w.workFlag = false
+	defer w.mutex.Unlock()
+	if !w.workFlag {
+		return
+	} else {
+		w.workFlag = false
+	}
 }
 
 func (w *Worker) SetEngine(engine *PoTEngine) {
