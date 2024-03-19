@@ -23,8 +23,13 @@ func NewVDF(outch chan *VDF0res, iteration int, id int64) *VDF {
 	return &VDF{Vdf: vdf.New("wesolowski_rust", []byte(""), iteration, id), OutputChan: outch, Finished: true}
 }
 
+func NewVDFwithInput(outch chan *VDF0res, input []byte, iteration int, id int64) *VDF {
+	return &VDF{Vdf: vdf.New("wesolowski_rust", input, iteration, id), OutputChan: outch, Finished: true}
+}
+
 func (v *VDF) Exec(epoch uint64) error {
 	v.Finished = false
+	defer v.setFinished()
 	res, err := v.Vdf.Execute()
 	if err != nil {
 		return err
@@ -35,10 +40,10 @@ func (v *VDF) Exec(epoch uint64) error {
 	}
 	if res != nil {
 		v.OutputChan <- vdfRes
-		v.Finished = true
+		//v.Finished = true
 		return nil
 	} else {
-		return errors.New("Exec vdf0 failed\n")
+		return errors.New("Exec vdf0 failed for res is nil\n")
 	}
 }
 
@@ -60,10 +65,14 @@ func (v *VDF) SetInput(input []byte, iteration int) error {
 
 func (v *VDF) Abort() error {
 	err := v.Vdf.Abort()
-	v.Finished = true
+	defer v.setFinished()
 	return err
 }
 
 func (v *VDF) IsFinished() bool {
 	return v.Finished
+}
+
+func (v *VDF) setFinished() {
+	v.Finished = true
 }

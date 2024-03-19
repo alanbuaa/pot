@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"fmt"
 	"sync"
 )
 
@@ -30,22 +31,19 @@ func NewCPUCounter(cpuList []uint8) (c *CPUCounter) {
 }
 
 func (c *CPUCounter) Occupy(ctrl *Controller) {
-	for {
-		if ctrl.IsAbort {
-			break
-		}
-		c.cond.L.Lock()
-		if len(c.idleCpuList) == 0 {
-			c.cond.Wait()
-		}
+	c.cond.L.Lock()
+	for len(c.idleCpuList) == 0 {
+		c.cond.Wait()
+	}
+	if !ctrl.IsAbort {
 		ctrl.CpuNo = c.idleCpuList[0]
+		fmt.Println(" occupy:", ctrl.CpuNo)
+		fmt.Println("before occupy, cpuList:", c.idleCpuList)
 		c.idleCpuList = c.idleCpuList[1:]
 		ctrl.IsAllocated = true
-		c.cond.L.Unlock()
-		if ctrl.IsAllocated {
-			break
-		}
+		fmt.Println("after occupy, cpuList: ", c.idleCpuList)
 	}
+	c.cond.L.Unlock()
 }
 
 func (c *CPUCounter) Release(ctrl *Controller) {

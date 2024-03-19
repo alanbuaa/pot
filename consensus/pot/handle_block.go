@@ -218,10 +218,10 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 	finishflag := w.vdf0.Finished
 	w.log.Infof("[PoT]\tMinew Work flag: %t", finishflag)
 
-	if w.isMinerWorking() {
+	if w.IsVDF1Working() {
 		close(w.abort)
-		w.workFlag = false
 		w.wg.Wait()
+		w.setWorkFlagFalse()
 	}
 
 	err = w.setVDF0epoch(block.GetHeader().Height - 1)

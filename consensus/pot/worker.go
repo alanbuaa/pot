@@ -189,7 +189,7 @@ func (w *Worker) OnGetVdf0Response() {
 				continue
 			}
 
-			if w.isMinerWorking() {
+			if w.IsVDF1Working() {
 				close(w.abort)
 				w.setWorkFlagFalse()
 				w.wg.Wait()
@@ -204,7 +204,7 @@ func (w *Worker) OnGetVdf0Response() {
 			// calculate the next epoch vdf
 			inputHash := crypto.Hash(res0)
 
-			if !w.vdf0.Finished {
+			if !w.vdf0.IsFinished() {
 				err := w.vdf0.Abort()
 				if err != nil {
 					w.log.Errorf("[PoT]\tepoch %d: vdf0 abort error for %s", epoch+1, err)
@@ -213,7 +213,7 @@ func (w *Worker) OnGetVdf0Response() {
 			}
 
 			w.increaseEpoch()
-			err = w.vdf0.SetInput(inputHash, w.config.PoT.Vdf0Iteration)
+			w.vdf0 = types.NewVDFwithInput(w.getVDF0chan(), inputHash, w.config.PoT.Vdf0Iteration, w.ID)
 			if err != nil {
 				w.log.Errorf("[PoT]\tepoch %d:set vdf0 error for %t", epoch+1, err)
 				continue
@@ -261,8 +261,8 @@ func (w *Worker) OnGetVdf0Response() {
 }
 
 func (w *Worker) mine(epoch uint64, vdf0res []byte, nonce int64, workerid int, abort chan struct{}, difficulty *big.Int, parentblock *types.Block, uncleblock []*types.Block, wg *sync.WaitGroup) *types.Block {
-	defer w.setWorkFlagFalse()
 	defer wg.Done()
+	defer w.setWorkFlagFalse()
 
 	mixdigest := w.calcMixdigest(epoch, parentblock, uncleblock, difficulty, w.PeerId)
 	tmp := new(big.Int)
@@ -270,11 +270,10 @@ func (w *Worker) mine(epoch uint64, vdf0res []byte, nonce int64, workerid int, a
 	noncebyte := tmp.Bytes()
 	input := bytes.Join([][]byte{noncebyte, vdf0res, mixdigest}, []byte(""))
 	hashinput := crypto.Hash(input)
-	err := w.vdf1[workerid].SetInput(hashinput, w.config.PoT.Vdf1Iteration)
-	if err != nil {
-		return nil
-	}
+
+	w.vdf1[workerid] = types.NewVDFwithInput(w.vdf1Chan, hashinput, w.config.PoT.Vdf1Iteration, w.ID)
 	vdfCh := w.vdf1Chan
+
 	go func() {
 		w.log.Infof("[PoT]\tepoch %d:Start run vdf1 %d to mine", epoch, workerid)
 		err := w.vdf1[workerid].Exec(epoch)
@@ -545,7 +544,7 @@ func (w *Worker) setVDF0epoch(epoch uint64) error {
 		return fmt.Errorf("[PoT]\tepoch %d: could not set for a outdated epoch %d", epochnow, epoch)
 	}
 
-	if w.isMinerWorking() {
+	if w.IsVDF1Working() {
 		err := w.vdf0.Abort()
 		if err != nil {
 			return err
@@ -708,7 +707,7 @@ func (w *Worker) self() string {
 	return w.PeerId
 }
 
-func (w *Worker) isMinerWorking() bool {
+func (w *Worker) IsVDF1Working() bool {
 
 	// for i := 0; i < len(w.vdf1); i++ {
 	//	if !w.vdf1[i].Finished {

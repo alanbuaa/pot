@@ -220,11 +220,11 @@ func (w *Worker) chainreset(branch []*types.Block) error {
 	}
 
 	w.log.Infof("[PoT]\tepoch %d: the chain has been reset by branch %s", epoch, branchstr)
-	flag := w.isMinerWorking()
+	flag := w.IsVDF1Working()
 	//w.log.Infof("[PoT]\tflag: %t", flag)
 	time := time2.Now()
 	if flag {
-		w.workFlag = false
+		w.setWorkFlagFalse()
 		close(w.abort)
 		w.wg.Wait()
 		w.log.Infof("[PoT]\tthe vdf1 work got abort for chain reset, need %d ms", time2.Since(time)/time2.Millisecond)
