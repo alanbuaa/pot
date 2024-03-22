@@ -118,7 +118,7 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 				return err
 			}
 
-			w.log.Infof("[PoT]\tthe shared ancestor of fork is %s at %d,match %t", hexutil.Encode(ances.GetHeader().Hashes), ances.GetHeader().Height, bytes.Equal(c.GetHeader().Hashes, ances.GetHeader().Hashes))
+			w.log.Debugf("[PoT]\tthe shared ancestor of fork is %s at %d,match %t", hexutil.Encode(ances.GetHeader().Hashes), ances.GetHeader().Height, bytes.Equal(c.GetHeader().Hashes, ances.GetHeader().Hashes))
 			//nowBranch, _, err := w.GetBranch(ances, currentblock)
 
 			forkBranch, _, err := w.GetBranch(ances, block)
@@ -129,7 +129,7 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 
 			flag, err := w.CheckVDF0ForBranch(forkBranch)
 			if flag {
-				w.log.Infof("[PoT]\tPass VDF Check")
+				w.log.Debugf("[PoT]\tPass VDF Check")
 			} else {
 				return err
 			}
@@ -213,7 +213,7 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 	branch, _, err := w.GetBranch(ances, block)
 	flag, err := w.CheckVDF0ForBranch(branch)
 	if flag {
-		w.log.Infof("[PoT]\tPass VDF Check")
+		w.log.Debugf("[PoT]\tPass VDF Check")
 	}
 	if err != nil {
 		w.log.Errorf("[PoT]\tGet branch error for: %s", err)

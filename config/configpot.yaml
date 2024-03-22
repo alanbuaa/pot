@@ -65,8 +65,8 @@ consensus:
   pot:
     snum : 2
     sysPara: 2
-    vdf0Iteration: 300000
-    vdf1Iteration: 180000
+    vdf0Iteration: 200000
+    vdf1Iteration: 120000
     excutorAddress: 127.0.0.1:9877
     batchsize: 12000
     timeout: 5
