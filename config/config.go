@@ -53,6 +53,9 @@ type PoTConfig struct {
 	Vdf1Iteration  int    `yaml:"vdf1Iteration"`
 	Batchsize      int    `yaml:"batchsize"`
 	ExcutorAddress string `yaml:"excutorAddress"`
+	Timeout        int    `yaml:"timeout"`
+	CommiteeSize   int    `yaml:"commiteeSize"`
+	ConfirmDelay   int    `yaml:"confirmDelay"`
 }
 type ConsensusConfig struct {
 	Type        string            `yaml:"type"`

@@ -37,7 +37,8 @@ func (w *Worker) request(request *pb.BlockRequest) (*pb.BlockResponse, error) {
 	if err != nil {
 		return nil, err
 	}
-	timer := time.NewTimer(5 * time.Second)
+	duration := time.Duration(w.config.PoT.Timeout)
+	timer := time.NewTimer(duration * time.Second)
 
 	res := new(pb.BlockResponse)
 	select {

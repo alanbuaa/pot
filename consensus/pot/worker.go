@@ -181,7 +181,7 @@ func (w *Worker) OnGetVdf0Response() {
 
 			backupblock, err := w.blockStorage.GetbyHeight(epoch)
 
-			w.log.Infof("[PoT]\tepoch %d:epoch %d block num %d", epoch+1, epoch, len(backupblock))
+			w.log.Debugf("[PoT]\tepoch %d:epoch %d block num %d", epoch+1, epoch, len(backupblock))
 
 			if err != nil {
 				w.log.Warn("[PoT]\tget backup block error :", err)
@@ -193,7 +193,7 @@ func (w *Worker) OnGetVdf0Response() {
 				close(w.abort)
 				w.setWorkFlagFalse()
 				w.wg.Wait()
-				w.log.Infof("[PoT]\tepoch %d:the miner got abort for get in new epoch", epoch+1)
+				w.log.Debugf("[PoT]\tepoch %d:the miner got abort for get in new epoch", epoch+1)
 			}
 
 			// the last epoch is over
@@ -207,7 +207,7 @@ func (w *Worker) OnGetVdf0Response() {
 			if !w.vdf0.IsFinished() {
 				err := w.vdf0.Abort()
 				if err != nil {
-					w.log.Errorf("[PoT]\tepoch %d: vdf0 abort error for %s", epoch+1, err)
+					w.log.Warnf("[PoT]\tepoch %d: vdf0 abort error for %s", epoch+1, err)
 				}
 				w.log.Warnf("[PoT]\tepoch %d:vdf0 got abort for new epoch ", epoch+1)
 			}
@@ -215,11 +215,11 @@ func (w *Worker) OnGetVdf0Response() {
 			w.increaseEpoch()
 			w.vdf0 = types.NewVDFwithInput(w.getVDF0chan(), inputHash, w.config.PoT.Vdf0Iteration, w.ID)
 			if err != nil {
-				w.log.Errorf("[PoT]\tepoch %d:set vdf0 error for %t", epoch+1, err)
+				w.log.Warnf("[PoT]\tepoch %d:set vdf0 error for %t", epoch+1, err)
 				continue
 			}
 
-			w.log.Infof("[PoT]\tepoch %d:Start epoch %d vdf0", epoch+1, epoch+1)
+			w.log.Debugf("[PoT]\tepoch %d:Start epoch %d vdf0", epoch+1, epoch+1)
 			w.timestamp = time.Now()
 			go func() {
 				err = w.vdf0.Exec(epoch + 1)
@@ -236,7 +236,7 @@ func (w *Worker) OnGetVdf0Response() {
 				if len(backupblock) != 0 {
 					w.chainReader.SetHeight(epoch, backupblock[0])
 					parentblock = backupblock[0]
-					w.log.Errorf("[PoT]\tepoch %d:parent block hash is nil,set nil block %s as parent", epoch+1, hex.EncodeToString(parentblock.GetHeader().Hashes))
+					w.log.Infof("[PoT]\tepoch %d:parent block hash is nil,set nil block %s as parent", epoch+1, hex.EncodeToString(parentblock.GetHeader().Hashes))
 				} else {
 
 				}
@@ -246,11 +246,19 @@ func (w *Worker) OnGetVdf0Response() {
 			// if epoch > 1 {
 			// 	w.simpleLeaderUpdate(parentblock)
 			// }
+			_, err = w.GetExcutedTxsFromExecutor(epoch)
+			if err != nil {
+				w.log.Warnf("[PoT]\tepoch %d: Get Tx from executor error for %s", epoch+1, err)
+			} else {
+				w.log.Debugf("[PoT]\tepoch %d: Get Txs from executor", epoch+1)
+			}
 			_ = w.handleBlockExcutedTx(parentblock)
+
 			difficulty := w.calcDifficulty(parentblock, uncleblock)
 
 			w.startWorking()
 			w.abort = make(chan struct{})
+
 			w.wg.Add(cpuCounter)
 			for i := 0; i < cpuCounter; i++ {
 				go w.mine(epoch+1, res0, rand.Int63(), i, w.abort, difficulty, parentblock, uncleblock, w.wg)
@@ -275,7 +283,7 @@ func (w *Worker) mine(epoch uint64, vdf0res []byte, nonce int64, workerid int, a
 	vdfCh := w.vdf1Chan
 
 	go func() {
-		w.log.Infof("[PoT]\tepoch %d:Start run vdf1 %d to mine", epoch, workerid)
+		w.log.Debugf("[PoT]\tepoch %d:Start run vdf1 %d to mine", epoch, workerid)
 		err := w.vdf1[workerid].Exec(epoch)
 		if err != nil {
 			w.log.Errorf("[PoT]\tepoch %d:vdf1 %d mine error for %s", epoch, workerid, err)
@@ -324,7 +332,8 @@ func (w *Worker) mine(epoch uint64, vdf0res []byte, nonce int64, workerid int, a
 }
 
 func (w *Worker) createBlock(epoch uint64, parentBlock *types.Block, uncleBlock []*types.Block, difficulty *big.Int, mixdigest []byte, nonce int64, vdf0res []byte, vdf1res []byte) *types.Block {
-	Txs := w.GetExcutedTxs(epoch)
+	Txs := w.GetTxsFromMempool()
+	//w.log.Infof("Txs len %d", len(Txs))
 	parentblockhash := make([]byte, 0)
 	if parentBlock != nil {
 		parentblockhash = parentBlock.Hash()
@@ -386,16 +395,28 @@ func (w *Worker) GenerateCoinbaseTx(pubkeybyte []byte) *types.Tx {
 	return &types.Tx{Data: txdata}
 }
 
-func (w *Worker) GetExcutedTxs(epoch uint64) []*types.Tx {
-
-	// TODO: Get executed blocks from executor
-
-	executeblocks, err := w.GetTxsFromExecutor(epoch)
+func (w *Worker) GetExcutedTxsFromExecutor(epoch uint64) ([]*types.ExecutedTxData, error) {
+	conn, err := grpc.Dial(w.config.PoT.ExcutorAddress, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(1024*1024*1024)))
 	if err != nil {
-		w.log.Errorf("[PoT]\tGet Txs from executor error for %s", err)
-		return make([]*types.Tx, 0)
+		return nil, err
+	}
+	client := pb.NewPoTExecutorClient(conn)
+	request := &pb.GetTxRequest{
+		StartHeight: w.executeheight,
+		Des:         w.config.PoT.ExcutorAddress,
+	}
+	response, err := client.GetTxs(context.Background(), request)
+	if err != nil {
+		//w.log.Errorf("[PoT]\tGet Txs from executor error for %s",err)
+		return nil, err
 	}
 
+	executeblocks := response.GetBlocks()
+	excuteheight := response.GetEnd()
+	if excuteheight > w.executeheight {
+		w.executeheight = excuteheight
+	}
+	executedtxs := make([]*types.ExecutedTxData, 0)
 	for i := 0; i < len(executeblocks); i++ {
 		height := executeblocks[i].GetHeader().GetHeight()
 		executedTxs := executeblocks[i].GetTxs()
@@ -405,11 +426,15 @@ func (w *Worker) GetExcutedTxs(epoch uint64) []*types.Tx {
 				TxHash:         executedtx.GetTxHash(),
 			}
 			//exectxdata, _ := exectx.EncodeToByte()
+			executedtxs = append(executedtxs, exectx)
 			w.mempool.Add(exectx)
 		}
 	}
+	return executedtxs, nil
+}
 
-	excutedTxDatas := w.mempool.GetFirstN(Batchsize)
+func (w *Worker) GetTxsFromMempool() []*types.Tx {
+	excutedTxDatas := w.mempool.GetFirstN(w.config.PoT.Batchsize)
 	excutedtxs := make([]*types.Tx, 0)
 	for i := 0; i < len(excutedTxDatas); i++ {
 		txdata, err := excutedTxDatas[i].EncodeToByte()
@@ -420,34 +445,6 @@ func (w *Worker) GetExcutedTxs(epoch uint64) []*types.Tx {
 		excutedtxs = append(excutedtxs, tx)
 	}
 	return excutedtxs
-}
-
-func (w *Worker) GetTxsFromExecutor(epoch uint64) ([]*pb.ExecuteBlock, error) {
-	if epoch > Commiteelen+CommiteeDelay {
-		conn, err := grpc.Dial(w.config.PoT.ExcutorAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
-		if err != nil {
-			return nil, err
-		}
-		client := pb.NewPoTExecutorClient(conn)
-		request := &pb.GetTxRequest{
-			StartHeight: w.executeheight,
-			Des:         w.config.PoT.ExcutorAddress,
-		}
-		response, err := client.GetTxs(context.Background(), request)
-		if err != nil {
-			//w.log.Errorf("[PoT]\tGet Txs from executor error for %s",err)
-			return nil, err
-		}
-
-		excutorblock := response.GetBlocks()
-		excuteheight := response.GetEnd()
-		if excuteheight > w.executeheight {
-			w.executeheight = excuteheight
-		}
-		return excutorblock, nil
-
-	}
-	return make([]*pb.ExecuteBlock, 0), nil
 }
 
 func (w *Worker) createNilBlock(epoch uint64, parentBlock *types.Block, uncleBlock []*types.Block, difficulty *big.Int, mixdigest []byte, nonce int64, vdf0res []byte, vdf1res []byte) *types.Block {

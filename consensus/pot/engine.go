@@ -136,6 +136,7 @@ func (e *PoTEngine) Broadcast(msgByte []byte) error {
 	}
 	bytePacket, err := proto.Marshal(packet)
 	utils.PanicOnError(err)
+	//e.log.Infof("[PoT]\t packet len %f KB", float64(len(bytePacket))/float64(1024))
 	return e.Adaptor.Broadcast(bytePacket, e.consensusID, e.Topic)
 }
 

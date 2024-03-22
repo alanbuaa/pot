@@ -210,13 +210,23 @@ func (w *Worker) chainreset(branch []*types.Block) error {
 	branchlen := len(branch)
 	branchstr := ""
 	for i := branchlen - 1; i >= 0; i-- {
+		blocks := branch[i]
+		height := blocks.GetHeader().Height
+		originblocks, err := w.chainReader.GetByHeight(height)
+		if err != nil {
+			return fmt.Errorf("get chain block err for %s", err)
+		}
+		origintxs := originblocks.GetExcutedTx()
+		w.mempool.UnMark(origintxs)
 
-		height := branch[i].GetHeader().Height
 		if height != epoch {
-			w.chainReader.SetHeight(height, branch[i])
+			w.chainReader.SetHeight(height, blocks)
+			txs := blocks.GetExcutedTx()
+			w.mempool.UnMark(txs)
 			//w.blockStorage.SetVDFres(height, branch[i].GetHeader().PoTProof[0])
 			branchstr = branchstr + "\t" + strconv.Itoa(int(height))
 		}
+
 	}
 
 	w.log.Infof("[PoT]\tepoch %d: the chain has been reset by branch %s", epoch, branchstr)

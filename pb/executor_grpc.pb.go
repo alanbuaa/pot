@@ -58,15 +58,14 @@ func (c *executorClient) VerifyTx(ctx context.Context, in *Transaction, opts ...
 }
 
 // ExecutorServer is the server API for Executor service.
-// All implementations must embed UnimplementedExecutorServer
+// All implementations should embed UnimplementedExecutorServer
 // for forward compatibility
 type ExecutorServer interface {
 	CommitBlock(context.Context, *ExecBlock) (*Empty, error)
 	VerifyTx(context.Context, *Transaction) (*Result, error)
-	mustEmbedUnimplementedExecutorServer()
 }
 
-// UnimplementedExecutorServer must be embedded to have forward compatible implementations.
+// UnimplementedExecutorServer should be embedded to have forward compatible implementations.
 type UnimplementedExecutorServer struct {
 }
 
@@ -76,7 +75,6 @@ func (UnimplementedExecutorServer) CommitBlock(context.Context, *ExecBlock) (*Em
 func (UnimplementedExecutorServer) VerifyTx(context.Context, *Transaction) (*Result, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method VerifyTx not implemented")
 }
-func (UnimplementedExecutorServer) mustEmbedUnimplementedExecutorServer() {}
 
 // UnsafeExecutorServer may be embedded to opt out of forward compatibility for this service.
 // Use of this interface is not recommended, as added methods to ExecutorServer will

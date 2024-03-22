@@ -1,8 +1,10 @@
 package pot
 
 import (
+	"fmt"
 	"github.com/zzz136454872/upgradeable-consensus/consensus/whirly/simpleWhirly"
 	"github.com/zzz136454872/upgradeable-consensus/types"
+	"os"
 )
 
 //func (w *Worker) simpleLeaderUpdate(parent *types.Header) {
@@ -67,6 +69,7 @@ func (w *Worker) GetPeerQueue() chan *types.Block {
 }
 
 func (w *Worker) CommiteeUpdate(epoch uint64) {
+
 	//if epoch >= CommiteeDelay+Commiteelen {
 	//	commitee := make([]string, Commiteelen)
 	//	selfaddress := make([]string, 0)
@@ -102,6 +105,22 @@ func (w *Worker) CommiteeUpdate(epoch uint64) {
 	//		w.potSignalChan <- b
 	//	}
 	//}
+	if epoch > 10 && w.ID == 1 {
+		block, err := w.chainReader.GetByHeight(epoch - 1)
+		if err != nil {
+			return
+		}
+		header := block.GetHeader()
+		fill, err := os.OpenFile("difficulty", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
+		if err != nil {
+			fmt.Println(err)
+		}
+		_, err = fill.WriteString(fmt.Sprintf("%d\n", header.Difficulty.Int64()))
+		if err != nil {
+			fmt.Println(err)
+		}
+		fill.Close()
+	}
 }
 func (w *Worker) SetWhirly(impl *simpleWhirly.NodeController) {
 	w.whirly = impl

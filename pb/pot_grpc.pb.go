@@ -69,16 +69,15 @@ func (c *poTExecutorClient) CommitTxs(ctx context.Context, in *CommitTxsRequest,
 }
 
 // PoTExecutorServer is the server API for PoTExecutor service.
-// All implementations must embed UnimplementedPoTExecutorServer
+// All implementations should embed UnimplementedPoTExecutorServer
 // for forward compatibility
 type PoTExecutorServer interface {
 	GetTxs(context.Context, *GetTxRequest) (*GetTxResponse, error)
 	VerifyTxs(context.Context, *VerifyTxRequest) (*VerifyTxResponse, error)
 	CommitTxs(context.Context, *CommitTxsRequest) (*CommitTxsResponse, error)
-	mustEmbedUnimplementedPoTExecutorServer()
 }
 
-// UnimplementedPoTExecutorServer must be embedded to have forward compatible implementations.
+// UnimplementedPoTExecutorServer should be embedded to have forward compatible implementations.
 type UnimplementedPoTExecutorServer struct {
 }
 
@@ -91,7 +90,6 @@ func (UnimplementedPoTExecutorServer) VerifyTxs(context.Context, *VerifyTxReques
 func (UnimplementedPoTExecutorServer) CommitTxs(context.Context, *CommitTxsRequest) (*CommitTxsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CommitTxs not implemented")
 }
-func (UnimplementedPoTExecutorServer) mustEmbedUnimplementedPoTExecutorServer() {}
 
 // UnsafePoTExecutorServer may be embedded to opt out of forward compatibility for this service.
 // Use of this interface is not recommended, as added methods to PoTExecutorServer will

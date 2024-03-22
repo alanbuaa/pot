@@ -12,6 +12,7 @@ import (
 	"github.com/zzz136454872/upgradeable-consensus/types"
 	"google.golang.org/protobuf/proto"
 	"math/big"
+	"os"
 	"time"
 )
 
@@ -39,6 +40,7 @@ func (w *Worker) handleBlock() {
 				break
 			} else if header.Height == epoch {
 				if header.PeerId == w.self() {
+
 					w.log.Infof("[PoT]\tepoch %d:Receive block from myself, Difficulty %d, with parent %s", epoch, header.Difficulty.Int64(), hex.EncodeToString(header.ParentHash))
 
 					w.mutex.Lock()
@@ -54,7 +56,19 @@ func (w *Worker) handleBlock() {
 					}
 
 				} else {
-					w.log.Infof("[PoT]\tepoch %d:Receive block from node %d, Difficulty %d, with parent %s", epoch, header.Address, header.Difficulty.Int64(), hex.EncodeToString(header.ParentHash))
+					w.log.Infof("[PoT]\tepoch %d:Receive block from node %d, Difficulty %d, with parent %s, transport need %d seconds", epoch, header.Address, header.Difficulty.Int64(), hex.EncodeToString(header.ParentHash), time.Since(header.Timestamp)/time.Second)
+					if w.ID == 1 {
+						transfertime := float64(time.Since(header.Timestamp)) / float64(time.Second)
+						fill, err := os.OpenFile("transfertime", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
+						if err != nil {
+							fmt.Println(err)
+						}
+						_, err = fill.WriteString(fmt.Sprintf("%f\n", transfertime))
+						if err != nil {
+							fmt.Println(err)
+						}
+						fill.Close()
+					}
 					if header.Difficulty.Cmp(common.Big0) == 0 {
 						//w.storage.Put(header)
 						w.blockStorage.Put(block)

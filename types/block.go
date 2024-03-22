@@ -63,6 +63,8 @@ func (b *Block) GetTxs() []*Tx {
 
 func (b *Block) ToProto() *pb.Block {
 	pbheader := b.GetHeader().ToProto()
+	//headerbytes, _ := proto.Marshal(pbheader)
+	//fmt.Printf("header len %\nf", float64(len(headerbytes))/float64(1024))
 	if b.Txs != nil {
 		txs := make([]*pb.Tx, len(b.Txs))
 		for i := 0; i < len(b.Txs); i++ {
