@@ -43,7 +43,7 @@ func (w *Worker) request(request *pb.BlockRequest) (*pb.BlockResponse, error) {
 	res := new(pb.BlockResponse)
 	select {
 	case response := <-w.blockResponseChan:
-		if response.Src != request.Des || response.Srcid != request.Desid {
+		if response.Src != request.Des {
 			return nil, fmt.Errorf("receive response from wrong address")
 		}
 		res = response
@@ -88,10 +88,10 @@ func (w *Worker) handlePoTResponse(response *pb.PoTResponse) error {
 func (w *Worker) requestPoTResFor(epoch uint64, address int64, peerid string) ([]byte, error) {
 	request := &pb.PoTRequest{
 		Epoch: epoch,
-		Desid: address,
-		Des:   peerid,
-		Srcid: w.ID,
-		Src:   w.PeerId,
+
+		Des: peerid,
+
+		Src: w.PeerId,
 	}
 	response, err := w.potRequest(request)
 	if err != nil {
@@ -133,7 +133,7 @@ func (w *Worker) potRequest(request *pb.PoTRequest) (*pb.PoTResponse, error) {
 	res := new(pb.PoTResponse)
 	select {
 	case response := <-w.potResponseCh:
-		if response.Src != request.Des || response.Srcid != request.Desid {
+		if response.Src != request.Des {
 			return nil, fmt.Errorf("receive response from wrong address")
 		}
 		res = response
@@ -165,10 +165,9 @@ func (w *Worker) getParentBlock(block *types.Block) (*types.Block, error) {
 		request := &pb.BlockRequest{
 			Height: block.GetHeader().Height - 1,
 			Hashes: parentHash,
-			Desid:  block.GetHeader().Address,
-			Srcid:  w.ID,
-			Des:    block.GetHeader().PeerId,
-			Src:    w.PeerId,
+
+			Des: block.GetHeader().PeerId,
+			Src: w.PeerId,
 		}
 		// w.p2p.Unicast()
 		blockResponse, err := w.request(request)
@@ -204,10 +203,9 @@ func (w *Worker) getUncleBlock(block *types.Block) ([]*types.Block, error) {
 			request := &pb.BlockRequest{
 				Height: header.Height - 1,
 				Hashes: header.UncleHash[i],
-				Desid:  header.Address,
-				Srcid:  w.ID,
-				Des:    header.PeerId,
-				Src:    w.PeerId,
+
+				Des: header.PeerId,
+				Src: w.PeerId,
 			}
 			// w.p2p.Unicast()
 			blockResponse, err := w.request(request)

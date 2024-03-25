@@ -231,7 +231,7 @@ func (w *Worker) OnGetVdf0Response() {
 			parentblock, uncleblock := w.blockSelection(backupblock, res0, epoch)
 
 			if parentblock != nil {
-				w.log.Infof("[PoT]\tepoch %d:parent block hash is : %s Difficulty %d from %d", epoch+1, hex.EncodeToString(parentblock.Hash()), parentblock.GetHeader().Difficulty.Int64(), parentblock.GetHeader().Address)
+				w.log.Infof("[PoT]\tepoch %d:parent block hash is : %s Difficulty %d from %s", epoch+1, hex.EncodeToString(parentblock.Hash()), parentblock.GetHeader().Difficulty.Int64(), parentblock.GetHeader().PeerId)
 			} else {
 				if len(backupblock) != 0 {
 					w.chainReader.SetHeight(epoch, backupblock[0])
