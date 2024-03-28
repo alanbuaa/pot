@@ -51,7 +51,7 @@ var (
 func main() {
 	signal.Notify(sigChan, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM,
 		syscall.SIGQUIT)
-	total := 4
+	total := 1
 	nodes := make([]*node.Node, total)
 
 	for i := int64(0); i < int64(total); i++ {
