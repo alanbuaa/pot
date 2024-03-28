@@ -3,9 +3,10 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/zzz136454872/upgradeable-consensus/crypto"
 	"github.com/zzz136454872/upgradeable-consensus/pb"
-	"github.com/zzz136454872/upgradeable-consensus/types"
 	"google.golang.org/grpc"
+	"math/big"
 	"net"
 	"time"
 )
@@ -23,7 +24,7 @@ func main() {
 	defer rpcserver.Stop()
 	defer listen.Close()
 	for {
-		time.Sleep(2 * time.Second)
+		time.Sleep(20 * time.Second)
 		blocks := exec.GenerateTxsForHeight(exec.height)
 		exec.blocks = append(exec.blocks, blocks)
 		exec.height += 1
@@ -95,7 +96,9 @@ func (p *PoTexecutor) CommitTxs(ctx context.Context, request *pb.CommitTxsReques
 func (p *PoTexecutor) GenerateTxsForHeight(height uint64) *Testblock {
 	txs := make([][]byte, 0)
 	for i := 0; i < 1000; i++ {
-		txs = append(txs, types.RandByte())
+		bigint := big.NewInt(int64(i))
+		tx := crypto.Hash(bigint.Bytes())
+		txs = append(txs, tx)
 	}
 	return &Testblock{
 		Height: height,
