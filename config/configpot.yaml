@@ -32,7 +32,7 @@ p2p:
   type: p2p-adaptor # p2p-adaptor currently only supports simple-whirly # sudo sysctl -w net.core.rmem_max=2500000
   #type: p2p
 
-topic: this-is-consensus-topic-saddfasfdas-002
+topic: this-is-consensus-topic-saddfasfdas-005
 
 consensus:
   # type: "upgradeable"
@@ -67,7 +67,7 @@ consensus:
     sysPara: 2
     vdf0Iteration: 200000
     vdf1Iteration: 120000
-    excutorAddress: 127.0.0.1:9877
+    excutorAddress: 123.157.213.104:22222
     batchsize: 12000
     timeout: 5
     commiteeSize : 4

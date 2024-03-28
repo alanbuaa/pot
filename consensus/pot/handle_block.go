@@ -56,9 +56,9 @@ func (w *Worker) handleBlock() {
 					}
 
 				} else {
-					w.log.Infof("[PoT]\tepoch %d:Receive block from node %d, Difficulty %d, with parent %s, transport need %d seconds", epoch, header.Address, header.Difficulty.Int64(), hex.EncodeToString(header.ParentHash), time.Since(header.Timestamp)/time.Second)
+					w.log.Infof("[PoT]\tepoch %d:Receive block from node %d, Difficulty %d, with parent %s, transport need %f millseconds", epoch, header.Address, header.Difficulty.Int64(), hex.EncodeToString(header.ParentHash), float64(time.Since(header.Timestamp))/float64(time.Millisecond))
 					if w.ID == 1 {
-						transfertime := float64(time.Since(header.Timestamp)) / float64(time.Second)
+						transfertime := float64(time.Since(header.Timestamp)) / float64(time.Millisecond)
 						fill, err := os.OpenFile("transfertime", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
 						if err != nil {
 							fmt.Println(err)
