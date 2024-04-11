@@ -173,6 +173,7 @@ func (w *Worker) OnGetVdf0Response() {
 			epoch := w.getEpoch()
 			timer := time.Since(w.timestamp) / time.Millisecond
 			w.log.Infof("[PoT]\tepoch %d:Receive epoch %d vdf0 res %s, use %d ms\n", epoch, res.Epoch, hexutil.Encode(crypto.Hash(res.Res)), timer)
+			//time.Sleep(10 * time.Second)
 
 			if epoch > res.Epoch {
 				w.log.Errorf("[PoT]\tthe epoch already set")
@@ -185,6 +186,11 @@ func (w *Worker) OnGetVdf0Response() {
 
 			if err != nil {
 				w.log.Warn("[PoT]\tget backup block error :", err)
+				go w.WaitandReset(res)
+				continue
+			}
+
+			if len(backupblock) < int(w.config.PoT.Snum) && epoch > 1 {
 				go w.WaitandReset(res)
 				continue
 			}
@@ -286,27 +292,42 @@ func (w *Worker) mine(epoch uint64, vdf0res []byte, nonce int64, workerid int, a
 		w.log.Debugf("[PoT]\tepoch %d:Start run vdf1 %d to mine", epoch, workerid)
 		err := w.vdf1[workerid].Exec(epoch)
 		if err != nil {
-			w.log.Errorf("[PoT]\tepoch %d:vdf1 %d mine error for %s", epoch, workerid, err)
+			return
 		}
 	}()
+
+	target := new(big.Int).Set(bigD)
+	target = target.Div(bigD, difficulty)
 
 	for {
 		select {
 		case res := <-vdfCh:
 			res1 := res.Res
 			// compare to target
-			target := new(big.Int).Set(bigD)
-			target = target.Div(bigD, difficulty)
+
 			tmp.SetBytes(crypto.Hash(res1))
 			if tmp.Cmp(target) >= 0 {
 
 				block := w.createNilBlock(epoch, parentblock, uncleblock, difficulty, mixdigest, nonce, vdf0res, res1)
 				w.log.Infof("[PoT]\tepoch %d:workerid %d fail to find a %d block, create a nil block %s", epoch, workerid, difficulty.Int64(), hexutil.Encode(block.Hash()))
 				w.blockStorage.Put(block)
-				//w.peerMsgQueue <- block
-				// w.workFlag = false
 
-				return block
+				nonce += 1
+				tmp.SetInt64(nonce)
+				noncebyte := tmp.Bytes()
+				input := bytes.Join([][]byte{noncebyte, vdf0res, mixdigest}, []byte(""))
+				hashinput := crypto.Hash(input)
+				w.vdf1[workerid] = types.NewVDFwithInput(w.vdf1Chan, hashinput, w.config.PoT.Vdf1Iteration, w.ID)
+
+				go func() {
+					w.log.Debugf("[PoT]\tepoch %d:Start run vdf1 %d to mine", epoch, workerid)
+					err := w.vdf1[workerid].Exec(epoch)
+					if err != nil {
+						return
+					}
+				}()
+
+				continue
 			}
 			// w.createBlock
 			block := w.createBlock(epoch, parentblock, uncleblock, difficulty, mixdigest, nonce, vdf0res, res1)
@@ -315,8 +336,23 @@ func (w *Worker) mine(epoch uint64, vdf0res []byte, nonce int64, workerid int, a
 
 			// broadcast the block
 			w.peerMsgQueue <- block
+			nonce += 1
+			tmp.SetInt64(nonce)
+			noncebyte := tmp.Bytes()
+			input := bytes.Join([][]byte{noncebyte, vdf0res, mixdigest}, []byte(""))
+			hashinput := crypto.Hash(input)
+			w.vdf1[workerid] = types.NewVDFwithInput(w.vdf1Chan, hashinput, w.config.PoT.Vdf1Iteration, w.ID)
+
+			go func() {
+				w.log.Debugf("[PoT]\tepoch %d:Start run vdf1 %d to mine", epoch, workerid)
+				err := w.vdf1[workerid].Exec(epoch)
+				if err != nil {
+					return
+				}
+			}()
+
 			// w.workFlag = false
-			return block
+			continue
 		case <-abort:
 			err := w.vdf1[workerid].Abort()
 			if err != nil {
@@ -538,7 +574,7 @@ func (w *Worker) checkVDFforepoch(epoch uint64, vdfres []byte) bool {
 func (w *Worker) setVDF0epoch(epoch uint64) error {
 	epochnow := w.getEpoch()
 	if epochnow > epoch {
-		return fmt.Errorf("[PoT]\tepoch %d: could not set for a outdated epoch %d", epochnow, epoch)
+		return fmt.Errorf("could not set for a outdated epoch %d", epochnow, epoch)
 	}
 
 	if w.IsVDF1Working() {

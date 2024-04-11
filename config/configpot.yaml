@@ -66,8 +66,8 @@ consensus:
     snum : 2
     sysPara: 2
     vdf0Iteration: 200000
-    vdf1Iteration: 120000
-    excutorAddress: 51.26.20.251:8085
+    vdf1Iteration: 80000
+    excutorAddress: 127.0.0.1:9877
     batchsize: 100
     timeout: 5
     commiteeSize : 4

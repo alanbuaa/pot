@@ -12,6 +12,7 @@ import (
 	"github.com/zzz136454872/upgradeable-consensus/types"
 	"google.golang.org/protobuf/proto"
 	"math/big"
+	"math/rand"
 	"os"
 	"time"
 )
@@ -160,6 +161,10 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 			_ = w.blockStorage.Put(block)
 			w.mutex.Unlock()
 
+			err = w.workReset(block.GetHeader().Height, block)
+			if err != nil {
+				w.log.Errorf("[PoT]\twork reset error for %s", err)
+			}
 			//txs := block.GetExcutedTxs()
 			//w.mempool.MarkProposed(txs)
 		}
@@ -194,10 +199,20 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 			w.log.Warnf("[PoT]\tset vdf error for %s:", err)
 			return err
 		}
+
+		w.mutex.Lock()
+		// w.backupBlock = append(w.backupBlock, block)
+
+		w.blockCounter += 1
+		//err = w.storage.Put(block)
+		err = w.blockStorage.Put(block)
+		w.mutex.Unlock()
+
 		res := &types.VDF0res{
 			Res:   block.GetHeader().PoTProof[0],
 			Epoch: block.GetHeader().Height - 1,
 		}
+
 		w.vdf0Chan <- res
 		w.log.Infof("[PoT]\tepoch %d:set vdf complete. Start from epoch %d with res %s", epoch, block.GetHeader().Height-1, hexutil.Encode(crypto.Hash(res.Res)))
 		return nil
@@ -236,6 +251,15 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 		close(w.abort)
 		w.wg.Wait()
 		w.setWorkFlagFalse()
+	}
+
+	header := block.GetHeader()
+	if len(header.UncleHash) != 0 {
+		_, err := w.getUncleBlock(block)
+		if err != nil {
+			w.log.Errorf("[PoT]\tGet uncle block err for %s", err)
+			return err
+		}
 	}
 
 	err = w.setVDF0epoch(block.GetHeader().Height - 1)
@@ -394,4 +418,45 @@ func (w *Worker) CheckBlock(block *types.Block) (bool, error) {
 	return true, nil
 	//excutedtxs := block.GetExcutedTx()
 
+}
+
+func (w *Worker) workReset(epoch uint64, block *types.Block) error {
+	header := block.GetHeader()
+
+	parentblock, err := w.blockStorage.Get(header.ParentHash)
+	if err != nil {
+		return err
+	}
+
+	uncleblock := make([]*types.Block, 0)
+	for i := 0; i < len(header.UncleHash); i++ {
+		b, err := w.blockStorage.Get(header.UncleHash[i])
+		if err != nil {
+			return err
+		}
+
+		uncleblock = append(uncleblock, b)
+	}
+
+	res0, err := w.blockStorage.GetVDFresbyEpoch(epoch)
+	if err != nil {
+		return err
+	}
+
+	difficulty := header.Difficulty
+	if w.IsVDF1Working() {
+		w.setWorkFlagFalse()
+		close(w.abort)
+		w.wg.Wait()
+		//w.log.Infof("[PoT]\tthe vdf1 work got abort for chain reset, need %d ms", time2.Since(time)/time2.Millisecond)
+	}
+	w.startWorking()
+	w.abort = make(chan struct{})
+	w.wg.Add(cpuCounter)
+
+	for i := 0; i < cpuCounter; i++ {
+		go w.mine(epoch, res0, rand.Int63(), i, w.abort, difficulty, parentblock, uncleblock, w.wg)
+	}
+
+	return nil
 }

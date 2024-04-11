@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"github.com/zzz136454872/upgradeable-consensus/crypto"
 	"github.com/zzz136454872/upgradeable-consensus/logging"
 	"github.com/zzz136454872/upgradeable-consensus/node"
@@ -59,14 +58,16 @@ var (
 func main() {
 	signal.Notify(sigChan, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM,
 		syscall.SIGQUIT)
-	total := 1
+	total := 4
 	nodes := make([]*node.Node, total)
 
 	for i := int64(0); i < int64(total); i++ {
 		go func(index int64) {
+
 			nodes[index] = node.NewNode(index)
 		}(i)
 	}
+	go testexecutor()
 	<-sigChan
 	logger.Info("[UpgradeableConsensus] Exit...")
 	for i := 0; i < total; i++ {
@@ -139,7 +140,7 @@ func NewExec() *PoTexecutor {
 }
 
 func (p *PoTexecutor) GetTxs(ctx context.Context, request *pb.GetTxRequest) (*pb.GetTxResponse, error) {
-	fmt.Printf("receive request, start %d, end %d\n", request.StartHeight, p.height)
+	//fmt.Printf("receive request, start %d, end %d\n", request.StartHeight, p.height)
 	start := request.GetStartHeight()
 	if start > p.height {
 		return &pb.GetTxResponse{}, nil
