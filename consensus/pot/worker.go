@@ -23,6 +23,7 @@ import (
 	"math"
 	"math/big"
 	"math/rand"
+	"os"
 	"sync"
 	"time"
 )
@@ -80,6 +81,8 @@ type Worker struct {
 	potSignalChan chan<- []byte
 	committee     *orderedmap.OrderedMap
 	Commitee      []string
+
+	//
 }
 
 func NewWorker(id int64, config *config.ConsensusConfig, logger *logrus.Entry, bst *types.BlockStorage, engine *PoTEngine) *Worker {
@@ -180,17 +183,16 @@ func (w *Worker) OnGetVdf0Response() {
 				continue
 			}
 
-			backupblock, err := w.blockStorage.GetbyHeight(epoch)
+			//timestop := math.Floor(float64(timer) * float64(10-w.config.PoT.Slowrate) / float64(w.config.PoT.Slowrate))
+			//time.Sleep(time.Duration(timestop) * time.Millisecond)
+			//
+			//timer = time.Since(w.timestamp) / time.Millisecond
+			//w.log.Infof("[PoT]\tepoch %d:Receive epoch %d vdf0 res %s, use %d ms\n", epoch, res.Epoch, hexutil.Encode(crypto.Hash(res.Res)), timer)
 
-			w.log.Debugf("[PoT]\tepoch %d:epoch %d block num %d", epoch+1, epoch, len(backupblock))
+			flag, err := w.CheckParentBlockEnough(epoch)
 
-			if err != nil {
-				w.log.Warn("[PoT]\tget backup block error :", err)
-				go w.WaitandReset(res)
-				continue
-			}
-
-			if len(backupblock) < int(w.config.PoT.Snum) && epoch > 1 {
+			if !flag {
+				w.log.Infof("[PoT]\tepoch %d: check parent block enough fail for %s", epoch, err)
 				go w.WaitandReset(res)
 				continue
 			}
@@ -211,6 +213,7 @@ func (w *Worker) OnGetVdf0Response() {
 			inputHash := crypto.Hash(res0)
 
 			if !w.vdf0.IsFinished() {
+
 				err := w.vdf0.Abort()
 				if err != nil {
 					w.log.Warnf("[PoT]\tepoch %d: vdf0 abort error for %s", epoch+1, err)
@@ -233,6 +236,9 @@ func (w *Worker) OnGetVdf0Response() {
 					w.log.Info("[PoT]\texecute vdf error for :", err)
 				}
 			}()
+
+			backupblock, err := w.blockStorage.GetbyHeight(epoch)
+			w.log.Infof("[PoT]\tepoch %d:epoch %d block num %d", epoch+1, epoch, len(backupblock))
 
 			parentblock, uncleblock := w.blockSelection(backupblock, res0, epoch)
 
@@ -336,6 +342,8 @@ func (w *Worker) mine(epoch uint64, vdf0res []byte, nonce int64, workerid int, a
 
 			// broadcast the block
 			w.peerMsgQueue <- block
+
+			// begin new work
 			nonce += 1
 			tmp.SetInt64(nonce)
 			noncebyte := tmp.Bytes()
@@ -359,7 +367,7 @@ func (w *Worker) mine(epoch uint64, vdf0res []byte, nonce int64, workerid int, a
 				w.log.Errorf("[PoT]\tepoch %d:vdf1 %d mine abort error for %t", epoch, workerid, err)
 				return nil
 			}
-			w.log.Infof("[PoT]\tepoch %d:vdf1 workerid %d got abort", epoch, workerid)
+			w.log.Debugf("[PoT]\tepoch %d:vdf1 workerid %d got abort", epoch, workerid)
 			// w.workFlag = false
 			return nil
 		}
@@ -411,24 +419,6 @@ func (w *Worker) createBlock(epoch uint64, parentBlock *types.Block, uncleBlock 
 		Header: h,
 		Txs:    Txs,
 	}
-}
-
-func (w *Worker) GenerateCoinbaseTx(pubkeybyte []byte) *types.Tx {
-	coinbasetx := &types.RawTx{
-		ChainID:    big.NewInt(0),
-		Nonce:      0,
-		GasPrice:   big.NewInt(0),
-		Gas:        0,
-		To:         pubkeybyte,
-		Data:       big.NewInt(0).Bytes(),
-		Value:      big.NewInt(0),
-		V:          big.NewInt(0),
-		R:          big.NewInt(0),
-		S:          big.NewInt(0),
-		Accesslist: []byte(""),
-	}
-	txdata, _ := coinbasetx.EncodeToByte()
-	return &types.Tx{Data: txdata}
 }
 
 func (w *Worker) GetExcutedTxsFromExecutor(epoch uint64) ([]*types.ExecutedTxData, error) {
@@ -574,7 +564,7 @@ func (w *Worker) checkVDFforepoch(epoch uint64, vdfres []byte) bool {
 func (w *Worker) setVDF0epoch(epoch uint64) error {
 	epochnow := w.getEpoch()
 	if epochnow > epoch {
-		return fmt.Errorf("could not set for a outdated epoch %d", epochnow, epoch)
+		return fmt.Errorf("could not set for a outdated epoch %d", epoch)
 	}
 
 	if w.IsVDF1Working() {
@@ -689,6 +679,40 @@ func (w *Worker) caldifficultyExp(parentblock *types.Block, uncleBlock []*types.
 	}
 }
 
+func (w *Worker) CheckParentBlockEnough(height uint64) (bool, error) {
+	if height == 0 {
+		return true, nil
+	}
+
+	backupblock, err := w.blockStorage.GetbyHeight(height)
+
+	if err != nil {
+		return false, err
+	}
+
+	if len(backupblock) == 0 {
+		return false, nil
+	}
+
+	current, err := w.chainReader.GetByHeight(height - 1)
+	if err != nil {
+		return false, err
+	}
+	/* */
+	count := int64(0)
+	for _, block := range backupblock {
+		blockheader := block.GetHeader()
+		if bytes.Equal(current.GetHeader().Hashes, blockheader.ParentHash) {
+			count += 1
+		}
+	}
+	if count < w.config.PoT.Snum {
+		return false, fmt.Errorf("not enough parent block for height %d", height)
+	}
+
+	return true, nil
+}
+
 func (w *Worker) blockSelection(blocks []*types.Block, vdf0res []byte, height uint64) (parent *types.Block, uncle []*types.Block) {
 	if height == 0 {
 		return types.DefaultGenesisBlock(), nil
@@ -703,9 +727,6 @@ func (w *Worker) blockSelection(blocks []*types.Block, vdf0res []byte, height ui
 		return nil, nil
 	}
 
-	w.mutex.Lock()
-	defer w.mutex.Unlock()
-
 	if len(blocks) == 0 {
 		return nil, nil
 	}
@@ -714,10 +735,12 @@ func (w *Worker) blockSelection(blocks []*types.Block, vdf0res []byte, height ui
 	for _, block := range blocks {
 		blockheader := block.GetHeader()
 		if (bytes.Equal(current.GetHeader().Hashes, blockheader.ParentHash) && block.GetHeader().Difficulty.Cmp(common.Big0) != 0) || blockheader.ParentHash == nil {
+
 			readyblocks = append(readyblocks, block)
 			hashinput := append(block.Hash(), sr...)
-			tmp := new(big.Int).Div(bigD, new(big.Int).SetBytes(crypto.Hash(hashinput)))
-			weight := new(big.Int).Mul(blockheader.Difficulty, tmp)
+
+			tmp := new(big.Int).Mul(bigD, blockheader.Difficulty)
+			weight := new(big.Int).Div(tmp, new(big.Int).SetBytes(crypto.Hash(hashinput)))
 			if weight.Cmp(maxweight) > 0 {
 				max = len(readyblocks)
 				maxweight.Set(weight)
@@ -730,7 +753,8 @@ func (w *Worker) blockSelection(blocks []*types.Block, vdf0res []byte, height ui
 
 	parent = readyblocks[max-1]
 	uncle = append(readyblocks[:max-1], readyblocks[max:]...)
-
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
 	w.chainReader.SetHeight(parent.GetHeader().Height, parent)
 
 	return parent, uncle
@@ -767,4 +791,12 @@ func (w *Worker) handleBlockExcutedTx(block *types.Block) error {
 	excutedtx := block.GetExcutedTx()
 	w.mempool.MarkProposed(excutedtx)
 	return nil
+}
+
+func (w *Worker) stop() {
+	fill, err := os.OpenFile(fmt.Sprintf("./logs/blockmyself-%d", w.ID), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
+	if err != nil {
+		return
+	}
+	fill.WriteString("")
 }

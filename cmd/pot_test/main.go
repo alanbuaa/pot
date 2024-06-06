@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	config "github.com/zzz136454872/upgradeable-consensus/config"
 	"github.com/zzz136454872/upgradeable-consensus/crypto"
 	"github.com/zzz136454872/upgradeable-consensus/logging"
 	"github.com/zzz136454872/upgradeable-consensus/node"
@@ -58,7 +59,8 @@ var (
 func main() {
 	signal.Notify(sigChan, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM,
 		syscall.SIGQUIT)
-	total := 4
+	cfg, _ := config.NewConfig("config/configpot.yaml", 0)
+	total := cfg.Total
 	nodes := make([]*node.Node, total)
 
 	for i := int64(0); i < int64(total); i++ {

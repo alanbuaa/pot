@@ -105,6 +105,7 @@ func (e *PoTEngine) GetMsgByteEntrance() chan<- []byte {
 
 func (e *PoTEngine) Stop() {
 	_ = os.RemoveAll("dbfile/node0-" + strconv.Itoa(int(e.id)))
+	e.worker.stop()
 	close(e.GetMsgByteEntrance())
 }
 

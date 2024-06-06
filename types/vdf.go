@@ -13,32 +13,41 @@ type VDF0res struct {
 }
 
 type VDF struct {
+	ID int64
 	*vdf.Vdf
 	OutputChan chan *VDF0res
 	Finished   bool
 }
 
 func NewVDF(outch chan *VDF0res, iteration int, id int64) *VDF {
-
-	return &VDF{Vdf: vdf.New("wesolowski_rust", []byte(""), iteration, id), OutputChan: outch, Finished: true}
+	return &VDF{Vdf: vdf.New("wesolowski_rust", []byte(""), iteration, id), OutputChan: outch, Finished: true, ID: id}
 }
 
 func NewVDFwithInput(outch chan *VDF0res, input []byte, iteration int, id int64) *VDF {
-	return &VDF{Vdf: vdf.New("wesolowski_rust", input, iteration, id), OutputChan: outch, Finished: true}
+	return &VDF{Vdf: vdf.New("wesolowski_rust", input, iteration, id), OutputChan: outch, Finished: true, ID: id}
 }
 
 func (v *VDF) Exec(epoch uint64) error {
+
 	v.Finished = false
 	defer v.setFinished()
+	//start := time.Now()
 	res, err := v.Vdf.Execute()
 	if err != nil {
 		return err
 	}
+
 	vdfRes := &VDF0res{
 		Res:   res,
 		Epoch: epoch,
 	}
 	if res != nil {
+		//exectime := time.Since(start) / time.Millisecond
+		//if v.ID != 3 {
+		//	timestop := math.Floor(float64(exectime) * float64((10-8)/10))
+		//	time.Sleep(time.Duration(timestop) * time.Millisecond)
+		//	fmt.Printf("vdf execute need %d ms\n", time.Since(start)/time.Millisecond)
+		//}
 		v.OutputChan <- vdfRes
 		//v.Finished = true
 		return nil

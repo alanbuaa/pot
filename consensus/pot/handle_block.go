@@ -196,7 +196,7 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 	if epoch+100 < block.GetHeader().Height {
 		err := w.setVDF0epoch(block.GetHeader().Height - 1)
 		if err != nil {
-			w.log.Warnf("[PoT]\tset vdf error for %s:", err)
+			w.log.Warnf("[PoT]\tepoch %d: set vdf error for %s", epoch, err)
 			return err
 		}
 
@@ -264,7 +264,7 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 
 	err = w.setVDF0epoch(block.GetHeader().Height - 1)
 	if err != nil {
-		w.log.Warnf("[PoT]\tset vdf error for %s:", err)
+		w.log.Warnf("[PoT]\tepoch %d: set vdf error for %s:", epoch, err)
 		return err
 	}
 	w.mutex.Lock()

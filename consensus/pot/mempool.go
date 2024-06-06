@@ -8,8 +8,8 @@ import (
 )
 
 type WrappedTx struct {
-	tx       *types.ExecutedTxData
-	proposed bool
+	executedTxData *types.ExecutedTxData
+	proposed       bool
 }
 
 type Mempool struct {
@@ -47,8 +47,8 @@ func (c *Mempool) Add(txs ...*types.ExecutedTxData) {
 			continue
 		}
 		e := c.order.PushBack(&WrappedTx{
-			tx:       tx,
-			proposed: false,
+			executedTxData: tx,
+			proposed:       false,
 		})
 		c.set[txHash] = e
 	}
@@ -85,7 +85,7 @@ func (c *Mempool) GetFirstN(n int) []*types.ExecutedTxData {
 			break
 		}
 		if wrtx := e.Value.(*WrappedTx); !wrtx.proposed {
-			txs = append(txs, wrtx.tx)
+			txs = append(txs, wrtx.executedTxData)
 			i++
 		}
 		e = e.Next()
@@ -113,8 +113,8 @@ func (c *Mempool) MarkProposed(txs []*types.ExecutedTxData) {
 			// Move to back so that it's not immediately deleted by a call to TrimToLen()
 			c.order.MoveToBack(e)
 		} else {
-			// new tx, store it to back
-			e := c.order.PushBack(&WrappedTx{tx: tx, proposed: true})
+			// new executedTxData, store it to back
+			e := c.order.PushBack(&WrappedTx{executedTxData: tx, proposed: true})
 			c.set[txHash] = e
 		}
 	}

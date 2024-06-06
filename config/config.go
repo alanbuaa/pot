@@ -56,6 +56,7 @@ type PoTConfig struct {
 	Timeout        int    `yaml:"timeout"`
 	CommiteeSize   int    `yaml:"commiteeSize"`
 	ConfirmDelay   int    `yaml:"confirmDelay"`
+	Slowrate       int    `yaml:"slowrate"`
 }
 type ConsensusConfig struct {
 	Type        string            `yaml:"type"`

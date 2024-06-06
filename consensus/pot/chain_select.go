@@ -69,6 +69,7 @@ func (w *Worker) GetSharedAncestor(forkblock *types.Block, currentblock *types.B
 			}
 
 			fork, err := w.getParentBlock(fork)
+
 			if err != nil {
 				return nil, err
 			}
