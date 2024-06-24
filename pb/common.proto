@@ -35,10 +35,12 @@ message QuorumCert {
 message Request {
   bytes tx = 1;
   int32 chainID = 2;
+  bytes sharding = 3;
 }
 
 message Reply {
   bytes tx = 1;
   bytes receipt = 2;
-  int32 chainID =3;
+  int32 chainID = 3;
+  bytes sharding = 4;
 }

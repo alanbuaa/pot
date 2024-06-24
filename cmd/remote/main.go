@@ -3,12 +3,13 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/zzz136454872/upgradeable-consensus/crypto"
-	"github.com/zzz136454872/upgradeable-consensus/pb"
-	"google.golang.org/grpc"
 	"math/big"
 	"net"
 	"time"
+
+	"github.com/zzz136454872/upgradeable-consensus/crypto"
+	"github.com/zzz136454872/upgradeable-consensus/pb"
+	"google.golang.org/grpc"
 )
 
 func main() {
@@ -34,6 +35,11 @@ func main() {
 type PoTexecutor struct {
 	height uint64
 	blocks []*Testblock
+}
+
+// mustEmbedUnimplementedPoTExecutorServer implements pb.PoTExecutorServer.
+func (p *PoTexecutor) mustEmbedUnimplementedPoTExecutorServer() {
+	panic("unimplemented")
 }
 
 func NewExec() *PoTexecutor {

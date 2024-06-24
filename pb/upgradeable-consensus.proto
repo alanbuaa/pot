@@ -18,6 +18,7 @@ message Packet {
   int32 chainID = 4;
   PacketType type = 5;
   string receiverPublicAddress = 6;
+  string receiverShardingName = 7;
 }
 
 enum TransactionType{

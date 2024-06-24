@@ -24,12 +24,14 @@ test:
 
 compile_proto:
 	protoc pb/*.proto --go_out=. --go-grpc_out=.
+	protoc pb/*.proto --go_out=. --go-grpc_out=require_unimplemented_servers=false:.
 
 win_compile_proto:
 	protoc --go_out=plugins=grpc:. pb/*.proto
 
 run_server:
 	./upgradeable-consensus
+	./test 2>&1 | tee log.txt
 
 run_client:
 	./client
