@@ -75,7 +75,8 @@ func (wu *WhirlyUtilitiesImpl) Init(
 	newPeerId1 := strings.Replace(wu.PublicAddress, ".", "", -1)
 	newPeerId2 := strings.Replace(newPeerId1, ":", "", -1)
 
-	wu.BlockStorage = types.NewBlockStorageImpl(strconv.Itoa(int(cid)) + "-" + newPeerId2 + strconv.Itoa(int(id)))
+	// println("newPeerId2: ", newPeerId2)
+	wu.BlockStorage = types.NewBlockStorageImpl(strconv.Itoa(int(cid)) + "-" + newPeerId2 + "-" + strconv.Itoa(int(id)))
 
 	// Set receiver
 	//p2pAdaptor.SetReceiver(wu.GetMsgByteEntrance())
@@ -352,9 +353,9 @@ func (wu *WhirlyUtilitiesImpl) Unicast(address string, msg *pb.WhirlyMsg) error 
 
 func (wu *WhirlyUtilitiesImpl) ProcessProposal(b *pb.WhirlyBlock, p []byte) {
 	// wu.Log.Debugf("[whu] Process proposal")
-	if wu.ID == 0 {
-		wu.Executor.CommitBlock(b, p, wu.ConsensusID)
-	}
+	// if wu.PublicAddress == 0 {
+	wu.Executor.CommitBlock(b, p, wu.ConsensusID)
+	// }
 
 	// wu.Log.Debugf("[whu] after Process proposal")
 	// for _, tx := range txs {
