@@ -196,7 +196,7 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 	if epoch+100 < block.GetHeader().Height {
 		err := w.setVDF0epoch(block.GetHeader().Height - 1)
 		if err != nil {
-			w.log.Warnf("[PoT]\tepoch %d: set vdf error for %s", epoch, err)
+			w.log.Warnf("[PoT]\tepoch %d: execset vdf error for %s", epoch, err)
 			return err
 		}
 
@@ -214,7 +214,7 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 		}
 
 		w.vdf0Chan <- res
-		w.log.Infof("[PoT]\tepoch %d:set vdf complete. Start from epoch %d with res %s", epoch, block.GetHeader().Height-1, hexutil.Encode(crypto.Hash(res.Res)))
+		w.log.Infof("[PoT]\tepoch %d:execset vdf complete. Start from epoch %d with res %s", epoch, block.GetHeader().Height-1, hexutil.Encode(crypto.Hash(res.Res)))
 		return nil
 	}
 
@@ -264,7 +264,7 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 
 	err = w.setVDF0epoch(block.GetHeader().Height - 1)
 	if err != nil {
-		w.log.Warnf("[PoT]\tepoch %d: set vdf error for %s:", epoch, err)
+		w.log.Warnf("[PoT]\tepoch %d: execset vdf error for %s:", epoch, err)
 		return err
 	}
 	w.mutex.Lock()
@@ -280,7 +280,7 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 		Epoch: block.GetHeader().Height - 1,
 	}
 	w.vdf0Chan <- res
-	w.log.Infof("[PoT]\tepoch %d:set vdf complete. Start from epoch %d with res %s", epoch, block.GetHeader().Height-1, hexutil.Encode(crypto.Hash(res.Res)))
+	w.log.Infof("[PoT]\tepoch %d:execset vdf complete. Start from epoch %d with res %s", epoch, block.GetHeader().Height-1, hexutil.Encode(crypto.Hash(res.Res)))
 
 	return nil
 }

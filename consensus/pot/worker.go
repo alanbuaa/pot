@@ -36,6 +36,8 @@ const (
 	cpuCounter    = 1
 	NoParentD     = 2
 	Batchsize     = 100
+	Selectn       = 2
+	TotalReward   = 10000
 )
 
 type Worker struct {
@@ -74,7 +76,7 @@ type Worker struct {
 	blockResponseChan chan *pb.BlockResponse
 	potResponseCh     chan *pb.PoTResponse
 	blockStorage      *types.BlockStorage
-	chainReader       *types.ChainReader
+	chainReader       *ChainReader
 
 	// upper consensus
 	whirly        *simpleWhirly.NodeController
@@ -127,7 +129,7 @@ func NewWorker(id int64, config *config.ConsensusConfig, logger *logrus.Entry, b
 		blockStorage: bst,
 		committee:    orderedmap.NewOrderedMap(),
 		vdfChecker:   vdf.New("wesolowski_rust", []byte(""), potconfig.Vdf0Iteration, id),
-		chainReader:  types.NewChainReader(bst),
+		chainReader:  NewChainReader(bst),
 		PeerId:       engine.GetPeerID(),
 		workFlag:     false,
 		blockKeyMap:  keyblockmap,
@@ -142,6 +144,7 @@ func (w *Worker) Init() {
 	// w.log.Infof("%d %d", w.config.PoT.Snum, w.config.PoT.Vdf1Iteration)
 	w.vdf0.SetInput(crypto.Hash([]byte("aa")), w.config.PoT.Vdf0Iteration)
 	w.SetVdf0res(0, []byte("aa"))
+	w.blockStorage.Put(types.DefaultGenesisBlock())
 	w.blockCounter = 0
 
 }
@@ -179,7 +182,7 @@ func (w *Worker) OnGetVdf0Response() {
 			//time.Sleep(10 * time.Second)
 
 			if epoch > res.Epoch {
-				w.log.Errorf("[PoT]\tthe epoch already set")
+				w.log.Errorf("[PoT]\tthe epoch already execset")
 				continue
 			}
 
@@ -224,7 +227,7 @@ func (w *Worker) OnGetVdf0Response() {
 			w.increaseEpoch()
 			w.vdf0 = types.NewVDFwithInput(w.getVDF0chan(), inputHash, w.config.PoT.Vdf0Iteration, w.ID)
 			if err != nil {
-				w.log.Warnf("[PoT]\tepoch %d:set vdf0 error for %t", epoch+1, err)
+				w.log.Warnf("[PoT]\tepoch %d:execset vdf0 error for %t", epoch+1, err)
 				continue
 			}
 
@@ -248,7 +251,7 @@ func (w *Worker) OnGetVdf0Response() {
 				if len(backupblock) != 0 {
 					w.chainReader.SetHeight(epoch, backupblock[0])
 					parentblock = backupblock[0]
-					w.log.Infof("[PoT]\tepoch %d:parent block hash is nil,set nil block %s as parent", epoch+1, hex.EncodeToString(parentblock.GetHeader().Hashes))
+					w.log.Infof("[PoT]\tepoch %d:parent block hash is nil,execset nil block %s as parent", epoch+1, hex.EncodeToString(parentblock.GetHeader().Hashes))
 				} else {
 
 				}
@@ -393,7 +396,7 @@ func (w *Worker) createBlock(epoch uint64, parentBlock *types.Block, uncleBlock 
 	publicKeyBytes := privateKey.PublicKeyBytes()
 	//publicKeyBytes32 := crypto.Convert(publicKeyBytes)
 
-	coinbasetx := w.GenerateCoinbaseTx(publicKeyBytes)
+	coinbasetx := w.GenerateCoinbaseTx(publicKeyBytes, vdf0res, TotalReward)
 	Txs = append([]*types.Tx{coinbasetx}, Txs...)
 	txshash := crypto.ComputeMerkleRoot(types.Txs2Bytes(Txs))
 	h := &types.Header{
@@ -564,7 +567,7 @@ func (w *Worker) checkVDFforepoch(epoch uint64, vdfres []byte) bool {
 func (w *Worker) setVDF0epoch(epoch uint64) error {
 	epochnow := w.getEpoch()
 	if epochnow > epoch {
-		return fmt.Errorf("could not set for a outdated epoch %d", epoch)
+		return fmt.Errorf("could not execset for a outdated epoch %d", epoch)
 	}
 
 	if w.IsVDF1Working() {

@@ -2,7 +2,6 @@ package simpleWhirly
 
 import (
 	"strconv"
-	"time"
 
 	"github.com/sirupsen/logrus"
 	"github.com/zzz136454872/upgradeable-consensus/pb"
@@ -27,7 +26,7 @@ import (
 // 	}
 // }
 
-func (sw *SimpleWhirlyImpl) NewLeader(potSignal *PoTSignal, sharding *Sharding) {
+func (sw *SimpleWhirlyImpl) NewLeader(potSignal *PoTSignal) {
 	sw.Log.WithFields(logrus.Fields{
 		"address": sw.PublicAddress,
 	}).Info("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] new Epoch tirgger!")
@@ -37,9 +36,7 @@ func (sw *SimpleWhirlyImpl) NewLeader(potSignal *PoTSignal, sharding *Sharding) 
 	sw.curEchoLock.Unlock()
 	sw.maxVHeight = sw.vHeight
 
-	time.Sleep(1 * time.Second)
-
-	newLeaderMsg := sw.NewLeaderNotifyMsg(potSignal.Epoch, potSignal.Proof, sharding.Committee)
+	newLeaderMsg := sw.NewLeaderNotifyMsg(potSignal.Epoch, potSignal.Proof, potSignal.Committee)
 	if sw.GetP2pAdaptorType() == "p2p" {
 		sw.handleMsg(newLeaderMsg)
 	}
@@ -52,8 +49,7 @@ func (sw *SimpleWhirlyImpl) NewLeader(potSignal *PoTSignal, sharding *Sharding) 
 
 func (sw *SimpleWhirlyImpl) UpdateCommittee(committee []string, weight int) {
 
-	_, address := DecodeAddress(sw.PublicAddress)
-	if address != DaemonNodePublicAddress {
+	if sw.PublicAddress != DaemonNodePublicAddress {
 		sw.Log.WithFields(logrus.Fields{
 			"address": sw.PublicAddress,
 		}).Info("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] update committee tirgger!")
@@ -97,7 +93,6 @@ func (sw *SimpleWhirlyImpl) OnReceiveNewLeaderNotify(newLeaderMsg *pb.NewLeaderN
 
 	// Enter the current epoch and record the leader
 	sw.SetLeader(epoch, publicAddress)
-	sw.SetEpoch(epoch)
 	sw.Log.Trace("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] advance Epoch success!")
 
 	sw.voteLock.Lock()
@@ -106,19 +101,18 @@ func (sw *SimpleWhirlyImpl) OnReceiveNewLeaderNotify(newLeaderMsg *pb.NewLeaderN
 
 	// Calculate the weight of the node
 	weight := 0
-	_, address := DecodeAddress(sw.PublicAddress)
 	for _, c := range committee {
-		if c == address {
+		if c == sw.PublicAddress {
 			weight += 1
 		}
 	}
 
 	// If the weight is not 0, it indicates that the node is in the committee
 	// The daemon node should never be stopped
-	if weight > 0 || address == DaemonNodePublicAddress {
+	if weight > 0 || sw.PublicAddress == DaemonNodePublicAddress {
 		sw.UpdateCommittee(committee, weight)
 		// The daemon node should never echo
-		if address == DaemonNodePublicAddress {
+		if sw.PublicAddress == DaemonNodePublicAddress {
 			return
 		}
 	} else {
@@ -172,6 +166,7 @@ func (sw *SimpleWhirlyImpl) OnReceiveNewLeaderEcho(msg *pb.WhirlyMsg) {
 		"leader":       echoMsg.Leader,
 		"len(curEcho)": len(sw.curEcho),
 		"VHeight":      echoMsg.VHeight,
+		// "myAddress":    sw.PublicAddress,
 	}).Info("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] OnReceiveEcho.")
 
 	err := sw.BlockStorage.Put(echoMsg.Block)

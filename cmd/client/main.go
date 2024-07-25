@@ -178,12 +178,10 @@ func (client *Client) receiveReply() {
 	}
 }
 
-// const BroadcastToAll string = "ALL"
-
 func (client *Client) sendTx(tx *pb.Transaction) {
 	btx, err := proto.Marshal(tx)
 	utils.PanicOnError(err)
-	request := &pb.Request{Tx: btx, Sharding: []byte("default")}
+	request := &pb.Request{Tx: btx}
 	rawRequest, err := proto.Marshal(request)
 	utils.PanicOnError(err)
 
@@ -192,7 +190,6 @@ func (client *Client) sendTx(tx *pb.Transaction) {
 		ConsensusID: -1,
 		Epoch:       -1,
 		Type:        pb.PacketType_CLIENTPACKET,
-		// ReceiverPublicAddress: BroadcastToAll,
 	}
 	client.pendingTx.Add(1)
 	client.log.WithFields(logrus.Fields{

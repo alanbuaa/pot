@@ -1,6 +1,7 @@
 package pot
 
 import (
+	"encoding/json"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/zzz136454872/upgradeable-consensus/pb"
 	"github.com/zzz136454872/upgradeable-consensus/types"
@@ -34,10 +35,10 @@ func (e *PoTEngine) onReceiveMsg() {
 	}
 }
 
-// type ControllerMessage struct {
-// 	Data     []byte
-// 	Receiver string
-// }
+type ControllerMessage struct {
+	Data     []byte
+	Receiver string
+}
 
 func (e *PoTEngine) handlePacket(packet *pb.Packet) {
 	if packet.Type == pb.PacketType_P2PPACKET {
@@ -56,22 +57,16 @@ func (e *PoTEngine) handlePacket(packet *pb.Packet) {
 			if e.UpperConsensus != nil && e.UpperConsensus.GetMsgByteEntrance() != nil {
 				// TODO: cache message
 				// e.UpperConsensus.GetMsgByteEntrance() <- packet.GetMsg()
-				// controllerMessage := &ControllerMessage{
-				// 	Data:     packet.GetMsg(),
-				// 	Receiver: packet.ReceiverPublicAddress,
-				// }
-				// controllerMessageBytes, err := json.Marshal(controllerMessage)
-				// if err != nil {
-				// 	e.log.WithError(err).Warn("encode controllerMessage failed")
-				// 	return
-				// }
-				// e.UpperConsensus.GetMsgByteEntrance() <- controllerMessageBytes
-				bytePacket, err := proto.Marshal(packet)
+				controllerMessage := &ControllerMessage{
+					Data:     packet.GetMsg(),
+					Receiver: packet.ReceiverPublicAddress,
+				}
+				controllerMessageBytes, err := json.Marshal(controllerMessage)
 				if err != nil {
-					e.log.Warn("marshal packet failed")
+					e.log.WithError(err).Warn("encode controllerMessage failed")
 					return
 				}
-				e.UpperConsensus.GetMsgByteEntrance() <- bytePacket
+				e.UpperConsensus.GetMsgByteEntrance() <- controllerMessageBytes
 			}
 		}
 	} else if packet.Type == pb.PacketType_CLIENTPACKET {

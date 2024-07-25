@@ -123,19 +123,21 @@ func (t *Tx) GetRawTxData() *RawTx {
 		if err != nil {
 			return nil
 		} else {
-			tmp := new(big.Int)
+			//tmp := new(big.Int)
+			txInputs := make([]TxInput, 0)
+			for _, input := range RawTxData.GetTxInput() {
+				txInput := ToTxInput(input)
+				txInputs = append(txInputs, txInput)
+			}
+			txOutputs := make([]TxOutput, 0)
+			for _, output := range RawTxData.GetTxOutput() {
+				txOutput := ToTxOutput(output)
+				txOutputs = append(txOutputs, txOutput)
+			}
 			return &RawTx{
-				ChainID:    tmp.SetBytes(RawTxData.GetChainID()),
-				Nonce:      RawTxData.GetNonce(),
-				GasPrice:   tmp.SetBytes(RawTxData.GetGasPrice()),
-				Gas:        RawTxData.GetGas(),
-				To:         RawTxData.GetTo(),
-				Data:       RawTxData.GetData(),
-				Value:      tmp.SetBytes(RawTxData.GetValue()),
-				V:          tmp.SetBytes(RawTxData.GetV()),
-				R:          tmp.SetBytes(RawTxData.GetR()),
-				S:          tmp.SetBytes(RawTxData.GetS()),
-				Accesslist: RawTxData.GetAccesslist(),
+				Txid:     crypto.Convert(RawTxData.GetTxID()),
+				TxInput:  txInputs,
+				TxOutput: txOutputs,
 			}
 		}
 	} else {

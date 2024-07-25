@@ -203,15 +203,9 @@ func NewSimpleWhirlyForLocalTest(
 
 func (sw *SimpleWhirlyImpl) SetLeader(epoch int64, leaderID string) {
 	sw.leaderLock.Lock()
-	// sw.epoch = epoch
+	sw.epoch = epoch
 	sw.leader[epoch] = leaderID
 	sw.leaderLock.Unlock()
-}
-
-func (sw *SimpleWhirlyImpl) SetEpoch(epoch int64) {
-	if epoch > sw.epoch {
-		sw.epoch = epoch
-	}
 }
 
 func (sw *SimpleWhirlyImpl) GetLeader(epoch int64) string {
@@ -314,13 +308,6 @@ func (sw *SimpleWhirlyImpl) handleMsg(msg *pb.WhirlyMsg) {
 		sw.MemPool.Add(types.RawTransaction(request.Tx))
 		// send the request to the leader, if the replica is not the leader
 		if sw.PublicAddress != sw.GetLeader(sw.epoch) {
-			if sw.GetLeader(sw.epoch) == "" {
-				sw.Log.WithFields(logrus.Fields{
-					"address": sw.PublicAddress,
-					"epoch":   sw.epoch,
-				}).Warn("The leader of epoch: ", sw.epoch, " is null")
-			}
-
 			_ = sw.Unicast(sw.GetLeader(sw.epoch), msg)
 			return
 		}
@@ -375,8 +362,7 @@ func (sw *SimpleWhirlyImpl) Update(swProof *pb.SimpleWhirlyProof) {
 	}
 
 	if block2.Height+1 == block1.Height {
-		_, address := DecodeAddress(sw.PublicAddress)
-		if sw.View.ViewNum%2 == 0 && (sw.ID == 0 || address == DaemonNodePublicAddress) {
+		if sw.View.ViewNum%2 == 0 && sw.ID == 0 {
 			sw.Log.WithFields(logrus.Fields{
 				"blockHash":   hex.EncodeToString(block2.Hash),
 				"blockHeight": block2.Height,
@@ -402,10 +388,7 @@ func (sw *SimpleWhirlyImpl) OnCommit(block *pb.WhirlyBlock) {
 		}
 		// }()
 		//sw.Log.WithField("blockHash", hex.EncodeToString(block.Hash)).Trace("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] [SIMPLE WHIRLY] EXEC.")
-		_, address := DecodeAddress(sw.PublicAddress)
-		if sw.ID == 0 || address == DaemonNodePublicAddress {
-			go sw.ProcessProposal(block, []byte{})
-		}
+		go sw.ProcessProposal(block, []byte{})
 	}
 }
 

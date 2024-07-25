@@ -2,9 +2,6 @@ package pot
 
 import (
 	"encoding/json"
-	"fmt"
-	"os"
-
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/zzz136454872/upgradeable-consensus/consensus/whirly/simpleWhirly"
 	"github.com/zzz136454872/upgradeable-consensus/crypto"
@@ -91,29 +88,14 @@ func (w *Worker) CommiteeUpdate(epoch uint64) {
 				}
 			}
 		}
-		// potsignal := &simpleWhirly.PoTSignal{
-		// 	Epoch:               int64(epoch),
-		// 	Proof:               nil,
-		// 	ID:                  0,
-		// 	LeaderPublicAddress: commitee[0],
-		// 	Committee:           commitee,
-		// 	SelfPublicAddress:   selfaddress,
-		// 	CryptoElements:      nil,
-		// }
-		sharding := simpleWhirly.PoTSharding{
-			Name:                "default",
-			ParentSharding:      nil,
+		potsignal := &simpleWhirly.PoTSignal{
+			Epoch:               int64(epoch),
+			Proof:               nil,
+			ID:                  0,
 			LeaderPublicAddress: commitee[0],
 			Committee:           commitee,
+			SelfPublicAddress:   selfaddress,
 			CryptoElements:      nil,
-		}
-		shardings := []simpleWhirly.PoTSharding{sharding}
-		potsignal := &simpleWhirly.PoTSignal{
-			Epoch:             int64(epoch),
-			Proof:             nil,
-			ID:                0,
-			SelfPublicAddress: selfaddress,
-			Shardings:         shardings,
 		}
 		b, err := json.Marshal(potsignal)
 		if err != nil {
@@ -124,22 +106,22 @@ func (w *Worker) CommiteeUpdate(epoch uint64) {
 			w.potSignalChan <- b
 		}
 	}
-	if epoch > 10 && w.ID == 1 {
-		block, err := w.chainReader.GetByHeight(epoch - 1)
-		if err != nil {
-			return
-		}
-		header := block.GetHeader()
-		fill, err := os.OpenFile("difficulty", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
-		if err != nil {
-			fmt.Println(err)
-		}
-		_, err = fill.WriteString(fmt.Sprintf("%d\n", header.Difficulty.Int64()))
-		if err != nil {
-			fmt.Println(err)
-		}
-		fill.Close()
-	}
+	//if epoch > 10 && w.ID == 1 {
+	//	block, err := w.chainReader.GetByHeight(epoch - 1)
+	//	if err != nil {
+	//		return
+	//	}
+	//	header := block.GetHeader()
+	//	fill, err := os.OpenFile("difficulty", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
+	//	if err != nil {
+	//		fmt.Println(err)
+	//	}
+	//	_, err = fill.WriteString(fmt.Sprintf("%d\n", header.Difficulty.Int64()))
+	//	if err != nil {
+	//		fmt.Println(err)
+	//	}
+	//	fill.Close()
+	//}
 }
 func (w *Worker) SetWhirly(impl *simpleWhirly.NodeController) {
 	w.whirly = impl

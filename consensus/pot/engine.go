@@ -41,7 +41,7 @@ type PoTEngine struct {
 
 	//headerStorage  *types.HeaderStorage
 	blockStorage   *types.BlockStorage
-	chainReader    *types.ChainReader
+	chainReader    *ChainReader
 	UpperConsensus *simpleWhirly.NodeController
 }
 

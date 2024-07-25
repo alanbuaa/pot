@@ -25,14 +25,14 @@ log:
   filename: upgradeable_consensus.log
 
 executor:
-  type: local
+  type: remote
   address: 127.0.0.1:9876
 
 p2p:
   type: p2p-adaptor # p2p-adaptor currently only supports simple-whirly # sudo sysctl -w net.core.rmem_max=2500000
-  # type: p2p
+  #type: p2p
 
-topic: this-is-consensus-topic-tttaaabbbcccddd-011
+topic: this-is-consensus-topic-saddfasfdas-006
 
 consensus:
   # type: "upgradeable"
@@ -49,13 +49,13 @@ consensus:
   #   batch_size: 10
   #   batch_timeout: 1
   #   timeout: 2
-      #  type: whirly
-      #  consensus_id: 1009
-      #  whirly:
-      #    type: simple
-      #    # type: basic
-      #    batch_size: 10
-      #    timeout: 2
+  #      type: whirly
+  #      consensus_id: 1009
+  #      whirly:
+  #        type: simple
+  #        # type: basic
+  #        batch_size: 10
+  #        timeout: 2
   #     # type: pow
   #     # consensus_id: 1008
   #     # pow:
@@ -65,8 +65,8 @@ consensus:
   pot:
     snum : 2
     sysPara: 2
-    vdf0Iteration: 100000
-    vdf1Iteration: 50000
+    vdf0Iteration: 200000
+    vdf1Iteration: 100000
     excutorAddress: 127.0.0.1:9877
     batchsize: 100
     timeout: 5

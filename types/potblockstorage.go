@@ -3,28 +3,74 @@ package types
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/boltdb/bolt"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/zzz136454872/upgradeable-consensus/pb"
 	"google.golang.org/protobuf/proto"
+	"log"
+	"os"
 	"sync"
 )
 
-type BlockStorage struct {
-	db *leveldb.DB
+const blocksBucket = "blocks"
+const UTXOBucket = "chainstate"
 
+type BlockStorage struct {
+	db        *leveldb.DB
+	boltdb    *bolt.DB
 	vdfheight uint64
 	rwmutex   *sync.RWMutex
 }
 
+func dbExists(dbFile string) bool {
+	if _, err := os.Stat(dbFile); os.IsNotExist(err) {
+		return false
+	}
+	return true
+}
+
+func (s *BlockStorage) GetBoltdb() *bolt.DB {
+	return s.boltdb
+}
 func NewBlockStorage(id int64) *BlockStorage {
 	sint := fmt.Sprintf("%d", id)
 	db, err := leveldb.OpenFile("dbfile/node0-"+sint, nil)
+
 	if err != nil {
 		fmt.Println("output:", err)
 		panic(err)
 	}
 
+	boltdbname := fmt.Sprintf("boltdbfile/node0-" + sint)
+	if dbExists(boltdbname) {
+		err := os.Remove(boltdbname)
+		if err != nil {
+			panic(err)
+		}
+	}
+	boltdb, err := bolt.Open("boltdbfile/node0-"+sint, 0600, nil)
+	if err != nil {
+		fmt.Println("create boltdb err for ", err)
+		log.Panic(err)
+	}
+
+	err = boltdb.Update(func(tx *bolt.Tx) error {
+		_, err := tx.CreateBucket([]byte(blocksBucket))
+		if err != nil {
+			return err
+		}
+		_, err = tx.CreateBucket([]byte(UTXOBucket))
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		fmt.Println("create bolt bucket err for ", err)
+		log.Panic(err)
+	}
 	return &BlockStorage{
+		boltdb:    boltdb,
 		db:        db,
 		vdfheight: 0,
 		rwmutex:   new(sync.RWMutex),
@@ -44,35 +90,73 @@ func (s *BlockStorage) Put(block *Block) error {
 	if err != nil {
 		return err
 	}
+
+	err = s.boltdb.Update(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket([]byte(blocksBucket))
+		blockInb := bucket.Get(hash)
+		if blockInb != nil {
+			return nil
+		}
+
+		err = bucket.Put(hash, b)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+
 	err = s.putHeightHash(header.Height, hash)
 	return err
 }
 
 func (s *BlockStorage) Get(hash []byte) (*Block, error) {
-	blockByte, err := s.db.Get(hash, nil)
-	if err != nil {
-		return nil, err
-	}
 	block := &pb.Block{}
-	err = proto.Unmarshal(blockByte, block)
+	//blockByte, err := s.db.Get(hash, nil)
+	//if err != nil {
+	//	return nil, err
+	//}
+
+	//err = proto.Unmarshal(blockByte, block)
+	//
+	//if err != nil {
+	//	return nil, err
+	//}
+	err := s.boltdb.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(blocksBucket))
+		blockbyte := b.Get(hash)
+		if blockbyte == nil {
+			return fmt.Errorf("get block error for block %s is not found", hash)
+		}
+
+		err := proto.Unmarshal(blockbyte, block)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
 
 	if err != nil {
 		return nil, err
 	}
+
 	return ToBlock(block), nil
 }
 
 func (s *BlockStorage) HasBlock(hash []byte) bool {
-	blockByte, err := s.db.Get(hash, nil)
 
+	err := s.boltdb.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(blocksBucket))
+		blockbyte := b.Get(hash)
+		if blockbyte == nil {
+			return fmt.Errorf("get block error for block %s is not found", hash)
+		}
+		return nil
+	})
 	if err != nil {
 		return false
 	}
-	if blockByte != nil {
-		return true
-	} else {
-		return false
-	}
+	return true
 }
 
 func (s *BlockStorage) GetbyHeight(height uint64) ([]*Block, error) {
