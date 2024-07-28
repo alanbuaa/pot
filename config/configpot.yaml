@@ -49,13 +49,13 @@ consensus:
   #   batch_size: 10
   #   batch_timeout: 1
   #   timeout: 2
-      #  type: whirly
-      #  consensus_id: 1009
-      #  whirly:
-      #    type: simple
-      #    # type: basic
-      #    batch_size: 10
-      #    timeout: 2
+  #  type: whirly
+  #  consensus_id: 1009
+  #  whirly:
+  #    type: simple
+  #    # type: basic
+  #    batch_size: 10
+  #    timeout: 2
   #     # type: pow
   #     # consensus_id: 1008
   #     # pow:

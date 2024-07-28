@@ -186,11 +186,6 @@ func (p *PoTexecutor) VerifyTxs(ctx context.Context, request *pb.VerifyTxRequest
 	return reponse, nil
 }
 
-func (p *PoTexecutor) CommitTxs(ctx context.Context, request *pb.CommitTxsRequest) (*pb.CommitTxsResponse, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
 func (p *PoTexecutor) GenerateTxsForHeight(height uint64) *Testblock {
 	txs := make([][]byte, 0)
 	for i := 0; i < 1000; i++ {

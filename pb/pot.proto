@@ -95,20 +95,37 @@ message TxData {
   bytes TxData = 2;
 }
 
+message DciTx{
+  bytes TxID                  = 1;
+  repeated TxInput TxInput    = 2;
+  repeated TxOutput TxOutput  = 3;
+  int32 ChainID               = 4;
+}
+
+message TxInput{
+  bool  IsCoinbase  = 1;
+  bytes TxID        = 2;
+  int64 Voutput     = 3;
+  bytes Scriptsig   = 4;
+  int64 Value       = 5;
+  bytes Address     = 6;
+  int32 ChainID     = 7;
+}
+
+message TxOutput{
+  bytes Address   = 1;
+  int64 Value     = 2;
+  bool  IsSpent   = 3;
+  bytes ScriptPk  = 4;
+  int32 ChainID   = 5;
+}
 
 
 message RawTxData {
-  bytes   ChainID = 1;
-  uint64  Nonce = 2;
-  bytes   GasPrice = 3;
-  uint64  Gas = 4;
-  bytes   To =5;
-  bytes   Data =6;
-  bytes   Value = 7;
-  bytes   V = 8;
-  bytes   R = 9;
-  bytes   S = 10;
-  bytes   Accesslist = 11;
+  bytes TxID                  = 1;
+  repeated TxInput TxInput    = 2;
+  repeated TxOutput TxOutput  = 3;
+  int32 ChainID               = 4;
 }
 
 message ExecutedTxData{
@@ -133,7 +150,7 @@ message ExecutedTx{
 service PoTExecutor {
   rpc   GetTxs(GetTxRequest) returns (GetTxResponse){}
   rpc   VerifyTxs(VerifyTxRequest) returns (VerifyTxResponse){}
-  rpc   CommitTxs(CommitTxsRequest) returns (CommitTxsResponse){}
+
 }
 
 message GetTxRequest{
@@ -156,10 +173,52 @@ message VerifyTxResponse{
   repeated bool flag =2;
 }
 
-message CommitTxsRequest{
-  repeated RawTxData Txs = 1;
+
+
+service DciExector{
+  rpc   SendDci(SendDciRequest)           returns (SendDciResponse)       {}
+  rpc   GetBalance(GetBalanceRequest)     returns (GetBalanceResponse)     {}
+  rpc   DevastateDci(DevastateDciRequest) returns (DevastateDciResponse)  {}
 }
 
-message CommitTxsResponse{
+message DciReward{
+  bytes Address = 1;
+  int64 Amount = 2;
+  int64 ChainID = 3;
+  DciProof DciProof = 4;
+}
+
+message DciProof {
+  int64 Epoch = 1 ;
+  int64 Height = 2;
+  bytes Hash = 3;
+}
+
+message SendDciRequest{
+  repeated DciReward DciReward = 1;
+}
+
+message SendDciResponse{
+  bool IsSuccess = 1;
+  uint64 Height = 2;
+}
+
+message GetBalanceRequest{
+  bytes Address = 1;
+  bytes Signature = 2;
+}
+
+message GetBalanceResponse{
+  bytes Address = 1;
+  int64 Balance = 2;
+  repeated TxOutput TxOutputs= 3;
+}
+
+message DevastateDciRequest{
+    int64 Amount = 1;
+    RawTxData Tx = 2;
+}
+
+message DevastateDciResponse{
 
 }

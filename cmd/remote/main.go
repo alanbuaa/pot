@@ -3,13 +3,12 @@ package main
 import (
 	"context"
 	"fmt"
-	"math/big"
-	"net"
-	"time"
-
 	"github.com/zzz136454872/upgradeable-consensus/crypto"
 	"github.com/zzz136454872/upgradeable-consensus/pb"
 	"google.golang.org/grpc"
+	"math/big"
+	"net"
+	"time"
 )
 
 func main() {
@@ -37,11 +36,6 @@ type PoTexecutor struct {
 	blocks []*Testblock
 }
 
-// mustEmbedUnimplementedPoTExecutorServer implements pb.PoTExecutorServer.
-func (p *PoTexecutor) mustEmbedUnimplementedPoTExecutorServer() {
-	panic("unimplemented")
-}
-
 func NewExec() *PoTexecutor {
 	return &PoTexecutor{
 		height: 0,
@@ -50,6 +44,7 @@ func NewExec() *PoTexecutor {
 }
 
 func (p *PoTexecutor) GetTxs(ctx context.Context, request *pb.GetTxRequest) (*pb.GetTxResponse, error) {
+
 	fmt.Printf("receive request, start %d, end %d\n", request.StartHeight, p.height)
 	start := request.GetStartHeight()
 	if start > p.height {
@@ -92,11 +87,6 @@ func (p *PoTexecutor) VerifyTxs(ctx context.Context, request *pb.VerifyTxRequest
 		Flag: flag,
 	}
 	return reponse, nil
-}
-
-func (p *PoTexecutor) CommitTxs(ctx context.Context, request *pb.CommitTxsRequest) (*pb.CommitTxsResponse, error) {
-	//TODO implement me
-	panic("implement me")
 }
 
 func (p *PoTexecutor) GenerateTxsForHeight(height uint64) *Testblock {
