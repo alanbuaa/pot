@@ -211,7 +211,7 @@ func (s *Sharding) handleStop(address string) {
 }
 
 func (s *Sharding) NodeManage(potSignal *PoTSignal) {
-	s.controller.Log.Trace("NodeManage: ", s.Name)
+	s.controller.Log.Info("NodeManage: ", s.Name, ",        len(Committee): ", len(s.Committee))
 	// Determine whether the leader belongs to oneself
 	for _, address := range potSignal.SelfPublicAddress {
 		// fmt.Println("---------", s.Name, "----", s.LeaderPublicAddress)

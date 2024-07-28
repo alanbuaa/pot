@@ -156,7 +156,7 @@ func (nc *NodeController) receiveMsg(ctx context.Context) {
 			}
 			packet, err := DecodePacket(msgByte)
 			if err != nil {
-				nc.Log.WithError(err).Warn("decode packet failed")
+				nc.Log.WithError(err).Warn("nodeController: decode packet failed")
 				continue
 			}
 			go nc.handleMsg(packet)
@@ -261,8 +261,8 @@ func (nc *NodeController) ShardManage(potSignal *PoTSignal) {
 }
 
 func (nc *NodeController) NodeManage(potSignal *PoTSignal) {
-	fmt.Println("========================", nc.epoch, "========================")
-	fmt.Println("SelfPublicAddress: ", potSignal.SelfPublicAddress)
+	fmt.Println("======================== epoch: ", nc.epoch, "========================")
+	fmt.Println("len(SelfPublicAddress): ", len(potSignal.SelfPublicAddress))
 	// fmt.Printf("%+v\n", potSignal.Shardings)
 	// println(potSignal.Shardings)
 

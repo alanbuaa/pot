@@ -9,33 +9,30 @@ replace network => ./p2p/p2p-adaptor/network
 require p2padaptor v0.0.0-00010101000000-000000000000
 
 require (
+	github.com/boltdb/bolt v1.3.1
 	github.com/elliotchance/orderedmap v1.5.0
 	github.com/ethereum/go-ethereum v1.12.2
 	github.com/niclabs/tcrsa v0.0.5
-	github.com/shirou/gopsutil v3.21.4-0.20210419000835-c7a38de76ee5+incompatible
 	github.com/shopspring/decimal v1.3.1
 	github.com/sirupsen/logrus v1.9.3
-	github.com/stretchr/testify v1.8.4
 	github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7
 	github.com/wjbbig/go-hotstuff v0.0.0-20200715143423-ae125c8187f8
-	golang.org/x/sys v0.16.0
-	google.golang.org/grpc v1.59.0
-	google.golang.org/protobuf v1.31.0
+	golang.org/x/exp v0.0.0-20230810033253-352e893a4cad
+	golang.org/x/sys v0.18.0
+	google.golang.org/grpc v1.64.0
+	google.golang.org/protobuf v1.33.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
 	github.com/DXPlus/go-libp2p-pubsub-abci v1.1.0 // indirect
-	github.com/StackExchange/wmi v0.0.0-20180116203802-5d049714c4a6 // indirect
 	github.com/benbjohnson/clock v1.3.5 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
-	github.com/boltdb/bolt v1.3.1 // indirect
 	github.com/btcsuite/btcd/btcec/v2 v2.2.0 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/chuwt/chia-bls-go v0.0.0-20220803023723-5157f484c1ad // indirect
 	github.com/containerd/cgroups v1.1.0 // indirect
 	github.com/coreos/go-systemd/v22 v22.5.0 // indirect
-	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/davidlazar/go-crypto v0.0.0-20200604182044-b73af7476f6c // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.2.0 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
@@ -44,17 +41,16 @@ require (
 	github.com/francoispqt/gojay v1.2.13 // indirect
 	github.com/go-logr/logr v1.2.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
-	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/go-stack/stack v1.8.1 // indirect
 	github.com/go-task/slim-sprig v0.0.0-20230315185526-52ccab3ef572 // indirect
 	github.com/godbus/dbus/v5 v5.1.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/mock v1.6.0 // indirect
-	github.com/golang/protobuf v1.5.3 // indirect
+	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/golang/snappy v0.0.5-0.20220116011046-fa5810519dcb // indirect
 	github.com/google/gopacket v1.1.19 // indirect
 	github.com/google/pprof v0.0.0-20230602150820-91b7bce49751 // indirect
-	github.com/google/uuid v1.3.1 // indirect
+	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/websocket v1.5.0 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
@@ -114,7 +110,6 @@ require (
 	github.com/opentracing/opentracing-go v1.2.0 // indirect
 	github.com/pbnjay/memory v0.0.0-20210728143218-7b4eea64cf58 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
-	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/polydawn/refmt v0.89.0 // indirect
 	github.com/prometheus/client_golang v1.14.0 // indirect
 	github.com/prometheus/client_model v0.4.0 // indirect
@@ -127,8 +122,6 @@ require (
 	github.com/quic-go/webtransport-go v0.5.3 // indirect
 	github.com/raulk/go-watchdog v1.3.0 // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
-	github.com/tklauser/go-sysconf v0.3.11 // indirect
-	github.com/tklauser/numcpus v0.6.0 // indirect
 	github.com/whyrusleeping/go-keyspace v0.0.0-20160322163242-5b898ac5add1 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	go.opentelemetry.io/otel v1.16.0 // indirect
@@ -139,15 +132,14 @@ require (
 	go.uber.org/fx v1.19.2 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.24.0 // indirect
-	golang.org/x/crypto v0.12.0 // indirect
-	golang.org/x/exp v0.0.0-20230810033253-352e893a4cad // indirect
+	golang.org/x/crypto v0.21.0 // indirect
 	golang.org/x/mod v0.11.0 // indirect
-	golang.org/x/net v0.14.0 // indirect
-	golang.org/x/sync v0.3.0 // indirect
-	golang.org/x/text v0.12.0 // indirect
+	golang.org/x/net v0.22.0 // indirect
+	golang.org/x/sync v0.6.0 // indirect
+	golang.org/x/text v0.14.0 // indirect
 	golang.org/x/tools v0.9.1 // indirect
 	gonum.org/v1/gonum v0.13.0 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20230822172742-b8732ec3820d // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20240318140521-94a12d6c2237 // indirect
 	lukechampine.com/blake3 v1.2.1 // indirect
 	network v0.0.0 // indirect
 )
