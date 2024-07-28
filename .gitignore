@@ -13,6 +13,5 @@ test
 /.vscode
 /*.log
 /*.txt
-/*.out
 /.VSCodeCounter
 
