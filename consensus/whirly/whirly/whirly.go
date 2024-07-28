@@ -14,6 +14,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/zzz136454872/upgradeable-consensus/config"
+	"github.com/zzz136454872/upgradeable-consensus/consensus/model"
 	whirlyUtilities "github.com/zzz136454872/upgradeable-consensus/consensus/whirly"
 	"github.com/zzz136454872/upgradeable-consensus/crypto"
 	"github.com/zzz136454872/upgradeable-consensus/executor"
@@ -112,6 +113,18 @@ func NewWhirly(
 	go whi.pacemaker.Run(ctx)
 
 	return whi
+}
+
+func (whi *WhirlyImpl) UpdateExternalStatus(status model.ExternalStatus) {
+	return
+}
+
+func (whi *WhirlyImpl) NewEpochConfirmation(epoch int64, proof []byte, committee []string) {
+	return
+}
+
+func (whi *WhirlyImpl) RequestLatestBlock(epoch int64, proof []byte, committee []string) {
+	return
 }
 
 func (whi *WhirlyImpl) CleanVote() {

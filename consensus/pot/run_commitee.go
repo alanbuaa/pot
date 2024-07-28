@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/zzz136454872/upgradeable-consensus/config"
 	"github.com/zzz136454872/upgradeable-consensus/consensus/whirly/simpleWhirly"
 	"github.com/zzz136454872/upgradeable-consensus/crypto"
 	"github.com/zzz136454872/upgradeable-consensus/types"
@@ -100,17 +101,41 @@ func (w *Worker) CommiteeUpdate(epoch uint64) {
 		// 	SelfPublicAddress:   selfaddress,
 		// 	CryptoElements:      nil,
 		// }
-		sharding := simpleWhirly.PoTSharding{
+		whilyConsensus := &config.WhirlyConfig{
+			Type:      "simple",
+			BatchSize: 2,
+			Timeout:   2,
+		}
+
+		consensus := config.ConsensusConfig{
+			Type:        "whirly",
+			ConsensusID: 1201,
+			Whirly:      whilyConsensus,
+			Nodes:       w.config.Nodes,
+			Topic:       w.config.Topic,
+			F:           w.config.F,
+		}
+
+		sharding1 := simpleWhirly.PoTSharding{
 			Name:                "default",
 			ParentSharding:      nil,
 			LeaderPublicAddress: commitee[0],
 			Committee:           commitee,
 			CryptoElements:      nil,
+			SubConsensus:        consensus,
 		}
-		shardings := []simpleWhirly.PoTSharding{sharding}
+		sharding2 := simpleWhirly.PoTSharding{
+			Name:                "hello_world",
+			ParentSharding:      nil,
+			LeaderPublicAddress: commitee[0],
+			Committee:           commitee,
+			CryptoElements:      nil,
+			SubConsensus:        consensus,
+		}
+		shardings := []simpleWhirly.PoTSharding{sharding1, sharding2}
 		potsignal := &simpleWhirly.PoTSignal{
 			Epoch:             int64(epoch),
-			Proof:             nil,
+			Proof:             make([]byte, 0),
 			ID:                0,
 			SelfPublicAddress: selfaddress,
 			Shardings:         shardings,

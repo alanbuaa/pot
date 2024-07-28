@@ -9,6 +9,7 @@ import (
 	"github.com/niclabs/tcrsa"
 	"github.com/sirupsen/logrus"
 	"github.com/zzz136454872/upgradeable-consensus/config"
+	"github.com/zzz136454872/upgradeable-consensus/consensus/model"
 	"github.com/zzz136454872/upgradeable-consensus/executor"
 	"github.com/zzz136454872/upgradeable-consensus/p2p"
 	"github.com/zzz136454872/upgradeable-consensus/pb"
@@ -356,4 +357,16 @@ func (hs *HotStuffImpl) GetWeight(nid int64) float64 {
 
 func (hs *HotStuffImpl) GetMaxAdversaryWeight() float64 {
 	return 1.0 / 3.0
+}
+
+func (hs *HotStuffImpl) UpdateExternalStatus(status model.ExternalStatus) {
+	return
+}
+
+func (hs *HotStuffImpl) NewEpochConfirmation(epoch int64, proof []byte, committee []string) {
+	return
+}
+
+func (hs *HotStuffImpl) RequestLatestBlock(epoch int64, proof []byte, committee []string) {
+	return
 }

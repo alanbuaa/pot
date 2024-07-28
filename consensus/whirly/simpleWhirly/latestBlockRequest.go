@@ -2,49 +2,49 @@ package simpleWhirly
 
 import (
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
 	"github.com/zzz136454872/upgradeable-consensus/pb"
 )
 
-// func (sw *SimpleWhirlyImpl) handlePoTSignal(potSignalBytes []byte) {
-// 	potSignal := &PoTSignal{}
-// 	err := json.Unmarshal(potSignalBytes, potSignal)
-// 	if err != nil {
-// 		sw.Log.WithField("error", err.Error()).Error("Unmarshal potSignal failed.")
-// 		return
-// 	}
+type LatestBlockRequestMechanism struct {
+	maxVHeight   uint64
+	curEcho      map[string]*pb.SimpleWhirlyProof
+	curEchoLock  sync.Mutex
+	requestEpoch int64 // 确保一个Epoch只 request 一次
+	requestLock  sync.Mutex
+}
 
-// 	// Ignoring pot signals from old epochs
-// 	if potSignal.Epoch <= sw.epoch {
-// 		return
-// 	}
+// func (sw *SimpleWhirlyImpl) RequestLatestBlock(potSignal *PoTSignal, sharding *Sharding) {
+func (sw *SimpleWhirlyImpl) RequestLatestBlock(epoch int64, proof []byte, committee []string) {
 
-// 	// Determine whether the node is a leader
-// 	if potSignal.LeaderNetworkId == sw.PublicAddress {
-// 		sw.NewLeader(potSignal)
-// 	}
-// }
+	sw.latestBlockReq.requestLock.Lock()
+	if epoch <= sw.latestBlockReq.requestEpoch {
+		return
+	}
 
-func (sw *SimpleWhirlyImpl) NewLeader(potSignal *PoTSignal, sharding *Sharding) {
 	sw.Log.WithFields(logrus.Fields{
 		"address": sw.PublicAddress,
-	}).Info("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] new Epoch tirgger!")
+	}).Info("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] request latest block!")
 
-	sw.curEchoLock.Lock()
-	sw.curEcho = make([]*pb.SimpleWhirlyProof, 0)
-	sw.curEchoLock.Unlock()
-	sw.maxVHeight = sw.vHeight
+	sw.latestBlockReq.curEchoLock.Lock()
+	sw.latestBlockReq.curEcho = make(map[string]*pb.SimpleWhirlyProof)
+	sw.latestBlockReq.curEchoLock.Unlock()
+	sw.latestBlockReq.maxVHeight = sw.vHeight
+
+	sw.latestBlockReq.requestEpoch = epoch
+	sw.latestBlockReq.requestLock.Unlock()
 
 	time.Sleep(1 * time.Second)
 
-	newLeaderMsg := sw.NewLeaderNotifyMsg(potSignal.Epoch, potSignal.Proof, sharding.Committee)
+	newLatestBlockRequest := sw.NewLatestBlockRequest(epoch, proof, committee)
 	if sw.GetP2pAdaptorType() == "p2p" {
-		sw.handleMsg(newLeaderMsg)
+		sw.handleMsg(newLatestBlockRequest)
 	}
 	// broadcast
-	err := sw.Broadcast(newLeaderMsg)
+	err := sw.Broadcast(newLatestBlockRequest)
 	if err != nil {
 		sw.Log.WithField("error", err.Error()).Warn("Broadcast newLeaderMsg failed.")
 	}
@@ -52,7 +52,7 @@ func (sw *SimpleWhirlyImpl) NewLeader(potSignal *PoTSignal, sharding *Sharding) 
 
 func (sw *SimpleWhirlyImpl) UpdateCommittee(committee []string, weight int) {
 
-	_, address := DecodeAddress(sw.PublicAddress)
+	_, _, address := DecodeAddress(sw.PublicAddress)
 	if address != DaemonNodePublicAddress {
 		sw.Log.WithFields(logrus.Fields{
 			"address": sw.PublicAddress,
@@ -81,11 +81,12 @@ func (sw *SimpleWhirlyImpl) VerifyPoTProof(epoch int64, leader int64, proof []by
 	return true
 }
 
-func (sw *SimpleWhirlyImpl) OnReceiveNewLeaderNotify(newLeaderMsg *pb.NewLeaderNotify) {
+func (sw *SimpleWhirlyImpl) OnReceiveLatestBlockRequest(newLeaderMsg *pb.LatestBlockRequest) {
 	epoch := int64(newLeaderMsg.Epoch)
 	leader := int64(newLeaderMsg.Leader)
 	publicAddress := newLeaderMsg.PublicAddress
 	committee := newLeaderMsg.Committee
+	newConsensusId := newLeaderMsg.ConsensusId
 
 	if epoch < sw.epoch {
 		return
@@ -106,7 +107,7 @@ func (sw *SimpleWhirlyImpl) OnReceiveNewLeaderNotify(newLeaderMsg *pb.NewLeaderN
 
 	// Calculate the weight of the node
 	weight := 0
-	_, address := DecodeAddress(sw.PublicAddress)
+	_, consensusID, address := DecodeAddress(sw.PublicAddress)
 	for _, c := range committee {
 		if c == address {
 			weight += 1
@@ -115,7 +116,8 @@ func (sw *SimpleWhirlyImpl) OnReceiveNewLeaderNotify(newLeaderMsg *pb.NewLeaderN
 
 	// If the weight is not 0, it indicates that the node is in the committee
 	// The daemon node should never be stopped
-	if weight > 0 || address == DaemonNodePublicAddress {
+	// 当前共识实例的 daemon node 不需要停止，但是其他节点，包括前面共识实例的 daemon node 都需要停止
+	if weight > 0 || (address == DaemonNodePublicAddress && consensusID == int64(newConsensusId)) {
 		sw.UpdateCommittee(committee, weight)
 		// The daemon node should never echo
 		if address == DaemonNodePublicAddress {
@@ -130,7 +132,7 @@ func (sw *SimpleWhirlyImpl) OnReceiveNewLeaderNotify(newLeaderMsg *pb.NewLeaderN
 		"newEpoch":  epoch,
 		"newLeader": publicAddress,
 		"myAddress": sw.PublicAddress,
-	}).Trace("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] OnReceive Notify.")
+	}).Trace("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] OnReceive LatestBlockRequest.")
 
 	block, err := sw.BlockStorage.Get(sw.lockProof.BlockHash)
 	if err != nil {
@@ -138,11 +140,11 @@ func (sw *SimpleWhirlyImpl) OnReceiveNewLeaderNotify(newLeaderMsg *pb.NewLeaderN
 	}
 
 	// Echo leader
-	echoMsg := sw.NewLeaderEchoMsg(leader, block, sw.lockProof, sw.epoch, sw.vHeight)
+	echoMsg := sw.NewLatestBlockEchoMsg(leader, block, sw.lockProof, sw.epoch, sw.vHeight)
 
 	if sw.GetLeader(sw.epoch) == sw.PublicAddress {
 		// echo self
-		sw.OnReceiveNewLeaderEcho(echoMsg)
+		sw.OnReceiveLatestBlockEcho(echoMsg)
 	} else {
 		// send vote to the leader
 		if sw.GetP2pAdaptorType() == "p2p" {
@@ -154,8 +156,9 @@ func (sw *SimpleWhirlyImpl) OnReceiveNewLeaderNotify(newLeaderMsg *pb.NewLeaderN
 
 }
 
-func (sw *SimpleWhirlyImpl) OnReceiveNewLeaderEcho(msg *pb.WhirlyMsg) {
-	echoMsg := msg.GetNewLeaderEcho()
+func (sw *SimpleWhirlyImpl) OnReceiveLatestBlockEcho(msg *pb.WhirlyMsg) {
+	echoMsg := msg.GetLatestBlockEcho()
+	senderAdress := echoMsg.PublicAddress
 
 	if int64(echoMsg.Epoch) < sw.epoch {
 		sw.Log.WithFields(logrus.Fields{
@@ -165,47 +168,47 @@ func (sw *SimpleWhirlyImpl) OnReceiveNewLeaderEcho(msg *pb.WhirlyMsg) {
 		return
 	}
 
-	sw.curEchoLock.Lock()
+	sw.latestBlockReq.curEchoLock.Lock()
 	sw.Log.WithFields(logrus.Fields{
 		"sender":       echoMsg.PublicAddress,
 		"epoch":        echoMsg.Epoch,
 		"leader":       echoMsg.Leader,
-		"len(curEcho)": len(sw.curEcho),
+		"len(curEcho)": len(sw.latestBlockReq.curEcho),
 		"VHeight":      echoMsg.VHeight,
-	}).Info("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] OnReceiveEcho.")
+	}).Trace("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] OnReceive LatestBlockEcho.")
 
 	err := sw.BlockStorage.Put(echoMsg.Block)
 	if err != nil {
 		sw.Log.WithError(err).Info("Store the new block from echo message failed.")
-		sw.curEchoLock.Unlock()
+		sw.latestBlockReq.curEchoLock.Unlock()
 		return
 	}
 
 	if !sw.verfiySwProof(echoMsg.SwProof) {
 		sw.Log.Warn("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] echo proof is wrong.")
-		sw.curEchoLock.Unlock()
+		sw.latestBlockReq.curEchoLock.Unlock()
 		return
 	}
 
-	if echoMsg.VHeight > sw.maxVHeight {
-		sw.maxVHeight = echoMsg.VHeight
+	if echoMsg.VHeight > sw.latestBlockReq.maxVHeight {
+		sw.latestBlockReq.maxVHeight = echoMsg.VHeight
 	}
 
-	sw.curEcho = append(sw.curEcho, echoMsg.SwProof)
+	sw.latestBlockReq.curEcho[senderAdress] = echoMsg.SwProof
 
 	sw.lock.Lock()
 	sw.UpdateLockProof(echoMsg.SwProof)
 	sw.lock.Unlock()
 
-	if len(sw.curEcho) >= 2*sw.Config.F+1 {
-		sw.AdvanceView(sw.maxVHeight)
+	if len(sw.latestBlockReq.curEcho) >= 2*sw.Config.F+1 {
+		sw.AdvanceView(sw.latestBlockReq.maxVHeight)
 		sw.Log.Warn("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] begin propose.")
-		sw.curEcho = make([]*pb.SimpleWhirlyProof, 0)
-		sw.curEchoLock.Unlock()
+		sw.latestBlockReq.curEcho = make(map[string]*pb.SimpleWhirlyProof)
+		sw.latestBlockReq.curEchoLock.Unlock()
 		go sw.OnPropose()
 		return
 	}
-	sw.curEchoLock.Unlock()
+	sw.latestBlockReq.curEchoLock.Unlock()
 }
 
 // func (sw *SimpleWhirlyImpl) testNewLeader() {

@@ -14,6 +14,8 @@ message WhirlyMsg {
     NewLeaderNotify newLeaderNotify = 6;
     NewLeaderEcho newLeaderEcho = 7;
     WhirlyPing whirlyPing = 8;
+    LatestBlockRequest latestBlockRequest = 9;
+    LatestBlockEcho latestBlockEcho = 10;
   }
   //   string senderAddress = 11;
 }
@@ -64,6 +66,25 @@ message NewLeaderNotify {
 }
 
 message NewLeaderEcho {
+  uint64 leader = 1;
+  uint64 senderId = 2;
+  uint64 epoch = 3;
+  WhirlyBlock block = 4;
+  SimpleWhirlyProof swProof = 5;
+  uint64 vHeight = 6;
+  string publicAddress = 7;
+}
+
+message LatestBlockRequest {
+  uint64 leader = 1;
+  uint64 epoch = 2;
+  bytes proof = 3;
+  string publicAddress = 4;
+  repeated string committee = 5;
+  uint64 consensusId = 6;
+}
+
+message LatestBlockEcho {
   uint64 leader = 1;
   uint64 senderId = 2;
   uint64 epoch = 3;

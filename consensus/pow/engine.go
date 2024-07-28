@@ -9,6 +9,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/zzz136454872/upgradeable-consensus/config"
+	"github.com/zzz136454872/upgradeable-consensus/consensus/model"
 	"github.com/zzz136454872/upgradeable-consensus/executor"
 	"github.com/zzz136454872/upgradeable-consensus/p2p"
 	"github.com/zzz136454872/upgradeable-consensus/pb"
@@ -61,6 +62,18 @@ func (e *Engine) GetWeight(nid int64) float64 {
 
 func (e *Engine) GetMaxAdversaryWeight() float64 {
 	return 1.0 / 3
+}
+
+func (e *Engine) UpdateExternalStatus(status model.ExternalStatus) {
+	return
+}
+
+func (e *Engine) NewEpochConfirmation(epoch int64, proof []byte, committee []string) {
+	return
+}
+
+func (e *Engine) RequestLatestBlock(epoch int64, proof []byte, committee []string) {
+	return
 }
 
 func NewPowEngine(nid int64, cid int64, config *config.ConsensusConfig, exec executor.Executor, adaptor p2p.P2PAdaptor, log *logrus.Entry) *Engine {

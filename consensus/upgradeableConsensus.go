@@ -140,6 +140,18 @@ func (uc *UpgradeableConsensus) GetConsensusID() int64 {
 	return uc.cid
 }
 
+func (uc *UpgradeableConsensus) UpdateExternalStatus(status model.ExternalStatus) {
+	return
+}
+
+func (uc *UpgradeableConsensus) NewEpochConfirmation(epoch int64, proof []byte, committee []string) {
+	return
+}
+
+func (uc *UpgradeableConsensus) RequestLatestBlock(epoch int64, proof []byte, committee []string) {
+	return
+}
+
 func (uc *UpgradeableConsensus) GetMsgByteEntrance() chan<- []byte {
 	return uc.msgByteEntrance
 }

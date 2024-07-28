@@ -7,6 +7,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/zzz136454872/upgradeable-consensus/config"
+	"github.com/zzz136454872/upgradeable-consensus/consensus/model"
 	"github.com/zzz136454872/upgradeable-consensus/consensus/whirly/simpleWhirly"
 	"github.com/zzz136454872/upgradeable-consensus/executor"
 	"github.com/zzz136454872/upgradeable-consensus/p2p"
@@ -123,6 +124,18 @@ func (e *PoTEngine) GetMaxAdversaryWeight() float64 {
 
 func (e *PoTEngine) GetConsensusID() int64 {
 	return e.consensusID
+}
+
+func (e *PoTEngine) UpdateExternalStatus(status model.ExternalStatus) {
+	return
+}
+
+func (e *PoTEngine) NewEpochConfirmation(epoch int64, proof []byte, committee []string) {
+	return
+}
+
+func (e *PoTEngine) RequestLatestBlock(epoch int64, proof []byte, committee []string) {
+	return
 }
 
 func (e *PoTEngine) Broadcast(msgByte []byte) error {
