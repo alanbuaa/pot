@@ -39,7 +39,16 @@ message Header{
   string PeerId = 11;
   bytes Pubkey = 12;
   bytes Txhash = 13;
+  bytes Command = 14;
 }
+
+message Command {
+  int32 Type = 1;
+  bytes Operation = 2;
+  bytes Proof = 3;
+}
+
+
 
 
 
@@ -138,7 +147,8 @@ message ExecuteBlock {
 }
 
 message ExecuteHeader {
-  uint64 Height = 1;
+  uint64  Height = 1;
+  bytes   BlockHash = 2;
 }
 
 message ExecutedTx{

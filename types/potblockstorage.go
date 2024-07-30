@@ -2,6 +2,7 @@ package types
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/boltdb/bolt"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -14,6 +15,11 @@ import (
 
 const blocksBucket = "blocks"
 const UTXOBucket = "chainstate"
+const ExecutedBucket = "Executed"
+
+var (
+	ErrHeightHashNotFound = errors.New("height hash not found")
+)
 
 type BlockStorage struct {
 	db        *leveldb.DB
@@ -63,6 +69,10 @@ func NewBlockStorage(id int64) *BlockStorage {
 		if err != nil {
 			return err
 		}
+		_, err = tx.CreateBucket([]byte(ExecutedBucket))
+		if err != nil {
+			return err
+		}
 		return nil
 	})
 	if err != nil {
@@ -86,10 +96,10 @@ func (s *BlockStorage) Put(block *Block) error {
 	}
 
 	hash := header.Hash()
-	err = s.db.Put(hash, b, nil)
-	if err != nil {
-		return err
-	}
+	//err = s.db.Put(hash, b, nil)
+	//if err != nil {
+	//	return err
+	//}
 
 	err = s.boltdb.Update(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket([]byte(blocksBucket))
@@ -164,7 +174,7 @@ func (s *BlockStorage) GetbyHeight(height uint64) ([]*Block, error) {
 		return []*Block{DefaultGenesisBlock()}, nil
 	}
 	values, exists := s.getHeightHash(height)
-	if exists == leveldb.ErrNotFound {
+	if exists == ErrHeightHashNotFound {
 		return nil, fmt.Errorf("not have block for height %d", height)
 	} else if exists != nil {
 		return nil, exists
@@ -172,16 +182,11 @@ func (s *BlockStorage) GetbyHeight(height uint64) ([]*Block, error) {
 
 	headers := make([]*Block, 0)
 	for _, hash := range values {
-		pbheader, err := s.db.Get(hash, nil)
+		block, err := s.Get(hash)
 		if err != nil {
 			return nil, err
 		}
-		block := &pb.Block{}
-		err = proto.Unmarshal(pbheader, block)
-		if err != nil {
-			return nil, err
-		}
-		headers = append(headers, ToBlock(block))
+		headers = append(headers, block)
 	}
 	return headers, nil
 }
@@ -190,12 +195,23 @@ func (s *BlockStorage) getHeightHash(height uint64) ([][]byte, error) {
 
 	keys := []byte(fmt.Sprintf("height:%d", height))
 
-	values, err := s.db.Get(keys, nil)
-	if err != nil {
-		return nil, err
-	}
+	//values, err := s.db.Get(keys, nil)
+	//if err != nil {
+	//	return nil, err
+	//}
 	var decodeData [][]byte
-	err = json.Unmarshal(values, &decodeData)
+	err := s.boltdb.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(blocksBucket))
+		blocksbyte := b.Get(keys)
+		if blocksbyte == nil {
+			return ErrHeightHashNotFound
+		}
+		err := json.Unmarshal(blocksbyte, &decodeData)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -204,7 +220,7 @@ func (s *BlockStorage) getHeightHash(height uint64) ([][]byte, error) {
 
 func (s *BlockStorage) putHeightHash(height uint64, hash []byte) error {
 	data, err := s.getHeightHash(height)
-	if err != leveldb.ErrNotFound && err != nil {
+	if err != ErrHeightHashNotFound && err != nil {
 		return err
 	}
 	if len(data) != 0 {
@@ -217,13 +233,30 @@ func (s *BlockStorage) putHeightHash(height uint64, hash []byte) error {
 		return err
 	}
 	keys := []byte(fmt.Sprintf("height:%d", height))
-	err = s.db.Put(keys, encodedata, nil)
+	err = s.boltdb.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(blocksBucket))
+		err = b.Put(keys, encodedata)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
 	return err
 }
 
 func (s *BlockStorage) SetVDFres(epoch uint64, vdfres []byte) error {
 	key := []byte(fmt.Sprintf("epoch:%d", epoch))
-	err := s.db.Put(key, vdfres, nil)
+	err := s.boltdb.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(blocksBucket))
+
+		err := b.Put(key, vdfres)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+
+	//err := s.db.Put(key, vdfres, nil)
 	if epoch > s.vdfheight {
 		s.rwmutex.Lock()
 		s.vdfheight = epoch
@@ -234,7 +267,16 @@ func (s *BlockStorage) SetVDFres(epoch uint64, vdfres []byte) error {
 
 func (s *BlockStorage) GetVDFresbyEpoch(epoch uint64) ([]byte, error) {
 	key := []byte(fmt.Sprintf("epoch:%d", epoch))
-	value, err := s.db.Get(key, nil)
+	//value, err := s.db.Get(key, nil)
+	var value []byte
+	err := s.boltdb.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(blocksBucket))
+		value = b.Get(key)
+		if value == nil {
+			return fmt.Errorf("not found vdf res for height %d", epoch)
+		}
+		return nil
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -245,4 +287,51 @@ func (s *BlockStorage) GetVDFHeight() uint64 {
 	s.rwmutex.RLock()
 	defer s.rwmutex.RUnlock()
 	return s.vdfheight
+}
+
+func (s *BlockStorage) GetExcutedBlock(hash []byte) (*pb.ExecuteBlock, error) {
+	block := &pb.ExecuteBlock{}
+	err := s.boltdb.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(ExecutedBucket))
+		blockbyte := b.Get(hash)
+		if blockbyte != nil {
+			return fmt.Errorf("get block error for block %s is not found", hash)
+		}
+		err := proto.Unmarshal(blockbyte, block)
+		if err != nil {
+			return err
+		}
+		return nil
+	},
+	)
+
+	if err != nil {
+		return nil, err
+	}
+	return block, nil
+}
+
+func (s *BlockStorage) PutExcutedBlock(block *pb.ExecuteBlock) error {
+	b, err := proto.Marshal(block)
+	if err != nil {
+		return err
+	}
+	blockhash := block.GetHeader().GetBlockHash()
+	err = s.boltdb.Update(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket([]byte(ExecutedBucket))
+		blockin := bucket.Get(blockhash)
+		if blockin != nil {
+			return nil
+		}
+		err = bucket.Put(blockhash, b)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+
+	if err != nil {
+		return err
+	}
+	return nil
 }

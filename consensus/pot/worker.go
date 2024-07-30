@@ -7,7 +7,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"github.com/elliotchance/orderedmap"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/shopspring/decimal"
@@ -31,13 +30,14 @@ import (
 var bigD = new(big.Int).Sub(big.NewInt(0).Exp(big.NewInt(2), big.NewInt(256), nil), big.NewInt(1))
 
 const (
-	Commiteelen   = 4
-	CommiteeDelay = 1
-	cpuCounter    = 1
-	NoParentD     = 2
-	Batchsize     = 100
-	Selectn       = 2
-	TotalReward   = 10000
+	Commiteelen        = 4
+	CommiteeDelay      = 1
+	cpuCounter         = 1
+	NoParentD          = 2
+	Batchsize          = 100
+	Selectn            = 2
+	TotalReward        = 10000
+	BackupCommiteeSize = 64
 )
 
 type Worker struct {
@@ -81,8 +81,8 @@ type Worker struct {
 	// upper consensus
 	whirly        *simpleWhirly.NodeController
 	potSignalChan chan<- []byte
-	committee     *orderedmap.OrderedMap
-	Commitee      []string
+	//committee     *orderedmap.OrderedMap
+	Commitee []string
 
 	//
 }
@@ -127,12 +127,12 @@ func NewWorker(id int64, config *config.ConsensusConfig, logger *logrus.Entry, b
 		//storage:      st,
 		mempool:      mempool,
 		blockStorage: bst,
-		committee:    orderedmap.NewOrderedMap(),
-		vdfChecker:   vdf.New("wesolowski_rust", []byte(""), potconfig.Vdf0Iteration, id),
-		chainReader:  NewChainReader(bst),
-		PeerId:       engine.GetPeerID(),
-		workFlag:     false,
-		blockKeyMap:  keyblockmap,
+		//committee:    orderedmap.NewOrderedMap(),
+		vdfChecker:  vdf.New("wesolowski_rust", []byte(""), potconfig.Vdf0Iteration, id),
+		chainReader: NewChainReader(bst),
+		PeerId:      engine.GetPeerID(),
+		workFlag:    false,
+		blockKeyMap: keyblockmap,
 	}
 	w.Init()
 
@@ -257,10 +257,6 @@ func (w *Worker) OnGetVdf0Response() {
 				}
 			}
 
-			w.CommiteeUpdate(epoch)
-			// if epoch > 1 {
-			// 	w.simpleLeaderUpdate(parentblock)
-			// }
 			_, err = w.GetExcutedTxsFromExecutor(epoch)
 			if err != nil {
 				w.log.Warnf("[PoT]\tepoch %d: Get Tx from executor error for %s", epoch+1, err)
@@ -269,8 +265,12 @@ func (w *Worker) OnGetVdf0Response() {
 			}
 			_ = w.handleBlockExcutedTx(parentblock)
 
-			difficulty := w.calcDifficulty(parentblock, uncleblock)
+			// if epoch > 1 {
+			// 	w.simpleLeaderUpdate(parentblock)
+			// }
+			w.CommiteeUpdate(epoch)
 
+			difficulty := w.calcDifficulty(parentblock, uncleblock)
 			w.startWorking()
 			w.abort = make(chan struct{})
 
@@ -442,9 +442,11 @@ func (w *Worker) GetExcutedTxsFromExecutor(epoch uint64) ([]*types.ExecutedTxDat
 
 	executeblocks := response.GetBlocks()
 	excuteheight := response.GetEnd()
+
 	if excuteheight > w.executeheight {
 		w.executeheight = excuteheight
 	}
+
 	executedtxs := make([]*types.ExecutedTxData, 0)
 	for i := 0; i < len(executeblocks); i++ {
 		height := executeblocks[i].GetHeader().GetHeight()

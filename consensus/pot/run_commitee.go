@@ -2,9 +2,6 @@ package pot
 
 import (
 	"encoding/json"
-	"fmt"
-	"os"
-
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/zzz136454872/upgradeable-consensus/consensus/whirly/simpleWhirly"
 	"github.com/zzz136454872/upgradeable-consensus/crypto"
@@ -56,17 +53,17 @@ import (
 //	}
 //}
 
-func (w *Worker) committeeCheck(id int64, header *types.Header) bool {
-	if _, exist := w.committee.Get(id); !exist {
-		w.committee.Set(id, header)
-		return false
-	}
-	return true
-}
-
-func (w *Worker) committeeSizeCheck() bool {
-	return w.committee.Len() == 4
-}
+//func (w *Worker) committeeCheck(id int64, header *types.Header) bool {
+//	if _, exist := w.committee.Get(id); !exist {
+//		w.committee.Set(id, header)
+//		return false
+//	}
+//	return true
+//}
+//
+//func (w *Worker) committeeSizeCheck() bool {
+//	return w.committee.Len() == 4
+//}
 
 func (w *Worker) GetPeerQueue() chan *types.Block {
 	return w.peerMsgQueue
@@ -107,6 +104,7 @@ func (w *Worker) CommiteeUpdate(epoch uint64) {
 			Committee:           commitee,
 			CryptoElements:      nil,
 		}
+		w.log.Error(len(commitee))
 		shardings := []simpleWhirly.PoTSharding{sharding}
 		potsignal := &simpleWhirly.PoTSignal{
 			Epoch:             int64(epoch),
@@ -124,22 +122,22 @@ func (w *Worker) CommiteeUpdate(epoch uint64) {
 			w.potSignalChan <- b
 		}
 	}
-	if epoch > 10 && w.ID == 1 {
-		block, err := w.chainReader.GetByHeight(epoch - 1)
-		if err != nil {
-			return
-		}
-		header := block.GetHeader()
-		fill, err := os.OpenFile("difficulty", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
-		if err != nil {
-			fmt.Println(err)
-		}
-		_, err = fill.WriteString(fmt.Sprintf("%d\n", header.Difficulty.Int64()))
-		if err != nil {
-			fmt.Println(err)
-		}
-		fill.Close()
-	}
+	//if epoch > 10 && w.ID == 1 {
+	//	block, err := w.chainReader.GetByHeight(epoch - 1)
+	//	if err != nil {
+	//		return
+	//	}
+	//	header := block.GetHeader()
+	//	fill, err := os.OpenFile("difficulty", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
+	//	if err != nil {
+	//		fmt.Println(err)
+	//	}
+	//	_, err = fill.WriteString(fmt.Sprintf("%d\n", header.Difficulty.Int64()))
+	//	if err != nil {
+	//		fmt.Println(err)
+	//	}
+	//	fill.Close()
+	//}
 }
 func (w *Worker) SetWhirly(impl *simpleWhirly.NodeController) {
 	w.whirly = impl
@@ -170,4 +168,35 @@ func (w *Worker) UpdateCommitee(peerid string) []string {
 
 func (w *Worker) AppendCommitee(peerid string) {
 	w.Commitee = append(w.Commitee, peerid)
+}
+
+func (w *Worker) GetBackupCommitee(epoch uint64) []string {
+	commitee := make([]string, Commiteelen)
+	if epoch > BackupCommiteeSize && epoch%BackupCommiteeSize == 0 {
+		for i := uint64(1); i <= BackupCommiteeSize; i++ {
+			getepoch := epoch - 64 + i
+			block, err := w.chainReader.GetByHeight(getepoch)
+			if err != nil {
+				return nil
+			}
+			if block != nil {
+				header := block.GetHeader()
+				commiteekey := header.PublicKey
+				commitee = append(commitee, hexutil.Encode(commiteekey))
+			}
+		}
+		w.Commitee = commitee
+	} else {
+		commitee = w.Commitee
+	}
+	return commitee
+}
+
+// TODO: Shuffle function need to
+func (w *Worker) ShuffleCommitee(epoch uint64, backupcommitee []string) []string {
+	backuplen := len(w.Commitee)
+	if backuplen > 4 {
+		return backupcommitee[:4]
+	}
+	return w.Commitee
 }
