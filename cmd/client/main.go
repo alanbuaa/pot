@@ -44,6 +44,7 @@ type Client struct {
 
 	pendingTx *atomic.Int64
 	successTx *atomic.Int64
+	totalTx   int
 
 	// latency
 	sendTime    map[command]time.Time
@@ -95,6 +96,7 @@ func NewClient(log *logrus.Entry) *Client {
 		pendingTx:              new(atomic.Int64),
 		successTx:              new(atomic.Int64),
 		UnimplementedP2PServer: pb.UnimplementedP2PServer{},
+		totalTx:                0,
 	}
 
 	client.requestTimeout.Init()
@@ -150,7 +152,8 @@ func (client *Client) receiveReply() {
 			if re, ok := client.getResults(cmd); ok {
 				if re.result == string(replyMsg.Receipt) {
 					re.count++
-					if re.count == (len(client.config.Nodes)+2)/3 {
+					// if re.count == (len(client.config.Nodes)+2)/3 {
+					if re.count == 2 {
 						client.pendingTx.Add(-1)
 						client.successTx.Add(1)
 						client.log.WithFields(logrus.Fields{
@@ -179,11 +182,18 @@ func (client *Client) receiveReply() {
 }
 
 // const BroadcastToAll string = "ALL"
-
 func (client *Client) sendTx(tx *pb.Transaction) {
 	btx, err := proto.Marshal(tx)
 	utils.PanicOnError(err)
-	request := &pb.Request{Tx: btx, Sharding: []byte("default")}
+	client.totalTx += 1
+	var request *pb.Request
+	if client.totalTx%2 == 0 {
+		request = &pb.Request{Tx: btx, Sharding: []byte("default")}
+	} else {
+		request = &pb.Request{Tx: btx, Sharding: []byte("hello_world")}
+		// request = &pb.Request{Tx: btx, Sharding: []byte("default")}
+	}
+
 	rawRequest, err := proto.Marshal(request)
 	utils.PanicOnError(err)
 

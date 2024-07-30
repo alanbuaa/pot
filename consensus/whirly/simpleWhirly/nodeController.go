@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -146,13 +147,7 @@ func (nc *NodeController) receiveMsg(ctx context.Context) {
 			if !ok2 {
 				nc.Log.Warn("Receive request error: Invaild sharding name")
 			} else {
-				sharding.nodesLock.Lock()
-				for _, node := range sharding.WhrilyNodes {
-					go func(n *SimpleWhirlyImpl) {
-						n.GetRequestEntrance() <- req
-					}(node)
-				}
-				sharding.nodesLock.Unlock()
+				sharding.handleRequest(req)
 			}
 			nc.shardingsLock.Unlock()
 		case msgByte, ok := <-nc.MsgByteEntrance:
@@ -161,7 +156,7 @@ func (nc *NodeController) receiveMsg(ctx context.Context) {
 			}
 			packet, err := DecodePacket(msgByte)
 			if err != nil {
-				nc.Log.WithError(err).Warn("decode packet failed")
+				nc.Log.WithError(err).Warn("nodeController: decode packet failed")
 				continue
 			}
 			go nc.handleMsg(packet)
@@ -225,13 +220,23 @@ func (nc *NodeController) ShardManage(potSignal *PoTSignal) {
 		localSharding, ok := nc.Shardings[s.Name]
 		if !ok {
 			// create a new sharding
-			nc.Log.Info("create a new sharding")
+			nc.Log.Info("create a new sharding: ", s.Name)
 			ns := NewSharding(s.Name, nc, s)
 			nc.Shardings[s.Name] = ns
 		} else {
 			// update sharding
 			localSharding.LeaderPublicAddress = s.LeaderPublicAddress
 			localSharding.Committee = s.Committee
+			if localSharding.SubConsensus.ConsensusID != s.SubConsensus.ConsensusID {
+				// 此时意味者发送了共识切换，需要为新共识创建一个 DaemonNode 节点
+				// 请注意，创建节点的共识类型，是依据 localSharding.SubConsensus 指定的，因此在创建前需要先更新 localSharding.SubConsensus
+				nc.Log.Info("create a new consensus DaemonNode in ", s.Name, " for consensusID: ", s.SubConsensus.ConsensusID)
+				localSharding.SubConsensus = &s.SubConsensus
+				address := EncodeAddress(localSharding.Name+nc.PeerId, s.SubConsensus.ConsensusID, DaemonNodePublicAddress)
+				localSharding.createConsensusNode(address)
+			} else {
+				localSharding.SubConsensus = &s.SubConsensus
+			}
 		}
 		nc.shardingsLock.Unlock()
 	}
@@ -256,40 +261,20 @@ func (nc *NodeController) ShardManage(potSignal *PoTSignal) {
 }
 
 func (nc *NodeController) NodeManage(potSignal *PoTSignal) {
-	fmt.Println("========================")
-	fmt.Println(potSignal.SelfPublicAddress)
+	fmt.Println("======================== epoch: ", nc.epoch, "========================")
+	fmt.Println("len(SelfPublicAddress): ", len(potSignal.SelfPublicAddress))
 	// fmt.Printf("%+v\n", potSignal.Shardings)
 	// println(potSignal.Shardings)
 
 	for _, s := range nc.Shardings {
-		// Determine whether the leader belongs to oneself
-		for _, address := range potSignal.SelfPublicAddress {
-			fmt.Println("---------")
-			for _, c := range s.Committee {
-				if address == c && address != s.LeaderPublicAddress {
-					_ = s.createNode(address)
-					// nc.Log.Info("create a new committee")
-				} else {
-					// fmt.Println("AAA = ", address, "\nDDD = ", c)
-				}
-			}
-
-			if address == s.LeaderPublicAddress {
-				// This new simpleWhirly node or committee node attempts to become a leader
-				node := s.createNode(address)
-				node.NewLeader(potSignal, s)
-				nc.Log.Info("create a new leader")
-			} else {
-				// fmt.Println("AAA = ", address, "\nBBB = ", s.LeaderPublicAddress)
-			}
-		}
+		go s.NodeManage(potSignal)
 	}
 
 }
 
 // stop a committee node
 func (nc *NodeController) handleStop(address string) {
-	shardingName, _ := DecodeAddress(address)
+	shardingName, _, _ := DecodeAddress(address)
 	nc.shardingsLock.Lock()
 	sharding, ok := nc.Shardings[shardingName]
 	if !ok {
@@ -301,15 +286,26 @@ func (nc *NodeController) handleStop(address string) {
 	nc.shardingsLock.Unlock()
 }
 
-func EncodeAddress(shardingName string, address string) string {
-	return shardingName + "-" + address
+func EncodeAddress(shardingName string, consensusID int64, address string) string {
+	consensusIDStr := strconv.FormatInt(consensusID, 10)
+	return shardingName + "-" + consensusIDStr + "-" + address
 }
 
-func DecodeAddress(address string) (string, string) {
+// Input: address that is encoded
+// Output: shardingName, consensusID, rawAddress
+func DecodeAddress(address string) (string, int64, string) {
 	res := strings.Split(address, "-")
-	if len(res) != 2 {
+	if len(res) != 3 {
 		println("DecodeAddress Error: Illegal parameter")
-		return "", ""
+		return "", 0, ""
 	}
-	return res[0], res[1]
+	shardingName := res[0]
+	rawAddress := res[2]
+
+	consensusID, err := strconv.ParseInt(res[1], 10, 64)
+	if err != nil {
+		println("DecodeAddress Error: Illegal ConsensusID")
+		return "", 0, ""
+	}
+	return shardingName, consensusID, rawAddress
 }

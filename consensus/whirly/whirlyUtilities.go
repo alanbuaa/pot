@@ -226,6 +226,35 @@ func (wu *WhirlyUtilitiesImpl) NewLeaderEchoMsg(leader int64, block *pb.WhirlyBl
 	return wMsg
 }
 
+func (wu *WhirlyUtilitiesImpl) NewLatestBlockRequest(epoch int64, proof []byte, committee []string) *pb.WhirlyMsg {
+	wMsg := &pb.WhirlyMsg{}
+
+	wMsg.Payload = &pb.WhirlyMsg_LatestBlockRequest{LatestBlockRequest: &pb.LatestBlockRequest{
+		Leader:        uint64(wu.ID),
+		Epoch:         uint64(epoch),
+		Proof:         proof,
+		PublicAddress: wu.PublicAddress,
+		Committee:     committee,
+		ConsensusId:   uint64(wu.ConsensusID),
+	}}
+	return wMsg
+}
+
+func (wu *WhirlyUtilitiesImpl) NewLatestBlockEchoMsg(leader int64, block *pb.WhirlyBlock, proof *pb.SimpleWhirlyProof, epoch int64, vHeghit uint64) *pb.WhirlyMsg {
+	wMsg := &pb.WhirlyMsg{}
+
+	wMsg.Payload = &pb.WhirlyMsg_LatestBlockEcho{LatestBlockEcho: &pb.LatestBlockEcho{
+		Leader:        uint64(leader),
+		SenderId:      uint64(wu.ID),
+		Epoch:         uint64(epoch),
+		Block:         block,
+		SwProof:       proof,
+		VHeight:       vHeghit,
+		PublicAddress: wu.PublicAddress,
+	}}
+	return wMsg
+}
+
 func (wu *WhirlyUtilitiesImpl) PingMsg() *pb.WhirlyMsg {
 	wMsg := &pb.WhirlyMsg{}
 	wMsg.Payload = &pb.WhirlyMsg_WhirlyPing{WhirlyPing: &pb.WhirlyPing{

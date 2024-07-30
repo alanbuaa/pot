@@ -15,7 +15,17 @@ type Consensus interface {
 	GetConsensusID() int64
 	VerifyBlock(block []byte, proof []byte) bool
 
+	UpdateExternalStatus(status ExternalStatus)
+	NewEpochConfirmation(epoch int64, proof []byte, committee []string)
+	RequestLatestBlock(epoch int64, proof []byte, committee []string)
+
 	// the following functions are for synchronous consensus upgrade only
 	GetWeight(nid int64) float64
 	GetMaxAdversaryWeight() float64
+}
+
+type ExternalStatus struct {
+	Command string
+	Epoch   int64
+	Leader  string
 }

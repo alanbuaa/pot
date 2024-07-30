@@ -23,13 +23,19 @@ test:
 	go test -v ./...
 
 compile_proto:
-	protoc pb/*.proto --go_out=. --go-grpc_out=. --go-grpc_opt=require_unimplemented_servers=false
+	protoc pb/*.proto --go_out=. --go-grpc_out=.
+
+compile_proto_new:
+	protoc pb/*.proto --go_out=. --go-grpc_out=require_unimplemented_servers=false:.
 
 win_compile_proto:
 	protoc --go_out=plugins=grpc:. pb/*.proto
 
 run_server:
 	./upgradeable-consensus
+
+run_server_new:
+	./test 2>&1 | tee log.txt
 
 run_client:
 	./client

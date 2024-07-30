@@ -129,6 +129,7 @@ func NewConfig(path string, id int64) (*Config, error) {
 	cfg.Consensus.Keys = keys
 	// cfg.Consensus.F = (len(cfg.Nodes) - 1) / 3
 	cfg.Consensus.F = (cfg.Total - 1) / 3
+	// cfg.Consensus.F = 1
 	cfg.Consensus.Topic = cfg.Topic
 	return cfg, nil
 }

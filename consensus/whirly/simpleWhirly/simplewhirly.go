@@ -13,6 +13,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/zzz136454872/upgradeable-consensus/config"
+	"github.com/zzz136454872/upgradeable-consensus/consensus/model"
 	whirlyUtilities "github.com/zzz136454872/upgradeable-consensus/consensus/whirly"
 	"github.com/zzz136454872/upgradeable-consensus/executor"
 	"github.com/zzz136454872/upgradeable-consensus/p2p"
@@ -51,11 +52,12 @@ type SimpleWhirlyImpl struct {
 	waitProposal *sync.Cond
 	cancel       context.CancelFunc
 
-	// PoT
-	// PoTByteEntrance chan []byte // receive msg
-	curEcho      []*pb.SimpleWhirlyProof
-	curEchoLock  sync.Mutex
-	maxVHeight   uint64
+	// New Epoch Echo
+	newEpoch NewEpochMechanism
+
+	// Latest block synchronization
+	latestBlockReq LatestBlockRequestMechanism
+
 	inCommittee  bool
 	Committee    []string
 	stopEntrance chan string
@@ -214,6 +216,18 @@ func (sw *SimpleWhirlyImpl) SetEpoch(epoch int64) {
 	}
 }
 
+func (sw *SimpleWhirlyImpl) UpdateExternalStatus(status model.ExternalStatus) {
+	switch status.Command {
+	case "SetLeader":
+		sw.SetLeader(status.Epoch, status.Leader)
+	case "SetEpoch":
+		sw.SetEpoch(status.Epoch)
+	default:
+		sw.Log.Warnf("UpdateExternalStatus: command type not supported: %s", status.Command)
+	}
+
+}
+
 func (sw *SimpleWhirlyImpl) GetLeader(epoch int64) string {
 	sw.leaderLock.Lock()
 	leaderID, ok := sw.leader[epoch]
@@ -331,12 +345,21 @@ func (sw *SimpleWhirlyImpl) handleMsg(msg *pb.WhirlyMsg) {
 		}
 		sw.OnReceiveProposal(proposalMsg.Block, proposalMsg.SwProof, proposalMsg.PublicAddress)
 	case *pb.WhirlyMsg_WhirlyVote:
-		sw.OnReceiveVote(msg)
+		whirlyVoteMsg := msg.GetWhirlyVote()
+		if int64(whirlyVoteMsg.Epoch) < sw.epoch {
+			return
+		}
+		sw.OnReceiveVote(whirlyVoteMsg)
 	case *pb.WhirlyMsg_NewLeaderNotify:
 		newLeaderMsg := msg.GetNewLeaderNotify()
 		sw.OnReceiveNewLeaderNotify(newLeaderMsg)
 	case *pb.WhirlyMsg_NewLeaderEcho:
 		sw.OnReceiveNewLeaderEcho(msg)
+	case *pb.WhirlyMsg_LatestBlockRequest:
+		lbReq := msg.GetLatestBlockRequest()
+		sw.OnReceiveLatestBlockRequest(lbReq)
+	case *pb.WhirlyMsg_LatestBlockEcho:
+		sw.OnReceiveLatestBlockEcho(msg)
 	case *pb.WhirlyMsg_WhirlyPing:
 		pingMsg := msg.GetWhirlyPing()
 		sw.handlePingMsg(pingMsg)
@@ -375,7 +398,7 @@ func (sw *SimpleWhirlyImpl) Update(swProof *pb.SimpleWhirlyProof) {
 	}
 
 	if block2.Height+1 == block1.Height {
-		_, address := DecodeAddress(sw.PublicAddress)
+		_, _, address := DecodeAddress(sw.PublicAddress)
 		if sw.View.ViewNum%2 == 0 && (sw.ID == 0 || address == DaemonNodePublicAddress) {
 			sw.Log.WithFields(logrus.Fields{
 				"blockHash":   hex.EncodeToString(block2.Hash),
@@ -402,7 +425,8 @@ func (sw *SimpleWhirlyImpl) OnCommit(block *pb.WhirlyBlock) {
 		}
 		// }()
 		//sw.Log.WithField("blockHash", hex.EncodeToString(block.Hash)).Trace("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] [SIMPLE WHIRLY] EXEC.")
-		_, address := DecodeAddress(sw.PublicAddress)
+		// 只有 DaemonNode 需要提交交易
+		_, _, address := DecodeAddress(sw.PublicAddress)
 		if sw.ID == 0 || address == DaemonNodePublicAddress {
 			go sw.ProcessProposal(block, []byte{})
 		}
@@ -525,7 +549,8 @@ func (sw *SimpleWhirlyImpl) OnReceiveProposal(newBlock *pb.WhirlyBlock, swProof 
 	if sw.GetLeader(sw.epoch) == sw.PublicAddress {
 		// if sw.GetLeader(int64(newBlock.ExecHeight)) == sw.ID {
 		// vote self
-		sw.OnReceiveVote(voteMsg)
+		vote := voteMsg.GetWhirlyVote()
+		sw.OnReceiveVote(vote)
 	} else {
 		// send vote to the leader
 		_ = sw.Unicast(publicAddress, voteMsg)
@@ -533,12 +558,11 @@ func (sw *SimpleWhirlyImpl) OnReceiveProposal(newBlock *pb.WhirlyBlock, swProof 
 	}
 }
 
-func (sw *SimpleWhirlyImpl) OnReceiveVote(msg *pb.WhirlyMsg) {
+func (sw *SimpleWhirlyImpl) OnReceiveVote(whirlyVoteMsg *pb.WhirlyVote) {
 	if !sw.inCommittee {
 		sw.Log.Trace("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "]  OnReceiveVote: Not in Committee.")
 		return
 	}
-	whirlyVoteMsg := msg.GetWhirlyVote()
 
 	if int64(whirlyVoteMsg.Epoch) < sw.epoch {
 		return
