@@ -28,6 +28,7 @@ type Header struct {
 	Address    int64
 	PeerId     string
 	TxHash     []byte
+	ExeHash    []byte
 	Hashes     []byte
 	PublicKey  []byte
 }

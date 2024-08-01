@@ -140,17 +140,28 @@ func (w *Worker) GenerateCoinbaseTx(pubkeybyte []byte, vdf0res []byte, totalrewa
 				return bytes.Compare(rewards[i].Address, rewards[j].Address) < 0
 			})
 
+			//seed := bytes.Join([][]byte{vdf0res},big.NewInt(chainID).Bytes())
+
 			rand.Seed(binary.BigEndian.Uint64(crypto.Hash(vdf0res)[:8]))
-			rand.Shuffle(len(rewards), func(i, j int) {
-				rewards[i], rewards[j] = rewards[j], rewards[i]
-			})
+			//rand.Shuffle(len(rewards), func(i, j int) {
+			//	rewards[i], rewards[j] = rewards[j], rewards[i]
+			//})
+			//if Selectn < len(rewards) {
+			//	selectreward[chainID] = rewards[:Selectn]
+			//} else {
+			//	selectreward[chainID] = rewards
+			//}
 
-			if Selectn < len(rewards) {
-				selectreward[chainID] = rewards[:Selectn]
-			} else {
-				selectreward[chainID] = rewards
+			for i := 0; i < Selectn; i++ {
+				r := rand.Float64()
+				acnum := 0.0
+				for _, reward := range rewards {
+					acnum += reward.weight
+					if r <= acnum {
+						selectreward[chainID] = append(selectreward[chainID], reward)
+					}
+				}
 			}
-
 		}
 	}
 

@@ -39,7 +39,8 @@ message Header{
   string PeerId = 11;
   bytes Pubkey = 12;
   bytes Txhash = 13;
-  bytes Command = 14;
+  bytes ExeHash = 14;
+  bytes Command = 15;
 }
 
 message Command {

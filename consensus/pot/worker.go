@@ -35,7 +35,7 @@ const (
 	cpuCounter         = 1
 	NoParentD          = 2
 	Batchsize          = 100
-	Selectn            = 2
+	Selectn            = 1
 	TotalReward        = 10000
 	BackupCommiteeSize = 64
 )
@@ -79,12 +79,14 @@ type Worker struct {
 	chainReader       *ChainReader
 
 	// upper consensus
-	whirly        *simpleWhirly.NodeController
-	potSignalChan chan<- []byte
+	whirly         *simpleWhirly.NodeController
+	potSignalChan  chan<- []byte
+	CommiteeNum    int32
+	Commitee       [][]string
+	Shardings      []Sharding
+	BackupCommitee []string
+	SelfAddress    []string
 	//committee     *orderedmap.OrderedMap
-	Commitee []string
-
-	//
 }
 
 func NewWorker(id int64, config *config.ConsensusConfig, logger *logrus.Entry, bst *types.BlockStorage, engine *PoTEngine) *Worker {
@@ -106,6 +108,8 @@ func NewWorker(id int64, config *config.ConsensusConfig, logger *logrus.Entry, b
 	peer := make(chan *types.Block, 5)
 	keyblockmap := make(map[[crypto.Hashlen]byte][]byte)
 	mempool := NewMempool()
+	Commitee := make([][]string, 0)
+	BackupCommitee := make([]string, BackupCommiteeSize)
 
 	w := &Worker{
 		abort:         make(chan struct{}),
@@ -128,11 +132,14 @@ func NewWorker(id int64, config *config.ConsensusConfig, logger *logrus.Entry, b
 		mempool:      mempool,
 		blockStorage: bst,
 		//committee:    orderedmap.NewOrderedMap(),
-		vdfChecker:  vdf.New("wesolowski_rust", []byte(""), potconfig.Vdf0Iteration, id),
-		chainReader: NewChainReader(bst),
-		PeerId:      engine.GetPeerID(),
-		workFlag:    false,
-		blockKeyMap: keyblockmap,
+		vdfChecker:     vdf.New("wesolowski_rust", []byte(""), potconfig.Vdf0Iteration, id),
+		chainReader:    NewChainReader(bst),
+		PeerId:         engine.GetPeerID(),
+		workFlag:       false,
+		blockKeyMap:    keyblockmap,
+		Commitee:       Commitee,
+		CommiteeNum:    int32(1),
+		BackupCommitee: BackupCommitee,
 	}
 	w.Init()
 
@@ -268,7 +275,7 @@ func (w *Worker) OnGetVdf0Response() {
 			// if epoch > 1 {
 			// 	w.simpleLeaderUpdate(parentblock)
 			// }
-			w.CommiteeUpdate(epoch)
+			w.CommitteeUpdate(epoch)
 
 			difficulty := w.calcDifficulty(parentblock, uncleblock)
 			w.startWorking()
@@ -411,8 +418,9 @@ func (w *Worker) createBlock(epoch uint64, parentBlock *types.Block, uncleBlock 
 		Address:    w.ID,
 		PeerId:     w.PeerId,
 		TxHash:     txshash,
-		Hashes:     nil,
-		PublicKey:  publicKeyBytes,
+
+		Hashes:    nil,
+		PublicKey: publicKeyBytes,
 	}
 
 	h.Hashes = h.Hash()

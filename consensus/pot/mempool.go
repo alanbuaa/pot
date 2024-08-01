@@ -83,10 +83,10 @@ func NewMempool() *Mempool {
 	return c
 }
 
-func (c *Mempool) Has(tx *types.ExecutedTxData) bool {
+func (c *Mempool) Has(blocks *types.ExecutedTxData) bool {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
-	_, ok := c.execset[tx.Hash()]
+	_, ok := c.execset[blocks.Hash()]
 	return ok
 }
 

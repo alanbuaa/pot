@@ -14,6 +14,32 @@ const (
 	ExcutedTxType = 0x02
 )
 
+type ExecutedBlock struct {
+	Header ExecuteHeader
+	Txs    []ExecutedTxData
+}
+
+type ExecuteHeader struct {
+	Height    uint64
+	BlockHash []byte
+}
+
+func (e *ExecuteHeader) ToProto() *pb.ExecuteHeader {
+	return &pb.ExecuteHeader{
+		Height:    e.Height,
+		BlockHash: e.BlockHash,
+	}
+}
+
+func (e *ExecuteHeader) EncodeToByte() ([]byte, error) {
+	pbexTx := e.ToProto()
+	pbbyte, err := proto.Marshal(pbexTx)
+	if err != nil {
+		return nil, err
+	}
+	return pbbyte, nil
+}
+
 type ExecutedTxData struct {
 	ExecutedHeight uint64
 	TxHash         []byte

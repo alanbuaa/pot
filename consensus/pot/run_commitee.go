@@ -9,6 +9,14 @@ import (
 	"github.com/zzz136454872/upgradeable-consensus/types"
 )
 
+type Sharding struct {
+	Name            string
+	Id              int32
+	LeaderAddress   string
+	Committee       []string
+	consensusconfig config.ConsensusConfig
+}
+
 //func (w *Worker) simpleLeaderUpdate(parent *types.Header) {
 //	if parent != nil {
 //		// address := parent.Address
@@ -70,10 +78,10 @@ func (w *Worker) GetPeerQueue() chan *types.Block {
 	return w.peerMsgQueue
 }
 
-func (w *Worker) CommiteeUpdate(epoch uint64) {
+func (w *Worker) CommitteeUpdate(epoch uint64) {
 
 	if epoch >= CommiteeDelay+Commiteelen {
-		commitee := make([]string, Commiteelen)
+		committee := make([]string, Commiteelen)
 		selfaddress := make([]string, 0)
 		for i := uint64(0); i < Commiteelen; i++ {
 			block, err := w.chainReader.GetByHeight(epoch - CommiteeDelay - i)
@@ -82,7 +90,7 @@ func (w *Worker) CommiteeUpdate(epoch uint64) {
 			}
 			if block != nil {
 				header := block.GetHeader()
-				commitee[i] = hexutil.Encode(header.PublicKey)
+				committee[i] = hexutil.Encode(header.PublicKey)
 				flag, _ := w.TryFindKey(crypto.Convert(header.Hash()))
 				if flag {
 					selfaddress = append(selfaddress, hexutil.Encode(header.PublicKey))
@@ -93,8 +101,8 @@ func (w *Worker) CommiteeUpdate(epoch uint64) {
 		// 	Epoch:               int64(epoch),
 		// 	Proof:               nil,
 		// 	ID:                  0,
-		// 	LeaderPublicAddress: commitee[0],
-		// 	Committee:           commitee,
+		// 	LeaderPublicAddress: committee[0],
+		// 	Committee:           committee,
 		// 	SelfPublicAddress:   selfaddress,
 		// 	CryptoElements:      nil,
 		// }
@@ -116,19 +124,19 @@ func (w *Worker) CommiteeUpdate(epoch uint64) {
 		sharding1 := simpleWhirly.PoTSharding{
 			Name:                "default",
 			ParentSharding:      nil,
-			LeaderPublicAddress: commitee[0],
-			Committee:           commitee,
+			LeaderPublicAddress: committee[0],
+			Committee:           committee,
 			CryptoElements:      nil,
 			SubConsensus:        consensus,
 		}
 
-		w.log.Error(len(commitee))
+		w.log.Error(len(committee))
 
 		sharding2 := simpleWhirly.PoTSharding{
 			Name:                "hello_world",
 			ParentSharding:      nil,
-			LeaderPublicAddress: commitee[0],
-			Committee:           commitee,
+			LeaderPublicAddress: committee[0],
+			Committee:           committee,
 			CryptoElements:      nil,
 			SubConsensus:        consensus,
 		}
@@ -167,64 +175,99 @@ func (w *Worker) CommiteeUpdate(epoch uint64) {
 	//	fill.Close()
 	//}
 }
+
+func (w *Worker) ImprovedCommitteeUpdate(epoch uint64, committeeNum int) {
+	backupcommitee, selfaddr := w.GetBackupCommitee(epoch)
+	commitee := w.ShuffleCommitee(epoch, backupcommitee, committeeNum)
+	for i := 0; i < committeeNum; i++ {
+		selfaddress := make([]string, 0)
+		for _, s := range commitee[i] {
+			if IsContain(selfaddr, s) {
+				selfaddress = append(selfaddress, s)
+			}
+		}
+	}
+
+}
+
+func IsContain(parent []string, son string) bool {
+	for _, s := range parent {
+		if s == son {
+			return true
+		}
+	}
+	return false
+}
+
 func (w *Worker) SetWhirly(impl *simpleWhirly.NodeController) {
 	w.whirly = impl
 	w.potSignalChan = impl.GetPoTByteEntrance()
 }
 
-func (w *Worker) CommiteeLenCheck() bool {
-	if len(w.Commitee) != Commiteelen {
-		return false
-	}
-	return true
-}
+//func (w *Worker) CommiteeLenCheck() bool {
+//	if len(w.Commitee) != Commiteelen {
+//		return false
+//	}
+//	return true
+//}
 
-func (w *Worker) GetCommiteeLeader() string {
-	return w.Commitee[Commiteelen-1]
-}
+//func (w *Worker) GetCommiteeLeader() string {
+//	return w.Commitee[Commiteelen-1]
+//}
 
-func (w *Worker) UpdateCommitee(peerid string) []string {
-	if w.CommiteeLenCheck() {
-		w.Commitee = w.Commitee[1:Commiteelen]
-		w.Commitee = append(w.Commitee, peerid)
-	}
-	if w.CommiteeLenCheck() {
-		return w.Commitee
-	}
-	return nil
-}
+//func (w *Worker) UpdateCommitee(commiteeid int, peerid string) []string {
+//	if w.CommiteeLenCheck() {
+//		w.Commitee[commiteeid] = w.Commitee[commiteeid][1:Commiteelen]
+//		w.Commitee[commiteeid] = append(w.Commitee[commiteeid], peerid)
+//	}
+//	if w.CommiteeLenCheck() {
+//		return w.Commitee[commiteeid]
+//	}
+//	return nil
+//}
+//
+//func (w *Worker) AppendCommitee(commiteeid int, peerid string) {
+//	w.Commitee[commiteeid] = append(w.Commitee[commiteeid], peerid)
+//}
 
-func (w *Worker) AppendCommitee(peerid string) {
-	w.Commitee = append(w.Commitee, peerid)
-}
-
-func (w *Worker) GetBackupCommitee(epoch uint64) []string {
+func (w *Worker) GetBackupCommitee(epoch uint64) ([]string, []string) {
 	commitee := make([]string, Commiteelen)
+	selfAddr := make([]string, 0)
 	if epoch > BackupCommiteeSize && epoch%BackupCommiteeSize == 0 {
 		for i := uint64(1); i <= BackupCommiteeSize; i++ {
 			getepoch := epoch - 64 + i
 			block, err := w.chainReader.GetByHeight(getepoch)
 			if err != nil {
-				return nil
+				return nil, nil
 			}
 			if block != nil {
 				header := block.GetHeader()
 				commiteekey := header.PublicKey
 				commitee = append(commitee, hexutil.Encode(commiteekey))
+				flag, _ := w.TryFindKey(crypto.Convert(header.Hash()))
+				if flag {
+					selfAddr = append(selfAddr, hexutil.Encode(header.PublicKey))
+				}
 			}
 		}
-		w.Commitee = commitee
+		w.BackupCommitee = commitee
+		w.SelfAddress = selfAddr
 	} else {
-		commitee = w.Commitee
+		commitee = w.BackupCommitee
+		selfAddr = w.SelfAddress
 	}
-	return commitee
+	return commitee, selfAddr
 }
 
-// TODO: Shuffle function need to
-func (w *Worker) ShuffleCommitee(epoch uint64, backupcommitee []string) []string {
-	backuplen := len(w.Commitee)
-	if backuplen > 4 {
-		return backupcommitee[:4]
+// TODO: Shuffle function need to complete
+func (w *Worker) ShuffleCommitee(epoch uint64, backupcommitee []string, comitteenum int) [][]string {
+	commitees := make([][]string, comitteenum)
+	for i := 0; i < comitteenum; i++ {
+		if len(backupcommitee) > 4 {
+			commitees[i] = backupcommitee[:4]
+		} else {
+			commitees[i] = backupcommitee
+		}
 	}
-	return w.Commitee
+	return commitees
 }

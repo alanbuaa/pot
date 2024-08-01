@@ -23,7 +23,7 @@ test:
 	go test -v ./...
 
 compile_proto:
-	protoc pb/*.proto --go_out=. --go-grpc_out=.
+	protoc pb/*.proto --go_out=. --go-grpc_out=. --go-grpc_opt=require_unimplemented_servers=false
 
 compile_proto_new:
 	protoc pb/*.proto --go_out=. --go-grpc_out=require_unimplemented_servers=false:.
