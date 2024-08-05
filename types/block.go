@@ -34,8 +34,9 @@ type Header struct {
 }
 
 type Block struct {
-	Header *Header
-	Txs    []*Tx
+	Header     *Header
+	Txs        []*Tx
+	ExeHeaders []*ExecuteHeader
 }
 
 func (b *Block) Hash() []byte {
@@ -319,20 +320,8 @@ func RandByte() []byte {
 	return res
 }
 
-func (b *Block) GetExcutedTx() []*ExecutedTxData {
-	txs := b.GetTxs()
-	excutedtx := make([]*ExecutedTxData, 0)
-	if txs != nil {
-		for i := 0; i < len(txs); i++ {
-			if txs[i].GetTxType() == pb.TxDataType_ExcutedTx {
-				excuteddata := txs[i].GetExcutedTxData()
-				if excuteddata != nil {
-					excutedtx = append(excutedtx, excuteddata)
-				}
-			}
-		}
-	}
-	return excutedtx
+func (b *Block) GetExecutedHeaders() []*ExecuteHeader {
+	return b.ExeHeaders
 }
 
 func (b *Block) GetRawTx() []*RawTx {

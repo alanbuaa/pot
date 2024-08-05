@@ -220,11 +220,11 @@ func (w *Worker) chainreset(branch []*types.Block) error {
 			if err != nil {
 				return fmt.Errorf("get chain block err for %s", err)
 			}
-			origintxs := originblocks.GetExcutedTx()
-			w.mempool.UnMark(origintxs)
+			originHeaders := originblocks.GetExecutedHeaders()
+			w.mempool.UnMarkByHeader(originHeaders)
 			w.chainReader.SetHeight(height, blocks)
-			txs := blocks.GetExcutedTx()
-			w.mempool.MarkProposed(txs)
+			txs := blocks.GetExecutedHeaders()
+			w.mempool.MarkProposedByHeader(txs)
 			//w.blockStorage.SetVDFres(height, branch[i].GetHeader().PoTProof[0])
 			branchstr = branchstr + "\t" + strconv.Itoa(int(height))
 		}

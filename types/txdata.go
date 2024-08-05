@@ -15,13 +15,29 @@ const (
 )
 
 type ExecutedBlock struct {
-	Header ExecuteHeader
-	Txs    []ExecutedTxData
+	Header *ExecuteHeader
+	Txs    []*ExecutedTx
+}
+
+func (e *ExecutedBlock) ToProto() *pb.ExecuteBlock {
+	pbtxs := make([]*pb.ExecutedTx, 0)
+	for _, tx := range e.Txs {
+		pbtxs = append(pbtxs, tx.ToProto())
+	}
+	return &pb.ExecuteBlock{
+		Header: e.Header.ToProto(),
+		Txs:    pbtxs,
+	}
+}
+
+func (e *ExecutedBlock) Hash() [crypto.Hashlen]byte {
+	return crypto.Convert(e.Header.BlockHash)
 }
 
 type ExecuteHeader struct {
 	Height    uint64
 	BlockHash []byte
+	TxsHash   []byte
 }
 
 func (e *ExecuteHeader) ToProto() *pb.ExecuteHeader {
@@ -38,6 +54,49 @@ func (e *ExecuteHeader) EncodeToByte() ([]byte, error) {
 		return nil, err
 	}
 	return pbbyte, nil
+}
+
+func (e *ExecuteHeader) Hash() [crypto.Hashlen]byte {
+	return crypto.Convert(e.BlockHash)
+}
+
+type ExecutedTx struct {
+	Height uint64
+	TxHash []byte
+	Data   []byte
+}
+
+func (e *ExecutedTx) ToProto() *pb.ExecutedTx {
+	return &pb.ExecutedTx{
+		Height: e.Height,
+		TxHash: e.TxHash,
+		Data:   e.Data,
+	}
+}
+
+func (e *ExecutedTx) EncodeToByte() ([]byte, error) {
+	pbexTx := e.ToProto()
+	pbbyte, err := proto.Marshal(pbexTx)
+	if err != nil {
+		return nil, err
+	}
+	pbtx := &pb.TxData{
+		TxDataType: pb.TxDataType_ExcutedTx,
+		TxData:     pbbyte,
+	}
+	b, err := proto.Marshal(pbtx)
+	if err != nil {
+		return nil, err
+	}
+	return b, nil
+}
+
+func (e *ExecutedTx) Hash() [crypto.Hashlen]byte {
+	if e.TxHash != nil {
+		return crypto.Convert(e.TxHash)
+	} else {
+		return crypto.Convert(crypto.NilTxsHash)
+	}
 }
 
 type ExecutedTxData struct {

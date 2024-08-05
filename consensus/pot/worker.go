@@ -386,7 +386,11 @@ func (w *Worker) mine(epoch uint64, vdf0res []byte, nonce int64, workerid int, a
 }
 
 func (w *Worker) createBlock(epoch uint64, parentBlock *types.Block, uncleBlock []*types.Block, difficulty *big.Int, mixdigest []byte, nonce int64, vdf0res []byte, vdf1res []byte) *types.Block {
-	Txs := w.GetTxsFromMempool()
+	exeblocks := w.GetExecutedBlockFromMempool()
+	exeheader := make([]*types.ExecuteHeader, 0)
+	for _, exeblock := range exeblocks {
+		exeheader = append(exeheader, exeblock.Header)
+	}
 	//w.log.Infof("Txs len %d", len(Txs))
 	parentblockhash := make([]byte, 0)
 	if parentBlock != nil {
@@ -404,7 +408,8 @@ func (w *Worker) createBlock(epoch uint64, parentBlock *types.Block, uncleBlock 
 	//publicKeyBytes32 := crypto.Convert(publicKeyBytes)
 
 	coinbasetx := w.GenerateCoinbaseTx(publicKeyBytes, vdf0res, TotalReward)
-	Txs = append([]*types.Tx{coinbasetx}, Txs...)
+
+	Txs := []*types.Tx{coinbasetx}
 	txshash := crypto.ComputeMerkleRoot(types.Txs2Bytes(Txs))
 	h := &types.Header{
 		Height:     epoch,
@@ -427,12 +432,13 @@ func (w *Worker) createBlock(epoch uint64, parentBlock *types.Block, uncleBlock 
 	w.SetKeyBlockMap(privateKey.Private(), crypto.Convert(h.Hash()))
 
 	return &types.Block{
-		Header: h,
-		Txs:    Txs,
+		Header:     h,
+		Txs:        Txs,
+		ExeHeaders: exeheader,
 	}
 }
 
-func (w *Worker) GetExcutedTxsFromExecutor(epoch uint64) ([]*types.ExecutedTxData, error) {
+func (w *Worker) GetExcutedTxsFromExecutor(epoch uint64) ([]*types.ExecutedBlock, error) {
 	conn, err := grpc.Dial(w.config.PoT.ExcutorAddress, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(1024*1024*1024)))
 	if err != nil {
 		return nil, err
@@ -455,35 +461,54 @@ func (w *Worker) GetExcutedTxsFromExecutor(epoch uint64) ([]*types.ExecutedTxDat
 		w.executeheight = excuteheight
 	}
 
-	executedtxs := make([]*types.ExecutedTxData, 0)
-	for i := 0; i < len(executeblocks); i++ {
-		height := executeblocks[i].GetHeader().GetHeight()
-		executedTxs := executeblocks[i].GetTxs()
-		for _, executedtx := range executedTxs {
-			exectx := &types.ExecutedTxData{
-				ExecutedHeight: height,
-				TxHash:         executedtx.GetTxHash(),
-			}
-			//exectxdata, _ := exectx.EncodeToByte()
-			executedtxs = append(executedtxs, exectx)
-			w.mempool.Add(exectx)
+	//executedtxs := make([]*types.ExecutedTxData, 0)
+	//for i := 0; i < len(executeblocks); i++ {
+	//height := executeblocks[i].GetHeader().GetHeight()
+	//executedTxs := executeblocks[i].GetTxs()
+	//for _, executedtx := range executedTxs {
+	//	exectx := &types.ExecutedTxData{
+	//		ExecutedHeight: height,
+	//		TxHash:         executedtx.GetTxHash(),
+	//	}
+	//	//exectxdata, _ := exectx.EncodeToByte()
+	//	executedtxs = append(executedtxs, exectx)
+	//	w.mempool.Add(exectx)
+	//}
+
+	//}
+	blocks := make([]*types.ExecutedBlock, 0)
+	for _, executeblock := range executeblocks {
+		pbheader := executeblock.GetHeader()
+		header := &types.ExecuteHeader{
+			Height:    pbheader.GetHeight(),
+			BlockHash: pbheader.GetBlockHash(),
+			//TxsHash:
 		}
+		pbtxs := executeblock.GetTxs()
+		executedtxs := make([]*types.ExecutedTx, 0)
+		for _, pbtx := range pbtxs {
+			executedtx := &types.ExecutedTx{
+				Height: pbtx.GetHeight(),
+				TxHash: pbtx.GetTxHash(),
+				Data:   pbtx.GetData(),
+			}
+			executedtxs = append(executedtxs, executedtx)
+		}
+		block := &types.ExecutedBlock{
+			Header: header,
+			Txs:    executedtxs,
+		}
+		w.mempool.Add(block)
+		blocks = append(blocks, block)
 	}
-	return executedtxs, nil
+
+	return blocks, nil
 }
 
-func (w *Worker) GetTxsFromMempool() []*types.Tx {
-	excutedTxDatas := w.mempool.GetFirstN(w.config.PoT.Batchsize)
-	excutedtxs := make([]*types.Tx, 0)
-	for i := 0; i < len(excutedTxDatas); i++ {
-		txdata, err := excutedTxDatas[i].EncodeToByte()
-		if err != nil {
-			break
-		}
-		tx := &types.Tx{Data: txdata}
-		excutedtxs = append(excutedtxs, tx)
-	}
-	return excutedtxs
+func (w *Worker) GetExecutedBlockFromMempool() []*types.ExecutedBlock {
+	ExecutedBlocks := w.mempool.GetFirstN(w.config.PoT.Batchsize)
+
+	return ExecutedBlocks
 }
 
 func (w *Worker) createNilBlock(epoch uint64, parentBlock *types.Block, uncleBlock []*types.Block, difficulty *big.Int, mixdigest []byte, nonce int64, vdf0res []byte, vdf1res []byte) *types.Block {
@@ -801,8 +826,8 @@ func (w *Worker) SetEngine(engine *PoTEngine) {
 }
 
 func (w *Worker) handleBlockExcutedTx(block *types.Block) error {
-	excutedtx := block.GetExcutedTx()
-	w.mempool.MarkProposed(excutedtx)
+	excutedtx := block.GetExecutedHeaders()
+	w.mempool.MarkProposedByHeader(excutedtx)
 	return nil
 }
 

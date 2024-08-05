@@ -12,8 +12,8 @@ import (
 )
 
 type WrappedExcutedTx struct {
-	executedTxData *types.ExecutedTxData
-	proposed       bool
+	executedBlock *types.ExecutedBlock
+	proposed      bool
 }
 
 type WrappedRawTx struct {
@@ -83,39 +83,43 @@ func NewMempool() *Mempool {
 	return c
 }
 
-func (c *Mempool) Has(blocks *types.ExecutedTxData) bool {
+func (c *Mempool) Has(blocks *types.ExecutedBlock) bool {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
-	_, ok := c.execset[blocks.Hash()]
+	e, ok := c.execset[blocks.Hash()]
+	block := e.Value.(*WrappedExcutedTx).executedBlock
+	if block.Txs == nil {
+		block.Txs = blocks.Txs
+	}
 	return ok
 }
 
-func (c *Mempool) Add(txs ...*types.ExecutedTxData) {
+func (c *Mempool) Add(blocks ...*types.ExecutedBlock) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
-	for _, tx := range txs {
-		txHash := tx.Hash()
+	for _, block := range blocks {
+		txHash := block.Hash()
 		// avoid duplication
 
 		if _, ok := c.execset[txHash]; ok {
 			continue
 		}
 		e := c.execorder.PushBack(&WrappedExcutedTx{
-			executedTxData: tx,
-			proposed:       false,
+			executedBlock: block,
+			proposed:      false,
 		})
 		c.execset[txHash] = e
 	}
 }
 
 // Remove commands from execset and list
-func (c *Mempool) Remove(txs []types.ExecutedTxData) {
+func (c *Mempool) Remove(blocks []types.ExecutedBlock) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
-	for _, tx := range txs {
-		txHash := tx.Hash()
+	for _, block := range blocks {
+		txHash := block.Hash()
 		if e, ok := c.execset[txHash]; ok {
 			c.execorder.Remove(e)
 			delete(c.execset, txHash)
@@ -124,14 +128,14 @@ func (c *Mempool) Remove(txs []types.ExecutedTxData) {
 }
 
 // GetFirstN return the top n unused commands from the list
-func (c *Mempool) GetFirstN(n int) []*types.ExecutedTxData {
+func (c *Mempool) GetFirstN(n int) []*types.ExecutedBlock {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
 
 	if len(c.execset) == 0 {
 		return nil
 	}
-	txs := make([]*types.ExecutedTxData, 0, n)
+	txs := make([]*types.ExecutedBlock, 0, n)
 	i := 0
 	// get the first element of list
 	e := c.execorder.Front()
@@ -140,7 +144,7 @@ func (c *Mempool) GetFirstN(n int) []*types.ExecutedTxData {
 			break
 		}
 		if wrtx := e.Value.(*WrappedExcutedTx); !wrtx.proposed {
-			txs = append(txs, wrtx.executedTxData)
+			txs = append(txs, wrtx.executedBlock)
 			i++
 		}
 		e = e.Next()
@@ -148,7 +152,7 @@ func (c *Mempool) GetFirstN(n int) []*types.ExecutedTxData {
 	return txs
 }
 
-func (c *Mempool) IsProposed(tx *types.ExecutedTxData) bool {
+func (c *Mempool) IsProposed(tx *types.ExecutedBlock) bool {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
 	if e, ok := c.execset[tx.Hash()]; ok {
@@ -158,7 +162,7 @@ func (c *Mempool) IsProposed(tx *types.ExecutedTxData) bool {
 }
 
 // MarkProposed will mark the given commands as proposed and move them to the back of the queue
-func (c *Mempool) MarkProposed(txs []*types.ExecutedTxData) {
+func (c *Mempool) MarkProposed(txs []*types.ExecutedBlock) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	for _, tx := range txs {
@@ -168,19 +172,55 @@ func (c *Mempool) MarkProposed(txs []*types.ExecutedTxData) {
 			// Move to back so that it's not immediately deleted by a call to TrimToLen()
 			c.execorder.MoveToBack(e)
 		} else {
-			// new executedTxData, store it to back
-			e := c.execorder.PushBack(&WrappedExcutedTx{executedTxData: tx, proposed: true})
+			// new executedBlock, store it to back
+			e := c.execorder.PushBack(&WrappedExcutedTx{executedBlock: tx, proposed: true})
 			c.execset[txHash] = e
 		}
 	}
 }
 
-func (c *Mempool) UnMark(txs []*types.ExecutedTxData) {
+// MarkProposedByHeader will mark the given commands as proposed and move them to the back of the queue
+func (c *Mempool) MarkProposedByHeader(txs []*types.ExecuteHeader) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	for _, tx := range txs {
+		txHash := tx.Hash()
+		if e, ok := c.execset[txHash]; ok {
+			e.Value.(*WrappedExcutedTx).proposed = true
+			// Move to back so that it's not immediately deleted by a call to TrimToLen()
+			c.execorder.MoveToBack(e)
+		} else {
+			// new executedBlock, store it to back
+			e := c.execorder.PushBack(&WrappedExcutedTx{executedBlock: &types.ExecutedBlock{
+				Header: tx,
+				Txs:    nil,
+			}, proposed: true})
+			c.execset[txHash] = e
+		}
+	}
+}
+
+func (c *Mempool) UnMarkByHeader(headers []*types.ExecuteHeader) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	for _, tx := range headers {
+		if e, ok := c.execset[tx.Hash()]; ok {
+			e.Value.(*WrappedExcutedTx).proposed = false
+			c.execorder.MoveToFront(e)
+		}
+	}
+}
+
+func (c *Mempool) UnMark(txs []*types.ExecutedBlock) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	for _, tx := range txs {
 		if e, ok := c.execset[tx.Hash()]; ok {
+			block := e.Value.(*WrappedExcutedTx)
 			e.Value.(*WrappedExcutedTx).proposed = false
+			if block.executedBlock.Txs == nil {
+				block.executedBlock.Txs = tx.Txs
+			}
 			c.execorder.MoveToFront(e)
 		}
 	}
@@ -263,7 +303,7 @@ func (c *Mempool) MarkRawTxProposed(txs []*types.RawTx) {
 			// Move to back so that it's not immediately deleted by a call to TrimToLen()
 			c.raworder.MoveToBack(e)
 		} else {
-			// new executedTxData, store it to back
+			// new executedBlock, store it to back
 			e := c.raworder.PushBack(&WrappedRawTx{rawtx: tx, proposed: true})
 			c.rawset[txHash] = e
 		}

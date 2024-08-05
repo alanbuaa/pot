@@ -142,6 +142,7 @@ message ExecutedTxData{
   uint64  ExecutedHeight = 1;
   bytes   TxHash = 2;
 }
+
 message ExecuteBlock {
   ExecuteHeader Header = 1;
   repeated ExecutedTx Txs= 2;

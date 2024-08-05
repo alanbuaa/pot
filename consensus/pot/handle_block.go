@@ -416,7 +416,7 @@ func (w *Worker) CheckBlock(block *types.Block) (bool, error) {
 		return flag, err
 	}
 	return true, nil
-	//excutedtxs := block.GetExcutedTx()
+	//excutedtxs := block.GetExecutedHeaders()
 
 }
 

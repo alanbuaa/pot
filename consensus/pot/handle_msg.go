@@ -92,7 +92,7 @@ func (e *PoTEngine) handlePacket(packet *pb.Packet) {
 func (e *PoTEngine) handleRequest(request *pb.Request) {
 	rtx := types.RawTransaction(request.Tx)
 	if !e.exec.VerifyTx(rtx) {
-		e.log.Warn("executedTxData verify failed")
+		e.log.Warn("executedBlock verify failed")
 		return
 	}
 	tx, err := rtx.ToTx()
