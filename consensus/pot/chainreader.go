@@ -286,56 +286,6 @@ func (c *ChainReader) Reindex() error {
 
 }
 
-func (c *ChainReader) UpdateTxForBlock(block *types.Block) error {
-	db := c.GetBoltDb()
-
-	err := db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(types.UTXOBucket))
-		txs := block.GetRawTx()
-		for _, rawTx := range txs {
-			if rawTx.IsCoinBase() == false {
-				for _, input := range rawTx.TxInput {
-					var updateOuts types.TxOutputs
-					outsBytes := b.Get(input.Txid[:])
-					outs := types.DecodeByte2Outputs(outsBytes)
-
-					for i, out := range outs {
-						if int64(i) != input.Voutput {
-							updateOuts = append(updateOuts, out)
-						}
-					}
-
-					if len(updateOuts) == 0 {
-						err := b.Delete(input.Txid[:])
-						if err != nil {
-							return err
-						}
-					} else {
-						err := b.Put(input.Txid[:], updateOuts.EncodeTxOutputs2Byte())
-						if err != nil {
-							return err
-						}
-					}
-
-				}
-			}
-			newouts := make(types.TxOutputs, 0)
-			for _, output := range rawTx.TxOutput {
-				newouts = append(newouts, output)
-			}
-			err := b.Put(rawTx.Txid[:], newouts.EncodeTxOutputs2Byte())
-			if err != nil {
-				return err
-			}
-		}
-		return nil
-	})
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
 // ResetTxForBlock reset utxo bucket for block reset, need to happen after UpdateBlock
 func (c *ChainReader) ResetTxForBlock(block *types.Block) error {
 	txs := block.GetRawTx()
@@ -394,6 +344,57 @@ func (c *ChainReader) ResetTxForBlock(block *types.Block) error {
 	} else {
 		return nil
 	}
+}
+
+func (c *ChainReader) UpdateTxForBlock(block *types.Block) error {
+	db := c.GetBoltDb()
+	txs := block.GetRawTx()
+
+	err := db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(types.UTXOBucket))
+
+		for _, rawTx := range txs {
+			if rawTx.IsCoinBase() == false {
+				for _, input := range rawTx.TxInput {
+					var updateOuts types.TxOutputs
+					outsBytes := b.Get(input.Txid[:])
+					outs := types.DecodeByte2Outputs(outsBytes)
+
+					for i, out := range outs {
+						if int64(i) != input.Voutput {
+							updateOuts = append(updateOuts, out)
+						}
+					}
+
+					if len(updateOuts) == 0 {
+						err := b.Delete(input.Txid[:])
+						if err != nil {
+							return err
+						}
+					} else {
+						err := b.Put(input.Txid[:], updateOuts.EncodeTxOutputs2Byte())
+						if err != nil {
+							return err
+						}
+					}
+
+				}
+			}
+			newouts := make(types.TxOutputs, 0)
+			for _, output := range rawTx.TxOutput {
+				newouts = append(newouts, output)
+			}
+			err := b.Put(rawTx.Txid[:], newouts.EncodeTxOutputs2Byte())
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (c *ChainReader) UpdateBlock(block *types.Block) error {

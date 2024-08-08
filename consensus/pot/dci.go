@@ -66,10 +66,34 @@ func (w *Worker) DevastateDci(ctx context.Context, request *pb.DevastateDciReque
 	if !tx.BasicVerify() {
 		return &pb.DevastateDciResponse{}, fmt.Errorf("tx is not valid")
 	} else {
+		addr := tx.TxInput[0].Address
+		outputs := w.chainReader.FindUTXO(addr)
+		for _, input := range tx.TxInput {
+			if !bytes.Equal(addr, input.Address) {
+				return &pb.DevastateDciResponse{}, fmt.Errorf("tx is not valid for address not the same")
+			}
+			flag := false
+			for _, output := range outputs {
+				if output.CanBeUnlockWith(input.Address) {
+					flag = true
+					break
+				} else {
+					continue
+				}
+			}
+			if !flag {
+				return &pb.DevastateDciResponse{}, fmt.Errorf("tx is not valid for not found spendable utxo")
+			}
+		}
 		w.mempool.AddRawTx(tx)
 	}
 
 	return &pb.DevastateDciResponse{}, nil
+}
+
+func (w Worker) VerifyUTXO(ctx context.Context, request *pb.VerifyUTXORequest) (*pb.VerifyUTXOResponse, error) {
+
+	return &pb.VerifyUTXOResponse{Flag: true}, nil
 }
 
 func (w *Worker) handleDevastateDciRequest() {

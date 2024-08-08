@@ -38,6 +38,7 @@ const (
 	Selectn            = 1
 	TotalReward        = 10000
 	BackupCommiteeSize = 64
+	ConfirmDelay       = 6
 )
 
 type Worker struct {
@@ -260,7 +261,8 @@ func (w *Worker) OnGetVdf0Response() {
 					parentblock = backupblock[0]
 					w.log.Infof("[PoT]\tepoch %d:parent block hash is nil,execset nil block %s as parent", epoch+1, hex.EncodeToString(parentblock.GetHeader().Hashes))
 				} else {
-
+					w.log.Errorf("[PoT]\tepoch %d:dont't find any parent block", epoch+1)
+					panic(fmt.Errorf("[PoT]\tepoch %d:dont't find any parent block", epoch+1))
 				}
 			}
 
@@ -271,6 +273,10 @@ func (w *Worker) OnGetVdf0Response() {
 				w.log.Debugf("[PoT]\tepoch %d: Get Txs from executor", epoch+1)
 			}
 			_ = w.handleBlockExcutedTx(parentblock)
+			err = w.handleBlockRawTx(parentblock)
+			if err != nil {
+				w.log.Errorf("[PoT]\tepoch %d: Handle Txs for block %s err for %s", epoch+1, hexutil.Encode(parentblock.Hash()), err)
+			}
 
 			// if epoch > 1 {
 			// 	w.simpleLeaderUpdate(parentblock)
@@ -828,6 +834,29 @@ func (w *Worker) SetEngine(engine *PoTEngine) {
 func (w *Worker) handleBlockExcutedTx(block *types.Block) error {
 	excutedtx := block.GetExecutedHeaders()
 	w.mempool.MarkProposedByHeader(excutedtx)
+	return nil
+}
+
+func (w *Worker) handleBlockRawTx(block *types.Block) error {
+	err := w.chainReader.UpdateTxForBlock(block)
+	if err != nil {
+		return err
+	}
+	if block.Header.Height > ConfirmDelay {
+		block, err := w.chainReader.GetByHeight(block.Header.Height - ConfirmDelay)
+		if err != nil {
+			return err
+		}
+		rawtxs := block.GetRawTx()
+		for _, tx := range rawtxs {
+			if !tx.IsCoinBase() {
+				types.UTXO2Transaction(tx)
+
+			}
+		}
+
+	}
+
 	return nil
 }
 

@@ -345,3 +345,7 @@ func (r *RawTx) BasicVerify() bool {
 func (o TxOutput) IsLockedWithKey(pubkey []byte) bool {
 	return bytes.Equal(o.Address, pubkey)
 }
+
+func UTXO2Transaction(tx *RawTx) {
+
+}

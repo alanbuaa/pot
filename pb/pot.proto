@@ -162,7 +162,6 @@ message ExecutedTx{
 service PoTExecutor {
   rpc   GetTxs(GetTxRequest) returns (GetTxResponse){}
   rpc   VerifyTxs(VerifyTxRequest) returns (VerifyTxResponse){}
-
 }
 
 message GetTxRequest{
@@ -189,8 +188,9 @@ message VerifyTxResponse{
 
 service DciExector{
   rpc   SendDci(SendDciRequest)           returns (SendDciResponse)       {}
-  rpc   GetBalance(GetBalanceRequest)     returns (GetBalanceResponse)     {}
+  rpc   GetBalance(GetBalanceRequest)     returns (GetBalanceResponse)    {}
   rpc   DevastateDci(DevastateDciRequest) returns (DevastateDciResponse)  {}
+  rpc   VerifyUTXO(VerifyUTXORequest)     returns (VerifyUTXOResponse)    {}
 }
 
 message DciReward{
@@ -233,4 +233,21 @@ message DevastateDciRequest{
 
 message DevastateDciResponse{
 
+}
+
+message UTXOProof{
+  uint64  Height  = 1;
+  bytes   TxHash  = 2;
+  bytes   Data    = 3;
+}
+
+message VerifyUTXORequest{
+  bytes From = 1;
+  bytes To = 2;
+  int64 Value = 3;
+  bytes Proof = 4;
+}
+
+message VerifyUTXOResponse{
+  bool flag = 1;
 }
