@@ -8,6 +8,7 @@ import (
 	"github.com/zzz136454872/upgradeable-consensus/config"
 	"github.com/zzz136454872/upgradeable-consensus/consensus/model"
 	"github.com/zzz136454872/upgradeable-consensus/pb"
+	"github.com/zzz136454872/upgradeable-consensus/types"
 	"github.com/zzz136454872/upgradeable-consensus/utils"
 	"google.golang.org/protobuf/proto"
 )
@@ -134,6 +135,20 @@ func (s *Sharding) GetPeerID() string {
 
 func (s *Sharding) GetP2PType() string {
 	return s.controller.p2pAdaptor.GetP2PType()
+}
+
+// Sharding implements Executor
+func (s *Sharding) CommitBlock(block types.ConsensusBlock, proof []byte, cid int64) {
+	txs := block.GetTxs()
+	newBlock := &pb.WhirlyBlock{
+		Txs:          txs,
+		ShardingName: []byte(s.Name),
+	}
+	s.controller.Executor.CommitBlock(newBlock, proof, cid)
+}
+
+func (s *Sharding) VerifyTx(tx types.RawTransaction) bool {
+	return s.controller.Executor.VerifyTx(tx)
 }
 
 func (s *Sharding) handleMsg(packet *pb.Packet) {

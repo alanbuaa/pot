@@ -12,6 +12,7 @@ message WhirlyBlock {
   repeated bytes txs = 4;
   QuorumCert Justify = 5;
   bool committed = 6;
+  bytes shardingName = 7;
 }
 
 enum MsgType {

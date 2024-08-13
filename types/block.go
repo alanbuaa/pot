@@ -4,18 +4,21 @@ import (
 	"bytes"
 	"crypto/rand"
 	"fmt"
+	"math/big"
+	"time"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/zzz136454872/upgradeable-consensus/crypto"
 	"github.com/zzz136454872/upgradeable-consensus/pb"
 	"google.golang.org/protobuf/reflect/protoreflect"
-	"math/big"
-	"time"
 )
 
 type ConsensusBlock interface {
 	GetTxs() [][]byte
+	GetShardingName() []byte
 	protoreflect.ProtoMessage
 }
+
 type Header struct {
 	Height     uint64
 	ParentHash []byte

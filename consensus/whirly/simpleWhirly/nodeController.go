@@ -185,7 +185,7 @@ func (nc *NodeController) handleMsg(packet *pb.Packet) {
 	nc.shardingsLock.Lock()
 	sharding, ok := nc.Shardings[packet.ReceiverShardingName]
 	if !ok {
-		nc.Log.Warn("Receive message error: Sharding name does not exist")
+		nc.Log.Warnf("Receive message error: Sharding name %s in %s message does not exist\n", packet.ReceiverShardingName, packet.Msg)
 	} else {
 		go sharding.handleMsg(packet)
 	}

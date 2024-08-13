@@ -6,7 +6,8 @@ import "pb/upgradeable-consensus.proto";
 option go_package="./pb";
 
 message ExecBlock {
-  repeated bytes txs=1;
+  repeated bytes txs = 1;
+  bytes shardingName = 2;
 }
 
 message Result {
