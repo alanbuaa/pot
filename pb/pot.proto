@@ -14,6 +14,7 @@ enum MessageType{
 message Block {
   Header Header = 1;
   repeated Tx Txs = 2;
+  repeated ExecuteHeader ExecuteHeaders = 3;
 }
 
 message Tx{
@@ -229,6 +230,7 @@ message GetBalanceResponse{
 message DevastateDciRequest{
     int64 Amount = 1;
     RawTxData Tx = 2;
+    bytes To = 3;
 }
 
 message DevastateDciResponse{

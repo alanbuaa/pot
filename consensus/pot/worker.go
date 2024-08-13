@@ -306,7 +306,7 @@ func (w *Worker) OnGetVdf0Response() {
 			} else {
 				w.log.Debugf("[PoT]\tepoch %d: Get Txs from executor", epoch+1)
 			}
-			_ = w.handleBlockExecutedTx(parentblock)
+			_ = w.handleBlockExecutedHeader(parentblock)
 			err = w.handleBlockRawTx(parentblock)
 			if err != nil {
 				w.log.Errorf("[PoT]\tepoch %d: Handle Txs for block %s err for %s", epoch+1, hexutil.Encode(parentblock.Hash()), err)
@@ -886,7 +886,7 @@ func (w *Worker) SetEngine(engine *PoTEngine) {
 	w.PeerId = w.Engine.GetPeerID()
 }
 
-func (w *Worker) handleBlockExecutedTx(block *types.Block) error {
+func (w *Worker) handleBlockExecutedHeader(block *types.Block) error {
 	executedHeaders := block.GetExecutedHeaders()
 	for _, header := range executedHeaders {
 		hash := header.Hash()

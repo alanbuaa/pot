@@ -34,7 +34,7 @@ func (w *Worker) VerifyDCITx() bool {
 	return true
 }
 
-func (w *Worker) VerifyDciReward(reward *DciReward) (bool, error) {
+func (w *Worker) VerifyDciReward(reward *DciReward) (bool, *types.ExecutedTx, error) {
 	//return true
 	//address := reward.Address
 	//amount := reward.Amount
@@ -42,22 +42,25 @@ func (w *Worker) VerifyDciReward(reward *DciReward) (bool, error) {
 
 	exeheight := proof.Height
 	if exeheight > w.executeheight {
-		return false, fmt.Errorf("height is beyond execute height")
+		return false, nil, fmt.Errorf("height is beyond execute height")
 	}
 
 	exeblock, err := w.blockStorage.GetExcutedBlock(proof.BlockHash)
 	if err != nil {
-		return false, err
+		return false, nil, err
 	}
 	if exeblock.Header.Height != proof.Height {
-		return false, fmt.Errorf("the height of proof is not equal to the height of block")
+		return false, nil, fmt.Errorf("the height of proof is not equal to the height of block")
 	}
 	for _, tx := range exeblock.Txs {
-		if bytes.Equal(tx.TxHash, proof.TxHash) {
-			return true, nil
+		if !bytes.Equal(tx.TxHash, proof.TxHash) {
+			continue
+		} else {
+
 		}
+
 	}
-	return false, fmt.Errorf("not found tx in block")
+	return false, nil, fmt.Errorf("not found tx in block")
 }
 
 func (w *Worker) SendDci(ctx context.Context, request *pb.SendDciRequest) (*pb.SendDciResponse, error) {
@@ -67,14 +70,24 @@ func (w *Worker) SendDci(ctx context.Context, request *pb.SendDciRequest) (*pb.S
 	for _, pbdcireward := range dcirewards {
 
 		dciReward := ToDciReward(pbdcireward)
-		flag, err := w.VerifyDciReward(dciReward)
+		flag, tx, err := w.VerifyDciReward(dciReward)
 		if !flag {
 			return &pb.SendDciResponse{
 				IsSuccess: false,
 				Height:    0,
 			}, fmt.Errorf("the dci reward is not valid for %s", err.Error())
 		} else {
-			w.mempool.AddDciReward(dciReward)
+			txdata := tx.Data
+			if len(txdata) < 98 {
+				return &pb.SendDciResponse{
+					IsSuccess: false,
+					Height:    0,
+				}, fmt.Errorf("the dci reward is not valid for %s", err.Error())
+			} else {
+				address := txdata[2:98]
+				dciReward.Address = address
+				w.mempool.AddDciReward(dciReward)
+			}
 		}
 	}
 	return &pb.SendDciResponse{

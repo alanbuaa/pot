@@ -53,7 +53,6 @@ func ToDciReward(proof *pb.DciReward) *DciReward {
 		Amount:  proof.GetAmount(),
 		ChainID: proof.GetChainID(),
 		Proof: DciProof{
-
 			Height:    proof.GetDciProof().GetHeight(),
 			BlockHash: proof.GetDciProof().GetBlockHash(),
 			TxHash:    proof.GetDciProof().GetTxHash(),

@@ -67,34 +67,50 @@ func (b *Block) ToProto() *pb.Block {
 	pbheader := b.GetHeader().ToProto()
 	//headerbytes, _ := proto.Marshal(pbheader)
 	//fmt.Printf("header len %\nf", float64(len(headerbytes))/float64(1024))
-	if b.Txs != nil {
-		txs := make([]*pb.Tx, len(b.Txs))
-		for i := 0; i < len(b.Txs); i++ {
-			txs[i] = b.Txs[i].ToProto()
-		}
-		pbblock := &pb.Block{
-			Header: pbheader,
-			Txs:    txs,
-		}
-		return pbblock
-	} else {
-		pbblock := &pb.Block{
-			Header: pbheader,
-			Txs:    make([]*pb.Tx, 0),
-		}
-		return pbblock
+	//if b.Txs != nil {
+	//	txs := make([]*pb.Tx, len(b.Txs))
+	//	for i := 0; i < len(b.Txs); i++ {
+	//		txs[i] = b.Txs[i].ToProto()
+	//	}
+	//	pbblock := &pb.Block{
+	//		Header: pbheader,
+	//		Txs:    txs,
+	//	}
+	//	return pbblock
+	//} else {
+	//	pbblock := &pb.Block{
+	//		Header: pbheader,
+	//		Txs:    make([]*pb.Tx, 0),
+	//	}
+	//	return pbblock
+	//}
+
+	pbtxs := make([]*pb.Tx, 0)
+	for _, tx := range b.Txs {
+		pbtxs = append(pbtxs, tx.ToProto())
+	}
+	pbexeheader := make([]*pb.ExecuteHeader, 0)
+	for _, header := range b.ExeHeaders {
+		pbexeheader = append(pbexeheader, header.ToProto())
+	}
+	return &pb.Block{
+		Header:         pbheader,
+		Txs:            pbtxs,
+		ExecuteHeaders: pbexeheader,
 	}
 }
 
 func ToBlock(block *pb.Block) *Block {
 	pbheader := block.GetHeader()
 	pbtxs := block.GetTxs()
-
+	pbexeheaders := block.GetExecuteHeaders()
 	header := ToHeader(pbheader)
 	txs := ToTxs(pbtxs)
+	exeheader := ToExeHeaders(pbexeheaders)
 	return &Block{
-		Header: header,
-		Txs:    txs,
+		Header:     header,
+		Txs:        txs,
+		ExeHeaders: exeheader,
 	}
 }
 
@@ -104,6 +120,14 @@ func ToExeHeader(exeheader *pb.ExecuteHeader) *ExecuteHeader {
 		BlockHash: exeheader.BlockHash,
 		TxsHash:   exeheader.TxsHash,
 	}
+}
+
+func ToExeHeaders(exeheaders []*pb.ExecuteHeader) []*ExecuteHeader {
+	exes := make([]*ExecuteHeader, len(exeheaders))
+	for i := 0; i < len(exeheaders); i++ {
+		exes[i] = ToExeHeader(exeheaders[i])
+	}
+	return exes
 }
 
 func (b *Header) Hash() []byte {
