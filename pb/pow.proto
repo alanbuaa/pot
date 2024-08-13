@@ -12,6 +12,7 @@ message PoWBlock {
   uint64 nonce=4;
   bytes blockHash = 5;
   bool commited = 6;
+  bytes shardingName = 7;
 }
 
 message PoWMessage {

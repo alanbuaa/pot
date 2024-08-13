@@ -15,3 +15,8 @@ test
 /*.txt
 /.VSCodeCounter
 
+remote
+vdftest
+difficulty
+transfertime
+__debug_bin*
