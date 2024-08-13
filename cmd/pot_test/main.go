@@ -8,6 +8,7 @@ import (
 	"github.com/zzz136454872/upgradeable-consensus/node"
 	"github.com/zzz136454872/upgradeable-consensus/pb"
 	"google.golang.org/grpc"
+	"log"
 	"math/big"
 	"net"
 	_ "net/http/pprof"
@@ -63,13 +64,26 @@ func main() {
 	total := cfg.Total
 	nodes := make([]*node.Node, total)
 
+	defer func() {
+		if r := recover(); r != nil {
+			f, err := os.OpenFile("panic.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
+			if err != nil {
+				log.Fatal(err)
+			}
+			logger := log.New(f, "panic: ", log.LstdFlags)
+			logger.Println(r)
+			f.Close()
+		}
+	}()
+
+	// Your code that may cause panic
 	for i := int64(0); i < int64(total); i++ {
 		go func(index int64) {
-
 			nodes[index] = node.NewNode(index)
 		}(i)
 	}
 	go testexecutor()
+
 	<-sigChan
 	logger.Info("[UpgradeableConsensus] Exit...")
 	for i := 0; i < total; i++ {

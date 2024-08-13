@@ -145,6 +145,7 @@ func (c *ChainReader) FindUTXO(address []byte) []types.TxOutput {
 	err := db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(types.UTXOBucket))
 		c := b.Cursor()
+		count := 0
 		for k, v := c.First(); k != nil; k, v = c.Next() {
 			outs := types.DecodeByte2Outputs(v)
 
@@ -153,7 +154,9 @@ func (c *ChainReader) FindUTXO(address []byte) []types.TxOutput {
 					utxos = append(utxos, out)
 				}
 			}
+			count += 1
 		}
+		//fmt.Println(count)
 		return nil
 	})
 	if err != nil {
@@ -352,7 +355,6 @@ func (c *ChainReader) UpdateTxForBlock(block *types.Block) error {
 
 	err := db.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(types.UTXOBucket))
-
 		for _, rawTx := range txs {
 			if rawTx.IsCoinBase() == false {
 				for _, input := range rawTx.TxInput {
@@ -381,7 +383,10 @@ func (c *ChainReader) UpdateTxForBlock(block *types.Block) error {
 				}
 			}
 			newouts := make(types.TxOutputs, 0)
+
 			for _, output := range rawTx.TxOutput {
+				//fmt.Println(hexutil.Encode(output.Address), output.Value)
+				//fmt.Println(output.Address)
 				newouts = append(newouts, output)
 			}
 			err := b.Put(rawTx.Txid[:], newouts.EncodeTxOutputs2Byte())

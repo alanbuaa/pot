@@ -39,8 +39,8 @@ message Header{
   string PeerId = 11;
   bytes Pubkey = 12;
   bytes Txhash = 13;
-  bytes ExeHash = 14;
-  bytes Command = 15;
+//  bytes ExeHash = 14;
+//  bytes Command = 15;
 }
 
 message Command {
@@ -48,10 +48,6 @@ message Command {
   bytes Operation = 2;
   bytes Proof = 3;
 }
-
-
-
-
 
 message BlockRequest {
   uint64 Height = 1;
@@ -151,6 +147,8 @@ message ExecuteBlock {
 message ExecuteHeader {
   uint64  Height = 1;
   bytes   BlockHash = 2;
+  int64   ChainID = 3;
+  bytes   TxsHash = 4;
 }
 
 message ExecutedTx{
@@ -173,6 +171,8 @@ message GetTxResponse{
   uint64 Start = 1;
   uint64 End = 2;
   repeated ExecuteBlock Blocks = 3;
+  int64 Value = 4;
+  bytes Address = 5;
 }
 
 message VerifyTxRequest{
@@ -201,9 +201,9 @@ message DciReward{
 }
 
 message DciProof {
-  int64 Epoch = 1 ;
-  int64 Height = 2;
-  bytes Hash = 3;
+  uint64 Height = 1 ;
+  bytes BlockHash = 2;
+  bytes  TxHash = 3;
 }
 
 message SendDciRequest{
@@ -232,7 +232,7 @@ message DevastateDciRequest{
 }
 
 message DevastateDciResponse{
-
+  bool flag = 1;
 }
 
 message UTXOProof{

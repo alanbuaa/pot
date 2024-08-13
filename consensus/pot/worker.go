@@ -22,6 +22,7 @@ import (
 	"math"
 	"math/big"
 	"math/rand"
+	"net"
 	"os"
 	"sync"
 	"time"
@@ -41,6 +42,18 @@ const (
 	ConfirmDelay       = 6
 )
 
+type Abortcontrol struct {
+	abortchannel chan struct{}
+	once         *sync.Once
+}
+
+func NewAbortcontrol() *Abortcontrol {
+	return &Abortcontrol{
+		abortchannel: make(chan struct{}),
+		once:         new(sync.Once),
+	}
+}
+
 type Worker struct {
 	// basic info
 	ID     int64
@@ -56,7 +69,7 @@ type Worker struct {
 	vdf1          []*types.VDF
 	vdf1Chan      chan *types.VDF0res
 	vdfChecker    *vdf.Vdf
-	abort         chan struct{}
+	abort         *Abortcontrol
 	wg            *sync.WaitGroup
 	workFlag      bool
 	blockKeyMap   map[[crypto.Hashlen]byte][]byte
@@ -78,6 +91,8 @@ type Worker struct {
 	potResponseCh     chan *pb.PoTResponse
 	blockStorage      *types.BlockStorage
 	chainReader       *ChainReader
+	listener          net.Listener
+	rpcserver         *grpc.Server
 
 	// upper consensus
 	whirly         *simpleWhirly.NodeController
@@ -105,6 +120,10 @@ func NewWorker(id int64, config *config.ConsensusConfig, logger *logrus.Entry, b
 	for i := 0; i < cpuCounter; i++ {
 		vdf1[i] = types.NewVDF(ch1, potconfig.Vdf1Iteration, id)
 	}
+	listen, err := net.Listen("tcp", config.Nodes[id].DciRpcAddress)
+	if err != nil {
+		panic(err)
+	}
 
 	peer := make(chan *types.Block, 5)
 	keyblockmap := make(map[[crypto.Hashlen]byte][]byte)
@@ -112,8 +131,13 @@ func NewWorker(id int64, config *config.ConsensusConfig, logger *logrus.Entry, b
 	Commitee := make([][]string, 0)
 	BackupCommitee := make([]string, BackupCommiteeSize)
 
+	aborts := &Abortcontrol{
+		abortchannel: make(chan struct{}),
+		once:         new(sync.Once),
+	}
+
 	w := &Worker{
-		abort:         make(chan struct{}),
+		abort:         aborts,
 		Engine:        engine,
 		config:        config,
 		ID:            id,
@@ -142,6 +166,11 @@ func NewWorker(id int64, config *config.ConsensusConfig, logger *logrus.Entry, b
 		CommiteeNum:    int32(1),
 		BackupCommitee: BackupCommitee,
 	}
+	rpcserver := grpc.NewServer()
+	pb.RegisterDciExectorServer(rpcserver, w)
+	w.rpcserver = rpcserver
+	w.listener = listen
+
 	w.Init()
 
 	return w
@@ -160,7 +189,6 @@ func (w *Worker) startWorking() {
 	w.mutex.Lock()
 	defer w.mutex.Unlock()
 	w.workFlag = true
-
 }
 
 func (w *Worker) Work() {
@@ -193,6 +221,9 @@ func (w *Worker) OnGetVdf0Response() {
 				w.log.Errorf("[PoT]\tthe epoch already execset")
 				continue
 			}
+			if len(res.Res) == 0 {
+				w.log.Errorf("[PoT]\treceive vdf0 res is empty")
+			}
 
 			//timestop := math.Floor(float64(timer) * float64(10-w.config.PoT.Slowrate) / float64(w.config.PoT.Slowrate))
 			//time.Sleep(time.Duration(timestop) * time.Millisecond)
@@ -209,7 +240,10 @@ func (w *Worker) OnGetVdf0Response() {
 			}
 
 			if w.IsVDF1Working() {
-				close(w.abort)
+				w.abort.once.Do(func() {
+					close(w.abort.abortchannel)
+				})
+
 				w.setWorkFlagFalse()
 				w.wg.Wait()
 				w.log.Debugf("[PoT]\tepoch %d:the miner got abort for get in new epoch", epoch+1)
@@ -254,7 +288,7 @@ func (w *Worker) OnGetVdf0Response() {
 			parentblock, uncleblock := w.blockSelection(backupblock, res0, epoch)
 
 			if parentblock != nil {
-				w.log.Infof("[PoT]\tepoch %d:parent block hash is : %s Difficulty %d from %s", epoch+1, hex.EncodeToString(parentblock.Hash()), parentblock.GetHeader().Difficulty.Int64(), parentblock.GetHeader().PeerId)
+				w.log.Infof("[PoT]\tepoch %d:parent block hash is : %s Difficulty %d from %s", epoch+1, hex.EncodeToString(parentblock.Hash()), parentblock.GetHeader().Difficulty.Int64(), hexutil.Encode(parentblock.GetHeader().PublicKey))
 			} else {
 				if len(backupblock) != 0 {
 					w.chainReader.SetHeight(epoch, backupblock[0])
@@ -272,7 +306,7 @@ func (w *Worker) OnGetVdf0Response() {
 			} else {
 				w.log.Debugf("[PoT]\tepoch %d: Get Txs from executor", epoch+1)
 			}
-			_ = w.handleBlockExcutedTx(parentblock)
+			_ = w.handleBlockExecutedTx(parentblock)
 			err = w.handleBlockRawTx(parentblock)
 			if err != nil {
 				w.log.Errorf("[PoT]\tepoch %d: Handle Txs for block %s err for %s", epoch+1, hexutil.Encode(parentblock.Hash()), err)
@@ -285,18 +319,22 @@ func (w *Worker) OnGetVdf0Response() {
 
 			difficulty := w.calcDifficulty(parentblock, uncleblock)
 			w.startWorking()
-			w.abort = make(chan struct{})
+			w.abort = NewAbortcontrol()
 
 			w.wg.Add(cpuCounter)
+
+			vdf0rescopy := make([]byte, len(res0))
+			copy(vdf0rescopy, res0)
+
 			for i := 0; i < cpuCounter; i++ {
-				go w.mine(epoch+1, res0, rand.Int63(), i, w.abort, difficulty, parentblock, uncleblock, w.wg)
+				go w.mine(epoch+1, vdf0rescopy, rand.Int63(), i, w.abort, difficulty, parentblock, uncleblock, w.wg)
 			}
 
 		}
 	}
 }
 
-func (w *Worker) mine(epoch uint64, vdf0res []byte, nonce int64, workerid int, abort chan struct{}, difficulty *big.Int, parentblock *types.Block, uncleblock []*types.Block, wg *sync.WaitGroup) *types.Block {
+func (w *Worker) mine(epoch uint64, vdf0res []byte, nonce int64, workerid int, abort *Abortcontrol, difficulty *big.Int, parentblock *types.Block, uncleblock []*types.Block, wg *sync.WaitGroup) *types.Block {
 	defer wg.Done()
 	defer w.setWorkFlagFalse()
 
@@ -377,7 +415,7 @@ func (w *Worker) mine(epoch uint64, vdf0res []byte, nonce int64, workerid int, a
 
 			// w.workFlag = false
 			continue
-		case <-abort:
+		case <-abort.abortchannel:
 			err := w.vdf1[workerid].Abort()
 			if err != nil {
 				w.log.Errorf("[PoT]\tepoch %d:vdf1 %d mine abort error for %t", epoch, workerid, err)
@@ -407,7 +445,12 @@ func (w *Worker) createBlock(epoch uint64, parentBlock *types.Block, uncleBlock 
 		uncleBlockhash[i] = uncleBlock[i].Hash()
 	}
 
-	PotProof := [][]byte{vdf0res, vdf1res}
+	vdf0rescopy := make([]byte, len(vdf0res))
+	copy(vdf0rescopy, vdf0res)
+	vdf1rescopy := make([]byte, len(vdf1res))
+	copy(vdf1rescopy, vdf1res)
+
+	PotProof := [][]byte{vdf0rescopy, vdf1rescopy}
 
 	privateKey := crypto.GenerateKey()
 	publicKeyBytes := privateKey.PublicKeyBytes()
@@ -417,6 +460,9 @@ func (w *Worker) createBlock(epoch uint64, parentBlock *types.Block, uncleBlock 
 
 	Txs := []*types.Tx{coinbasetx}
 	txshash := crypto.ComputeMerkleRoot(types.Txs2Bytes(Txs))
+	id := w.ID
+	peerid := w.PeerId
+
 	h := &types.Header{
 		Height:     epoch,
 		ParentHash: parentblockhash,
@@ -426,12 +472,11 @@ func (w *Worker) createBlock(epoch uint64, parentBlock *types.Block, uncleBlock 
 		Nonce:      nonce,
 		Timestamp:  time.Now(),
 		PoTProof:   PotProof,
-		Address:    w.ID,
-		PeerId:     w.PeerId,
+		Address:    id,
+		PeerId:     peerid,
 		TxHash:     txshash,
-
-		Hashes:    nil,
-		PublicKey: publicKeyBytes,
+		Hashes:     nil,
+		PublicKey:  publicKeyBytes,
 	}
 
 	h.Hashes = h.Hash()
@@ -817,7 +862,17 @@ func (w *Worker) IsVDF1Working() bool {
 	// }
 	w.mutex.Lock()
 	defer w.mutex.Unlock()
-	return w.workFlag
+	//for i := 0; i < cpuCounter; i++ {
+	//	_, ok := <-w.vdf1[i].OutputChan
+	//	if ok {
+	//		return true
+	//	}
+	//}
+
+	if w.workFlag {
+		return true
+	}
+	return false
 }
 
 func (w *Worker) setWorkFlagFalse() {
@@ -831,13 +886,29 @@ func (w *Worker) SetEngine(engine *PoTEngine) {
 	w.PeerId = w.Engine.GetPeerID()
 }
 
-func (w *Worker) handleBlockExcutedTx(block *types.Block) error {
-	excutedtx := block.GetExecutedHeaders()
-	w.mempool.MarkProposedByHeader(excutedtx)
+func (w *Worker) handleBlockExecutedTx(block *types.Block) error {
+	executedHeaders := block.GetExecutedHeaders()
+	for _, header := range executedHeaders {
+		hash := header.Hash()
+		exeblock := w.mempool.GetBlockByHash(hash)
+		if exeblock != nil {
+			err := w.blockStorage.PutExcutedBlock(exeblock)
+			if err != nil {
+				return err
+			}
+		} else {
+			return fmt.Errorf("handle block excuted tx error for executedblock %s does not exist in mempool", hexutil.Encode(hash[:]))
+		}
+	}
+	w.mempool.MarkProposedByHeader(executedHeaders)
 	return nil
 }
 
 func (w *Worker) handleBlockRawTx(block *types.Block) error {
+	//w.log.Errorf("len of rawtx is %d", len(block.GetRawTx()))
+	//if len(block.GetRawTx()) != 0 {
+	//	fmt.Println(hexutil.Encode(block.GetRawTx()[0].Txid[:]))
+	//}
 	err := w.chainReader.UpdateTxForBlock(block)
 	if err != nil {
 		return err
@@ -851,7 +922,6 @@ func (w *Worker) handleBlockRawTx(block *types.Block) error {
 		for _, tx := range rawtxs {
 			if !tx.IsCoinBase() {
 				types.UTXO2Transaction(tx)
-
 			}
 		}
 
@@ -866,4 +936,6 @@ func (w *Worker) stop() {
 		return
 	}
 	fill.WriteString("")
+	w.rpcserver.Stop()
+	w.listener.Close()
 }

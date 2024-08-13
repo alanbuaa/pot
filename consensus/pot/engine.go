@@ -92,6 +92,7 @@ func (e *PoTEngine) start() {
 	go e.worker.OnGetVdf0Response()
 	go e.worker.Work()
 	go e.onReceiveMsg()
+	go e.worker.rpcserver.Serve(e.worker.listener)
 }
 func (e *PoTEngine) GetRequestEntrance() chan<- *pb.Request {
 	if e.UpperConsensus != nil && e.UpperConsensus.GetRequestEntrance() != nil {

@@ -57,6 +57,7 @@ type PoTConfig struct {
 	CommiteeSize   int    `yaml:"commiteeSize"`
 	ConfirmDelay   int    `yaml:"confirmDelay"`
 	Slowrate       int    `yaml:"slowrate"`
+	RpcAddress     string `yaml:"dcirpcAddress"`
 }
 type ConsensusConfig struct {
 	Type        string            `yaml:"type"`
@@ -103,6 +104,7 @@ type ReplicaInfo struct {
 	ID             int64  `yaml:"id"`
 	Address        string `yaml:"address"`
 	RpcAddress     string `yaml:"rpc_address"`
+	DciRpcAddress  string `yaml:"dcirpcAddress"`
 	PrivateKeyPath string `yaml:"private_key_path"`
 }
 

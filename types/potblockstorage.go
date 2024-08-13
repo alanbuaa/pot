@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/boltdb/bolt"
-	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/zzz136454872/upgradeable-consensus/pb"
 	"google.golang.org/protobuf/proto"
 	"log"
@@ -22,7 +21,7 @@ var (
 )
 
 type BlockStorage struct {
-	db        *leveldb.DB
+	//db        *leveldb.DB
 	boltdb    *bolt.DB
 	vdfheight uint64
 	rwmutex   *sync.RWMutex
@@ -40,12 +39,6 @@ func (s *BlockStorage) GetBoltdb() *bolt.DB {
 }
 func NewBlockStorage(id int64) *BlockStorage {
 	sint := fmt.Sprintf("%d", id)
-	db, err := leveldb.OpenFile("dbfile/node0-"+sint, nil)
-
-	if err != nil {
-		fmt.Println("output:", err)
-		panic(err)
-	}
 
 	boltdbname := fmt.Sprintf("boltdbfile/node0-" + sint)
 	if dbExists(boltdbname) {
@@ -80,8 +73,8 @@ func NewBlockStorage(id int64) *BlockStorage {
 		log.Panic(err)
 	}
 	return &BlockStorage{
-		boltdb:    boltdb,
-		db:        db,
+		boltdb: boltdb,
+		//db:        db,
 		vdfheight: 0,
 		rwmutex:   new(sync.RWMutex),
 	}
@@ -289,7 +282,7 @@ func (s *BlockStorage) GetVDFHeight() uint64 {
 	return s.vdfheight
 }
 
-func (s *BlockStorage) GetExcutedBlock(hash []byte) (*pb.ExecuteBlock, error) {
+func (s *BlockStorage) GetExcutedBlock(hash []byte) (*ExecutedBlock, error) {
 	block := &pb.ExecuteBlock{}
 	err := s.boltdb.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(ExecutedBucket))
@@ -304,32 +297,32 @@ func (s *BlockStorage) GetExcutedBlock(hash []byte) (*pb.ExecuteBlock, error) {
 		return nil
 	},
 	)
-
 	if err != nil {
 		return nil, err
 	}
-	return block, nil
+	exeblock := ToExecuteBlock(block)
+	return exeblock, nil
 }
 
-func (s *BlockStorage) PutExcutedBlock(block *pb.ExecuteBlock) error {
-	b, err := proto.Marshal(block)
+func (s *BlockStorage) PutExcutedBlock(block *ExecutedBlock) error {
+	pbblock := block.ToProto()
+	b, err := proto.Marshal(pbblock)
 	if err != nil {
 		return err
 	}
-	blockhash := block.GetHeader().GetBlockHash()
+	blockhash := block.Hash()
 	err = s.boltdb.Update(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket([]byte(ExecutedBucket))
-		blockin := bucket.Get(blockhash)
+		blockin := bucket.Get(blockhash[:])
 		if blockin != nil {
 			return nil
 		}
-		err = bucket.Put(blockhash, b)
+		err = bucket.Put(blockhash[:], b)
 		if err != nil {
 			return err
 		}
 		return nil
 	})
-
 	if err != nil {
 		return err
 	}

@@ -40,6 +40,11 @@ func ComputeMerkleRoot(hashes [][]byte) []byte {
 	if len(hashes) == 0 {
 		return nil
 	}
+
+	if len(hashes) == 1 {
+		return Hash(hashes[0])
+	}
+
 	for len(hashes) > 1 {
 		// padding for odd num
 		if len(hashes)&1 == 1 {

@@ -5,10 +5,12 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/zzz136454872/upgradeable-consensus/crypto"
 	"github.com/zzz136454872/upgradeable-consensus/pb"
 	"github.com/zzz136454872/upgradeable-consensus/types"
 	"golang.org/x/exp/rand"
+	"google.golang.org/protobuf/proto"
 	"math"
 	"sort"
 )
@@ -32,17 +34,52 @@ func (w *Worker) VerifyDCITx() bool {
 	return true
 }
 
+func (w *Worker) VerifyDciReward(reward *DciReward) (bool, error) {
+	//return true
+	//address := reward.Address
+	//amount := reward.Amount
+	proof := reward.Proof
+
+	exeheight := proof.Height
+	if exeheight > w.executeheight {
+		return false, fmt.Errorf("height is beyond execute height")
+	}
+
+	exeblock, err := w.blockStorage.GetExcutedBlock(proof.BlockHash)
+	if err != nil {
+		return false, err
+	}
+	if exeblock.Header.Height != proof.Height {
+		return false, fmt.Errorf("the height of proof is not equal to the height of block")
+	}
+	for _, tx := range exeblock.Txs {
+		if bytes.Equal(tx.TxHash, proof.TxHash) {
+			return true, nil
+		}
+	}
+	return false, fmt.Errorf("not found tx in block")
+}
+
 func (w *Worker) SendDci(ctx context.Context, request *pb.SendDciRequest) (*pb.SendDciResponse, error) {
 
 	dcirewards := request.GetDciReward()
-	for _, pbdciproof := range dcirewards {
-		dciproof := ToDciReward(pbdciproof)
-		w.mempool.AddDciReward(dciproof)
-	}
 
+	for _, pbdcireward := range dcirewards {
+
+		dciReward := ToDciReward(pbdcireward)
+		flag, err := w.VerifyDciReward(dciReward)
+		if !flag {
+			return &pb.SendDciResponse{
+				IsSuccess: false,
+				Height:    0,
+			}, fmt.Errorf("the dci reward is not valid for %s", err.Error())
+		} else {
+			w.mempool.AddDciReward(dciReward)
+		}
+	}
 	return &pb.SendDciResponse{
 		IsSuccess: true,
-		Height:    0,
+		Height:    w.getEpoch(),
 	}, nil
 
 }
@@ -50,6 +87,7 @@ func (w *Worker) SendDci(ctx context.Context, request *pb.SendDciRequest) (*pb.S
 func (w *Worker) GetBalance(ctx context.Context, request *pb.GetBalanceRequest) (*pb.GetBalanceResponse, error) {
 
 	addr := request.GetAddress()
+	w.log.Errorf("get balance of %s", hexutil.Encode(addr))
 	amount := w.chainReader.GetBalance(addr)
 
 	return &pb.GetBalanceResponse{
@@ -73,12 +111,14 @@ func (w *Worker) DevastateDci(ctx context.Context, request *pb.DevastateDciReque
 				return &pb.DevastateDciResponse{}, fmt.Errorf("tx is not valid for address not the same")
 			}
 			flag := false
-			for _, output := range outputs {
-				if output.CanBeUnlockWith(input.Address) {
-					flag = true
-					break
-				} else {
+			for i, output := range outputs {
+				if !output.CanBeUnlockWith(input.Address) {
 					continue
+				}
+				if input.Value == output.Value {
+					flag = true
+					outputs = append(outputs[:i], outputs[i+1:]...)
+					break
 				}
 			}
 			if !flag {
@@ -91,37 +131,50 @@ func (w *Worker) DevastateDci(ctx context.Context, request *pb.DevastateDciReque
 	return &pb.DevastateDciResponse{}, nil
 }
 
-func (w Worker) VerifyUTXO(ctx context.Context, request *pb.VerifyUTXORequest) (*pb.VerifyUTXOResponse, error) {
+func (w *Worker) VerifyUTXO(ctx context.Context, request *pb.VerifyUTXORequest) (*pb.VerifyUTXOResponse, error) {
+	from := request.GetFrom()
+	if from != nil {
+		return &pb.VerifyUTXOResponse{Flag: false}, nil
+	}
+	to := request.GetTo()
+	amount := request.GetValue()
+	proof := request.GetProof()
 
+	utxoproof := &pb.UTXOProof{}
+	err := proto.Unmarshal(proof, utxoproof)
+	if err != nil {
+		return &pb.VerifyUTXOResponse{Flag: false}, err
+	}
+	height := utxoproof.GetHeight()
+	hash := utxoproof.GetTxHash()
+
+	block, err := w.chainReader.GetByHeight(height)
+	if err != nil {
+		return &pb.VerifyUTXOResponse{Flag: false}, err
+	}
+
+	rawtx := block.GetRawTx()
+	for _, tx := range rawtx {
+		if bytes.Equal(tx.Txid[:], hash) {
+			if len(tx.TxInput) == 0 {
+				return &pb.VerifyUTXOResponse{Flag: false}, fmt.Errorf("txinput is zero")
+			}
+			txinput := tx.TxInput[0]
+			if !bytes.Equal(txinput.Address, to) {
+				return &pb.VerifyUTXOResponse{Flag: false}, fmt.Errorf("wrong address")
+			}
+			if amount != txinput.Value {
+				return &pb.VerifyUTXOResponse{Flag: false}, fmt.Errorf("wrong value")
+			}
+			return &pb.VerifyUTXOResponse{Flag: true}, nil
+		}
+	}
+
+	//return &pb.VerifyUTXOResponse{Flag: false}, nil
 	return &pb.VerifyUTXOResponse{Flag: true}, nil
 }
 
 func (w *Worker) handleDevastateDciRequest() {
-
-}
-
-func (w *Worker) GetUpperBlock(height int64) *pb.WhirlyBlock {
-	return &pb.WhirlyBlock{
-		ParentHash: nil,
-		Hash:       nil,
-		Height:     0,
-		Txs:        nil,
-		Justify:    nil,
-		Committed:  false,
-	}
-}
-
-func (w *Worker) VerifyUpperBlock(block *pb.WhirlyBlock) bool {
-	return true
-}
-
-func (w *Worker) VerifyDciReward(reward *DciReward) {
-	proof := reward.Proof
-	block := w.GetUpperBlock(proof.Height)
-
-	if w.VerifyUpperBlock(block) {
-
-	}
 
 }
 

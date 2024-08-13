@@ -237,7 +237,9 @@ func (w *Worker) chainreset(branch []*types.Block) error {
 	time := time2.Now()
 	if flag {
 		w.setWorkFlagFalse()
-		close(w.abort)
+		w.abort.once.Do(func() {
+			close(w.abort.abortchannel)
+		})
 		w.wg.Wait()
 		w.log.Infof("[PoT]\tthe vdf1 work got abort for chain reset, need %d ms", time2.Since(time)/time2.Millisecond)
 	}

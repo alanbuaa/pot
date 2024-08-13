@@ -3,7 +3,6 @@ package types
 import (
 	"bytes"
 	"encoding/gob"
-
 	"github.com/zzz136454872/upgradeable-consensus/crypto"
 	"github.com/zzz136454872/upgradeable-consensus/pb"
 	"google.golang.org/protobuf/proto"
@@ -27,6 +26,23 @@ func (e *ExecutedBlock) ToProto() *pb.ExecuteBlock {
 	return &pb.ExecuteBlock{
 		Header: e.Header.ToProto(),
 		Txs:    pbtxs,
+	}
+}
+
+func ToExecuteBlock(block *pb.ExecuteBlock) *ExecutedBlock {
+	txs := make([]*ExecutedTx, 0)
+	pbtxs := block.GetTxs()
+	for _, pbtx := range pbtxs {
+		tx := ToExecutedTx(pbtx)
+		txs = append(txs, tx)
+	}
+	return &ExecutedBlock{
+		Header: &ExecuteHeader{
+			Height:    block.Header.GetHeight(),
+			BlockHash: block.Header.GetBlockHash(),
+			TxsHash:   block.Header.GetTxsHash(),
+		},
+		Txs: txs,
 	}
 }
 
@@ -96,6 +112,14 @@ func (e *ExecutedTx) Hash() [crypto.Hashlen]byte {
 		return crypto.Convert(e.TxHash)
 	} else {
 		return crypto.Convert(crypto.NilTxsHash)
+	}
+}
+
+func ToExecutedTx(tx *pb.ExecutedTx) *ExecutedTx {
+	return &ExecutedTx{
+		Data:   tx.GetData(),
+		Height: tx.GetHeight(),
+		TxHash: tx.GetTxHash(),
 	}
 }
 
@@ -170,7 +194,7 @@ func (r *RawTx) ToProto() *pb.RawTxData {
 		pboutput = append(pboutput, output.ToProto())
 	}
 	pbrawtx := &pb.RawTxData{
-		//TxID:     r.Txid[:],
+		TxID:     r.Txid[:],
 		TxInput:  pbinput,
 		TxOutput: pboutput,
 	}
@@ -322,7 +346,7 @@ func (o TxOutput) CanBeUnlockWith(address []byte) bool {
 	//return bytes.Equal(o.ScriptPk,address)
 }
 func (r *RawTx) IsCoinBase() bool {
-	return len(r.TxInput) == 1 && r.TxInput[0].Txid == [32]byte{} && r.TxInput[0].Voutput == -1
+	return len(r.TxInput) == 1 && r.TxInput[0].Voutput == -1
 }
 
 func (r *RawTx) BasicVerify() bool {
@@ -343,6 +367,8 @@ func (r *RawTx) BasicVerify() bool {
 }
 
 func (o TxOutput) IsLockedWithKey(pubkey []byte) bool {
+	//fmt.Println(hexutil.Encode(o.Address))
+	//fmt.Println(hexutil.Encode(pubkey))
 	return bytes.Equal(o.Address, pubkey)
 }
 

@@ -13,7 +13,6 @@ import (
 	"google.golang.org/protobuf/proto"
 	"math/big"
 	"math/rand"
-	"os"
 	"time"
 )
 
@@ -26,7 +25,7 @@ func (w *Worker) handleBlock() {
 			epoch := w.getEpoch()
 			header := block.GetHeader()
 
-			if w.blockStorage.HasBlock(header.Hashes) {
+			if w.blockStorage.HasBlock(header.Hash()) {
 				continue
 			}
 
@@ -58,18 +57,18 @@ func (w *Worker) handleBlock() {
 
 				} else {
 					w.log.Infof("[PoT]\tepoch %d:Receive block from node %d, Difficulty %d, with parent %s, transport need %f millseconds", epoch, header.Address, header.Difficulty.Int64(), hex.EncodeToString(header.ParentHash), float64(time.Since(header.Timestamp))/float64(time.Millisecond))
-					if w.ID == 0 {
-						transfertime := float64(time.Since(header.Timestamp)) / float64(time.Millisecond)
-						fill, err := os.OpenFile("transfertime", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
-						if err != nil {
-							fmt.Println(err)
-						}
-						_, err = fill.WriteString(fmt.Sprintf("%f\n", transfertime))
-						if err != nil {
-							fmt.Println(err)
-						}
-						fill.Close()
-					}
+					//if w.ID == 0 {
+					//	transfertime := float64(time.Since(header.Timestamp)) / float64(time.Millisecond)
+					//	fill, err := os.OpenFile("transfertime", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
+					//	if err != nil {
+					//		fmt.Println(err)
+					//	}
+					//	_, err = fill.WriteString(fmt.Sprintf("%f\n", transfertime))
+					//	if err != nil {
+					//		fmt.Println(err)
+					//	}
+					//	fill.Close()
+					//}
 					if header.Difficulty.Cmp(common.Big0) == 0 {
 						//w.storage.Put(header)
 						w.blockStorage.Put(block)
@@ -248,7 +247,9 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 	w.log.Infof("[PoT]\tMinew Work flag: %t", finishflag)
 
 	if w.IsVDF1Working() {
-		close(w.abort)
+		w.abort.once.Do(func() {
+			close(w.abort.abortchannel)
+		})
 		w.wg.Wait()
 		w.setWorkFlagFalse()
 	}
@@ -290,6 +291,7 @@ func (w *Worker) blockbroadcast(block *types.Block) error {
 	pbHeader := block.ToProto()
 	headerByte, err := proto.Marshal(pbHeader)
 	if err != nil {
+
 		return err
 	}
 	message := &pb.PoTMessage{
@@ -434,7 +436,6 @@ func (w *Worker) workReset(epoch uint64, block *types.Block) error {
 		if err != nil {
 			return err
 		}
-
 		uncleblock = append(uncleblock, b)
 	}
 
@@ -446,16 +447,21 @@ func (w *Worker) workReset(epoch uint64, block *types.Block) error {
 	difficulty := header.Difficulty
 	if w.IsVDF1Working() {
 		w.setWorkFlagFalse()
-		close(w.abort)
+		w.abort.once.Do(func() {
+			close(w.abort.abortchannel)
+		})
+
 		w.wg.Wait()
 		//w.log.Infof("[PoT]\tthe vdf1 work got abort for chain reset, need %d ms", time2.Since(time)/time2.Millisecond)
 	}
 	w.startWorking()
-	w.abort = make(chan struct{})
+	w.abort = NewAbortcontrol()
 	w.wg.Add(cpuCounter)
 
+	vdf0rescopy := make([]byte, len(res0))
+	copy(vdf0rescopy, res0)
 	for i := 0; i < cpuCounter; i++ {
-		go w.mine(epoch, res0, rand.Int63(), i, w.abort, difficulty, parentblock, uncleblock, w.wg)
+		go w.mine(epoch, vdf0rescopy, rand.Int63(), i, w.abort, difficulty, parentblock, uncleblock, w.wg)
 	}
 
 	return nil

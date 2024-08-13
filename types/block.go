@@ -98,6 +98,14 @@ func ToBlock(block *pb.Block) *Block {
 	}
 }
 
+func ToExeHeader(exeheader *pb.ExecuteHeader) *ExecuteHeader {
+	return &ExecuteHeader{
+		Height:    exeheader.Height,
+		BlockHash: exeheader.BlockHash,
+		TxsHash:   exeheader.TxsHash,
+	}
+}
+
 func (b *Header) Hash() []byte {
 	if b.Hashes != nil {
 		return b.Hashes
@@ -116,6 +124,36 @@ func (b *Header) Hash() []byte {
 		unclehash = append(unclehash, b.UncleHash[i]...)
 	}
 	peeridbyte := []byte(b.PeerId)
+	if b.PoTProof == nil {
+		panic("pot proof is nil")
+	}
+	if b.Mixdigest == nil {
+		panic("pot Mixdigest is nil")
+	}
+	if b.ParentHash == nil {
+		panic("pot proof is nil")
+	}
+	if b.TxHash == nil {
+		panic("txhash is nil")
+	}
+	if b.PublicKey == nil {
+		panic("PublicKey is nil")
+	}
+	//fmt.Println("height:", height)
+	//fmt.Println("b.ParentHash:", b.ParentHash)
+	//fmt.Println("b.unclelen", len(b.UncleHash))
+	//fmt.Println("unclehash:", unclehash)
+	//fmt.Println("b.Mixdigest:", b.Mixdigest)
+	//fmt.Println("difficulty:", difficulty)
+	//fmt.Println("nonce:", nonce)
+	//fmt.Println("timestamp:", timestamp)
+	//fmt.Println("b.PoTProof[0]:", b.PoTProof[0])
+	//fmt.Println("b.PoTProof[1]:", b.PoTProof[1])
+	//fmt.Println("address:", address)
+	//fmt.Println("peeridbyte:", peeridbyte)
+	//fmt.Println("b.TxHash:", b.TxHash)
+	//fmt.Println("b.PublicKey:", b.PublicKey)
+
 	hashinput := bytes.Join([][]byte{
 		height, b.ParentHash, unclehash,
 		b.Mixdigest, difficulty, nonce,
@@ -265,7 +303,30 @@ func (b *Header) ToProto() *pb.Header {
 	if err != nil {
 		return nil
 	}
-
+	if b.PoTProof == nil {
+		panic("pot proof is nil")
+	}
+	if b.Mixdigest == nil {
+		panic("pot Mixdigest is nil")
+	}
+	if b.ParentHash == nil {
+		panic("pot proof is nil")
+	}
+	if b.TxHash == nil {
+		panic("txhash is nil")
+	}
+	if b.PublicKey == nil {
+		panic("PublicKey is nil")
+	}
+	if b.PoTProof == nil {
+		panic("potproof nil")
+	}
+	if b.PublicKey == nil {
+		panic("PublicKey nil")
+	}
+	if b.TxHash == nil {
+		panic("txhash is nil")
+	}
 	if b.Hashes == nil {
 		b.Hash()
 	}
@@ -290,9 +351,9 @@ func (b *Header) ToProto() *pb.Header {
 func DefaultGenesisHeader() *Header {
 	h := &Header{
 		Height:     0,
-		ParentHash: nil,
-		UncleHash:  nil,
-		Mixdigest:  nil,
+		ParentHash: crypto.NilTxsHash,
+		UncleHash:  [][]byte{crypto.NilTxsHash},
+		Mixdigest:  crypto.NilTxsHash,
 		Difficulty: big.NewInt(1),
 		Nonce:      0,
 		Timestamp:  time.Date(2023, 8, 14, 15, 35, 00, 0, time.Local),
@@ -300,7 +361,7 @@ func DefaultGenesisHeader() *Header {
 		Address:    0,
 		Hashes:     nil,
 		PeerId:     "0",
-		PublicKey:  []byte(""),
+		PublicKey:  []byte("xxx"),
 		TxHash:     crypto.NilTxsHash,
 	}
 	h.Hash()

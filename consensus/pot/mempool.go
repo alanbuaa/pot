@@ -29,9 +29,9 @@ type DciReward struct {
 	weight  float64
 }
 type DciProof struct {
-	Epoch  int64
-	Height int64
-	Hash   []byte
+	Height    uint64
+	BlockHash []byte
+	TxHash    []byte
 }
 
 func (d *DciReward) ToProto() *pb.DciReward {
@@ -40,9 +40,9 @@ func (d *DciReward) ToProto() *pb.DciReward {
 		Amount:  d.Amount,
 		ChainID: d.ChainID,
 		DciProof: &pb.DciProof{
-			Epoch:  d.Proof.Epoch,
-			Height: d.Proof.Height,
-			Hash:   d.Proof.Hash,
+			Height:    d.Proof.Height,
+			BlockHash: d.Proof.BlockHash,
+			TxHash:    d.Proof.TxHash,
 		},
 	}
 }
@@ -53,9 +53,10 @@ func ToDciReward(proof *pb.DciReward) *DciReward {
 		Amount:  proof.GetAmount(),
 		ChainID: proof.GetChainID(),
 		Proof: DciProof{
-			Epoch:  proof.GetDciProof().GetEpoch(),
-			Height: proof.GetDciProof().GetHeight(),
-			Hash:   proof.GetDciProof().GetHash(),
+
+			Height:    proof.GetDciProof().GetHeight(),
+			BlockHash: proof.GetDciProof().GetBlockHash(),
+			TxHash:    proof.GetDciProof().GetTxHash(),
 		},
 	}
 }
@@ -94,6 +95,16 @@ func (c *Mempool) Has(blocks *types.ExecutedBlock) bool {
 	return ok
 }
 
+func (c Mempool) GetBlockByHash(txHash [crypto.Hashlen]byte) *types.ExecutedBlock {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	if e, ok := c.execset[txHash]; ok {
+		return e.Value.(*WrappedExcutedTx).executedBlock
+	} else {
+		return nil
+	}
+}
+
 func (c *Mempool) Add(blocks ...*types.ExecutedBlock) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
@@ -124,6 +135,15 @@ func (c *Mempool) Remove(blocks []types.ExecutedBlock) {
 			c.execorder.Remove(e)
 			delete(c.execset, txHash)
 		}
+	}
+}
+
+func (c *Mempool) RemoveALl() {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	for hash, element := range c.execset {
+		c.execorder.Remove(element)
+		delete(c.execset, hash)
 	}
 }
 
