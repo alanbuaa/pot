@@ -130,7 +130,7 @@ func connectToServer(addr string) (*grpc.ClientConn, error) {
 
 // 创建客户端并调用服务
 func main() {
-	// 假设服务器地址为localhost:50051
+	//假设服务器地址为localhost:50051
 	serverAddr := "127.0.0.1:9867"
 
 	// 连接到服务器
@@ -145,19 +145,49 @@ func main() {
 
 	for true {
 
-		str := "0x06c5a8ddb574b9a5497cb6cd20bad05a05da85332a227f988c285d1b848b5195725e1089e2c8302916b4d167df7fb0280de64605119388401122c16b28a921c1099da44d988e381e0515802ce8af50b64962ea1f91c2bf2f76a0f8d646c5b742"
+		//str := "100"
+		//addr, err := hexutil.Decode(str)
+		////fmt.Println(addr)
+		//str1 := "0x4e28aaa6752120ce8b735e50765a5f6d0d617b2bd632088582ee5c058ca60ff0"
+		//str2 := "0x11e37519b6cf44b70267ac20a5e33786330879df97a7c06463565ca89d5b65d5"
+		//blockhash, err := hexutil.Decode(str1)
+		//txhash, err := hexutil.Decode(str2)
+		//dcireward := &pb.DciReward{
+		//	Address: addr,
+		//	Amount:  100,
+		//	ChainID: 1,
+		//	DciProof: &pb.DciProof{
+		//		Height:    27,
+		//		BlockHash: blockhash,
+		//		TxHash:    txhash,
+		//	},
+		//}
+		//
+		//req := &pb.SendDciRequest{DciReward: []*pb.DciReward{dcireward}}
+		//
+		//resp, err := client.SendDci(context.Background(), req)
+		//if err != nil {
+		//	fmt.Println(err)
+		//}
+		//fmt.Printf("Response: %d\n", resp.IsSuccess)
+		//break
+		str := "0x13017a8cdc8a5a3929fdd814c925c9db2ff9875fc0b9fd30250f9126af04d5d1decfa524d9226d5f529c0dc708dc3e2f0dcb254c75848f4f16f972712231602f04165df4a72bc8bceaf4effcc62dc59461eba9801cb66c99a9666553f1ba42d1"
 		addr, err := hexutil.Decode(str)
-		fmt.Println(addr)
+		//fmt.Println(addr)
+
 		req := &pb.GetBalanceRequest{
-			Address:   addr,
-			Signature: nil,
+			Address: addr,
 		}
 
 		resp, err := client.GetBalance(context.Background(), req)
 		if err != nil {
-			break
+			fmt.Println(err)
 		}
 		fmt.Printf("Response: %d\n", resp.Balance)
 		break
 	}
+
+	//privkey := crypto.GenerateKey()
+	////pubkey := privkey.PublicKey()
+	//fmt.Println(hexutil.Encode(privkey.PublicKeyBytes()))CommitBlock
 }

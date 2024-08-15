@@ -50,15 +50,14 @@ func (w *Worker) VerifyDciReward(reward *DciReward) (bool, *types.ExecutedTx, er
 		return false, nil, err
 	}
 	if exeblock.Header.Height != proof.Height {
-		return false, nil, fmt.Errorf("the height of proof is not equal to the height of block")
+		return false, nil, fmt.Errorf("the height of proof %d is not equal to the height of block %d", proof.Height, exeblock.Header.Height)
 	}
 	for _, tx := range exeblock.Txs {
 		if !bytes.Equal(tx.TxHash, proof.TxHash) {
 			continue
 		} else {
-
+			return true, tx, nil
 		}
-
 	}
 	return false, nil, fmt.Errorf("not found tx in block")
 }
@@ -85,6 +84,7 @@ func (w *Worker) SendDci(ctx context.Context, request *pb.SendDciRequest) (*pb.S
 				}, fmt.Errorf("the dci reward is not valid for %s", err.Error())
 			} else {
 				address := txdata[2:98]
+				//fmt.Println(hexutil.Encode(address))
 				dciReward.Address = address
 				w.mempool.AddDciReward(dciReward)
 			}
@@ -193,7 +193,15 @@ func (w *Worker) handleDevastateDciRequest() {
 
 func (w *Worker) GenerateCoinbaseTx(pubkeybyte []byte, vdf0res []byte, totalreward int64) *types.Tx {
 	dcirewards := w.mempool.GetAllDciRewards()
-
+	coinbaseproof := make([]types.CoinbaseProof, 0)
+	for _, dcireward := range dcirewards {
+		proof := types.CoinbaseProof{
+			TxHash:  dcireward.Proof.TxHash,
+			Address: dcireward.Address,
+			Amount:  dcireward.Amount,
+		}
+		coinbaseproof = append(coinbaseproof, proof)
+	}
 	txin := types.TxInput{
 		IsCoinbase: false,
 		Txid:       [32]byte{},
@@ -273,9 +281,10 @@ func (w *Worker) GenerateCoinbaseTx(pubkeybyte []byte, vdf0res []byte, totalrewa
 	}
 
 	tx := &types.RawTx{
-		Txid:     [32]byte{},
-		TxInput:  []types.TxInput{txin},
-		TxOutput: txouts,
+		Txid:           [32]byte{},
+		TxInput:        []types.TxInput{txin},
+		TxOutput:       txouts,
+		CoinbaseProofs: coinbaseproof,
 	}
 	tx.Txid = tx.Hash()
 

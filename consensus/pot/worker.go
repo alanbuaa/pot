@@ -533,7 +533,7 @@ func (w *Worker) GetExcutedTxsFromExecutor(epoch uint64) ([]*types.ExecutedBlock
 		header := &types.ExecuteHeader{
 			Height:    pbheader.GetHeight(),
 			BlockHash: pbheader.GetBlockHash(),
-			//TxsHash:
+			TxsHash:   pbheader.GetTxsHash(),
 		}
 		pbtxs := executeblock.GetTxs()
 		executedtxs := make([]*types.ExecutedTx, 0)
@@ -893,6 +893,7 @@ func (w *Worker) handleBlockExecutedHeader(block *types.Block) error {
 		exeblock := w.mempool.GetBlockByHash(hash)
 		if exeblock != nil {
 			err := w.blockStorage.PutExcutedBlock(exeblock)
+			w.log.Error("the exe block height ", exeblock.Header.Height)
 			if err != nil {
 				return err
 			}
@@ -909,6 +910,14 @@ func (w *Worker) handleBlockRawTx(block *types.Block) error {
 	//if len(block.GetRawTx()) != 0 {
 	//	fmt.Println(hexutil.Encode(block.GetRawTx()[0].Txid[:]))
 	//}
+
+	txs := block.GetRawTx()
+	for _, tx := range txs {
+		if tx.IsCoinBase() {
+			dciproofs := tx.CoinbaseProofs
+			w.mempool.MarkDciRewardProposed(dciproofs)
+		}
+	}
 	err := w.chainReader.UpdateTxForBlock(block)
 	if err != nil {
 		return err

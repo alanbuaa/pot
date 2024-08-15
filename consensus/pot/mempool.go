@@ -94,7 +94,7 @@ func (c *Mempool) Has(blocks *types.ExecutedBlock) bool {
 	return ok
 }
 
-func (c Mempool) GetBlockByHash(txHash [crypto.Hashlen]byte) *types.ExecutedBlock {
+func (c *Mempool) GetBlockByHash(txHash [crypto.Hashlen]byte) *types.ExecutedBlock {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	if e, ok := c.execset[txHash]; ok {
@@ -354,7 +354,7 @@ func (c *Mempool) AddDciReward(rewards ...*DciReward) {
 	defer c.mutex.Unlock()
 
 	for _, reward := range rewards {
-		strings := fmt.Sprintf(hexutil.Encode(reward.Address)+"-%d", reward.Amount)
+		strings := hexutil.Encode(reward.Proof.TxHash)
 		_, ok := c.DciRewardPool[strings]
 		if ok {
 			continue
@@ -366,14 +366,16 @@ func (c *Mempool) AddDciReward(rewards ...*DciReward) {
 
 }
 
-func (c *Mempool) RemoveDciReward(rewards ...*DciReward) {
+func (c *Mempool) MarkDciRewardProposed(proof []types.CoinbaseProof) {
+
+}
+
+func (c *Mempool) RemoveDciRewardByTxHash(hash []byte) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
-	for _, reward := range rewards {
-		strings := fmt.Sprintf(hexutil.Encode(reward.Address)+"-%d", reward.Amount)
-		if _, ok := c.DciRewardPool[strings]; ok {
-			delete(c.DciRewardPool, strings)
-		}
+	str := hexutil.Encode(hash)
+	if _, ok := c.DciRewardPool[str]; ok {
+		delete(c.DciRewardPool, str)
 	}
 }
 
@@ -386,6 +388,6 @@ func (c *Mempool) GetAllDciRewards() []*DciReward {
 		rewards = append(rewards, reward)
 	}
 
-	c.DciRewardPool = make(map[string]*DciReward)
+	//c.DciRewardPool = make(map[string]*DciReward)
 	return rewards
 }

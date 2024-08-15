@@ -106,7 +106,7 @@ message DciTx{
   bytes TxID                  = 1;
   repeated TxInput TxInput    = 2;
   repeated TxOutput TxOutput  = 3;
-  int32 ChainID               = 4;
+  repeated CoinbaseProof Proof              = 4;
 }
 
 message TxInput{
@@ -132,7 +132,7 @@ message RawTxData {
   bytes TxID                  = 1;
   repeated TxInput TxInput    = 2;
   repeated TxOutput TxOutput  = 3;
-  int32 ChainID               = 4;
+  repeated CoinbaseProof CoinbaseProofs              = 4;
 }
 
 message ExecutedTxData{
@@ -184,8 +184,6 @@ message VerifyTxResponse{
   repeated ExecutedTxData Txs = 1;
   repeated bool flag =2;
 }
-
-
 
 service DciExector{
   rpc   SendDci(SendDciRequest)           returns (SendDciResponse)       {}
@@ -252,4 +250,10 @@ message VerifyUTXORequest{
 
 message VerifyUTXOResponse{
   bool flag = 1;
+}
+
+message CoinbaseProof{
+  bytes Address = 1;
+  bytes TxHash = 2;
+  int64 Amount = 3;
 }

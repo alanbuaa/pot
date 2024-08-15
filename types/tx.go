@@ -134,10 +134,15 @@ func (t *Tx) GetRawTxData() *RawTx {
 				txOutput := ToTxOutput(output)
 				txOutputs = append(txOutputs, txOutput)
 			}
+			CoinbaseProofs := make([]CoinbaseProof, 0)
+			for _, proof := range RawTxData.GetCoinbaseProofs() {
+				CoinbaseProofs = append(CoinbaseProofs, ToCoinbaseProof(proof))
+			}
 			return &RawTx{
-				Txid:     crypto.Convert(RawTxData.GetTxID()),
-				TxInput:  txInputs,
-				TxOutput: txOutputs,
+				Txid:           crypto.Convert(RawTxData.GetTxID()),
+				TxInput:        txInputs,
+				TxOutput:       txOutputs,
+				CoinbaseProofs: CoinbaseProofs,
 			}
 		}
 	} else {

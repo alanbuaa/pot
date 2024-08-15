@@ -334,7 +334,7 @@ func (s *Sharding) createConsensusNode(address string) model.Consensus {
 				s.SubConsensus.ConsensusID,
 				s.epoch,
 				s.controller.Config,
-				s.controller.Executor,
+				s,
 				s,
 				s.controller.Log,
 				address,

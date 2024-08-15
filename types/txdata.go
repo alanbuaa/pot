@@ -36,11 +36,12 @@ func ToExecuteBlock(block *pb.ExecuteBlock) *ExecutedBlock {
 		tx := ToExecutedTx(pbtx)
 		txs = append(txs, tx)
 	}
+
 	return &ExecutedBlock{
 		Header: &ExecuteHeader{
-			Height:    block.Header.GetHeight(),
-			BlockHash: block.Header.GetBlockHash(),
-			TxsHash:   block.Header.GetTxsHash(),
+			Height:    block.GetHeader().GetHeight(),
+			BlockHash: block.GetHeader().GetBlockHash(),
+			TxsHash:   block.GetHeader().GetTxsHash(),
 		},
 		Txs: txs,
 	}
@@ -60,6 +61,7 @@ func (e *ExecuteHeader) ToProto() *pb.ExecuteHeader {
 	return &pb.ExecuteHeader{
 		Height:    e.Height,
 		BlockHash: e.BlockHash,
+		TxsHash:   e.TxsHash,
 	}
 }
 
@@ -161,9 +163,10 @@ func (e *ExecutedTxData) Hash() [crypto.Hashlen]byte {
 }
 
 type RawTx struct {
-	Txid     [crypto.Hashlen]byte
-	TxInput  []TxInput
-	TxOutput []TxOutput
+	Txid           [crypto.Hashlen]byte
+	TxInput        []TxInput
+	TxOutput       []TxOutput
+	CoinbaseProofs []CoinbaseProof
 }
 
 type TxInput struct {
@@ -183,6 +186,12 @@ type TxOutput struct {
 	Proof    []byte
 }
 
+type CoinbaseProof struct {
+	Address []byte
+	Amount  int64
+	TxHash  []byte
+}
+
 func (r *RawTx) ToProto() *pb.RawTxData {
 	pbinput := make([]*pb.TxInput, 0)
 	for _, input := range r.TxInput {
@@ -193,10 +202,16 @@ func (r *RawTx) ToProto() *pb.RawTxData {
 	for _, output := range r.TxOutput {
 		pboutput = append(pboutput, output.ToProto())
 	}
+
+	pbproof := make([]*pb.CoinbaseProof, 0)
+	for _, proof := range r.CoinbaseProofs {
+		pbproof = append(pbproof, proof.ToProto())
+	}
 	pbrawtx := &pb.RawTxData{
-		TxID:     r.Txid[:],
-		TxInput:  pbinput,
-		TxOutput: pboutput,
+		TxID:           r.Txid[:],
+		TxInput:        pbinput,
+		TxOutput:       pboutput,
+		CoinbaseProofs: pbproof,
 	}
 	return pbrawtx
 }
@@ -293,6 +308,22 @@ func (o TxOutput) ToProto() *pb.TxOutput {
 	}
 }
 
+func ToCoinbaseProof(Proof *pb.CoinbaseProof) CoinbaseProof {
+	return CoinbaseProof{
+		Address: Proof.GetAddress(),
+		Amount:  Proof.GetAmount(),
+		TxHash:  Proof.GetTxHash(),
+	}
+}
+
+func (p CoinbaseProof) ToProto() *pb.CoinbaseProof {
+	return &pb.CoinbaseProof{
+		Address: p.Address,
+		Amount:  p.Amount,
+		TxHash:  p.TxHash,
+	}
+}
+
 func ToRawTx(tx *pb.RawTxData) *RawTx {
 	pbtxintputs := tx.GetTxInput()
 	txinputs := make([]TxInput, 0)
@@ -306,11 +337,19 @@ func ToRawTx(tx *pb.RawTxData) *RawTx {
 		txoutputs = append(txoutputs, ToTxOutput(pbtxoutput))
 	}
 
-	return &RawTx{
-		Txid:     crypto.Convert(tx.GetTxID()),
-		TxInput:  txinputs,
-		TxOutput: txoutputs,
+	pbcoinbaseproofs := tx.GetCoinbaseProofs()
+	coinbaseproofs := make([]CoinbaseProof, 0)
+	for _, pbcoinbaseproof := range pbcoinbaseproofs {
+		coinbaseproofs = append(coinbaseproofs, ToCoinbaseProof(pbcoinbaseproof))
 	}
+
+	return &RawTx{
+		Txid:           crypto.Convert(tx.GetTxID()),
+		TxInput:        txinputs,
+		TxOutput:       txoutputs,
+		CoinbaseProofs: coinbaseproofs,
+	}
+
 }
 
 type TxOutputs []TxOutput
@@ -374,4 +413,21 @@ func (o TxOutput) IsLockedWithKey(pubkey []byte) bool {
 
 func UTXO2Transaction(tx *RawTx) {
 
+	//to := tx.TxOutput[0].Address
+	//transacto := common.BytesToAddress(to)
+	//
+	//transaction := &types.DynamicFeeTx{
+	//	ChainID:    big.NewInt(11223344551),
+	//	Nonce:      0,
+	//	GasTipCap:  nil,
+	//	GasFeeCap:  nil,
+	//	Gas:        0,
+	//	To:         &transacto,
+	//	Value:      nil,
+	//	Data:       nil,
+	//	AccessList: nil,
+	//	V:          nil,
+	//	R:          nil,
+	//	S:          nil,
+	//}
 }

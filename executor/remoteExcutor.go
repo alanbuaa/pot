@@ -34,10 +34,15 @@ func NewRemoteExecutor(cfg *config.ExecutorConfig, uplog *logrus.Entry) *RemoteE
 
 func (e *RemoteExecutor) CommitBlock(block types.ConsensusBlock, proof []byte, cid int64) {
 	eb := &pb.ExecBlock{
-		Txs: block.GetTxs(),
+		Txs:          block.GetTxs(),
+		ShardingName: block.GetShardingName(),
 	}
 	if eb.Txs == nil {
 		e.log.Debug("block txs is nil ")
+		return
+	}
+	if eb.ShardingName == nil {
+		e.log.Error("CommitBlock sharding name is nil ")
 		return
 	}
 	if _, err := e.client.CommitBlock(context.Background(), eb); err != nil {
