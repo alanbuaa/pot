@@ -131,7 +131,7 @@ func connectToServer(addr string) (*grpc.ClientConn, error) {
 // 创建客户端并调用服务
 func main() {
 	//假设服务器地址为localhost:50051
-	serverAddr := "127.0.0.1:9867"
+	serverAddr := "127.0.0.1:9869"
 
 	// 连接到服务器
 	conn, err := connectToServer(serverAddr)
@@ -145,11 +145,11 @@ func main() {
 
 	for true {
 
-		//str := "100"
+		//str := "0x13017a8cdc8a5a3929fdd814c925c9db2ff9875fc0b9fd30250f9126af04d5d1decfa524d9226d5f529c0dc708dc3e2f0dcb254c75848f4f16f972712231602f04165df4a72bc8bceaf4effcc62dc59461eba9801cb66c99a9666553f1ba42d1"
 		//addr, err := hexutil.Decode(str)
 		////fmt.Println(addr)
-		//str1 := "0x4e28aaa6752120ce8b735e50765a5f6d0d617b2bd632088582ee5c058ca60ff0"
-		//str2 := "0x11e37519b6cf44b70267ac20a5e33786330879df97a7c06463565ca89d5b65d5"
+		//str1 := "0xd9a26bd283cc41e6bbefea02bbb646e4f4055ab0bd1bf040f485a64f1cc1915f"
+		//str2 := "0x4479d3eb7ced7d6da57cfda3897d3437fb52cb7a6805ae1935905a77dec23c67"
 		//blockhash, err := hexutil.Decode(str1)
 		//txhash, err := hexutil.Decode(str2)
 		//dcireward := &pb.DciReward{
@@ -157,7 +157,7 @@ func main() {
 		//	Amount:  100,
 		//	ChainID: 1,
 		//	DciProof: &pb.DciProof{
-		//		Height:    27,
+		//		Height:    37,
 		//		BlockHash: blockhash,
 		//		TxHash:    txhash,
 		//	},
@@ -171,6 +171,7 @@ func main() {
 		//}
 		//fmt.Printf("Response: %d\n", resp.IsSuccess)
 		//break
+
 		str := "0x13017a8cdc8a5a3929fdd814c925c9db2ff9875fc0b9fd30250f9126af04d5d1decfa524d9226d5f529c0dc708dc3e2f0dcb254c75848f4f16f972712231602f04165df4a72bc8bceaf4effcc62dc59461eba9801cb66c99a9666553f1ba42d1"
 		addr, err := hexutil.Decode(str)
 		//fmt.Println(addr)
@@ -183,7 +184,39 @@ func main() {
 		if err != nil {
 			fmt.Println(err)
 		}
-		fmt.Printf("Response: %d\n", resp.Balance)
+		fmt.Println(resp.Balance)
+		//txid := resp.GetUtxos()[0].GetTxid()
+		//txinput := types.TxInput{
+		//	IsCoinbase: false,
+		//	Txid:       crypto.Convert(txid),
+		//	Voutput:    1,
+		//	Scriptsig:  addr,
+		//	Value:      2000,
+		//	Address:    addr,
+		//}
+		//
+		//txoutput := types.TxOutput{
+		//	Address:  nil,
+		//	Value:    2000,
+		//	IsSpent:  false,
+		//	ScriptPk: addr,
+		//	Proof:    addr,
+		//}
+		//tx := types.RawTx{
+		//	Txid:           [32]byte{},
+		//	TxInput:        []types.TxInput{txinput},
+		//	TxOutput:       []types.TxOutput{txoutput},
+		//	CoinbaseProofs: nil,
+		//}
+		//request := &pb.DevastateDciRequest{
+		//	Amount:      2000,
+		//	Tx:          tx.ToProto(),
+		//	To:          addr,
+		//	Transaction: types.RandByte(),
+		//}
+		//
+		//response, err := client.DevastateDci(context.Background(), request)
+		//fmt.Println(response.Flag)
 		break
 	}
 

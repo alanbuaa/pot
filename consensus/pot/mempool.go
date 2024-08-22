@@ -21,6 +21,11 @@ type WrappedRawTx struct {
 	proposed bool
 }
 
+type WrappedDciReward struct {
+	dcireward *DciReward
+	proposed  bool
+}
+
 type DciReward struct {
 	Address []byte
 	Amount  int64
@@ -62,21 +67,23 @@ func ToDciReward(proof *pb.DciReward) *DciReward {
 
 type Mempool struct {
 	mutex         *sync.RWMutex
-	DciRewardPool map[string]*DciReward
+	DciRewardPool map[string]*WrappedDciReward
 	execorder     *list.List
 	execset       map[[crypto.Hashlen]byte]*list.Element
 	raworder      *list.List
 	rawset        map[[crypto.Hashlen]byte]*list.Element
+	rawmap        map[[crypto.Hashlen]byte][]byte
 }
 
 func NewMempool() *Mempool {
 	c := &Mempool{
 		mutex:         new(sync.RWMutex),
-		DciRewardPool: make(map[string]*DciReward),
+		DciRewardPool: make(map[string]*WrappedDciReward),
 		execorder:     new(list.List),
 		execset:       make(map[[crypto.Hashlen]byte]*list.Element),
 		raworder:      new(list.List),
 		rawset:        make(map[[crypto.Hashlen]byte]*list.Element),
+		rawmap:        make(map[[crypto.Hashlen]byte][]byte),
 	}
 	c.execorder.Init()
 	c.raworder.Init()
@@ -359,7 +366,10 @@ func (c *Mempool) AddDciReward(rewards ...*DciReward) {
 		if ok {
 			continue
 		} else {
-			c.DciRewardPool[strings] = reward
+			c.DciRewardPool[strings] = &WrappedDciReward{
+				dcireward: reward,
+				proposed:  false,
+			}
 		}
 
 	}
@@ -367,7 +377,14 @@ func (c *Mempool) AddDciReward(rewards ...*DciReward) {
 }
 
 func (c *Mempool) MarkDciRewardProposed(proof []types.CoinbaseProof) {
-
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	for _, proof := range proof {
+		str := hexutil.Encode(proof.TxHash)
+		if _, ok := c.DciRewardPool[str]; ok {
+			c.DciRewardPool[str].proposed = true
+		}
+	}
 }
 
 func (c *Mempool) RemoveDciRewardByTxHash(hash []byte) {
@@ -385,7 +402,9 @@ func (c *Mempool) GetAllDciRewards() []*DciReward {
 
 	rewards := make([]*DciReward, 0)
 	for _, reward := range c.DciRewardPool {
-		rewards = append(rewards, reward)
+		if !reward.proposed {
+			rewards = append(rewards, reward.dcireward)
+		}
 	}
 
 	//c.DciRewardPool = make(map[string]*DciReward)

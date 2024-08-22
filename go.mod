@@ -10,11 +10,12 @@ require p2padaptor v0.0.0-00010101000000-000000000000
 
 require (
 	github.com/boltdb/bolt v1.3.1
-	github.com/elliotchance/orderedmap v1.5.0
 	github.com/ethereum/go-ethereum v1.12.2
+	github.com/leanovate/gopter v0.2.11
 	github.com/niclabs/tcrsa v0.0.5
 	github.com/shopspring/decimal v1.3.1
 	github.com/sirupsen/logrus v1.9.3
+	github.com/stretchr/testify v1.8.4
 	github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7
 	github.com/wjbbig/go-hotstuff v0.0.0-20200715143423-ae125c8187f8
 	golang.org/x/exp v0.0.0-20230810033253-352e893a4cad
@@ -33,6 +34,7 @@ require (
 	github.com/chuwt/chia-bls-go v0.0.0-20220803023723-5157f484c1ad // indirect
 	github.com/containerd/cgroups v1.1.0 // indirect
 	github.com/coreos/go-systemd/v22 v22.5.0 // indirect
+	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/davidlazar/go-crypto v0.0.0-20200604182044-b73af7476f6c // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.2.0 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
@@ -110,6 +112,7 @@ require (
 	github.com/opentracing/opentracing-go v1.2.0 // indirect
 	github.com/pbnjay/memory v0.0.0-20210728143218-7b4eea64cf58 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
+	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/polydawn/refmt v0.89.0 // indirect
 	github.com/prometheus/client_golang v1.14.0 // indirect
 	github.com/prometheus/client_model v0.4.0 // indirect

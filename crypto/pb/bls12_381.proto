@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+package bls12_381;
+
+option go_package="/pb";
+
+// bls12-381 Fr in big endian
+message Fr {
+  uint64 e1 = 1;
+  uint64 e2 = 2;
+  uint64 e3 = 3;
+  uint64 e4 = 4;
+}
+
+// bls12-381 Fq q = 384 in big endian
+message Fq{
+  uint64 e1 = 1;
+  uint64 e2 = 2;
+  uint64 e3 = 3;
+  uint64 e4 = 4;
+  uint64 e5 = 5;
+  uint64 e6 = 6;
+}
+
+// bls12-381 Fq2 q = 384 in big endian
+message Fq2{
+  Fq c1 = 1;
+  Fq c2 = 2;
+}
+
+// bls12-381 g1 affine in big endian
+message G1Affine{
+  Fq x = 1;
+  Fq y = 2;
+  bool infinity = 3;
+}
+
+// bls12-381 g2 affine in big endian
+message G2Affine{
+  Fq2 x = 1;
+  Fq2 y = 2;
+  bool infinity = 3;
+}

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/boltdb/bolt"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/zzz136454872/upgradeable-consensus/crypto"
 	"github.com/zzz136454872/upgradeable-consensus/types"
 	"log"
@@ -130,8 +131,9 @@ func (c *ChainReader) FindUnspentTransactions(address []byte) []*types.RawTx {
 	return unspentTxs
 }
 
-func (c *ChainReader) FindUTXO(address []byte) []types.TxOutput {
-	utxos := make([]types.TxOutput, 0)
+func (c *ChainReader) FindUTXO(address []byte) map[[crypto.Hashlen]byte][]types.TxOutput {
+	utxos := make(map[[crypto.Hashlen]byte][]types.TxOutput, 0)
+
 	//unspenttransactions := c.FindUnspentTransactions(address)
 	//
 	//for _, unspenttransaction := range unspenttransactions {
@@ -148,12 +150,16 @@ func (c *ChainReader) FindUTXO(address []byte) []types.TxOutput {
 		count := 0
 		for k, v := c.First(); k != nil; k, v = c.Next() {
 			outs := types.DecodeByte2Outputs(v)
-
+			canuse := make([]types.TxOutput, 0)
 			for _, out := range outs {
 				if out.IsLockedWithKey(address) {
-					utxos = append(utxos, out)
+					//utxos = append(utxos, out)
+					canuse = append(canuse, out)
 				}
 			}
+			txid := crypto.Convert(k)
+
+			utxos[txid] = canuse
 			count += 1
 		}
 		//fmt.Println(count)
@@ -172,7 +178,9 @@ func (c *ChainReader) GetBalance(address []byte) int64 {
 	utxos := c.FindUTXO(address)
 
 	for _, utxo := range utxos {
-		balance += utxo.Value
+		for _, output := range utxo {
+			balance += output.Value
+		}
 	}
 	return balance
 
@@ -388,8 +396,12 @@ func (c *ChainReader) UpdateTxForBlock(block *types.Block) error {
 				//fmt.Println(hexutil.Encode(output.Address), output.Value)
 				//fmt.Println(output.Address)
 				newouts = append(newouts, output)
+				if output.Value == 2000 {
+					fmt.Println(hexutil.Encode(rawTx.Txid[:]), output.Value)
+				}
 			}
 			err := b.Put(rawTx.Txid[:], newouts.EncodeTxOutputs2Byte())
+
 			if err != nil {
 				return err
 			}

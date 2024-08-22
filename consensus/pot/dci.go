@@ -63,85 +63,61 @@ func (w *Worker) VerifyDciReward(reward *DciReward) (bool, *types.ExecutedTx, er
 }
 
 func (w *Worker) SendDci(ctx context.Context, request *pb.SendDciRequest) (*pb.SendDciResponse, error) {
-
-	dcirewards := request.GetDciReward()
-
-	for _, pbdcireward := range dcirewards {
-
-		dciReward := ToDciReward(pbdcireward)
-		flag, tx, err := w.VerifyDciReward(dciReward)
-		if !flag {
-			return &pb.SendDciResponse{
-				IsSuccess: false,
-				Height:    0,
-			}, fmt.Errorf("the dci reward is not valid for %s", err.Error())
-		} else {
-			txdata := tx.Data
-			if len(txdata) < 98 {
-				return &pb.SendDciResponse{
-					IsSuccess: false,
-					Height:    0,
-				}, fmt.Errorf("the dci reward is not valid for %s", err.Error())
-			} else {
-				address := txdata[2:98]
-				//fmt.Println(hexutil.Encode(address))
-				dciReward.Address = address
-				w.mempool.AddDciReward(dciReward)
-			}
-		}
+	err := w.broadcastSendDciRequest(request)
+	if err != nil {
+		return &pb.SendDciResponse{IsSuccess: false}, err
 	}
-	return &pb.SendDciResponse{
-		IsSuccess: true,
-		Height:    w.getEpoch(),
-	}, nil
-
+	return w.handleSendDciRequest(request)
 }
 
 func (w *Worker) GetBalance(ctx context.Context, request *pb.GetBalanceRequest) (*pb.GetBalanceResponse, error) {
 
 	addr := request.GetAddress()
 	w.log.Errorf("get balance of %s", hexutil.Encode(addr))
-	amount := w.chainReader.GetBalance(addr)
+	//amount := w.chainReader.GetBalance(addr)
+	utxos := w.chainReader.FindUTXO(addr)
+	balance := int64(0)
+
+	pbutxos := make([]*pb.Utxo, 0)
+	//count := 0
+	for txid, utxo := range utxos {
+		txouts := make([]*pb.TxOutput, 0)
+		for _, output := range utxo {
+			txouts = append(txouts, output.ToProto())
+			balance += output.Value
+		}
+		if len(txouts) == 0 {
+			continue
+		}
+		id := make([]byte, 32)
+		copy(id, txid[:])
+		Utxo := &pb.Utxo{
+			Txid:      id,
+			TxOutputs: txouts,
+		}
+		//count += 1
+		//fmt.Println(hexutil.Encode(txid[:]))
+		//fmt.Println(hexutil.Encode(Utxo.GetTxid()))
+		pbutxos = append(pbutxos, Utxo)
+		//fmt.Println(hexutil.Encode(pbutxos[0].GetTxid()))
+	}
+	//fmt.Println(count)
+	//fmt.Println(hexutil.Encode(pbutxos[0].GetTxid()))
 
 	return &pb.GetBalanceResponse{
-		Address:   addr,
-		Balance:   amount,
-		TxOutputs: nil,
+		Address: addr,
+		Balance: balance,
+		Utxos:   pbutxos,
 	}, nil
 }
 
 func (w *Worker) DevastateDci(ctx context.Context, request *pb.DevastateDciRequest) (*pb.DevastateDciResponse, error) {
-
-	pbrawtx := request.GetTx()
-	tx := types.ToRawTx(pbrawtx)
-	if !tx.BasicVerify() {
-		return &pb.DevastateDciResponse{}, fmt.Errorf("tx is not valid")
-	} else {
-		addr := tx.TxInput[0].Address
-		outputs := w.chainReader.FindUTXO(addr)
-		for _, input := range tx.TxInput {
-			if !bytes.Equal(addr, input.Address) {
-				return &pb.DevastateDciResponse{}, fmt.Errorf("tx is not valid for address not the same")
-			}
-			flag := false
-			for i, output := range outputs {
-				if !output.CanBeUnlockWith(input.Address) {
-					continue
-				}
-				if input.Value == output.Value {
-					flag = true
-					outputs = append(outputs[:i], outputs[i+1:]...)
-					break
-				}
-			}
-			if !flag {
-				return &pb.DevastateDciResponse{}, fmt.Errorf("tx is not valid for not found spendable utxo")
-			}
-		}
-		w.mempool.AddRawTx(tx)
+	err := w.broadcastDevastateDciRequest(request)
+	if err != nil {
+		return &pb.DevastateDciResponse{Flag: false}, err
 	}
 
-	return &pb.DevastateDciResponse{}, nil
+	return w.handleDevastateDciRequest(request)
 }
 
 func (w *Worker) VerifyUTXO(ctx context.Context, request *pb.VerifyUTXORequest) (*pb.VerifyUTXOResponse, error) {
@@ -187,8 +163,115 @@ func (w *Worker) VerifyUTXO(ctx context.Context, request *pb.VerifyUTXORequest) 
 	return &pb.VerifyUTXOResponse{Flag: true}, nil
 }
 
-func (w *Worker) handleDevastateDciRequest() {
+func (w *Worker) handleSendDciRequest(request *pb.SendDciRequest) (*pb.SendDciResponse, error) {
+	dcirewards := request.GetDciReward()
 
+	for _, pbdcireward := range dcirewards {
+
+		dciReward := ToDciReward(pbdcireward)
+		flag, tx, err := w.VerifyDciReward(dciReward)
+		if !flag {
+			return &pb.SendDciResponse{
+				IsSuccess: false,
+				Height:    0,
+			}, fmt.Errorf("the dci reward is not valid for %s", err.Error())
+		} else {
+			txdata := tx.Data
+			if len(txdata) < 98 {
+				return &pb.SendDciResponse{
+					IsSuccess: false,
+					Height:    0,
+				}, fmt.Errorf("the dci reward is not valid for %s", err.Error())
+			} else {
+				address := txdata[2:98]
+				//fmt.Println(hexutil.Encode(address))
+				dciReward.Address = address
+				w.mempool.AddDciReward(dciReward)
+			}
+		}
+	}
+	return &pb.SendDciResponse{
+		IsSuccess: true,
+		Height:    w.getEpoch(),
+	}, nil
+}
+
+func (w *Worker) broadcastSendDciRequest(request *pb.SendDciRequest) error {
+	requestbytes, err := proto.Marshal(request)
+	if err != nil {
+		return err
+	}
+	message := &pb.PoTMessage{
+		MsgType: pb.MessageType_SendDci_Request,
+		MsgByte: requestbytes,
+	}
+	messageByte, err := proto.Marshal(message)
+	if err != nil {
+		return err
+	}
+	err = w.Engine.Broadcast(messageByte)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (w *Worker) handleDevastateDciRequest(request *pb.DevastateDciRequest) (*pb.DevastateDciResponse, error) {
+	pbrawtx := request.GetTx()
+	tx := types.ToRawTx(pbrawtx)
+	if !tx.BasicVerify() {
+		return &pb.DevastateDciResponse{Flag: false}, fmt.Errorf("tx is not valid")
+	} else {
+		addr := tx.TxInput[0].Address
+		outputsmap := w.chainReader.FindUTXO(addr)
+		for _, input := range tx.TxInput {
+			if !bytes.Equal(addr, input.Address) {
+				return &pb.DevastateDciResponse{Flag: false}, fmt.Errorf("tx is not valid for address not the same")
+			}
+			flag := false
+
+			txid := input.Txid
+			if outputs, ok := outputsmap[txid]; ok {
+				for i, output := range outputs {
+					if !output.CanBeUnlockWith(input.Address) {
+						continue
+					}
+					if input.Value == output.Value {
+						flag = true
+						outputs = append(outputs[:i], outputs[i+1:]...)
+						break
+					}
+				}
+			}
+			if !flag {
+				return &pb.DevastateDciResponse{Flag: false}, fmt.Errorf("tx is not valid for not found spendable utxo")
+			}
+		}
+		w.mempool.AddRawTx(tx)
+		w.mempool.rawmap[tx.Hash()] = request.GetTransaction()
+	}
+
+	return &pb.DevastateDciResponse{Flag: true}, nil
+}
+
+func (w *Worker) broadcastDevastateDciRequest(request *pb.DevastateDciRequest) error {
+	requestbytes, err := proto.Marshal(request)
+	if err != nil {
+		return err
+	}
+	message := &pb.PoTMessage{
+		MsgType: pb.MessageType_DevastateDci_Request,
+		MsgByte: requestbytes,
+	}
+	messageByte, err := proto.Marshal(message)
+	if err != nil {
+		return err
+	}
+	err = w.Engine.Broadcast(messageByte)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (w *Worker) GenerateCoinbaseTx(pubkeybyte []byte, vdf0res []byte, totalreward int64) *types.Tx {
@@ -287,6 +370,10 @@ func (w *Worker) GenerateCoinbaseTx(pubkeybyte []byte, vdf0res []byte, totalrewa
 		CoinbaseProofs: coinbaseproof,
 	}
 	tx.Txid = tx.Hash()
+
+	if len(txouts) == 2 {
+		fmt.Println(hexutil.Encode(tx.Txid[:]))
+	}
 
 	txdata, _ := tx.EncodeToByte()
 	return &types.Tx{Data: txdata}

@@ -289,10 +289,9 @@ func (s *BlockStorage) GetExcutedBlock(hash []byte) (*ExecutedBlock, error) {
 		b := tx.Bucket([]byte(ExecutedBucket))
 		blockbyte := b.Get(hash)
 		if blockbyte == nil {
-
 			return fmt.Errorf("get block error for block %s is not found", hexutil.Encode(hash))
 		}
-		fmt.Println(hexutil.Encode(blockbyte))
+		//fmt.Println(hexutil.Encode(blockbyte))
 		err := proto.Unmarshal(blockbyte, block)
 		if err != nil {
 			return err
@@ -319,11 +318,11 @@ func (s *BlockStorage) PutExcutedBlock(block *ExecutedBlock) error {
 		bucket := tx.Bucket([]byte(ExecutedBucket))
 		blockin := bucket.Get(blockhash[:])
 		if blockin != nil {
-			fmt.Println("error for not nil block")
+			//fmt.Println("error for not nil block")
 			return fmt.Errorf("already have block for hash %s", hexutil.Encode(blockhash[:]))
 		}
 		err = bucket.Put(blockhash[:], b)
-		fmt.Println(hexutil.Encode(blockhash[:]), hexutil.Encode(b))
+		//fmt.Println(hexutil.Encode(blockhash[:]), hexutil.Encode(b))
 		if err != nil {
 			return err
 		}

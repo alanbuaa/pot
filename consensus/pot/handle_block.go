@@ -86,7 +86,12 @@ func (w *Worker) handleBlock() {
 			} else if header.Height > epoch {
 				// vdf check
 				w.log.Infof("[PoT]\tepoch %d:Receive a epoch %d block %s from node %d", epoch, header.Height, hexutil.Encode(header.Hashes), header.Address)
-				go w.handleAdvancedBlock(epoch, block)
+				go func() {
+					err := w.handleAdvancedBlock(epoch, block)
+					if err != nil {
+						w.log.Errorf("[PoT]\tepoch %d:handle advanced block err for %s", epoch, err)
+					}
+				}()
 			}
 		}
 	}
@@ -191,7 +196,6 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 
 func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 	current := w.chainReader.GetCurrentBlock()
-
 	if epoch+100 < block.GetHeader().Height {
 		err := w.setVDF0epoch(block.GetHeader().Height - 1)
 		if err != nil {

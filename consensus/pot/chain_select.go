@@ -185,6 +185,13 @@ func (w *Worker) GetBranch(root, leaf *types.Block) ([]*types.Block, [][]*types.
 		i = parentBlock
 	}
 
+	for i := 0; i < len(root.GetHeader().UncleHash); i++ {
+		_, err := w.getUncleBlock(root)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
 	return mainbranch, ommerbranch, nil
 }
 
@@ -193,15 +200,32 @@ func (w *Worker) chainResetAdvanced(branch []*types.Block) error {
 	branchlen := len(branch)
 	branchstr := ""
 
+	_, err := w.GetExcutedTxsFromExecutor(w.epoch)
+	if err != nil {
+		return fmt.Errorf("chain reset advanced err for get executed txs from executor err %s", err.Error())
+	}
+
 	for i := branchlen - 1; i > 0; i-- {
+		block := branch[i]
+		height := block.GetHeader().Height
 
-		height := branch[i].GetHeader().Height
-
-		w.chainReader.SetHeight(height, branch[i])
+		w.chainReader.SetHeight(height, block)
 		branchstr = branchstr + "\t" + strconv.Itoa(int(height))
+
+		exeheaders := block.GetExecutedHeaders()
+		w.mempool.MarkProposedByHeader(exeheaders)
+
+		rawtxs := block.GetRawTx()
+		w.mempool.MarkRawTxProposed(rawtxs)
+
+		for _, rawtx := range rawtxs {
+			if rawtx.IsCoinBase() {
+				dciproof := rawtx.CoinbaseProofs
+				w.mempool.MarkDciRewardProposed(dciproof)
+			}
+		}
 	}
 	w.log.Infof("[PoT]\tepoch %d: the chain has been reset by branch %s", epoch, branchstr)
-
 	return nil
 }
 

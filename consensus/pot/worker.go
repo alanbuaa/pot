@@ -19,6 +19,7 @@ import (
 	"github.com/zzz136454872/upgradeable-consensus/types"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/protobuf/proto"
 	"math"
 	"math/big"
 	"math/rand"
@@ -63,18 +64,19 @@ type Worker struct {
 	epoch  uint64
 
 	// vdf work
-	timestamp     time.Time
-	vdf0          *types.VDF
-	vdf0Chan      chan *types.VDF0res
-	vdf1          []*types.VDF
-	vdf1Chan      chan *types.VDF0res
-	vdfChecker    *vdf.Vdf
-	abort         *Abortcontrol
-	wg            *sync.WaitGroup
-	workFlag      bool
-	blockKeyMap   map[[crypto.Hashlen]byte][]byte
-	executeheight uint64
-	mempool       *Mempool
+	timestamp      time.Time
+	vdf0           *types.VDF
+	vdf0Chan       chan *types.VDF0res
+	vdf1           []*types.VDF
+	vdf1Chan       chan *types.VDF0res
+	vdfChecker     *vdf.Vdf
+	abort          *Abortcontrol
+	wg             *sync.WaitGroup
+	workFlag       bool
+	blockKeyMap    map[[crypto.Hashlen]byte][]byte
+	executeheight  uint64
+	mempool        *Mempool
+	chainresetflag bool
 
 	// rand seed
 	rand         *rand.Rand
@@ -165,6 +167,7 @@ func NewWorker(id int64, config *config.ConsensusConfig, logger *logrus.Entry, b
 		Commitee:       Commitee,
 		CommiteeNum:    int32(1),
 		BackupCommitee: BackupCommitee,
+		chainresetflag: false,
 	}
 	rpcserver := grpc.NewServer()
 	pb.RegisterDciExectorServer(rpcserver, w)
@@ -374,10 +377,10 @@ func (w *Worker) mine(epoch uint64, vdf0res []byte, nonce int64, workerid int, a
 
 				nonce += 1
 				tmp.SetInt64(nonce)
-				noncebyte := tmp.Bytes()
-				input := bytes.Join([][]byte{noncebyte, vdf0res, mixdigest}, []byte(""))
-				hashinput := crypto.Hash(input)
-				w.vdf1[workerid] = types.NewVDFwithInput(w.vdf1Chan, hashinput, w.config.PoT.Vdf1Iteration, w.ID)
+				noncebyte2 := tmp.Bytes()
+				input2 := bytes.Join([][]byte{noncebyte2, vdf0res, mixdigest}, []byte(""))
+				hashinput2 := crypto.Hash(input2)
+				w.vdf1[workerid] = types.NewVDFwithInput(w.vdf1Chan, hashinput2, w.config.PoT.Vdf1Iteration, w.ID)
 
 				go func() {
 					w.log.Debugf("[PoT]\tepoch %d:Start run vdf1 %d to mine", epoch, workerid)
@@ -457,8 +460,16 @@ func (w *Worker) createBlock(epoch uint64, parentBlock *types.Block, uncleBlock 
 	//publicKeyBytes32 := crypto.Convert(publicKeyBytes)
 
 	coinbasetx := w.GenerateCoinbaseTx(publicKeyBytes, vdf0res, TotalReward)
-
 	Txs := []*types.Tx{coinbasetx}
+	rawtxs := w.mempool.GetRawTx()
+	for _, rawtx := range rawtxs {
+		fmt.Println(hexutil.Encode(rawtx.Txid[:]), 123456)
+		txbyte, err := rawtx.EncodeToByte()
+		if err != nil {
+			return nil
+		}
+		Txs = append(Txs, &types.Tx{Data: txbyte})
+	}
 	txshash := crypto.ComputeMerkleRoot(types.Txs2Bytes(Txs))
 	id := w.ID
 	peerid := w.PeerId
@@ -888,6 +899,7 @@ func (w *Worker) SetEngine(engine *PoTEngine) {
 
 func (w *Worker) handleBlockExecutedHeader(block *types.Block) error {
 	executedHeaders := block.GetExecutedHeaders()
+	fmt.Println("len of executed headers is :", len(executedHeaders))
 	for _, header := range executedHeaders {
 		hash := header.Hash()
 		exeblock := w.mempool.GetBlockByHash(hash)
@@ -900,6 +912,7 @@ func (w *Worker) handleBlockExecutedHeader(block *types.Block) error {
 		} else {
 			return fmt.Errorf("handle block excuted tx error for executedblock %s does not exist in mempool", hexutil.Encode(hash[:]))
 		}
+
 	}
 	w.mempool.MarkProposedByHeader(executedHeaders)
 	return nil
@@ -916,6 +929,9 @@ func (w *Worker) handleBlockRawTx(block *types.Block) error {
 		if tx.IsCoinBase() {
 			dciproofs := tx.CoinbaseProofs
 			w.mempool.MarkDciRewardProposed(dciproofs)
+			if len(tx.TxOutput) == 2 {
+				fmt.Println(hexutil.Encode(tx.Txid[:]), tx.TxOutput[1].Value)
+			}
 		}
 	}
 	err := w.chainReader.UpdateTxForBlock(block)
@@ -930,7 +946,27 @@ func (w *Worker) handleBlockRawTx(block *types.Block) error {
 		rawtxs := block.GetRawTx()
 		for _, tx := range rawtxs {
 			if !tx.IsCoinBase() {
-				types.UTXO2Transaction(tx)
+				txid := tx.Txid
+				transactionbyte, ok := w.mempool.rawmap[txid]
+				if !ok {
+					return fmt.Errorf("handle block raw tx error for tx %s does not exist in mempool", hexutil.Encode(txid[:]))
+				}
+				ptx := &pb.Transaction{
+					Type:    pb.TransactionType_NORMAL,
+					Payload: transactionbyte,
+				}
+
+				btx, err := proto.Marshal(ptx)
+				if err != nil {
+					return err
+				}
+
+				sharding := []byte(hexutil.EncodeUint64(1))
+				request := &pb.Request{
+					Tx:       btx,
+					Sharding: sharding,
+				}
+				w.Engine.UpperConsensus.GetRequestEntrance() <- request
 			}
 		}
 

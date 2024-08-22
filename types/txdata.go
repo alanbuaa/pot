@@ -3,6 +3,7 @@ package types
 import (
 	"bytes"
 	"encoding/gob"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/zzz136454872/upgradeable-consensus/crypto"
 	"github.com/zzz136454872/upgradeable-consensus/pb"
 	"google.golang.org/protobuf/proto"
@@ -423,11 +424,15 @@ func UTXO2Transaction(tx *RawTx) {
 	//	GasFeeCap:  nil,
 	//	Gas:        0,
 	//	To:         &transacto,
-	//	Value:      nil,
+	//	Value:      big.NewInt(2000),
 	//	Data:       nil,
 	//	AccessList: nil,
 	//	V:          nil,
 	//	R:          nil,
 	//	S:          nil,
 	//}
+}
+
+func Transaction2Bytes(tx *types.DynamicFeeTx) {
+
 }

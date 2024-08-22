@@ -1,0 +1,239 @@
+// Package mrpvss multi-round pvss
+package mrpvss
+
+import (
+	"errors"
+	"fmt"
+
+	dleq "github.com/zzz136454872/upgradeable-consensus/crypto/proof/dleq/bls12381"
+	. "github.com/zzz136454872/upgradeable-consensus/crypto/types/curve/bls12381"
+	poly "github.com/zzz136454872/upgradeable-consensus/crypto/types/poly/bls12381"
+)
+
+var group1 = NewG1()
+
+func EncShares(g *PointG1, h *PointG1, pubKeyList []*PointG1, secret *Fr, threshold uint32) (shareCommitments []*PointG1, coeffCommits []*PointG1, encShares []*EncShare, err error) {
+
+	if g == nil || h == nil || pubKeyList == nil || secret == nil {
+		return nil, nil, nil, errors.New("invalid params")
+	}
+	n := uint32(len(pubKeyList))
+	if n < threshold {
+		return nil, nil, nil, errors.New("threshold is higher than num of public keys")
+	}
+
+	// 生成秘密共享多项式 p, p(0) = secret
+	// secretPoly := poly.NewSecretPolynomial(threshold, secret)
+	secretPoly := poly.NewSimplePolynomial(threshold, secret)
+	// 计算系数承诺 C_i = h^(a_i)
+	coeffCommits = make([]*PointG1, threshold)
+	for i, coeff := range secretPoly.Coeffs {
+		coeffCommits[i] = group1.Affine(group1.MulScalar(group1.New(), h, coeff))
+	}
+	// 计算份额 s_i = p(i)
+	shares := make([]*Fr, n)
+	for i := uint32(0); i < n; i++ {
+		shares[i] = secretPoly.Eval(FrFromUInt32(i + 1))
+	}
+
+	encShares = make([]*EncShare, n)
+	// share commitment S_i = h^(s_i)
+	shareCommitments = make([]*PointG1, n)
+	for i := uint32(0); i < n; i++ {
+		index := i + 1
+		// share commitment S_i = h^(s_i)
+		shareCommitments[i] = group1.MulScalar(group1.New(), h, shares[i])
+
+		// 计算加密份额 (A_i, {B_ij})
+		// TODO proof of ciphertext form
+		A := group1.MulScalar(group1.New(), g, shares[i])
+		// (pk_i)^(s_i）
+		cipherTerm := group1.MulScalar(group1.New(), pubKeyList[i], shares[i])
+		BList := make([]*PointG1, 32)
+		// product of B_ij, for verification
+		BProd := group1.Zero()
+		// 拆分份额 s_i = Σ_(j=1,32) s_ij
+		shareBytes := shares[i].ToBytes()
+		fr256 := FrFromInt(256)
+		step := NewFr().One()
+		for j := 0; j < 32; j++ {
+			// calc share pieces s_ij slice * 2^8^(k-j)
+			sharePiece := NewFr().Mul(FrFromInt(int(shareBytes[31-j])), step)
+			step.Mul(step, fr256)
+			// 	B_ij = g^(s_ij) (pk_i)^(s_i）
+			BList[j] = group1.Add(group1.New(), group1.MulScalar(group1.New(), g, sharePiece), cipherTerm)
+			group1.Add(BProd, BProd, BList[j])
+		}
+		// 分发证明 log_(pk_i) Y_i = log_(h) S_i 证明分发的是 s_i
+		dleqParams := dleq.DLEQ{
+			Index: index,
+			G1:    h,
+			H1:    shareCommitments[i],
+			G2:    group1.Add(group1.New(), g, group1.MulScalar(group1.New(), pubKeyList[i], FrFromInt(32))),
+			H2:    BProd,
+		}
+		encShares[i] = &EncShare{
+			A:         A,
+			BList:     BList,
+			DealProof: dleqParams.Prove(shares[i]),
+		}
+	}
+	return shareCommitments, coeffCommits, encShares, nil
+}
+
+func VerifyEncShares(n uint32, t uint32, g, h *PointG1, pubKeyList []*PointG1, shareCommits []*PointG1, coeffCommits []*PointG1, encShares []*EncShare) bool {
+	// 计算 {S_i} \prod B_ij
+
+	BProdList := make([]*PointG1, n)
+	for i := uint32(0); i < n; i++ {
+		calcShareCommits := group1.Zero()
+		exponent := NewFr().One()
+		BProdList[i] = group1.Zero()
+		for j := uint32(0); j < t; j++ {
+			// S_i = Π_j∈[0,t-1] (X_j)^[(i)^j] = h^p(i), i∈[1,t]
+			group1.Add(calcShareCommits, calcShareCommits, group1.MulScalar(group1.New(), coeffCommits[j], exponent))
+			exponent.Mul(exponent, FrFromUInt32(i+1))
+		}
+		if !group1.Equal(calcShareCommits, shareCommits[i]) {
+			fmt.Println("failed to verify shareCommits")
+			return false
+		}
+		for j := 0; j < 32; j++ {
+			// \prod B_ij
+			group1.Add(BProdList[i], BProdList[i], encShares[i].BList[j])
+		}
+	}
+	// 验证加密份额 log_h S_i = log_(g · pk_i^k) \prod B_ij
+	for i := uint32(0); i < n; i++ {
+		base2 := group1.Add(group1.New(), g, group1.MulScalar(group1.New(), pubKeyList[i], FrFromInt(32)))
+		if !dleq.Verify(i+1, h, shareCommits[i], base2, BProdList[i], encShares[i].DealProof) {
+			return false
+		}
+	}
+	return true
+}
+
+func AggregateShareCommits(shareCommits []*PointG1) *PointG1 {
+	n := len(shareCommits)
+	aggrShareCommit := group1.Zero()
+	for i := 0; i < n; i++ {
+		group1.Add(aggrShareCommit, aggrShareCommit, shareCommits[i])
+	}
+	return aggrShareCommit
+}
+
+func AggregateEncShareList(encShares []*EncShare) *EncShare {
+	n := len(encShares)
+	aggrEncShare := &EncShare{
+		A:         group1.Zero(),
+		BList:     make([]*PointG1, 32),
+		DealProof: nil,
+	}
+	for j := 0; j < 32; j++ {
+		aggrEncShare.BList[j] = group1.Zero()
+	}
+	for i := 0; i < n; i++ {
+		group1.Add(aggrEncShare.A, aggrEncShare.A, encShares[i].A)
+		for j := 0; j < 32; j++ {
+			group1.Add(aggrEncShare.BList[j], aggrEncShare.BList[j], encShares[i].BList[j])
+		}
+	}
+	return aggrEncShare
+}
+
+func AggregateEncShares(prevAggrEncShares, encShares *EncShare) *EncShare {
+	group1.Add(prevAggrEncShares.A, prevAggrEncShares.A, encShares.A)
+	for j := 0; j < 32; j++ {
+		group1.Add(prevAggrEncShares.BList[j], prevAggrEncShares.BList[j], encShares.BList[j])
+	}
+	return prevAggrEncShares
+}
+
+func DecryptShare(g *PointG1, privKey *Fr, encShare *EncShare) *Fr {
+	// A_i^sk_i
+	denominator := group1.MulScalar(group1.New(), encShare.A, privKey)
+	// g^(s_ij)  = (B_ij)/(A_i^sk_i)
+	share := NewFr().Zero()
+	step := NewFr().One()
+	fr256 := FrFromInt(256)
+	for i := 0; i < 32; i++ {
+		point := group1.Sub(group1.New(), encShare.BList[i], denominator)
+		exponent, err := bruteForceFindExp(g, point, step, 256)
+		if err != nil {
+			return nil
+		}
+		share.Add(share, exponent)
+		step.Mul(step, fr256)
+	}
+	return share
+}
+
+func DecryptAggregateShare(g *PointG1, privKey *Fr, encShare *EncShare, m uint32) *Fr {
+	// A_i^sk_i
+	denominator := group1.MulScalar(group1.New(), encShare.A, privKey)
+	// g^(s_ij)  = (B_ij)/(A_i^sk_i)
+	share := NewFr().Zero()
+	step := NewFr().One()
+	fr256 := FrFromInt(256)
+	for i := 0; i < 32; i++ {
+		point := group1.Sub(group1.New(), encShare.BList[i], denominator)
+		exponent, err := bruteForceFindExp(g, point, step, 256*m)
+		if err != nil {
+			return nil
+		}
+		share.Add(share, exponent)
+		step.Mul(step, fr256)
+	}
+	return share
+}
+
+func CalcRoundShare(index uint32, h *PointG1, c *PointG1, shareCommit *PointG1, share *Fr) (*RoundShare, error) {
+	if c == nil || share == nil {
+		return nil, errors.New("invalid parameter")
+	}
+	roundShare := group1.Affine(group1.MulScalar(group1.New(), c, share))
+	dleqParams := dleq.DLEQ{
+		Index: index,
+		G1:    c,
+		H1:    roundShare,
+		G2:    h,
+		H2:    shareCommit,
+	}
+	return &RoundShare{
+		Share: roundShare,
+		Proof: dleqParams.Prove(share),
+	}, nil
+}
+
+func VerifyRoundShare(index uint32, h *PointG1, c *PointG1, shareCommit *PointG1, roundShare *RoundShare) bool {
+	// log_c c^(s_i) = log_(h) S_i
+	return dleq.Verify(index, c, roundShare.Share, h, shareCommit, roundShare.Proof)
+}
+
+func RecoverSecret(threshold uint32, roundShares []*PointG1) *PointG1 {
+	t := int(threshold)
+	if t > len(roundShares) {
+		return nil
+	}
+	secret := group1.Zero()
+	// numerator = t!
+	numerator := NewFr().One()
+	for i := uint32(1); i <= threshold; i++ {
+		numerator.Mul(numerator, FrFromUInt32(i))
+	}
+	// ∏_(i∈[1,t]) (c^(s_i))^(λ_i)
+	for i := 1; i <= t; i++ {
+		// λ_i = t! / i / [∏_(j∈[1,t],j≠i) (j - i)]
+		lagrangeBasis := NewFr().Mul(numerator, NewFr().Inverse(FrFromInt(i)))
+		denominator := NewFr().One()
+		for j := 1; j <= t; j++ {
+			if j != i {
+				denominator.Mul(denominator, FrFromInt(j-i))
+			}
+		}
+		lagrangeBasis.Mul(lagrangeBasis, NewFr().Inverse(denominator))
+		// ∏_(i∈[1,t]) rs^(λ_i) , rs = c^(s_i)
+		group1.Add(secret, secret, group1.MulScalar(group1.New(), roundShares[i-1], lagrangeBasis))
+	}
+	return group1.Affine(secret)
+}

@@ -78,13 +78,13 @@ func (w *Worker) GetPeerQueue() chan *types.Block {
 	return w.peerMsgQueue
 }
 
-func (w *Worker) CommitteeUpdate(epoch uint64) {
+func (w *Worker) CommitteeUpdate(height uint64) {
 
-	if epoch >= CommiteeDelay+Commiteelen {
+	if height >= CommiteeDelay+Commiteelen {
 		committee := make([]string, Commiteelen)
 		selfaddress := make([]string, 0)
 		for i := uint64(0); i < Commiteelen; i++ {
-			block, err := w.chainReader.GetByHeight(epoch - CommiteeDelay - i)
+			block, err := w.chainReader.GetByHeight(height - CommiteeDelay - i)
 			if err != nil {
 				return
 			}
@@ -144,7 +144,7 @@ func (w *Worker) CommitteeUpdate(epoch uint64) {
 
 		shardings := []simpleWhirly.PoTSharding{sharding1}
 		potsignal := &simpleWhirly.PoTSignal{
-			Epoch:             int64(epoch),
+			Epoch:             int64(height),
 			Proof:             make([]byte, 0),
 			ID:                0,
 			SelfPublicAddress: selfaddress,
@@ -178,16 +178,6 @@ func (w *Worker) CommitteeUpdate(epoch uint64) {
 }
 
 func (w *Worker) ImprovedCommitteeUpdate(epoch uint64, committeeNum int) {
-	backupcommitee, selfaddr := w.GetBackupCommitee(epoch)
-	commitee := w.ShuffleCommitee(epoch, backupcommitee, committeeNum)
-	for i := 0; i < committeeNum; i++ {
-		selfaddress := make([]string, 0)
-		for _, s := range commitee[i] {
-			if IsContain(selfaddr, s) {
-				selfaddress = append(selfaddress, s)
-			}
-		}
-	}
 
 }
 

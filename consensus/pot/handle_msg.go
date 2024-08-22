@@ -235,8 +235,34 @@ func (e *PoTEngine) handlePoTMsg(message *pb.PoTMessage) error {
 		if err != nil {
 			return err
 		}
+	case pb.MessageType_SendDci_Request:
+		bytes := message.GetMsgByte()
+		request := new(pb.SendDciRequest)
+		err := proto.Unmarshal(bytes, request)
+		if err != nil {
+			return err
+		}
+		_, err = e.worker.handleSendDciRequest(request)
+		e.log.Error("[Engine]Get send dci request")
+		if err != nil {
+			return err
+		}
+	case pb.MessageType_DevastateDci_Request:
+		bytes := message.GetMsgByte()
+		request := new(pb.DevastateDciRequest)
+		err := proto.Unmarshal(bytes, request)
+		if err != nil {
+			return err
+		}
+		_, err = e.worker.handleDevastateDciRequest(request)
+		if err != nil {
+			return err
+		}
+		e.log.Error("[Engine]Get Devastate dci request")
+		if err != nil {
+			return err
+		}
 	}
-
 	return nil
 }
 

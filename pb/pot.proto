@@ -10,6 +10,8 @@ enum MessageType{
   PoT_Request = 3;
   PoT_Response = 4;
   PoT_Proof = 5;
+  SendDci_Request = 6;
+  DevastateDci_Request = 7;
 }
 message Block {
   Header Header = 1;
@@ -222,13 +224,19 @@ message GetBalanceRequest{
 message GetBalanceResponse{
   bytes Address = 1;
   int64 Balance = 2;
-  repeated TxOutput TxOutputs= 3;
+  repeated Utxo Utxos= 3;
+}
+
+message Utxo{
+  bytes Txid = 1;
+  repeated TxOutput TxOutputs = 2;
 }
 
 message DevastateDciRequest{
     int64 Amount = 1;
     RawTxData Tx = 2;
     bytes To = 3;
+    bytes transaction = 4;
 }
 
 message DevastateDciResponse{
