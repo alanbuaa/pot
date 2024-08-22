@@ -20,3 +20,6 @@ vdftest
 difficulty
 transfertime
 __debug_bin*
+remote2
+senddci
+getbalance
