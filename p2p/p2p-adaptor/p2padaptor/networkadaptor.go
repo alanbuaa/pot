@@ -5,7 +5,7 @@ import (
 	"errors"
 	net "network"
 
-	pubsub "github.com/DXPlus/go-libp2p-pubsub-abci"
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
 )
 
 var (

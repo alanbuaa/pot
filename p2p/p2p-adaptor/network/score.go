@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
-	pubsub "github.com/DXPlus/go-libp2p-pubsub-abci"
 	logging "github.com/ipfs/go-log"
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
 )
 
