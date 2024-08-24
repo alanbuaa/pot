@@ -26,6 +26,7 @@ enum TransactionType{
   UPGRADE = 1;
   TIMEVOTE = 2;
   LOCK = 3;
+  CENSORSHIP_RESISTANT = 4;
 }
 
 message Transaction {

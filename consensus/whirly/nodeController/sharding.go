@@ -1,4 +1,4 @@
-package simpleWhirly
+package nodeController
 
 import (
 	"fmt"
@@ -7,6 +7,8 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/zzz136454872/upgradeable-consensus/config"
 	"github.com/zzz136454872/upgradeable-consensus/consensus/model"
+	"github.com/zzz136454872/upgradeable-consensus/consensus/whirly/crWhirly"
+	"github.com/zzz136454872/upgradeable-consensus/consensus/whirly/simpleWhirly"
 	"github.com/zzz136454872/upgradeable-consensus/pb"
 	"github.com/zzz136454872/upgradeable-consensus/types"
 	"github.com/zzz136454872/upgradeable-consensus/utils"
@@ -329,7 +331,7 @@ func (s *Sharding) createConsensusNode(address string) model.Consensus {
 		case "simple":
 			s.active += 1
 			s.controller.total += 1
-			c = NewSimpleWhirly(
+			c = simpleWhirly.NewSimpleWhirly(
 				int64(s.controller.total),
 				s.SubConsensus.ConsensusID,
 				s.epoch,
@@ -341,6 +343,20 @@ func (s *Sharding) createConsensusNode(address string) model.Consensus {
 				s.controller.StopEntrance,
 			)
 			s.Nodes[address] = c
+		case "censorship-resistance":
+			s.active += 1
+			s.controller.total += 1
+			c = crWhirly.NewCrWhirly(
+				int64(s.controller.total),
+				s.SubConsensus.ConsensusID,
+				s.epoch,
+				s.controller.Config,
+				s,
+				s,
+				s.controller.Log,
+				address,
+				s.controller.StopEntrance,
+			)
 		default:
 			s.controller.Log.Warnf("whirly type not supported: %s", s.SubConsensus.Whirly.Type)
 		}

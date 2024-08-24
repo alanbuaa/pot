@@ -1,4 +1,4 @@
-package simpleWhirly
+package crWhirly
 
 import (
 	"strconv"
@@ -45,8 +45,8 @@ type LatestBlockRequestMechanism struct {
 	requestLock  sync.Mutex
 }
 
-// func (sw *SimpleWhirlyImpl) RequestLatestBlock(potSignal *PoTSignal, sharding *Sharding) {
-func (sw *SimpleWhirlyImpl) RequestLatestBlock(epoch int64, proof []byte, committee []string) {
+// func (sw *CrWhirlyImpl) RequestLatestBlock(potSignal *PoTSignal, sharding *Sharding) {
+func (sw *CrWhirlyImpl) RequestLatestBlock(epoch int64, proof []byte, committee []string) {
 
 	sw.latestBlockReq.requestLock.Lock()
 	if epoch <= sw.latestBlockReq.requestEpoch {
@@ -78,7 +78,7 @@ func (sw *SimpleWhirlyImpl) RequestLatestBlock(epoch int64, proof []byte, commit
 	}
 }
 
-func (sw *SimpleWhirlyImpl) UpdateCommittee(committee []string, weight int) {
+func (sw *CrWhirlyImpl) UpdateCommittee(committee []string, weight int) {
 
 	_, _, address := DecodeAddress(sw.PublicAddress)
 	if address != DaemonNodePublicAddress {
@@ -92,7 +92,7 @@ func (sw *SimpleWhirlyImpl) UpdateCommittee(committee []string, weight int) {
 	sw.Committee = committee
 }
 
-func (sw *SimpleWhirlyImpl) SleepNode() {
+func (sw *CrWhirlyImpl) SleepNode() {
 	sw.Log.WithFields(logrus.Fields{
 		"address": sw.PublicAddress,
 	}).Info("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] sleep node tirgger!")
@@ -105,11 +105,11 @@ func (sw *SimpleWhirlyImpl) SleepNode() {
 
 }
 
-func (sw *SimpleWhirlyImpl) VerifyPoTProof(epoch int64, leader int64, proof []byte) bool {
+func (sw *CrWhirlyImpl) VerifyPoTProof(epoch int64, leader int64, proof []byte) bool {
 	return true
 }
 
-func (sw *SimpleWhirlyImpl) OnReceiveLatestBlockRequest(newLeaderMsg *pb.LatestBlockRequest) {
+func (sw *CrWhirlyImpl) OnReceiveLatestBlockRequest(newLeaderMsg *pb.LatestBlockRequest) {
 	epoch := int64(newLeaderMsg.Epoch)
 	leader := int64(newLeaderMsg.Leader)
 	publicAddress := newLeaderMsg.PublicAddress
@@ -184,7 +184,7 @@ func (sw *SimpleWhirlyImpl) OnReceiveLatestBlockRequest(newLeaderMsg *pb.LatestB
 
 }
 
-func (sw *SimpleWhirlyImpl) OnReceiveLatestBlockEcho(msg *pb.WhirlyMsg) {
+func (sw *CrWhirlyImpl) OnReceiveLatestBlockEcho(msg *pb.WhirlyMsg) {
 	echoMsg := msg.GetLatestBlockEcho()
 	senderAdress := echoMsg.PublicAddress
 
@@ -239,7 +239,7 @@ func (sw *SimpleWhirlyImpl) OnReceiveLatestBlockEcho(msg *pb.WhirlyMsg) {
 	sw.latestBlockReq.curEchoLock.Unlock()
 }
 
-// func (sw *SimpleWhirlyImpl) testNewLeader() {
+// func (sw *CrWhirlyImpl) testNewLeader() {
 // 	for i := 1; i < 100; i++ {
 // 		time.Sleep(time.Second * 8)
 // 		potSignal := &PoTSignal{}
@@ -257,7 +257,7 @@ func (sw *SimpleWhirlyImpl) OnReceiveLatestBlockEcho(msg *pb.WhirlyMsg) {
 // 	}
 // }
 
-// func (sw *SimpleWhirlyImpl) testNewLeader2() {
+// func (sw *CrWhirlyImpl) testNewLeader2() {
 // 	for i := 1; i < 100; i++ {
 // 		time.Sleep(time.Second * 5)
 // 		potSignal := &PoTSignal{}

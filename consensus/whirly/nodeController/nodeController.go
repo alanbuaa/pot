@@ -1,4 +1,4 @@
-package simpleWhirly
+package nodeController
 
 import (
 	"context"
