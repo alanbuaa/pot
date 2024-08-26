@@ -2,10 +2,9 @@ package mrpvss
 
 import (
 	"fmt"
+	. "github.com/zzz136454872/upgradeable-consensus/crypto/types/curve/bls12381"
 	"math/big"
 	"testing"
-
-	. "github.com/zzz136454872/upgradeable-consensus/crypto/types/curve/bls12381"
 )
 
 func TestSplitFr(t *testing.T) {
@@ -71,7 +70,7 @@ func TestMRPVSS(t *testing.T) {
 		pubKeyList[i] = group1.Affine(group1.MulScalar(group1.New(), g, random))
 	}
 	// 分发份额
-	shareCommitments, coeffCommits, encShares, err := EncShares(g, h, pubKeyList, s, threshold)
+	shareCommitments, coeffCommits, encShares, _, err := EncShares(g, h, pubKeyList, s, threshold)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -157,7 +156,7 @@ func TestDPVSS(t *testing.T) {
 	for k := 0; k < m; k++ {
 		// 分发份额
 		var err error
-		shareCommitmentsList[k], coeffCommitsList[k], encsharesList[k], err = EncShares(g, h, pubKeyList, sList[k], threshold)
+		shareCommitmentsList[k], coeffCommitsList[k], encsharesList[k], _, err = EncShares(g, h, pubKeyList, sList[k], threshold)
 		if err != nil {
 			fmt.Println(err)
 			return

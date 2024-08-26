@@ -2,7 +2,6 @@ package mrpvss
 
 import (
 	"errors"
-
 	. "github.com/zzz136454872/upgradeable-consensus/crypto/types/curve/bls12381"
 )
 

@@ -22,18 +22,6 @@ const (
 	ChainID3Rate = 0.4
 )
 
-func (w *Worker) GenerateDciSendTx() {
-
-}
-
-func (w *Worker) ReceiveDCITx() {
-
-}
-
-func (w *Worker) VerifyDCITx() bool {
-	return true
-}
-
 func (w *Worker) VerifyDciReward(reward *DciReward) (bool, *types.ExecutedTx, error) {
 	//return true
 	//address := reward.Address
@@ -44,7 +32,6 @@ func (w *Worker) VerifyDciReward(reward *DciReward) (bool, *types.ExecutedTx, er
 	if exeheight > w.executeheight {
 		return false, nil, fmt.Errorf("height is beyond execute height")
 	}
-
 	exeblock, err := w.blockStorage.GetExcutedBlock(proof.BlockHash)
 	if err != nil {
 		return false, nil, err
@@ -80,30 +67,36 @@ func (w *Worker) GetBalance(ctx context.Context, request *pb.GetBalanceRequest) 
 
 	pbutxos := make([]*pb.Utxo, 0)
 	//count := 0
-	for txid, utxo := range utxos {
-		txouts := make([]*pb.TxOutput, 0)
-		for _, output := range utxo {
-			txouts = append(txouts, output.ToProto())
-			balance += output.Value
+	for utxokey, utxo := range utxos {
+		//txouts := make([]*pb.TxOutput, 0)
+		//for _, output := range utxo {
+		//	txouts = append(txouts, output.ToProto())
+		//	balance += output.Value
+		//}
+		//if len(txouts) == 0 {
+		//	continue
+		//}
+		//id := make([]byte, 32)
+		//copy(id, txid[:])
+		//Utxo := &pb.Utxo{
+		//	Txid:      id,
+		//	TxOutputs: txouts,
+		//}
+		//pbutxos = append(pbutxos, Utxo)
+		var txid [32]byte
+		var voutput int64
+		_, err := fmt.Sscanf(utxokey, "%s:%d", &txid, &voutput)
+		if err != nil {
+			return &pb.GetBalanceResponse{Balance: 0, Address: addr}, err
 		}
-		if len(txouts) == 0 {
-			continue
-		}
-		id := make([]byte, 32)
-		copy(id, txid[:])
-		Utxo := &pb.Utxo{
-			Txid:      id,
-			TxOutputs: txouts,
-		}
-		//count += 1
-		//fmt.Println(hexutil.Encode(txid[:]))
-		//fmt.Println(hexutil.Encode(Utxo.GetTxid()))
-		pbutxos = append(pbutxos, Utxo)
-		//fmt.Println(hexutil.Encode(pbutxos[0].GetTxid()))
-	}
-	//fmt.Println(count)
-	//fmt.Println(hexutil.Encode(pbutxos[0].GetTxid()))
 
+		Utxo := &pb.Utxo{
+			Txid:     txid[:],
+			Voutput:  voutput,
+			TxOutput: utxo.ToProto(),
+		}
+		pbutxos = append(pbutxos, Utxo)
+	}
 	return &pb.GetBalanceResponse{
 		Address: addr,
 		Balance: balance,
@@ -224,28 +217,54 @@ func (w *Worker) handleDevastateDciRequest(request *pb.DevastateDciRequest) (*pb
 	} else {
 		addr := tx.TxInput[0].Address
 		outputsmap := w.chainReader.FindUTXO(addr)
+		//for _, input := range tx.TxInput {
+		//	if !bytes.Equal(addr, input.Address) {
+		//		return &pb.DevastateDciResponse{Flag: false}, fmt.Errorf("tx is not valid for address not the same")
+		//	}
+		//	flag := false
+		//
+		//	txid := input.Txid
+		//	if outputs, ok := outputsmap[txid]; ok {
+		//		for i, output := range outputs {
+		//			if !output.CanBeUnlockWith(input.Address) {
+		//				continue
+		//			}
+		//			if input.Value == output.Value {
+		//				flag = true
+		//				outputs = append(outputs[:i], outputs[i+1:]...)
+		//				break
+		//			}
+		//		}
+		//	}
+		//	if !flag {
+		//		return &pb.DevastateDciResponse{Flag: false}, fmt.Errorf("tx is not valid for not found spendable utxo")
+		//	}
+		//}
+		amount := int64(0)
 		for _, input := range tx.TxInput {
 			if !bytes.Equal(addr, input.Address) {
 				return &pb.DevastateDciResponse{Flag: false}, fmt.Errorf("tx is not valid for address not the same")
 			}
-			flag := false
-
 			txid := input.Txid
-			if outputs, ok := outputsmap[txid]; ok {
-				for i, output := range outputs {
-					if !output.CanBeUnlockWith(input.Address) {
-						continue
-					}
-					if input.Value == output.Value {
-						flag = true
-						outputs = append(outputs[:i], outputs[i+1:]...)
-						break
-					}
+			voutput := input.Voutput
+
+			utxokey := fmt.Sprintf("%s:%d", txid, voutput)
+			if outputs, ok := outputsmap[utxokey]; ok {
+				if !outputs.CanBeUnlockWith(input.Address) {
+					return &pb.DevastateDciResponse{Flag: false}, fmt.Errorf("tx input cannot unlock corresponding utxo")
 				}
+				if input.Value != outputs.Value {
+					return &pb.DevastateDciResponse{Flag: false}, fmt.Errorf("tx input value is not equal to corresponding utxo value")
+				}
+				amount += input.Value
+				delete(outputsmap, utxokey)
 			}
-			if !flag {
-				return &pb.DevastateDciResponse{Flag: false}, fmt.Errorf("tx is not valid for not found spendable utxo")
-			}
+		}
+		if len(tx.TxOutput) != 1 {
+			return &pb.DevastateDciResponse{Flag: false}, fmt.Errorf("wrong tx output len")
+		}
+		if tx.TxOutput[0].Value != amount {
+			return &pb.DevastateDciResponse{Flag: false}, fmt.Errorf("tx output value is not equal to tx input value")
 		}
 		w.mempool.AddRawTx(tx)
 		w.mempool.rawmap[tx.Hash()] = request.GetTransaction()
@@ -300,6 +319,7 @@ func (w *Worker) GenerateCoinbaseTx(pubkeybyte []byte, vdf0res []byte, totalrewa
 		IsSpent:  false,
 		ScriptPk: nil,
 		Proof:    nil,
+		LockTime: 144,
 	}
 	txouts = append(txouts, minerout)
 
@@ -357,6 +377,7 @@ func (w *Worker) GenerateCoinbaseTx(pubkeybyte []byte, vdf0res []byte, totalrewa
 					IsSpent:  false,
 					ScriptPk: nil,
 					Proof:    nil,
+					LockTime: 144,
 				}
 				txouts = append(txouts, txout)
 			}

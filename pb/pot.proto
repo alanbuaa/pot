@@ -122,11 +122,12 @@ message TxInput{
 }
 
 message TxOutput{
-  bytes Address   = 1;
-  int64 Value     = 2;
-  bool  IsSpent   = 3;
-  bytes ScriptPk  = 4;
-  int32 ChainID   = 5;
+  bytes Address    = 1;
+  int64 Value      = 2;
+  bool  IsSpent    = 3;
+  bytes ScriptPk   = 4;
+  int32 ChainID    = 5;
+  uint64 LockTime   = 6;
 }
 
 
@@ -229,7 +230,8 @@ message GetBalanceResponse{
 
 message Utxo{
   bytes Txid = 1;
-  repeated TxOutput TxOutputs = 2;
+  int64 Voutput = 2;
+  TxOutput TxOutput = 3;
 }
 
 message DevastateDciRequest{

@@ -154,10 +154,10 @@ func TestSRS_ToBinaryFile(t *testing.T) {
 }
 
 func TestSRS_FromBinaryFile(t *testing.T) {
-	s := SRS{}
+	s := &SRS{}
 
 	startTime := time.Now()
-	err := s.FromBinaryFile()
+	s, err := FromBinaryFile()
 	if err != nil {
 		fmt.Println(err)
 	}

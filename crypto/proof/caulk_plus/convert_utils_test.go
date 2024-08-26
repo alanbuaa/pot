@@ -3,10 +3,9 @@ package caulk_plus
 import (
 	"crypto/rand"
 	"fmt"
-	"testing"
-
 	"github.com/zzz136454872/upgradeable-consensus/crypto/pb"
 	"github.com/zzz136454872/upgradeable-consensus/crypto/types/curve/bls12381"
+	"testing"
 )
 
 func TestConvertBetweenFrAndProtoFr(t *testing.T) {

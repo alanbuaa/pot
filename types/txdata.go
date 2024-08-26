@@ -185,6 +185,7 @@ type TxOutput struct {
 	IsSpent  bool
 	ScriptPk []byte
 	Proof    []byte
+	LockTime uint64
 }
 
 type CoinbaseProof struct {
@@ -297,6 +298,8 @@ func ToTxOutput(output *pb.TxOutput) TxOutput {
 		Value:    output.GetValue(),
 		IsSpent:  output.GetIsSpent(),
 		ScriptPk: output.GetScriptPk(),
+		//Proof:    output.GetProof(),
+		LockTime: output.GetLockTime(),
 	}
 }
 
@@ -306,7 +309,26 @@ func (o TxOutput) ToProto() *pb.TxOutput {
 		Value:    o.Value,
 		IsSpent:  o.IsSpent,
 		ScriptPk: o.ScriptPk,
+		LockTime: o.LockTime,
 	}
+}
+
+func (o TxOutput) EncodeToByte() []byte {
+	pboutput := o.ToProto()
+	pboutputbyte, err := proto.Marshal(pboutput)
+	if err != nil {
+		return nil
+	}
+	return pboutputbyte
+}
+
+func DecodeByteToTxOutput(data []byte) TxOutput {
+	pboutput := new(pb.TxOutput)
+	err := proto.Unmarshal(data, pboutput)
+	if err != nil {
+		return TxOutput{}
+	}
+	return ToTxOutput(pboutput)
 }
 
 func ToCoinbaseProof(Proof *pb.CoinbaseProof) CoinbaseProof {

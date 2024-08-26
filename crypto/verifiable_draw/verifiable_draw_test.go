@@ -3,12 +3,11 @@ package verifiable_draw
 import (
 	"crypto/rand"
 	"fmt"
-	"testing"
-	"time"
-
 	. "github.com/zzz136454872/upgradeable-consensus/crypto/types/curve/bls12381"
 	"github.com/zzz136454872/upgradeable-consensus/crypto/types/srs"
 	"github.com/zzz136454872/upgradeable-consensus/crypto/utils"
+	"testing"
+	"time"
 )
 
 func TestDraw(t *testing.T) {
@@ -73,7 +72,7 @@ func TestDraw(t *testing.T) {
 
 	fmt.Println("start verify draw proof")
 	start = time.Now()
-	res := Verify(s, candidatesNum, publicKeys, quota, drawProof)
+	res := Verify(s, candidatesNum, publicKeys, quota, group1.One(), drawProof)
 	fmt.Println("verify draw proof time:", time.Since(start))
 	fmt.Println("verify draw proof:", res)
 

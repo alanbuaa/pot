@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/boltdb/bolt"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/zzz136454872/upgradeable-consensus/crypto"
 	"github.com/zzz136454872/upgradeable-consensus/types"
 	"log"
@@ -14,20 +13,26 @@ import (
 /*
 ChainReader is used to store chain state for the pot chain
 */
+type LocalTxOutput struct {
+	types.TxOutput
+	confirmHeight uint64
+}
 
 type ChainReader struct {
-	storage *types.BlockStorage
-	chain   map[uint64]*types.Block
-	height  uint64
-	sync    *sync.RWMutex
+	storage    *types.BlockStorage
+	chain      map[uint64]*types.Block
+	unlockUtxo map[uint64]map[string]*types.TxOutput
+	height     uint64
+	sync       *sync.RWMutex
 }
 
 func NewChainReader(storage *types.BlockStorage) *ChainReader {
 	c := &ChainReader{
-		storage: storage,
-		chain:   make(map[uint64]*types.Block),
-		height:  0,
-		sync:    new(sync.RWMutex),
+		storage:    storage,
+		chain:      make(map[uint64]*types.Block),
+		unlockUtxo: make(map[uint64]map[string]*types.TxOutput),
+		height:     0,
+		sync:       new(sync.RWMutex),
 	}
 	c.chain[0] = types.DefaultGenesisBlock()
 	return c
@@ -131,8 +136,8 @@ func (c *ChainReader) FindUnspentTransactions(address []byte) []*types.RawTx {
 	return unspentTxs
 }
 
-func (c *ChainReader) FindUTXO(address []byte) map[[crypto.Hashlen]byte][]types.TxOutput {
-	utxos := make(map[[crypto.Hashlen]byte][]types.TxOutput, 0)
+func (c *ChainReader) FindUTXO(address []byte) map[string]types.TxOutput {
+	utxos := make(map[string]types.TxOutput)
 
 	//unspenttransactions := c.FindUnspentTransactions(address)
 	//
@@ -146,21 +151,26 @@ func (c *ChainReader) FindUTXO(address []byte) map[[crypto.Hashlen]byte][]types.
 	db := c.GetBoltDb()
 	err := db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(types.UTXOBucket))
-		c := b.Cursor()
-		count := 0
-		for k, v := c.First(); k != nil; k, v = c.Next() {
-			outs := types.DecodeByte2Outputs(v)
-			canuse := make([]types.TxOutput, 0)
-			for _, out := range outs {
-				if out.IsLockedWithKey(address) {
-					//utxos = append(utxos, out)
-					canuse = append(canuse, out)
-				}
-			}
-			txid := crypto.Convert(k)
+		cursor := b.Cursor()
 
-			utxos[txid] = canuse
-			count += 1
+		for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
+			//outs := types.DecodeByte2Outputs(v)
+			//canuse := make([]types.TxOutput, 0)
+			//for _, out := range outs {
+			//	if out.IsLockedWithKey(address) {
+			//		//utxos = append(utxos, out)
+			//		canuse = append(canuse, out)
+			//	}
+			//}
+			//txid := crypto.Convert(k)
+			//
+			//utxos[txid] = canuse
+
+			outs := types.DecodeByteToTxOutput(v)
+			if outs.IsLockedWithKey(address) {
+				utxokey := string(k)
+				utxos[utxokey] = outs
+			}
 		}
 		//fmt.Println(count)
 		return nil
@@ -177,10 +187,11 @@ func (c *ChainReader) GetBalance(address []byte) int64 {
 
 	utxos := c.FindUTXO(address)
 
-	for _, utxo := range utxos {
-		for _, output := range utxo {
-			balance += output.Value
-		}
+	for _, out := range utxos {
+		//for _, output := range utxo {
+		//	balance += output.Value
+		//}
+		balance += out.Value
 	}
 	return balance
 
@@ -304,47 +315,105 @@ func (c *ChainReader) ResetTxForBlock(block *types.Block) error {
 	err := db.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(types.UTXOBucket))
 
-		for _, tx := range txs {
+		for _, rawTx := range txs {
 
-			err := b.Delete(tx.Txid[:])
-			if err != nil {
-				return err
-			}
+			//err := b.Delete(rawTx.Txid[:])
+			//if err != nil {
+			//	return err
+			//}
+			//
+			//if !rawTx.IsCoinBase() {
+			//	for _, input := range rawTx.TxInput {
+			//		updateOut := types.TxOutputs{}
+			//		txid := input.Txid
+			//		height := block.Header.Height
+			//		for height >= 0 {
+			//			heighttxs := block.GetRawTx()
+			//			for _, heighttx := range heighttxs {
+			//				if txid == heighttx.Txid {
+			//					out := heighttx.TxOutput[input.Voutput]
+			//					updateOut = append(updateOut, out)
+			//					break
+			//				}
+			//			}
+			//		}
+			//		outsBytes := b.Get(input.Txid[:])
+			//		outs := types.DecodeByte2Outputs(outsBytes)
+			//		for _, out := range outs {
+			//			updateOut = append(updateOut, out)
+			//		}
+			//		if len(updateOut) == 0 {
+			//			err := b.Delete(input.Txid[:])
+			//			if err != nil {
+			//				return err
+			//			}
+			//		} else {
+			//			err := b.Put(input.Txid[:], updateOut.EncodeTxOutputs2Byte())
+			//			if err != nil {
+			//				return err
+			//			}
+			//		}
+			//	}
+			//}
+			for i, output := range rawTx.TxOutput {
+				utxokey := fmt.Sprintf("%s:%d", rawTx.Txid, i)
+				lockheight := block.GetHeader().Height + output.LockTime
+				if _, exist := c.unlockUtxo[lockheight][utxokey]; exist {
+					delete(c.unlockUtxo[lockheight], utxokey)
+					if len(c.unlockUtxo[lockheight]) == 0 {
+						delete(c.unlockUtxo, lockheight)
+					}
+					continue
+				}
 
-			if !tx.IsCoinBase() {
-				for _, input := range tx.TxInput {
-					updateOut := types.TxOutputs{}
-					txid := input.Txid
-					height := block.Header.Height
-					for height >= 0 {
-						heighttxs := block.GetRawTx()
-						for _, heighttx := range heighttxs {
-							if txid == heighttx.Txid {
-								out := heighttx.TxOutput[input.Voutput]
-								updateOut = append(updateOut, out)
-								break
-							}
-						}
-					}
-					outsBytes := b.Get(input.Txid[:])
-					outs := types.DecodeByte2Outputs(outsBytes)
-					for _, out := range outs {
-						updateOut = append(updateOut, out)
-					}
-					if len(updateOut) == 0 {
-						err := b.Delete(input.Txid[:])
-						if err != nil {
-							return err
-						}
-					} else {
-						err := b.Put(input.Txid[:], updateOut.EncodeTxOutputs2Byte())
-						if err != nil {
-							return err
-						}
+				outputbyte := b.Get([]byte(utxokey))
+				if outputbyte != nil {
+					err := b.Delete([]byte(utxokey))
+					if err != nil {
+						return err
 					}
 				}
 			}
-
+			if rawTx.IsCoinBase() == false {
+				for _, input := range rawTx.TxInput {
+					txid := input.Txid
+					voutput := input.Voutput
+					height := block.GetHeader().Height - 1
+					findflag := false
+					for height >= 0 && !findflag {
+						currBlock, err := c.GetByHeight(height)
+						if err != nil {
+							return err
+						}
+						rawTxes := currBlock.GetRawTx()
+						for _, t := range rawTxes {
+							if txid == t.Txid {
+								if len(t.TxOutput) < int(voutput) {
+									return fmt.Errorf("reset block for could not find tx output")
+								}
+								out := t.TxOutput[voutput]
+								utxokey := fmt.Sprintf("%s:%d", txid, voutput)
+								if block.GetHeader().Height >= height+out.LockTime {
+									err = b.Put([]byte(utxokey), out.EncodeToByte())
+									if err != nil {
+										return err
+									}
+								} else {
+									if _, exist := c.unlockUtxo[height+out.LockTime][utxokey]; !exist {
+										c.unlockUtxo[height+out.LockTime][utxokey] = &out
+									}
+								}
+								findflag = true
+								break
+							}
+						}
+						height--
+					}
+					if !findflag {
+						return fmt.Errorf("reset block for could not find corresponding tx output to txinput")
+					}
+				}
+			}
 		}
 
 		return nil
@@ -360,110 +429,86 @@ func (c *ChainReader) ResetTxForBlock(block *types.Block) error {
 func (c *ChainReader) UpdateTxForBlock(block *types.Block) error {
 	db := c.GetBoltDb()
 	txs := block.GetRawTx()
+	height := block.GetHeader().Height
 
 	err := db.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(types.UTXOBucket))
 		for _, rawTx := range txs {
 			if rawTx.IsCoinBase() == false {
 				for _, input := range rawTx.TxInput {
-					var updateOuts types.TxOutputs
-					outsBytes := b.Get(input.Txid[:])
-					outs := types.DecodeByte2Outputs(outsBytes)
+					//var updateOuts types.TxOutputs
+					//outsBytes := b.Get(input.Txid[:])
+					//outs := types.DecodeByte2Outputs(outsBytes)
+					//
+					//for i, out := range outs {
+					//	if int64(i) != input.Voutput {
+					//		updateOuts = append(updateOuts, out)
+					//	}
+					//}
+					//
+					//if len(updateOuts) == 0 {
+					//	err := b.Delete(input.Txid[:])
+					//	if err != nil {
+					//		return err
+					//	}
+					//} else {
+					//	err := b.Put(input.Txid[:], updateOuts.EncodeTxOutputs2Byte())
+					//	if err != nil {
+					//		return err
+					//	}
+					//}
 
-					for i, out := range outs {
-						if int64(i) != input.Voutput {
-							updateOuts = append(updateOuts, out)
-						}
+					utxokey := fmt.Sprintf("%s:%d", input.Txid, input.Voutput)
+					outsBytes := b.Get([]byte(utxokey))
+					if outsBytes == nil {
+						return fmt.Errorf("update tx error for can't find corresponding utxo ")
 					}
-
-					if len(updateOuts) == 0 {
-						err := b.Delete(input.Txid[:])
-						if err != nil {
-							return err
-						}
-					} else {
-						err := b.Put(input.Txid[:], updateOuts.EncodeTxOutputs2Byte())
-						if err != nil {
-							return err
-						}
+					err := b.Delete([]byte(utxokey))
+					if err != nil {
+						return err
 					}
-
 				}
 			}
-			newouts := make(types.TxOutputs, 0)
-
-			for _, output := range rawTx.TxOutput {
-				//fmt.Println(hexutil.Encode(output.Address), output.Value)
-				//fmt.Println(output.Address)
-				newouts = append(newouts, output)
-				if output.Value == 2000 {
-					fmt.Println(hexutil.Encode(rawTx.Txid[:]), output.Value)
+			//newouts := make(types.TxOutputs, 0)
+			//
+			//for _, output := range rawTx.TxOutput {
+			//	//fmt.Println(hexutil.Encode(output.Address), output.Value)
+			//	//fmt.Println(output.Address)
+			//	newouts = append(newouts, output)
+			//	//if output.Value == 2000 {
+			//	//	fmt.Println(hexutil.Encode(rawTx.Txid[:]), output.Value)
+			//	//}
+			//}
+			//err := b.Put(rawTx.Txid[:], newouts.EncodeTxOutputs2Byte())
+			//if err != nil {
+			//	return err
+			//}
+			for i, output := range rawTx.TxOutput {
+				utxokey := fmt.Sprintf("%s:%d", rawTx.Txid, i)
+				lockheight := height + output.LockTime
+				c.sync.Lock()
+				if _, exist := c.unlockUtxo[lockheight]; !exist {
+					c.unlockUtxo[lockheight] = make(map[string]*types.TxOutput)
 				}
-			}
-			err := b.Put(rawTx.Txid[:], newouts.EncodeTxOutputs2Byte())
-
-			if err != nil {
-				return err
+				c.unlockUtxo[lockheight][utxokey] = &output
+				c.sync.Unlock()
 			}
 		}
+		c.sync.Lock()
+		if pendingUtxos, exist := c.unlockUtxo[block.Header.Height]; exist {
+			for s, output := range pendingUtxos {
+				err := b.Put([]byte(s), output.EncodeToByte())
+				if err != nil {
+					return err
+				}
+			}
+		}
+		delete(c.unlockUtxo, block.Header.Height)
+		c.sync.Unlock()
 		return nil
 	})
 	if err != nil {
 		return err
 	}
 	return nil
-}
-
-func (c *ChainReader) UpdateBlock(block *types.Block) error {
-	txs := block.GetRawTx()
-	db := c.GetBoltDb()
-	err := db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(types.UTXOBucket))
-		for _, tx := range txs {
-			if tx.IsCoinBase() == false {
-				for _, input := range tx.TxInput {
-					updateOut := types.TxOutputs{}
-					outsBytes := b.Get(input.Txid[:])
-
-					outs := types.DecodeByte2Outputs(outsBytes)
-
-					for i, out := range outs {
-						if int64(i) != input.Voutput {
-							updateOut = append(updateOut, out)
-						}
-					}
-
-					if len(updateOut) == 0 {
-						err := b.Delete(input.Txid[:])
-						if err != nil {
-							return err
-						}
-					} else {
-						err := b.Put(input.Txid[:], updateOut.EncodeTxOutputs2Byte())
-						if err != nil {
-							return err
-						}
-					}
-				}
-			}
-
-			newoutputs := types.TxOutputs{}
-			for _, output := range tx.TxOutput {
-				newoutputs = append(newoutputs, output)
-			}
-
-			err := b.Put(tx.Txid[:], newoutputs.EncodeTxOutputs2Byte())
-			if err != nil {
-				return err
-			}
-
-		}
-
-		return nil
-	})
-	if err != nil {
-		return err
-	} else {
-		return nil
-	}
 }

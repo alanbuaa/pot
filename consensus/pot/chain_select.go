@@ -284,3 +284,10 @@ func (w *Worker) isBehindHeight(height uint64, block *types.Block) bool {
 	}
 	return true
 }
+
+func (w *Worker) SetChainSelectFlagFalse() {
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
+
+	w.chainresetflag = false
+}

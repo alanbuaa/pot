@@ -1,15 +1,19 @@
 package verifiable_draw
 
 import (
+	"bytes"
 	"crypto/rand"
+	"encoding/binary"
 	"fmt"
 	"github.com/zzz136454872/upgradeable-consensus/crypto/pb"
 	"github.com/zzz136454872/upgradeable-consensus/crypto/proof/caulk_plus"
+	dleq "github.com/zzz136454872/upgradeable-consensus/crypto/proof/dleq/bls12381"
 	kzg_ped_linkability "github.com/zzz136454872/upgradeable-consensus/crypto/proof/kzg_ped_linkability/kzg_vector"
 	schnorr_proof "github.com/zzz136454872/upgradeable-consensus/crypto/proof/schnorr_proof/bls12381"
 	. "github.com/zzz136454872/upgradeable-consensus/crypto/types/curve/bls12381"
 	"github.com/zzz136454872/upgradeable-consensus/crypto/types/srs"
 	"github.com/zzz136454872/upgradeable-consensus/crypto/utils"
+	"google.golang.org/protobuf/proto"
 )
 
 var (
@@ -17,18 +21,164 @@ var (
 )
 
 type DrawProof struct {
-	// prevRCommit^r
-	RCommit         *PointG1
+	RCommit         *PointG1    // prevRCommit^r
+	DLEQProof       *dleq.Proof // DLEQ(prevRCommit RCommit, D' C')
 	SelectedPubKeys []*PointG1
 	B               *Fr
 	DBlind          *PointG1
-	// kzg commitment of {a_i}
-	ACommit *PointG1
-	// kzg commitment of {θ_i}
-	VCommit        *PointG1
-	CaulkPlusProof *pb.MultiProof
-	SchnorrProof   *schnorr_proof.SchnorrProof
-	LnkProof       *kzg_ped_linkability.VectorLinkProof
+	ACommit         *PointG1 // kzg commitment of {a_i}
+	VCommit         *PointG1 // kzg commitment of {θ_i}
+	CaulkPlusProof  *pb.MultiProof
+	SchnorrProof    *schnorr_proof.SchnorrProof
+	LnkProof        *kzg_ped_linkability.VectorLinkProof
+}
+
+func (d *DrawProof) ToBytes() ([]byte, error) {
+	uint32Bytes := make([]byte, 4)
+	uint64Bytes := make([]byte, 8)
+	buffer := bytes.Buffer{}
+	// RCommit
+	buffer.Write(group1.ToCompressed(d.RCommit))
+	// DLEQProof
+	buffer.Write(d.DLEQProof.ToBytes())
+	// SelectedPubKeys Size
+	binary.BigEndian.PutUint32(uint32Bytes, uint32(len(d.SelectedPubKeys)))
+	buffer.Write(uint32Bytes)
+	// SelectedPubKeys
+	for _, p := range d.SelectedPubKeys {
+		buffer.Write(group1.ToCompressed(p))
+	}
+	// B
+	buffer.Write(d.B.ToBytes())
+	// DBlind
+	buffer.Write(group1.ToCompressed(d.DBlind))
+	// ACommit
+	buffer.Write(group1.ToCompressed(d.ACommit))
+	// VCommit
+	buffer.Write(group1.ToCompressed(d.VCommit))
+	// CaulkPlusProof
+	caulkPlusProofData, err := proto.Marshal(d.CaulkPlusProof)
+	if err != nil {
+		return nil, err
+	}
+	binary.BigEndian.PutUint64(uint64Bytes, uint64(len(caulkPlusProofData)))
+	buffer.Write(uint64Bytes)
+	buffer.Write(caulkPlusProofData)
+	// SchnorrProof
+	buffer.Write(d.SchnorrProof.ToBytes())
+	// LnkProof
+	buffer.Write(d.LnkProof.ToBytes())
+	return buffer.Bytes(), nil
+}
+
+func (d *DrawProof) FromBytes(data []byte) (*DrawProof, error) {
+	pointG1Buf := make([]byte, 48)
+	frBuf := make([]byte, 32)
+	DLEQBuf := make([]byte, 128)
+	uint32Buf := make([]byte, 4)
+	uint64Buf := make([]byte, 8)
+	SchnorrBuf := make([]byte, 128)
+	buffer := bytes.NewBuffer(data)
+	// RCommit
+	_, err := buffer.Read(pointG1Buf)
+	if err != nil {
+		return nil, err
+	}
+	d.RCommit, err = group1.FromCompressed(pointG1Buf)
+	if err != nil {
+		return nil, err
+	}
+	// DLEQProof
+	_, err = buffer.Read(DLEQBuf)
+	if err != nil {
+		return nil, err
+	}
+	d.DLEQProof, err = new(dleq.Proof).FromBytes(DLEQBuf)
+	if err != nil {
+		return nil, err
+	}
+	// SelectedPubKeys Size
+	_, err = buffer.Read(uint32Buf)
+	if err != nil {
+		return nil, err
+	}
+	SelectedPubKeysSize := binary.BigEndian.Uint32(uint32Buf)
+	// SelectedPubKeys
+	SelectedPubKeys := make([]*PointG1, SelectedPubKeysSize)
+	for i := uint32(0); i < SelectedPubKeysSize; i++ {
+		_, err = buffer.Read(pointG1Buf)
+		if err != nil {
+			return nil, err
+		}
+		SelectedPubKeys[i], err = group1.FromCompressed(pointG1Buf)
+		if err != nil {
+			return nil, err
+		}
+	}
+	// B
+	_, err = buffer.Read(frBuf)
+	if err != nil {
+		return nil, err
+	}
+	d.B = NewFr().FromBytes(frBuf)
+	//	DBlind
+	_, err = buffer.Read(pointG1Buf)
+	if err != nil {
+		return nil, err
+	}
+	d.DBlind, err = group1.FromCompressed(pointG1Buf)
+	if err != nil {
+		return nil, err
+	}
+	//	ACommit
+	_, err = buffer.Read(pointG1Buf)
+	if err != nil {
+		return nil, err
+	}
+	d.ACommit, err = group1.FromCompressed(pointG1Buf)
+	if err != nil {
+		return nil, err
+	}
+	//	VCommit
+	_, err = buffer.Read(pointG1Buf)
+	if err != nil {
+		return nil, err
+	}
+	d.VCommit, err = group1.FromCompressed(pointG1Buf)
+	if err != nil {
+		return nil, err
+	}
+	//	CaulkPlusProof *pb.MultiProof
+	_, err = buffer.Read(uint32Buf)
+	if err != nil {
+		return nil, err
+	}
+	CaulkPlusProofSize := binary.BigEndian.Uint64(uint64Buf)
+	CaulkPlusProofBuf := make([]byte, CaulkPlusProofSize)
+	_, err = buffer.Read(CaulkPlusProofBuf)
+	if err != nil {
+		return nil, err
+	}
+	d.CaulkPlusProof = new(pb.MultiProof)
+	err = proto.Unmarshal(CaulkPlusProofBuf, d.CaulkPlusProof)
+	if err != nil {
+		return nil, err
+	}
+	//	SchnorrProof   *schnorr_proof.SchnorrProof
+	_, err = buffer.Read(SchnorrBuf)
+	if err != nil {
+		return nil, err
+	}
+	d.SchnorrProof, err = new(schnorr_proof.SchnorrProof).FromBytes(SchnorrBuf)
+	if err != nil {
+		return nil, err
+	}
+	//	LnkProof       *kzg_ped_linkability.VectorLinkProof
+	d.LnkProof, err = new(kzg_ped_linkability.VectorLinkProof).FromBytes(buffer.Bytes())
+	if err != nil {
+		return nil, err
+	}
+	return d, nil
 }
 
 func Draw(s *srs.SRS, candidatesNum uint32, candidatesPubKey []*PointG1, quota uint32, secretVector []uint32, prevRCommit *PointG1) (*DrawProof, error) {
@@ -84,7 +234,7 @@ func Draw(s *srs.SRS, candidatesNum uint32, candidatesPubKey []*PointG1, quota u
 	b := NewFr()
 	for {
 		_, err = b.Rand(rand.Reader)
-		if err != nil || !NewFr().Mul(b, r).IsOne() {
+		if err == nil && !NewFr().Mul(b, r).IsOne() {
 			break
 		}
 	}
@@ -122,9 +272,20 @@ func Draw(s *srs.SRS, candidatesNum uint32, candidatesPubKey []*PointG1, quota u
 		return nil, err
 	}
 
+	rCommit := group1.MulScalar(group1.New(), prevRCommit, r)
+	// DLEQ(prevRCommit RCommit, D' C')
+	dleqInput := dleq.DLEQ{
+		Index: 0,
+		G1:    prevRCommit,
+		H1:    rCommit,
+		G2:    DBlind,
+		H2:    CBlind,
+	}
+	dleqInput.Prove(r)
 	return &DrawProof{
-		RCommit: group1.MulScalar(group1.New(), prevRCommit, r),
-		// TODO DLEQ(prevRCommit RCommit, D' C')
+		RCommit: rCommit,
+		// DLEQ(prevRCommit RCommit, D' C')
+		DLEQProof:       dleqInput.Prove(r),
 		SelectedPubKeys: selectedPubKeys,
 		B:               B,
 		DBlind:          DBlind,
@@ -136,7 +297,7 @@ func Draw(s *srs.SRS, candidatesNum uint32, candidatesPubKey []*PointG1, quota u
 	}, nil
 }
 
-func Verify(s *srs.SRS, candidatesNum uint32, candidatesPubKey []*PointG1, quota uint32, drawProof *DrawProof) bool {
+func Verify(s *srs.SRS, candidatesNum uint32, candidatesPubKey []*PointG1, quota uint32, prevRCommit *PointG1, drawProof *DrawProof) bool {
 	if quota != uint32(len(drawProof.SelectedPubKeys)) {
 		return false
 	}
@@ -183,6 +344,12 @@ func Verify(s *srs.SRS, candidatesNum uint32, candidatesPubKey []*PointG1, quota
 	if !schnorr_proof.Verify(drawProof.DBlind, CBlind, drawProof.SchnorrProof) {
 		return false
 	}
+
+	// verify DLEQ(prevRCommit RCommit, D' C')
+	if !dleq.Verify(0, prevRCommit, drawProof.RCommit, drawProof.DBlind, CBlind, drawProof.DLEQProof) {
+		return false
+	}
+
 	return kzg_ped_linkability.VerifyProof(s, candidatesPubKey, h, drawProof.LnkProof)
 }
 

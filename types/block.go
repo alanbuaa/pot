@@ -4,6 +4,11 @@ import (
 	"bytes"
 	"crypto/rand"
 	"fmt"
+	schnorr_proof "github.com/zzz136454872/upgradeable-consensus/crypto/proof/schnorr_proof/bls12381"
+	mrpvss "github.com/zzz136454872/upgradeable-consensus/crypto/share/mrpvss/bls12381"
+	"github.com/zzz136454872/upgradeable-consensus/crypto/types/curve/bls12381"
+	"github.com/zzz136454872/upgradeable-consensus/crypto/types/srs"
+	"github.com/zzz136454872/upgradeable-consensus/crypto/verifiable_draw"
 	"math/big"
 	"time"
 
@@ -17,6 +22,19 @@ type ConsensusBlock interface {
 	GetTxs() [][]byte
 	GetShardingName() []byte
 	protoreflect.ProtoMessage
+}
+type CryptoSet struct {
+	SRS            *srs.SRS
+	SrsUpdateProof *schnorr_proof.SchnorrProof // SRS更新证明
+	// 置换阶段
+	ShuffleProof *verifiable_draw.DrawProof // 公钥列表置换证明（包含置换输出的公钥列表）
+	// 抽签阶段
+	DrawProof *verifiable_draw.DrawProof // 抽签证明（包含抽签输出的公钥列表）
+	// DPVSS阶段
+	PVSSPKLists      [][]*bls12381.PointG1 // 多个PVSS参与者公钥列表
+	ShareCommitLists [][]*bls12381.PointG1 // 多个PVSS份额承诺列表
+	CoeffCommitLists [][]*bls12381.PointG1 // 多个PVSS系数承诺列表
+	EncShareLists    [][]*mrpvss.EncShare  // 多个PVSS加密份额列表
 }
 
 type Header struct {
@@ -34,6 +52,7 @@ type Header struct {
 	ExeHash    []byte
 	Hashes     []byte
 	PublicKey  []byte
+	CryptoSet  CryptoSet
 }
 
 type Block struct {
@@ -68,26 +87,6 @@ func (b *Block) GetTxs() []*Tx {
 
 func (b *Block) ToProto() *pb.Block {
 	pbheader := b.GetHeader().ToProto()
-	//headerbytes, _ := proto.Marshal(pbheader)
-	//fmt.Printf("header len %\nf", float64(len(headerbytes))/float64(1024))
-	//if b.Txs != nil {
-	//	txs := make([]*pb.Tx, len(b.Txs))
-	//	for i := 0; i < len(b.Txs); i++ {
-	//		txs[i] = b.Txs[i].ToProto()
-	//	}
-	//	pbblock := &pb.Block{
-	//		Header: pbheader,
-	//		Txs:    txs,
-	//	}
-	//	return pbblock
-	//} else {
-	//	pbblock := &pb.Block{
-	//		Header: pbheader,
-	//		Txs:    make([]*pb.Tx, 0),
-	//	}
-	//	return pbblock
-	//}
-
 	pbtxs := make([]*pb.Tx, 0)
 	for _, tx := range b.Txs {
 		pbtxs = append(pbtxs, tx.ToProto())

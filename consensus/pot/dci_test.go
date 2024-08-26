@@ -3,6 +3,8 @@ package pot
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/zzz136454872/upgradeable-consensus/crypto"
 	"github.com/zzz136454872/upgradeable-consensus/types"
 	"golang.org/x/exp/rand"
@@ -169,4 +171,59 @@ func TestBytesEqual(t *testing.T) {
 	}
 	t.Log(first == second.Txid)
 	t.Log(bytes.Equal(first[:], second.Txid[:]))
+}
+
+func TestUTXO(t *testing.T) {
+
+	// 测试数据实例
+	//var testData = []*types.TxOutput{
+	//	{
+	//		Address:  []byte("address1"),
+	//		Value:    1000,
+	//		IsSpent:  false,
+	//		ScriptPk: []byte("script1"),
+	//		Proof:    []byte("proof1"),
+	//		LockTime: time.Now().Unix(),
+	//	},
+	//	//{
+	//	//	Address:  []byte("address2"),
+	//	//	Value:    2000,
+	//	//	IsSpent:  true,
+	//	//	ScriptPk: []byte("script2"),
+	//	//	Proof:    []byte("proof2"),
+	//	//	LockTime: time.Now().Add(time.Hour * 24).Unix(), // 锁定时间为当前时间加上一天
+	//	//},
+	//	//{
+	//	//	Address:  []byte("address3"),
+	//	//	Value:    3000,
+	//	//	IsSpent:  false,
+	//	//	ScriptPk: []byte("script3"),
+	//	//	Proof:    []byte("proof3"),
+	//	//	LockTime: time.Now().Add(time.Hour * 48).Unix(), // 锁定时间为当前时间加上两天
+	//	//},
+	//	//{
+	//	//	Address:  []byte("address4"),
+	//	//	Value:    4000,
+	//	//	IsSpent:  true,
+	//	//	ScriptPk: []byte("script4"),
+	//	//	Proof:    []byte("proof4"),
+	//	//	LockTime: time.Now().Add(time.Hour * 72).Unix(), // 锁定时间为当前时间加上三天
+	//	//},
+	//	//{
+	//	//	Address:  []byte("address5"),
+	//	//	Value:    5000,
+	//	//	IsSpent:  false,
+	//	//	ScriptPk: []byte("script5"),
+	//	//	Proof:    []byte("proof5"),
+	//	//	LockTime: time.Now().Add(time.Hour * 96).Unix(), // 锁定时间为当前时间加上四天
+	//	//},
+	//}
+	//testData[0] = &types.TxOutput{}
+	s := fmt.Sprintf("%s:2", crypto.Convert(types.RandByte()))
+	b := []byte(s)
+	t.Log(hexutil.Encode(b))
+	//t.Log(len(testData))
+	t.Log(s)
+	t.Log(string(b))
+
 }

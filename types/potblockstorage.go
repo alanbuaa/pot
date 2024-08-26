@@ -308,7 +308,7 @@ func (s *BlockStorage) GetExcutedBlock(hash []byte) (*ExecutedBlock, error) {
 
 func (s *BlockStorage) PutExcutedBlock(block *ExecutedBlock) error {
 	pbblock := block.ToProto()
-	fmt.Println("put block of height: ", pbblock.GetHeader().GetHeight())
+	//fmt.Println("put block of height: ", pbblock.GetHeader().GetHeight())
 	b, err := proto.Marshal(pbblock)
 	if err != nil {
 		return err

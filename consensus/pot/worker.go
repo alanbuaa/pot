@@ -41,6 +41,8 @@ const (
 	TotalReward        = 10000
 	BackupCommiteeSize = 64
 	ConfirmDelay       = 6
+	CandidateKeyLen    = 32 // 候选公钥列表大小
+	Commitees          = 4  // 委员会大小
 )
 
 type Abortcontrol struct {
@@ -104,6 +106,7 @@ type Worker struct {
 	Shardings      []Sharding
 	BackupCommitee []string
 	SelfAddress    []string
+	Cryptoset      *CryptoSet
 	//committee     *orderedmap.OrderedMap
 }
 
@@ -204,7 +207,7 @@ func (w *Worker) Work() {
 	}
 }
 func (w *Worker) WaitandReset(res *types.VDF0res) {
-	time.Sleep(5 * time.Second)
+	time.Sleep(10 * time.Second)
 	w.vdf0Chan <- res
 }
 
@@ -232,7 +235,7 @@ func (w *Worker) OnGetVdf0Response() {
 			//time.Sleep(time.Duration(timestop) * time.Millisecond)
 			//
 			//timer = time.Since(w.timestamp) / time.Millisecond
-			//w.log.Infof("[PoT]\tepoch %d:Receive epoch %d vdf0 res %s, use %d ms\n", epoch, res.Epoch, hexutil.Encode(crypto.Hash(res.Res)), timer)
+			//w.log.Infof("[PoT]\tepoch %d:Receive epoch %d vdf0 res %s, use %d ms\Commitees", epoch, res.Epoch, hexutil.Encode(crypto.Hash(res.Res)), timer)
 
 			flag, err := w.CheckParentBlockEnough(epoch)
 
@@ -241,6 +244,10 @@ func (w *Worker) OnGetVdf0Response() {
 				go w.WaitandReset(res)
 				continue
 			}
+			// the last epoch is over
+			// epoch increase
+			res0 := res.Res
+			w.SetVdf0res(res.Epoch+1, res0)
 
 			if w.IsVDF1Working() {
 				w.abort.once.Do(func() {
@@ -251,11 +258,6 @@ func (w *Worker) OnGetVdf0Response() {
 				w.wg.Wait()
 				w.log.Debugf("[PoT]\tepoch %d:the miner got abort for get in new epoch", epoch+1)
 			}
-
-			// the last epoch is over
-			// epoch increase
-			res0 := res.Res
-			w.SetVdf0res(res.Epoch+1, res0)
 
 			// calculate the next epoch vdf
 			inputHash := crypto.Hash(res0)
@@ -291,7 +293,7 @@ func (w *Worker) OnGetVdf0Response() {
 			parentblock, uncleblock := w.blockSelection(backupblock, res0, epoch)
 
 			if parentblock != nil {
-				w.log.Infof("[PoT]\tepoch %d:parent block hash is : %s Difficulty %d from %s", epoch+1, hex.EncodeToString(parentblock.Hash()), parentblock.GetHeader().Difficulty.Int64(), hexutil.Encode(parentblock.GetHeader().PublicKey))
+				w.log.Infof("[PoT]\tepoch %d:parent block hash is : %s Difficulty %d from %d", epoch+1, hex.EncodeToString(parentblock.Hash()), parentblock.GetHeader().Difficulty.Int64(), parentblock.GetHeader().Address)
 			} else {
 				if len(backupblock) != 0 {
 					w.chainReader.SetHeight(epoch, backupblock[0])
@@ -899,13 +901,13 @@ func (w *Worker) SetEngine(engine *PoTEngine) {
 
 func (w *Worker) handleBlockExecutedHeader(block *types.Block) error {
 	executedHeaders := block.GetExecutedHeaders()
-	fmt.Println("len of executed headers is :", len(executedHeaders))
+	//fmt.Println("len of executed headers is :", len(executedHeaders))
 	for _, header := range executedHeaders {
 		hash := header.Hash()
 		exeblock := w.mempool.GetBlockByHash(hash)
 		if exeblock != nil {
 			err := w.blockStorage.PutExcutedBlock(exeblock)
-			w.log.Error("the exe block height ", exeblock.Header.Height)
+			//w.log.Error("the exe block height ", exeblock.Header.Height)
 			if err != nil {
 				return err
 			}

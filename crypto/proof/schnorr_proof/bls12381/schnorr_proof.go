@@ -1,8 +1,8 @@
 package schnorr_proof
 
 import (
+	"bytes"
 	"crypto/rand"
-
 	. "github.com/zzz136454872/upgradeable-consensus/crypto/types/curve/bls12381"
 )
 
@@ -15,6 +15,38 @@ type SchnorrProof struct {
 	T *PointG1
 	// response s = r + cx mod q
 	Response *Fr
+}
+
+func (p *SchnorrProof) ToBytes() []byte {
+	buffer := bytes.Buffer{}
+	buffer.Write(group1.ToCompressed(p.T))
+	buffer.Write(p.Response.ToBytes())
+	return buffer.Bytes()
+}
+func (p *SchnorrProof) FromBytes(data []byte) (*SchnorrProof, error) {
+	pointG1Buf := make([]byte, 48)
+	frBuf := make([]byte, 32)
+	buffer := bytes.Buffer{}
+	buffer.Write(data)
+
+	_, err := buffer.Read(pointG1Buf)
+	if err != nil {
+		return nil, err
+	}
+	T, err := group1.FromCompressed(pointG1Buf)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = buffer.Read(frBuf)
+	if err != nil {
+		return nil, err
+	}
+	R := NewFr().FromBytes(frBuf)
+	return &SchnorrProof{
+		T:        T,
+		Response: R,
+	}, nil
 }
 
 // CreateWitness base point g ,product point h = ^x

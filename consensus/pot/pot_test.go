@@ -37,7 +37,7 @@ func normalizePartitions(data []Data) map[int][]Data {
 	return partitions
 }
 
-// Sort and randomly select n records from each partition
+// Sort and randomly select Commitees records from each partition
 func selectRecords(partitions map[int][]Data, n int) map[int][]Data {
 	selectedRecords := make(map[int][]Data)
 
@@ -47,7 +47,7 @@ func selectRecords(partitions map[int][]Data, n int) map[int][]Data {
 			return records[i].Address < records[j].Address
 		})
 
-		// Shuffle the sorted records to randomly select n records
+		// Shuffle the sorted records to randomly select Commitees records
 
 		rand.Shuffle(len(records), func(i, j int) {
 			records[i], records[j] = records[j], records[i]
@@ -76,7 +76,7 @@ func TestPotShuffle(t *testing.T) {
 	// Normalize amounts within each partition
 	partitions := normalizePartitions(data)
 
-	// Select n records from each partition
+	// Select Commitees records from each partition
 	n := 1
 	selectedRecords := selectRecords(partitions, n)
 

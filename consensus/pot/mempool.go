@@ -153,7 +153,7 @@ func (c *Mempool) RemoveALl() {
 	}
 }
 
-// GetFirstN return the top n unused commands from the list
+// GetFirstN return the top Commitees unused commands from the list
 func (c *Mempool) GetFirstN(n int) []*types.ExecutedBlock {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()

@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"log"
 
 	"io"
@@ -102,7 +103,7 @@ func (uca *UnicastAdapter) SendUnicast(address string, msgByte []byte, consensus
 	// Whether the address is a peer.id string?
 	peerID, err := peer.Decode(address)
 	if err != nil {
-		return errors.New("decode peerid error, it is not a peerid string")
+		return fmt.Errorf("decode peerid error, %s is not a peerid string", address)
 	}
 
 	// Whether to connect with this peer?

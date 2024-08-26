@@ -1,12 +1,13 @@
 package kzg_ped_linkability
 
 import (
+	"bytes"
 	"crypto/rand"
+	"encoding/binary"
 	"errors"
-
 	. "github.com/zzz136454872/upgradeable-consensus/crypto/types/curve/bls12381"
 	roots_of_unity "github.com/zzz136454872/upgradeable-consensus/crypto/types/domain/bls12_381"
-	poly "github.com/zzz136454872/upgradeable-consensus/crypto/types/poly/bls12381"
+	"github.com/zzz136454872/upgradeable-consensus/crypto/types/poly/bls12381"
 	"github.com/zzz136454872/upgradeable-consensus/crypto/types/srs"
 )
 
@@ -21,6 +22,87 @@ type VectorLinkProof struct {
 	AHat      *PointG1
 	ZVector   []*Fr
 	Omega     *Fr
+}
+
+func (v *VectorLinkProof) ToBytes() []byte {
+	buffer := new(bytes.Buffer)
+	buffer.Write(group1.ToCompressed(v.KZGCommit))
+	buffer.Write(group1.ToCompressed(v.PedCommit))
+	buffer.Write(group1.ToCompressed(v.A))
+	buffer.Write(group1.ToCompressed(v.AHat))
+	intBytes := make([]byte, 4)
+	binary.BigEndian.PutUint32(intBytes, uint32(len(v.ZVector)))
+	buffer.Write(intBytes)
+	for _, z := range v.ZVector {
+		buffer.Write(z.ToBytes())
+	}
+	buffer.Write(v.Omega.ToBytes())
+	return buffer.Bytes()
+}
+
+func (v *VectorLinkProof) FromBytes(data []byte) (*VectorLinkProof, error) {
+	pointG1Buf := make([]byte, 48)
+	frBuf := make([]byte, 32)
+	uint32Buf := make([]byte, 4)
+	buffer := bytes.NewBuffer(data)
+	// KZGCommit
+	_, err := buffer.Read(pointG1Buf)
+	if err != nil {
+		return nil, err
+	}
+	v.KZGCommit, err = group1.FromCompressed(pointG1Buf)
+	if err != nil {
+		return nil, err
+	}
+	// PedCommit
+	_, err = buffer.Read(pointG1Buf)
+	if err != nil {
+		return nil, err
+	}
+	v.PedCommit, err = group1.FromCompressed(pointG1Buf)
+	if err != nil {
+		return nil, err
+	}
+	// A
+	_, err = buffer.Read(pointG1Buf)
+	if err != nil {
+		return nil, err
+	}
+	v.A, err = group1.FromCompressed(pointG1Buf)
+	if err != nil {
+		return nil, err
+	}
+	// AHat
+	_, err = buffer.Read(pointG1Buf)
+	if err != nil {
+		return nil, err
+	}
+	v.AHat, err = group1.FromCompressed(pointG1Buf)
+	if err != nil {
+		return nil, err
+	}
+	// ZVector Size
+	_, err = buffer.Read(uint32Buf)
+	if err != nil {
+		return nil, err
+	}
+	ZVectorSize := binary.BigEndian.Uint32(uint32Buf)
+	// ZVector
+	v.ZVector = make([]*Fr, ZVectorSize)
+	for i := uint32(0); i < ZVectorSize; i++ {
+		_, err = buffer.Read(frBuf)
+		if err != nil {
+			return nil, err
+		}
+		v.ZVector[i] = NewFr().FromBytes(frBuf)
+	}
+	// Omega
+	_, err = buffer.Read(frBuf)
+	if err != nil {
+		return nil, err
+	}
+	v.Omega = NewFr().FromBytes(frBuf)
+	return v, nil
 }
 
 func CreateProof(s *srs.SRS, hBasePoints []*PointG1, h *PointG1, kzgCommit *PointG1, pedCommit *PointG1, values []*Fr, r *Fr) (*VectorLinkProof, error) {

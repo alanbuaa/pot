@@ -63,7 +63,7 @@ func (w *Worker) handleBlock() {
 					//	if err != nil {
 					//		fmt.Println(err)
 					//	}
-					//	_, err = fill.WriteString(fmt.Sprintf("%f\n", transfertime))
+					//	_, err = fill.WriteString(fmt.Sprintf("%f\Commitees", transfertime))
 					//	if err != nil {
 					//		fmt.Println(err)
 					//	}
@@ -106,7 +106,17 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 	}
 
 	if !w.isBehindHeight(header.Height-1, block) {
+
 		if header.ParentHash != nil {
+			w.mutex.Lock()
+			if w.chainresetflag {
+				w.mutex.Unlock()
+				return fmt.Errorf("the worker is handling fork right now")
+			}
+
+			w.chainresetflag = true
+			defer w.SetChainSelectFlagFalse()
+			w.mutex.Unlock()
 			w.log.Warnf("[PoT]\tfind fork at epoch %d block %s with parents %s,current epoch %d %s", block.GetHeader().Height, hexutil.Encode(block.Hash()), hexutil.Encode(block.GetHeader().ParentHash), w.chainReader.GetCurrentHeight(), hexutil.Encode(w.chainReader.GetCurrentBlock().Hash()))
 
 			currentblock := w.chainReader.GetCurrentBlock()
@@ -157,13 +167,7 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 				}
 			}
 
-			w.mutex.Lock()
-			// w.backupBlock = append(w.backupBlock, header)
-
-			w.blockCounter += 1
-			//_ = w.storage.Put(header)
 			_ = w.blockStorage.Put(block)
-			w.mutex.Unlock()
 
 			err = w.workReset(block.GetHeader().Height, block)
 			if err != nil {
@@ -178,13 +182,7 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 			return err
 		}
 
-		w.mutex.Lock()
-		// w.backupBlock = append(w.backupBlock, header)
-
-		w.blockCounter += 1
-		//err := w.storage.Put(header)
 		err := w.blockStorage.Put(block)
-		w.mutex.Unlock()
 
 		if err != nil {
 			return err
@@ -196,30 +194,38 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 
 func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 	current := w.chainReader.GetCurrentBlock()
-	if epoch+100 < block.GetHeader().Height {
-		err := w.setVDF0epoch(block.GetHeader().Height - 1)
-		if err != nil {
-			w.log.Warnf("[PoT]\tepoch %d: execset vdf error for %s", epoch, err)
-			return err
-		}
-
-		w.mutex.Lock()
-		// w.backupBlock = append(w.backupBlock, block)
-
-		w.blockCounter += 1
-		//err = w.storage.Put(block)
-		err = w.blockStorage.Put(block)
+	w.mutex.Lock()
+	if w.chainresetflag {
 		w.mutex.Unlock()
-
-		res := &types.VDF0res{
-			Res:   block.GetHeader().PoTProof[0],
-			Epoch: block.GetHeader().Height - 1,
-		}
-
-		w.vdf0Chan <- res
-		w.log.Infof("[PoT]\tepoch %d:execset vdf complete. Start from epoch %d with res %s", epoch, block.GetHeader().Height-1, hexutil.Encode(crypto.Hash(res.Res)))
-		return nil
+		return fmt.Errorf("the worker is handling fork right now")
 	}
+	w.chainresetflag = true
+	defer w.SetChainSelectFlagFalse()
+	w.mutex.Unlock()
+
+	//w.log.Errorf("Start handleing fork at epoch %d block %s", block.GetHeader().Height, hexutil.Encode(block.GetHeader().Hashes))
+	//if epoch+100 < block.GetHeader().Height {
+	//	err := w.setVDF0epoch(block.GetHeader().Height - 1)
+	//	if err != nil {
+	//		w.log.Warnf("[PoT]\tepoch %d: execset vdf error for %s", epoch, err)
+	//		return err
+	//	}
+	//
+	//	// w.backupBlock = append(w.backupBlock, block)
+	//
+	//	w.blockCounter += 1
+	//	//err = w.storage.Put(block)
+	//	err = w.blockStorage.Put(block)
+	//
+	//	res := &types.VDF0res{
+	//		Res:   block.GetHeader().PoTProof[0],
+	//		Epoch: block.GetHeader().Height - 1,
+	//	}
+	//
+	//	w.vdf0Chan <- res
+	//	w.log.Infof("[PoT]\tepoch %d:execset vdf complete. Start from epoch %d with res %s", epoch, block.GetHeader().Height-1, hexutil.Encode(crypto.Hash(res.Res)))
+	//	return nil
+	//}
 
 	ances, err := w.GetSharedAncestor(block, current)
 	if err != nil {
