@@ -2,12 +2,40 @@ package simpleWhirly
 
 import (
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
 	"github.com/zzz136454872/upgradeable-consensus/pb"
 )
+
+const DaemonNodePublicAddress string = "daemonNode"
+const BroadcastToAll string = "ALL"
+
+func EncodeAddress(shardingName string, consensusID int64, address string) string {
+	consensusIDStr := strconv.FormatInt(consensusID, 10)
+	return shardingName + "-" + consensusIDStr + "-" + address
+}
+
+// Input: address that is encoded
+// Output: shardingName, consensusID, rawAddress
+func DecodeAddress(address string) (string, int64, string) {
+	res := strings.Split(address, "-")
+	if len(res) != 3 {
+		println("DecodeAddress Error: Illegal parameter")
+		return "", 0, ""
+	}
+	shardingName := res[0]
+	rawAddress := res[2]
+
+	consensusID, err := strconv.ParseInt(res[1], 10, 64)
+	if err != nil {
+		println("DecodeAddress Error: Illegal ConsensusID")
+		return "", 0, ""
+	}
+	return shardingName, consensusID, rawAddress
+}
 
 type LatestBlockRequestMechanism struct {
 	maxVHeight   uint64

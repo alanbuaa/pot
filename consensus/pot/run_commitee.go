@@ -3,9 +3,10 @@ package pot
 import (
 	"container/list"
 	"encoding/json"
+
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/zzz136454872/upgradeable-consensus/config"
-	"github.com/zzz136454872/upgradeable-consensus/consensus/whirly/simpleWhirly"
+	"github.com/zzz136454872/upgradeable-consensus/consensus/whirly/nodeController"
 	"github.com/zzz136454872/upgradeable-consensus/crypto"
 	schnorr_proof "github.com/zzz136454872/upgradeable-consensus/crypto/proof/schnorr_proof/bls12381"
 	mrpvss "github.com/zzz136454872/upgradeable-consensus/crypto/share/mrpvss/bls12381"
@@ -128,7 +129,7 @@ func (w *Worker) CommitteeUpdate(height uint64) {
 			F:           w.config.F,
 		}
 
-		sharding1 := simpleWhirly.PoTSharding{
+		sharding1 := nodeController.PoTSharding{
 			Name:                hexutil.EncodeUint64(1),
 			ParentSharding:      nil,
 			LeaderPublicAddress: committee[0],
@@ -149,8 +150,8 @@ func (w *Worker) CommitteeUpdate(height uint64) {
 		//}
 		//shardings := []simpleWhirly.PoTSharding{sharding1, sharding2}
 
-		shardings := []simpleWhirly.PoTSharding{sharding1}
-		potsignal := &simpleWhirly.PoTSignal{
+		shardings := []nodeController.PoTSharding{sharding1}
+		potsignal := &nodeController.PoTSignal{
 			Epoch:             int64(height),
 			Proof:             make([]byte, 0),
 			ID:                0,
@@ -381,7 +382,7 @@ func (w *Worker) ImprovedCommitteeUpdate(height uint64, committeeNum int, block 
 	//}
 }
 
-func (w *Worker) SetWhirly(impl *simpleWhirly.NodeController) {
+func (w *Worker) SetWhirly(impl *nodeController.NodeController) {
 	w.whirly = impl
 	w.potSignalChan = impl.GetPoTByteEntrance()
 }

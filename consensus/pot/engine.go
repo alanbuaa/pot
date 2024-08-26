@@ -8,7 +8,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/zzz136454872/upgradeable-consensus/config"
 	"github.com/zzz136454872/upgradeable-consensus/consensus/model"
-	"github.com/zzz136454872/upgradeable-consensus/consensus/whirly/simpleWhirly"
+	"github.com/zzz136454872/upgradeable-consensus/consensus/whirly/nodeController"
 	"github.com/zzz136454872/upgradeable-consensus/executor"
 	"github.com/zzz136454872/upgradeable-consensus/p2p"
 	"github.com/zzz136454872/upgradeable-consensus/pb"
@@ -43,7 +43,7 @@ type PoTEngine struct {
 	//headerStorage  *types.HeaderStorage
 	blockStorage   *types.BlockStorage
 	chainReader    *ChainReader
-	UpperConsensus *simpleWhirly.NodeController
+	UpperConsensus *nodeController.NodeController
 }
 
 func NewEngine(nid int64, cid int64, config *config.ConsensusConfig, exec executor.Executor, adaptor p2p.P2PAdaptor, log *logrus.Entry) *PoTEngine {
@@ -172,11 +172,11 @@ func (e *PoTEngine) GetBlockStorage() *types.BlockStorage {
 	return e.blockStorage
 }
 
-func (e *PoTEngine) SetWhirly(whirly2 *simpleWhirly.NodeController) {
+func (e *PoTEngine) SetWhirly(whirly2 *nodeController.NodeController) {
 	e.UpperConsensus = whirly2
 }
 
-func (e *PoTEngine) StartCommitee() *simpleWhirly.NodeController {
+func (e *PoTEngine) StartCommitee() *nodeController.NodeController {
 	whirlyconfig := &config.ConsensusConfig{
 		Type:        "whirly",
 		ConsensusID: 1009,
@@ -192,7 +192,7 @@ func (e *PoTEngine) StartCommitee() *simpleWhirly.NodeController {
 	}
 
 	//s := simpleWhirly.NewSimpleWhirly(e.id, 1009, whirlyconfig, e.exec, e.Adaptor, e.log, "", nil)
-	s := simpleWhirly.NewNodeController(e.id, 1009, whirlyconfig, e.exec, e.Adaptor, e.log)
+	s := nodeController.NewNodeController(e.id, 1009, whirlyconfig, e.exec, e.Adaptor, e.log)
 	e.UpperConsensus = s
 	e.log.Infof("[PoT]\tCommitee consensus whirly get prepared")
 	return s

@@ -13,10 +13,10 @@ import (
 
 	ldb "github.com/ipfs/go-ds-leveldb"
 
-	pubsub "github.com/DXPlus/go-libp2p-pubsub-abci"
 	cid "github.com/ipfs/go-cid"
 	libp2p "github.com/libp2p/go-libp2p"
 	kaddht "github.com/libp2p/go-libp2p-kad-dht"
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pb "github.com/libp2p/go-libp2p-pubsub/pb"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
@@ -217,7 +217,7 @@ func (n *Network) findTopicPeers(topic string) {
 			if err != nil {
 				// fmt.Println("Failed connecting to ", peer.ID.Pretty(), ", error:", err)
 			} else {
-				log.Println("Connected to:", peer.ID.Pretty())
+				log.Println("Connected to:", peer.ID)
 				anyConnected = true
 			}
 		}

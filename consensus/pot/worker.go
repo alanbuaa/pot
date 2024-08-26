@@ -7,19 +7,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/shopspring/decimal"
-	"github.com/sirupsen/logrus"
-	"github.com/zzz136454872/upgradeable-consensus/config"
-	"github.com/zzz136454872/upgradeable-consensus/consensus/whirly/simpleWhirly"
-	"github.com/zzz136454872/upgradeable-consensus/crypto"
-	"github.com/zzz136454872/upgradeable-consensus/crypto/vdf"
-	"github.com/zzz136454872/upgradeable-consensus/pb"
-	"github.com/zzz136454872/upgradeable-consensus/types"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/protobuf/proto"
 	"math"
 	"math/big"
 	"math/rand"
@@ -27,6 +14,20 @@ import (
 	"os"
 	"sync"
 	"time"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/shopspring/decimal"
+	"github.com/sirupsen/logrus"
+	"github.com/zzz136454872/upgradeable-consensus/config"
+	"github.com/zzz136454872/upgradeable-consensus/consensus/whirly/nodeController"
+	"github.com/zzz136454872/upgradeable-consensus/crypto"
+	"github.com/zzz136454872/upgradeable-consensus/crypto/vdf"
+	"github.com/zzz136454872/upgradeable-consensus/pb"
+	"github.com/zzz136454872/upgradeable-consensus/types"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/protobuf/proto"
 )
 
 var bigD = new(big.Int).Sub(big.NewInt(0).Exp(big.NewInt(2), big.NewInt(256), nil), big.NewInt(1))
@@ -99,7 +100,7 @@ type Worker struct {
 	rpcserver         *grpc.Server
 
 	// upper consensus
-	whirly         *simpleWhirly.NodeController
+	whirly         *nodeController.NodeController
 	potSignalChan  chan<- []byte
 	CommiteeNum    int32
 	Commitee       [][]string

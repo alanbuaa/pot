@@ -16,6 +16,8 @@ message WhirlyMsg {
     WhirlyPing whirlyPing = 8;
     LatestBlockRequest latestBlockRequest = 9;
     LatestBlockEcho latestBlockEcho = 10;
+    CrWhirlyProposal crWhirlyProposal = 11;
+    CrWhirlyVote crWhirlyVote = 12;
   }
   //   string senderAddress = 11;
 }
@@ -97,4 +99,28 @@ message LatestBlockEcho {
 message WhirlyPing {
   uint64 id = 1;
   string publicAddress = 2;
+}
+
+message CrWhirlyProposal {
+  uint64 id = 1;
+  uint64 senderId = 2;
+  WhirlyBlock block = 3;
+  QuorumCert highQC = 4;
+  SimpleWhirlyProof swProof = 5;
+  uint64 epoch = 6;
+  string publicAddress = 7;
+  repeated bytes finTxs = 8;
+}
+
+message CrWhirlyVote {
+  uint64 id = 1;
+  uint64 senderId = 2;
+  uint64 blockView = 3;
+  bytes BlockHash = 4;
+  bool flag = 5;
+  SimpleWhirlyProof swProof = 6;
+  uint64 epoch = 7;
+  string publicAddress = 8;
+  uint64 weight = 9;
+  bytes decryptedShares = 10;
 }
