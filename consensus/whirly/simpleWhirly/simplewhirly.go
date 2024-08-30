@@ -10,6 +10,8 @@ import (
 	"sync"
 	"time"
 
+	bc_api "blockchain-crypto/blockchain_api"
+
 	"github.com/sirupsen/logrus"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/zzz136454872/upgradeable-consensus/config"
@@ -58,9 +60,10 @@ type SimpleWhirlyImpl struct {
 	// Latest block synchronization
 	latestBlockReq LatestBlockRequestMechanism
 
-	inCommittee  bool
-	Committee    []string
-	stopEntrance chan string
+	inCommittee    bool
+	Committee      []string
+	stopEntrance   chan string
+	updateEntrance chan string
 
 	// Ping
 	readyNodes     []string
@@ -77,6 +80,7 @@ func NewSimpleWhirly(
 	log *logrus.Entry,
 	publicAddress string,
 	stopEntrance chan string,
+	updateEntrance chan string,
 ) *SimpleWhirlyImpl {
 	log.WithField("consensus id", cid).Debug("[SIMPLE WHIRLY] starting")
 	log.WithField("consensus id", cid).Trace("[SIMPLE WHIRLY] Generate genesis block")
@@ -88,8 +92,9 @@ func NewSimpleWhirly(
 		lockProof: nil,
 		vHeight:   genesisBlock.Height,
 		// pendingUpdate: make(chan *pb.SimpleWhirlyProof, 1),
-		cancel:       cancel,
-		stopEntrance: stopEntrance,
+		cancel:         cancel,
+		stopEntrance:   stopEntrance,
+		updateEntrance: updateEntrance,
 	}
 
 	sw.Init(id, cid, cfg, exec, p2pAdaptor, log, publicAddress)
@@ -216,12 +221,18 @@ func (sw *SimpleWhirlyImpl) SetEpoch(epoch int64) {
 	}
 }
 
+func (sw *SimpleWhirlyImpl) SetCryptoElements(cConfig bc_api.CommitteeConfig) {
+	sw.CommitteeCryptoElements = cConfig
+}
+
 func (sw *SimpleWhirlyImpl) UpdateExternalStatus(status model.ExternalStatus) {
 	switch status.Command {
 	case "SetLeader":
 		sw.SetLeader(status.Epoch, status.Leader)
 	case "SetEpoch":
 		sw.SetEpoch(status.Epoch)
+	case "SetCryptoElements":
+		sw.SetCryptoElements(status.CryptoElements)
 	default:
 		sw.Log.Warnf("UpdateExternalStatus: command type not supported: %s", status.Command)
 	}

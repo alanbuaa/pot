@@ -39,7 +39,7 @@ func DecodeAddress(address string) (string, int64, string) {
 
 type LatestBlockRequestMechanism struct {
 	maxVHeight   uint64
-	curEcho      map[string]*pb.SimpleWhirlyProof
+	curEcho      map[string]*pb.CrWhirlyProof
 	curEchoLock  sync.Mutex
 	requestEpoch int64 // 确保一个Epoch只 request 一次
 	requestLock  sync.Mutex
@@ -58,7 +58,7 @@ func (sw *CrWhirlyImpl) RequestLatestBlock(epoch int64, proof []byte, committee 
 	}).Info("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] request latest block!")
 
 	sw.latestBlockReq.curEchoLock.Lock()
-	sw.latestBlockReq.curEcho = make(map[string]*pb.SimpleWhirlyProof)
+	sw.latestBlockReq.curEcho = make(map[string]*pb.CrWhirlyProof)
 	sw.latestBlockReq.curEchoLock.Unlock()
 	sw.latestBlockReq.maxVHeight = sw.vHeight
 
@@ -87,6 +87,8 @@ func (sw *CrWhirlyImpl) UpdateCommittee(committee []string, weight int) {
 		}).Info("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] update committee tirgger!")
 		sw.Weight = int64(weight)
 		sw.inCommittee = true
+
+		sw.updateEntrance <- sw.PublicAddress
 	}
 
 	sw.Committee = committee
@@ -130,7 +132,7 @@ func (sw *CrWhirlyImpl) OnReceiveLatestBlockRequest(newLeaderMsg *pb.LatestBlock
 	sw.Log.Trace("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] advance Epoch success!")
 
 	sw.voteLock.Lock()
-	sw.CleanVote()
+	sw.CleanVote(0)
 	sw.voteLock.Unlock()
 
 	// Calculate the weight of the node
@@ -168,7 +170,7 @@ func (sw *CrWhirlyImpl) OnReceiveLatestBlockRequest(newLeaderMsg *pb.LatestBlock
 	}
 
 	// Echo leader
-	echoMsg := sw.NewLatestBlockEchoMsg(leader, block, sw.lockProof, sw.epoch, sw.vHeight)
+	echoMsg := sw.NewLatestBlockEchoMsg(leader, block, nil, sw.lockProof, sw.epoch, sw.vHeight)
 
 	if sw.GetLeader(sw.epoch) == sw.PublicAddress {
 		// echo self
@@ -212,7 +214,7 @@ func (sw *CrWhirlyImpl) OnReceiveLatestBlockEcho(msg *pb.WhirlyMsg) {
 		return
 	}
 
-	if !sw.verfiySwProof(echoMsg.SwProof) {
+	if !sw.verfiyCrProof(echoMsg.CrProof) {
 		sw.Log.Warn("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] echo proof is wrong.")
 		sw.latestBlockReq.curEchoLock.Unlock()
 		return
@@ -222,16 +224,16 @@ func (sw *CrWhirlyImpl) OnReceiveLatestBlockEcho(msg *pb.WhirlyMsg) {
 		sw.latestBlockReq.maxVHeight = echoMsg.VHeight
 	}
 
-	sw.latestBlockReq.curEcho[senderAdress] = echoMsg.SwProof
+	sw.latestBlockReq.curEcho[senderAdress] = echoMsg.CrProof
 
 	sw.lock.Lock()
-	sw.UpdateLockProof(echoMsg.SwProof)
+	sw.UpdateLockProof(echoMsg.CrProof)
 	sw.lock.Unlock()
 
 	if len(sw.latestBlockReq.curEcho) >= 2*sw.Config.F+1 {
 		sw.AdvanceView(sw.latestBlockReq.maxVHeight)
 		sw.Log.Warn("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] begin propose.")
-		sw.latestBlockReq.curEcho = make(map[string]*pb.SimpleWhirlyProof)
+		sw.latestBlockReq.curEcho = make(map[string]*pb.CrWhirlyProof)
 		sw.latestBlockReq.curEchoLock.Unlock()
 		go sw.OnPropose()
 		return

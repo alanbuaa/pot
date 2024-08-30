@@ -4,6 +4,8 @@ import (
 	"container/list"
 	"encoding/json"
 
+	bc_api "blockchain-crypto/blockchain_api"
+
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/zzz136454872/upgradeable-consensus/config"
 	"github.com/zzz136454872/upgradeable-consensus/consensus/whirly/nodeController"
@@ -134,7 +136,7 @@ func (w *Worker) CommitteeUpdate(height uint64) {
 			ParentSharding:      nil,
 			LeaderPublicAddress: committee[0],
 			Committee:           committee,
-			CryptoElements:      nil,
+			CryptoElements:      bc_api.CommitteeConfig{},
 			SubConsensus:        consensus,
 		}
 
