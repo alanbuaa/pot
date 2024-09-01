@@ -37,8 +37,9 @@ message CryptoElement{
   repeated PointG1List ShareCommitLists = 3;
   repeated PointG1List CoeffCommitLists = 4;
   repeated EncSharelist EncSharesLists = 5;
-
-  SchnorrProof SrsUpdateProof = 6;
-  DrawProof ShuffleProof = 7;
-  DrawProof DrawProof = 8;
+  repeated PointG1List CommitteePKLists = 6
+  SchnorrProof SrsUpdateProof = 7;
+  DrawProof ShuffleProof = 8;
+  DrawProof DrawProof = 9;
+  uint64 CommitteeWorkHeightList =10;
 }

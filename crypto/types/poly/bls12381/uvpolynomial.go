@@ -291,14 +291,14 @@ func NewSecretPolynomial(t uint32, s *Fr) *UVPolynomial {
 }
 
 // NewSimplePolynomial only for test
-func NewSimplePolynomial(t uint32, s *Fr) *UVPolynomial {
+func NewSimplePolynomial(t uint64, s *Fr) *UVPolynomial {
 	coeffs := make([]*Fr, t)
 	if s == nil {
 		coeffs[0] = FrFromInt(123)
 	} else {
 		coeffs[0] = s
 	}
-	for i := uint32(1); i < t; i++ {
+	for i := uint64(1); i < t; i++ {
 		coeffs[i] = NewFr()
 	}
 	coeffs[t-1].One()

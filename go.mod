@@ -2,8 +2,6 @@ module github.com/zzz136454872/upgradeable-consensus
 
 go 1.21
 
-toolchain go1.23.0
-
 replace p2padaptor => ./p2p/p2p-adaptor/p2padaptor
 
 replace network => ./p2p/p2p-adaptor/network

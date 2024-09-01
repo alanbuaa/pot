@@ -31,10 +31,12 @@ type CryptoSet struct {
 	// 抽签阶段
 	DrawProof *verifiable_draw.DrawProof // 抽签证明（包含抽签输出的公钥列表）
 	// DPVSS阶段
-	PVSSPKLists      [][]*bls12381.PointG1 // 多个PVSS参与者公钥列表
-	ShareCommitLists [][]*bls12381.PointG1 // 多个PVSS份额承诺列表
-	CoeffCommitLists [][]*bls12381.PointG1 // 多个PVSS系数承诺列表
-	EncShareLists    [][]*mrpvss.EncShare  // 多个PVSS加密份额列表
+	HolderPKLists           [][]*bls12381.PointG1 // 多个PVSS参与者公钥列表
+	ShareCommitLists        [][]*bls12381.PointG1 // 多个PVSS份额承诺列表
+	CoeffCommitLists        [][]*bls12381.PointG1 // 多个PVSS系数承诺列表
+	EncShareLists           [][]*mrpvss.EncShare  // 多个PVSS加密份额列表
+	CommitteePKList         []*bls12381.PointG1   // 多个PVSS对应的委员会公钥（公钥y = g^s，s为秘密）
+	CommitteeWorkHeightList []uint64              // 每个PVSS所对应委员会的工作高度
 }
 
 type Header struct {
@@ -71,6 +73,9 @@ func (b *Block) Hash() []byte {
 }
 
 func (b *Block) GetHeader() *Header {
+	if b == nil {
+		return nil
+	}
 	if b.Header != nil {
 		return b.Header
 	}

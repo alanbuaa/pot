@@ -34,6 +34,7 @@ type DrawProof struct {
 }
 
 func (d *DrawProof) ToBytes() ([]byte, error) {
+
 	uint32Bytes := make([]byte, 4)
 	uint64Bytes := make([]byte, 8)
 	buffer := bytes.Buffer{}
@@ -297,7 +298,7 @@ func Draw(s *srs.SRS, candidatesNum uint32, candidatesPubKey []*PointG1, quota u
 	}, nil
 }
 
-func Verify(s *srs.SRS, candidatesNum uint32, candidatesPubKey []*PointG1, quota uint32, prevRCommit *PointG1, drawProof *DrawProof) bool {
+func Verify(s *srs.SRS, candidatesNum uint64, candidatesPubKey []*PointG1, quota uint32, prevRCommit *PointG1, drawProof *DrawProof) bool {
 	if quota != uint32(len(drawProof.SelectedPubKeys)) {
 		return false
 	}
@@ -308,7 +309,7 @@ func Verify(s *srs.SRS, candidatesNum uint32, candidatesPubKey []*PointG1, quota
 	}
 
 	var candidatesPubKeyBytes []byte
-	for i := uint32(0); i < candidatesNum; i++ {
+	for i := uint64(0); i < candidatesNum; i++ {
 		candidatesPubKeyBytes = append(candidatesPubKeyBytes, group1.ToBytes(candidatesPubKey[i])...)
 	}
 	preImageBytes := append(candidatesPubKeyBytes, selectedPubKeyBytes...)

@@ -98,9 +98,9 @@ func (w *Worker) handleBlock() {
 }
 
 func (w *Worker) handleCurrentBlock(block *types.Block) error {
-	header := block.Header
+	header := block.GetHeader()
 	// _, _ = w.checkblock(header)
-	flag, err := w.CheckVDF0Current(block.GetHeader())
+	flag, err := w.CheckVDF0Current(header)
 	if !flag {
 		return err
 	}
@@ -108,6 +108,7 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 	if !w.isBehindHeight(header.Height-1, block) {
 
 		if header.ParentHash != nil {
+			w.log.Warnf("[PoT]\tfind fork at epoch %d block %s with parents %s,current epoch %d %s", block.GetHeader().Height, hexutil.Encode(block.Hash()), hexutil.Encode(block.GetHeader().ParentHash), w.chainReader.GetCurrentHeight(), hexutil.Encode(w.chainReader.GetCurrentBlock().Hash()))
 			w.mutex.Lock()
 			if w.chainresetflag {
 				w.mutex.Unlock()
@@ -117,7 +118,6 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 			w.chainresetflag = true
 			defer w.SetChainSelectFlagFalse()
 			w.mutex.Unlock()
-			w.log.Warnf("[PoT]\tfind fork at epoch %d block %s with parents %s,current epoch %d %s", block.GetHeader().Height, hexutil.Encode(block.Hash()), hexutil.Encode(block.GetHeader().ParentHash), w.chainReader.GetCurrentHeight(), hexutil.Encode(w.chainReader.GetCurrentBlock().Hash()))
 
 			currentblock := w.chainReader.GetCurrentBlock()
 			ances, err := w.GetSharedAncestor(block, currentblock)
@@ -138,8 +138,8 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 
 			forkBranch, _, err := w.GetBranch(ances, block)
 			if err != nil {
-				w.log.Errorf("Get Branch error for %s", err)
-				return err
+
+				return fmt.Errorf("get Branch error for %s", err.Error())
 			}
 
 			flag, err := w.CheckVDF0ForBranch(forkBranch)
@@ -199,6 +199,7 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 		w.mutex.Unlock()
 		return fmt.Errorf("the worker is handling fork right now")
 	}
+
 	w.chainresetflag = true
 	defer w.SetChainSelectFlagFalse()
 	w.mutex.Unlock()
@@ -235,9 +236,10 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 	w.log.Infof("[PoT]\tGet shared ancestor of block %s is %s at height %d", hexutil.Encode(block.Hash()), hexutil.Encode(ances.Hash()), ances.GetHeader().Height)
 
 	branch, _, err := w.GetBranch(ances, block)
+	w.log.Errorf("get branch end")
 	flag, err := w.CheckVDF0ForBranch(branch)
 	if flag {
-		w.log.Debugf("[PoT]\tPass VDF Check")
+		w.log.Infof("[PoT]\tPass VDF Check")
 	}
 	if err != nil {
 		w.log.Errorf("[PoT]\tGet branch error for: %s", err)
@@ -292,14 +294,17 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 	}
 	w.vdf0Chan <- res
 	w.log.Infof("[PoT]\tepoch %d:execset vdf complete. Start from epoch %d with res %s", epoch, block.GetHeader().Height-1, hexutil.Encode(crypto.Hash(res.Res)))
-
+	//w.mutex.Lock()
+	//w.log.Error(w.chainresetflag)
+	//w.mutex.Unlock()
 	return nil
+
 }
 
 func (w *Worker) blockbroadcast(block *types.Block) error {
 
-	pbHeader := block.ToProto()
-	headerByte, err := proto.Marshal(pbHeader)
+	pbblock := block.ToProto()
+	headerByte, err := proto.Marshal(pbblock)
 	if err != nil {
 
 		return err

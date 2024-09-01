@@ -114,7 +114,7 @@ func FrFromInt(in int) *Fr {
 	return NewFr().setUint64(uint64(in))
 }
 
-func FrFromUInt32(in uint32) *Fr {
+func FrFromUInt32(in uint64) *Fr {
 	return NewFr().setUint64(uint64(in))
 }
 func (e *Fr) setUint64(n uint64) *Fr {
