@@ -1,12 +1,16 @@
 module github.com/zzz136454872/upgradeable-consensus
 
-go 1.21
+go 1.22
 
 replace p2padaptor => ./p2p/p2p-adaptor/p2padaptor
 
 replace network => ./p2p/p2p-adaptor/network
 
 require p2padaptor v0.0.0-00010101000000-000000000000
+
+replace blockchain-crypto => ./crypto/blockchain-crypto
+
+require blockchain-crypto v0.0.0-00010101000000-000000000000
 
 require (
 	github.com/boltdb/bolt v1.3.1

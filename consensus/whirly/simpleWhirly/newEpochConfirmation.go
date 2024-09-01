@@ -95,7 +95,7 @@ func (sw *SimpleWhirlyImpl) OnReceiveNewLeaderNotify(newLeaderMsg *pb.NewLeaderN
 
 	// Echo leader
 	// 请注意，此时响应了新 leader，但是节点的 epoch 尚未更新，需要等到 leader 向旧委员会获取最新的区块时才更新，表示正式进行新的 epoch
-	echoMsg := sw.NewLeaderEchoMsg(leader, nil, sw.lockProof, epoch, sw.vHeight)
+	echoMsg := sw.NewLeaderEchoMsg(leader, nil, sw.lockProof, nil, epoch, sw.vHeight)
 
 	if sw.GetLeader(sw.epoch) == sw.PublicAddress {
 		// echo self

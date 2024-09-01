@@ -1,6 +1,10 @@
 package model
 
-import "github.com/zzz136454872/upgradeable-consensus/pb"
+import (
+	bc_api "blockchain-crypto/blockchain_api"
+
+	"github.com/zzz136454872/upgradeable-consensus/pb"
+)
 
 type Consensus interface {
 	// Consensus should has a initialize function like this
@@ -25,7 +29,8 @@ type Consensus interface {
 }
 
 type ExternalStatus struct {
-	Command string
-	Epoch   int64
-	Leader  string
+	Command        string
+	Epoch          int64
+	Leader         string
+	CryptoElements bc_api.CommitteeConfig
 }

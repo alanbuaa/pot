@@ -14,6 +14,8 @@ import (
 	"github.com/zzz136454872/upgradeable-consensus/types"
 	"github.com/zzz136454872/upgradeable-consensus/utils"
 	"google.golang.org/protobuf/proto"
+
+	bc_api "blockchain-crypto/blockchain_api"
 )
 
 // common whirlyUtilities func defined in the paper
@@ -34,21 +36,22 @@ type WhirlyUtilities interface {
 }
 
 type WhirlyUtilitiesImpl struct {
-	ID              int64
-	PublicAddress   string
-	ConsensusID     int64
-	BlockStorage    types.WhirlyBlockStorage
-	View            *View
-	Config          *config.ConsensusConfig
-	TimeChan        *utils.Timer
-	MemPool         *types.MemPool
-	MsgByteEntrance chan []byte // receive msg
-	RequestEntrance chan *pb.Request
-	p2pAdaptor      p2p.P2PAdaptor
-	Log             *logrus.Entry
-	Executor        executor.Executor
-	Topic           string
-	Weight          int64
+	ID                      int64
+	PublicAddress           string
+	ConsensusID             int64
+	BlockStorage            types.WhirlyBlockStorage
+	View                    *View
+	Config                  *config.ConsensusConfig
+	TimeChan                *utils.Timer
+	MemPool                 *types.MemPool
+	MsgByteEntrance         chan []byte // receive msg
+	RequestEntrance         chan *pb.Request
+	p2pAdaptor              p2p.P2PAdaptor
+	Log                     *logrus.Entry
+	Executor                executor.Executor
+	Topic                   string
+	Weight                  int64
+	CommitteeCryptoElements bc_api.CommitteeConfig
 }
 
 func (wu *WhirlyUtilitiesImpl) Init(
@@ -211,7 +214,9 @@ func (wu *WhirlyUtilitiesImpl) NewLeaderNotifyMsg(epoch int64, proof []byte, com
 	return wMsg
 }
 
-func (wu *WhirlyUtilitiesImpl) NewLeaderEchoMsg(leader int64, block *pb.WhirlyBlock, proof *pb.SimpleWhirlyProof, epoch int64, vHeghit uint64) *pb.WhirlyMsg {
+func (wu *WhirlyUtilitiesImpl) NewLeaderEchoMsg(leader int64, block *pb.WhirlyBlock,
+	swProof *pb.SimpleWhirlyProof, crProof *pb.CrWhirlyProof,
+	epoch int64, vHeghit uint64) *pb.WhirlyMsg {
 	wMsg := &pb.WhirlyMsg{}
 
 	wMsg.Payload = &pb.WhirlyMsg_NewLeaderEcho{NewLeaderEcho: &pb.NewLeaderEcho{
@@ -219,7 +224,8 @@ func (wu *WhirlyUtilitiesImpl) NewLeaderEchoMsg(leader int64, block *pb.WhirlyBl
 		SenderId:      uint64(wu.ID),
 		Epoch:         uint64(epoch),
 		Block:         block,
-		SwProof:       proof,
+		SwProof:       swProof,
+		CrProof:       crProof,
 		VHeight:       vHeghit,
 		PublicAddress: wu.PublicAddress,
 	}}
@@ -240,7 +246,9 @@ func (wu *WhirlyUtilitiesImpl) NewLatestBlockRequest(epoch int64, proof []byte, 
 	return wMsg
 }
 
-func (wu *WhirlyUtilitiesImpl) NewLatestBlockEchoMsg(leader int64, block *pb.WhirlyBlock, proof *pb.SimpleWhirlyProof, epoch int64, vHeghit uint64) *pb.WhirlyMsg {
+func (wu *WhirlyUtilitiesImpl) NewLatestBlockEchoMsg(leader int64, block *pb.WhirlyBlock,
+	swProof *pb.SimpleWhirlyProof, crProof *pb.CrWhirlyProof,
+	epoch int64, vHeghit uint64) *pb.WhirlyMsg {
 	wMsg := &pb.WhirlyMsg{}
 
 	wMsg.Payload = &pb.WhirlyMsg_LatestBlockEcho{LatestBlockEcho: &pb.LatestBlockEcho{
@@ -248,7 +256,8 @@ func (wu *WhirlyUtilitiesImpl) NewLatestBlockEchoMsg(leader int64, block *pb.Whi
 		SenderId:      uint64(wu.ID),
 		Epoch:         uint64(epoch),
 		Block:         block,
-		SwProof:       proof,
+		SwProof:       swProof,
+		CrProof:       crProof,
 		VHeight:       vHeghit,
 		PublicAddress: wu.PublicAddress,
 	}}
@@ -291,6 +300,15 @@ func (wu *WhirlyUtilitiesImpl) Proof(view uint64, proof []*pb.WhirlyVote, blockH
 		BlockHash: blockHash,
 		ViewNum:   view,
 		Proof:     proof,
+	}
+}
+
+func (wu *WhirlyUtilitiesImpl) CrProof(view uint64, proof [][]byte, voteProof []*pb.CrWhirlyVote, blockHash []byte) *pb.CrWhirlyProof {
+	return &pb.CrWhirlyProof{
+		BlockHash: blockHash,
+		ViewNum:   view,
+		Proof:     proof,
+		VoteProof: voteProof,
 	}
 }
 

@@ -87,6 +87,8 @@ func (sw *SimpleWhirlyImpl) UpdateCommittee(committee []string, weight int) {
 		}).Info("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] update committee tirgger!")
 		sw.Weight = int64(weight)
 		sw.inCommittee = true
+
+		sw.updateEntrance <- sw.PublicAddress
 	}
 
 	sw.Committee = committee
@@ -168,7 +170,7 @@ func (sw *SimpleWhirlyImpl) OnReceiveLatestBlockRequest(newLeaderMsg *pb.LatestB
 	}
 
 	// Echo leader
-	echoMsg := sw.NewLatestBlockEchoMsg(leader, block, sw.lockProof, sw.epoch, sw.vHeight)
+	echoMsg := sw.NewLatestBlockEchoMsg(leader, block, sw.lockProof, nil, sw.epoch, sw.vHeight)
 
 	if sw.GetLeader(sw.epoch) == sw.PublicAddress {
 		// echo self

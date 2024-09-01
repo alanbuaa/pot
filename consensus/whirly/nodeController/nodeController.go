@@ -47,6 +47,7 @@ type NodeController struct {
 	// PoT
 	PoTByteEntrance chan []byte // receive msg
 	StopEntrance    chan string // receive the publicAddress of the node that should be stopped
+	UpdateEntrance  chan string
 
 	total int
 	epoch int64 // The height of the POT chain
@@ -69,16 +70,17 @@ func NewNodeController(
 	log.Debug("[Node Controller] starting")
 	ctx, cancel := context.WithCancel(context.Background())
 	nc := &NodeController{
-		PeerId:       p2pAdaptor.GetPeerID(),
-		ConsensusID:  cid,
-		Config:       cfg,
-		Executor:     exec,
-		p2pAdaptor:   p2pAdaptor,
-		Log:          log.WithField("consensus id", cid),
-		cancel:       cancel,
-		epoch:        0,
-		StopEntrance: make(chan string, 10),
-		Shardings:    make(map[string]*Sharding),
+		PeerId:         p2pAdaptor.GetPeerID(),
+		ConsensusID:    cid,
+		Config:         cfg,
+		Executor:       exec,
+		p2pAdaptor:     p2pAdaptor,
+		Log:            log.WithField("consensus id", cid),
+		cancel:         cancel,
+		epoch:          0,
+		StopEntrance:   make(chan string, 10),
+		UpdateEntrance: make(chan string, 10),
+		Shardings:      make(map[string]*Sharding),
 		// WhrilyNodes: make(map[string]map[string]*SimpleWhirlyImpl),
 	}
 
@@ -125,6 +127,7 @@ func (nc *NodeController) Stop() {
 	close(nc.RequestByteEntrance)
 	close(nc.PoTByteEntrance)
 	close(nc.StopEntrance)
+	close(nc.UpdateEntrance)
 }
 
 func (nc *NodeController) receiveMsg(ctx context.Context) {
@@ -165,6 +168,11 @@ func (nc *NodeController) receiveMsg(ctx context.Context) {
 				return // closed
 			}
 			go nc.handleStop(address)
+		case address, ok := <-nc.UpdateEntrance:
+			if !ok {
+				return // closed
+			}
+			go nc.handleUpdate(address)
 		case potSignal, ok := <-nc.PoTByteEntrance:
 			if !ok {
 				return // closed
@@ -178,6 +186,39 @@ func (nc *NodeController) receiveMsg(ctx context.Context) {
 // NodeController function 1: message forwarding
 // =============================================
 func (nc *NodeController) handleMsg(packet *pb.Packet) {
+
+	// msgByte := packet.GetMsg()
+	// msg := new(pb.WhirlyMsg)
+	// err := proto.Unmarshal(msgByte, msg)
+	// if err != nil {
+	// 	nc.Log.Error("Unmarshal error: ", err)
+	// }
+	// fmt.Printf("Payload: %+v\n", msg.Payload)
+	// switch msg.Payload.(type) {
+	// case *pb.WhirlyMsg_Request:
+	// 	fmt.Printf("msg: %+v\n", msg.GetRequest())
+	// case *pb.WhirlyMsg_WhirlyProposal:
+	// 	fmt.Printf("msg: %+v\n", msg.GetCrWhirlyProposal())
+	// case *pb.WhirlyMsg_WhirlyVote:
+	// 	fmt.Printf("msg: %+v\n", msg.GetCrWhirlyVote())
+	// case *pb.WhirlyMsg_NewLeaderNotify:
+	// 	fmt.Printf("msg: %+v\n", msg.GetNewLeaderNotify())
+	// case *pb.WhirlyMsg_NewLeaderEcho:
+	// 	fmt.Printf("msg: %+v\n", msg.GetNewLeaderEcho())
+	// case *pb.WhirlyMsg_WhirlyPing:
+	// 	fmt.Printf("msg: %+v\n", msg.GetWhirlyPing())
+	// default:
+	// 	nc.Log.Warn("Receive unsupported msg")
+	// 	return
+	// }
+
+	// nc.Log.WithFields(logrus.Fields{
+	// 	"ReceiverShardingName":  packet.ReceiverShardingName,
+	// 	"Epoch":                 packet.Epoch,
+	// 	"ReceiverPublicAddress": packet.ReceiverPublicAddress,
+	// 	"Msg":                   hex.EncodeToString(packet.Msg)[0:10],
+	// }).Warn("handleMsg in NodeController")
+
 	if packet.ReceiverShardingName == "" {
 		nc.Log.Warn("Receive message error: Invaild sharding name")
 		return
@@ -282,6 +323,20 @@ func (nc *NodeController) handleStop(address string) {
 		nc.Log.Warn("Stop Node Error: Sharding does not exist")
 	} else {
 		go sharding.handleStop(address)
+	}
+	nc.shardingsLock.Unlock()
+}
+
+// update a committee node
+func (nc *NodeController) handleUpdate(address string) {
+	shardingName, _, _ := DecodeAddress(address)
+	nc.shardingsLock.Lock()
+	sharding, ok := nc.Shardings[shardingName]
+	if !ok {
+		// create a new sharding
+		nc.Log.Warn("Stop Node Error: Sharding does not exist")
+	} else {
+		go sharding.handleUpdate(address)
 	}
 	nc.shardingsLock.Unlock()
 }

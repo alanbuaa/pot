@@ -75,6 +75,7 @@ message NewLeaderEcho {
   SimpleWhirlyProof swProof = 5;
   uint64 vHeight = 6;
   string publicAddress = 7;
+  CrWhirlyProof crProof = 8;
 }
 
 message LatestBlockRequest {
@@ -94,6 +95,7 @@ message LatestBlockEcho {
   SimpleWhirlyProof swProof = 5;
   uint64 vHeight = 6;
   string publicAddress = 7;
+  CrWhirlyProof crProof = 8;
 }
 
 message WhirlyPing {
@@ -106,7 +108,7 @@ message CrWhirlyProposal {
   uint64 senderId = 2;
   WhirlyBlock block = 3;
   QuorumCert highQC = 4;
-  SimpleWhirlyProof swProof = 5;
+  CrWhirlyProof crProof = 5;
   uint64 epoch = 6;
   string publicAddress = 7;
   repeated bytes finTxs = 8;
@@ -118,9 +120,16 @@ message CrWhirlyVote {
   uint64 blockView = 3;
   bytes BlockHash = 4;
   bool flag = 5;
-  SimpleWhirlyProof swProof = 6;
+  CrWhirlyProof crProof = 6;
   uint64 epoch = 7;
   string publicAddress = 8;
   uint64 weight = 9;
-  bytes decryptedShares = 10;
+  repeated bytes decryptedShares = 10;
+}
+
+message CrWhirlyProof {
+  bytes BlockHash = 1;
+  uint64 viewNum = 2;
+  repeated bytes proof = 3;
+  repeated CrWhirlyVote voteProof = 4;
 }

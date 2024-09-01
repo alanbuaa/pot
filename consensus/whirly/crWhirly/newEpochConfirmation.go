@@ -10,7 +10,7 @@ import (
 )
 
 type NewEpochMechanism struct {
-	curEcho     map[string]*pb.SimpleWhirlyProof
+	curEcho     map[string]*pb.CrWhirlyProof
 	curEchoLock sync.Mutex
 	echoFlag    bool
 	activeFlag  bool
@@ -26,7 +26,7 @@ func (sw *CrWhirlyImpl) NewEpochConfirmation(epoch int64, proof []byte, committe
 	}).Info("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] new Epoch Confirmation!")
 
 	sw.newEpoch.curEchoLock.Lock()
-	sw.newEpoch.curEcho = make(map[string]*pb.SimpleWhirlyProof)
+	sw.newEpoch.curEcho = make(map[string]*pb.CrWhirlyProof)
 	sw.newEpoch.activeFlag = false
 	sw.newEpoch.epoch = epoch
 	sw.newEpoch.proof = proof
@@ -41,7 +41,7 @@ func (sw *CrWhirlyImpl) NewEpochConfirmation(epoch int64, proof []byte, committe
 	}
 	// broadcast
 	// 循环发送，直到收到了足够的echo消息
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 20; i++ {
 		if sw.newEpoch.activeFlag {
 			break
 		}
@@ -95,7 +95,7 @@ func (sw *CrWhirlyImpl) OnReceiveNewLeaderNotify(newLeaderMsg *pb.NewLeaderNotif
 
 	// Echo leader
 	// 请注意，此时响应了新 leader，但是节点的 epoch 尚未更新，需要等到 leader 向旧委员会获取最新的区块时才更新，表示正式进行新的 epoch
-	echoMsg := sw.NewLeaderEchoMsg(leader, nil, sw.lockProof, epoch, sw.vHeight)
+	echoMsg := sw.NewLeaderEchoMsg(leader, nil, nil, sw.lockProof, epoch, sw.vHeight)
 
 	if sw.GetLeader(sw.epoch) == sw.PublicAddress {
 		// echo self
@@ -145,13 +145,13 @@ func (sw *CrWhirlyImpl) OnReceiveNewLeaderEcho(msg *pb.WhirlyMsg) {
 	// 	return
 	// }
 
-	if !sw.verfiySwProof(echoMsg.SwProof) {
+	if !sw.verfiyCrProof(echoMsg.CrProof) {
 		sw.Log.Warn("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] echo proof is wrong.")
 		sw.newEpoch.curEchoLock.Unlock()
 		return
 	}
 
-	sw.newEpoch.curEcho[senderAdress] = echoMsg.SwProof
+	sw.newEpoch.curEcho[senderAdress] = echoMsg.CrProof
 
 	// sw.lock.Lock()
 	// sw.UpdateLockProof(echoMsg.SwProof)
@@ -159,7 +159,7 @@ func (sw *CrWhirlyImpl) OnReceiveNewLeaderEcho(msg *pb.WhirlyMsg) {
 
 	if len(sw.newEpoch.curEcho) >= 2*sw.Config.F+1 {
 		sw.Log.Warn("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] begin RequestLatestBlock.")
-		sw.newEpoch.curEcho = make(map[string]*pb.SimpleWhirlyProof)
+		sw.newEpoch.curEcho = make(map[string]*pb.CrWhirlyProof)
 
 		// 开始向旧委员会获取最新的区块
 		go sw.RequestLatestBlock(sw.newEpoch.epoch, sw.newEpoch.proof, sw.Committee)

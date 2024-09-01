@@ -13,6 +13,8 @@ import (
 	"github.com/zzz136454872/upgradeable-consensus/types"
 	"github.com/zzz136454872/upgradeable-consensus/utils"
 	"google.golang.org/protobuf/proto"
+
+	bc_api "blockchain-crypto/blockchain_api"
 )
 
 type PoTSharding struct {
@@ -20,8 +22,9 @@ type PoTSharding struct {
 	ParentSharding      []string
 	LeaderPublicAddress string
 	Committee           []string
-	CryptoElements      []byte
-	SubConsensus        config.ConsensusConfig
+	// CryptoElements      []byte
+	CryptoElements bc_api.CommitteeConfig
+	SubConsensus   config.ConsensusConfig
 }
 
 type Sharding struct {
@@ -29,7 +32,7 @@ type Sharding struct {
 	ParentSharding      []string
 	LeaderPublicAddress string
 	Committee           []string
-	CryptoElements      []byte
+	CryptoElements      bc_api.CommitteeConfig
 	SubConsensus        *config.ConsensusConfig
 
 	controller *NodeController
@@ -53,6 +56,7 @@ func NewSharding(name string, nc *NodeController, s PoTSharding) *Sharding {
 		LeaderPublicAddress: s.LeaderPublicAddress,
 		Committee:           s.Committee,
 		SubConsensus:        &s.SubConsensus,
+		CryptoElements:      s.CryptoElements,
 	}
 
 	// The daemonNode is always sleep, it only replies to transactions to local client and forwards transactions to leader
@@ -185,9 +189,12 @@ func (s *Sharding) handleMsg(packet *pb.Packet) {
 		}
 	}
 
+	// s.controller.Log.Info("handleMsg in Sharding 0")
+
 	if packet.ReceiverPublicAddress == BroadcastToAll {
 		for _, node := range s.Nodes {
 			go func(n model.Consensus) {
+				// s.controller.Log.Info("handleMsg in Sharding")
 				n.GetMsgByteEntrance() <- packet.GetMsg()
 			}(node)
 		}
@@ -223,6 +230,21 @@ func (s *Sharding) handleStop(address string) {
 		node.Stop()
 		delete(s.Nodes, address)
 		s.active -= 1
+	}
+	s.nodesLock.Unlock()
+}
+
+func (s *Sharding) handleUpdate(address string) {
+	s.nodesLock.Lock()
+	node, ok2 := s.Nodes[address]
+	if !ok2 {
+		s.controller.Log.Warn("receive unkonwn publicAddress from UpdateEntrance")
+	} else {
+		command := model.ExternalStatus{
+			Command:        "SetCryptoElements",
+			CryptoElements: s.CryptoElements,
+		}
+		node.UpdateExternalStatus(command)
 	}
 	s.nodesLock.Unlock()
 }
@@ -295,6 +317,12 @@ func (s *Sharding) checkNodeStauts(publicAddress string) model.Consensus {
 		}
 		newNode.UpdateExternalStatus(command2)
 
+		command3 := model.ExternalStatus{
+			Command:        "SetCryptoElements",
+			CryptoElements: s.CryptoElements,
+		}
+		newNode.UpdateExternalStatus(command3)
+
 		s.controller.Log.WithFields(logrus.Fields{
 			// "sender":       echoMsg.PublicAddress,
 			"epoch":       s.controller.epoch,
@@ -341,6 +369,7 @@ func (s *Sharding) createConsensusNode(address string) model.Consensus {
 				s.controller.Log,
 				address,
 				s.controller.StopEntrance,
+				s.controller.UpdateEntrance,
 			)
 			s.Nodes[address] = c
 		case "censorship-resistance":
@@ -356,7 +385,9 @@ func (s *Sharding) createConsensusNode(address string) model.Consensus {
 				s.controller.Log,
 				address,
 				s.controller.StopEntrance,
+				s.controller.UpdateEntrance,
 			)
+			s.Nodes[address] = c
 		default:
 			s.controller.Log.Warnf("whirly type not supported: %s", s.SubConsensus.Whirly.Type)
 		}
