@@ -1,6 +1,7 @@
 package types
 
 import (
+	"fmt"
 	schnorr_proof "github.com/zzz136454872/upgradeable-consensus/crypto/proof/schnorr_proof/bls12381"
 	mrpvss "github.com/zzz136454872/upgradeable-consensus/crypto/share/mrpvss/bls12381"
 	"github.com/zzz136454872/upgradeable-consensus/crypto/types/curve/bls12381"
@@ -126,4 +127,113 @@ func (s *CryptoElement) ToProto() *pb.CryptoElement {
 			CommitteeWorkHeightList: s.CommitteeWorkHeightList,
 		}
 	}
+}
+
+func ToCryptoElement(element *pb.CryptoElement) (CryptoElement, error) {
+	if element == nil {
+		return CryptoElement{}, fmt.Errorf("element is nil")
+	}
+	if element.GetSRS() != nil {
+		Srs, err := srs.FromCompressedBytes(element.GetSRS())
+		if err != nil {
+			return CryptoElement{}, err
+		}
+		srsproof := &schnorr_proof.SchnorrProof{}
+		srsproofs, err := srsproof.FromBytes(element.GetSrsUpdateProof())
+		if err != nil {
+			return CryptoElement{}, err
+		}
+		return CryptoElement{
+			SRS:            Srs,
+			SrsUpdateProof: srsproofs,
+		}, nil
+	}
+
+	holderpkilist := make([][]*bls12381.PointG1, 0)
+	for _, list := range element.GetHolderPKLists() {
+		g1s := make([]*bls12381.PointG1, 0)
+		for _, g1 := range list.GetPointG1S() {
+			point, err := G1.FromCompressed(g1.GetPointbytes())
+			if err != nil {
+				return CryptoElement{}, err
+			}
+			g1s = append(g1s, point)
+		}
+		holderpkilist = append(holderpkilist, g1s)
+	}
+
+	sharecommitlist := make([][]*bls12381.PointG1, 0)
+	for _, list := range element.GetShareCommitLists() {
+		g1s := make([]*bls12381.PointG1, 0)
+		for _, g1 := range list.GetPointG1S() {
+			point, err := G1.FromCompressed(g1.GetPointbytes())
+			if err != nil {
+				return CryptoElement{}, err
+			}
+			g1s = append(g1s, point)
+		}
+		sharecommitlist = append(sharecommitlist, g1s)
+	}
+
+	coeffcommitlist := make([][]*bls12381.PointG1, 0)
+	for _, list := range element.GetCoeffCommitLists() {
+		g1s := make([]*bls12381.PointG1, 0)
+		for _, g1 := range list.GetPointG1S() {
+			point, err := G1.FromCompressed(g1.GetPointbytes())
+			if err != nil {
+				return CryptoElement{}, err
+			}
+			g1s = append(g1s, point)
+		}
+		coeffcommitlist = append(coeffcommitlist, g1s)
+	}
+	encsharelist := make([][]*mrpvss.EncShare, 0)
+	for _, list := range element.GetEncSharesLists() {
+		shares := make([]*mrpvss.EncShare, 0)
+		for _, share := range list.GetEncShares() {
+			sharebytes := share.GetSharebytes()
+			encshare, err := mrpvss.NewEmptyEncShare().FromBytes(sharebytes)
+			if err != nil {
+				return CryptoElement{}, err
+			}
+			shares = append(shares, encshare)
+		}
+		encsharelist = append(encsharelist, shares)
+	}
+
+	committeePKList := make([]*bls12381.PointG1, 0)
+	for _, g1 := range element.GetCommitteePKLists() {
+		point, err := G1.FromCompressed(g1.GetPointbytes())
+		if err != nil {
+			return CryptoElement{}, err
+		}
+		committeePKList = append(committeePKList, point)
+	}
+	var err error
+	shuffleproof := &verifiable_draw.DrawProof{}
+	if element.GetShuffleProof() != nil {
+		shuffleproof, err = shuffleproof.FromBytes(element.GetShuffleProof())
+		if err != nil {
+			return CryptoElement{}, err
+		}
+	}
+	drawproof := &verifiable_draw.DrawProof{}
+	if element.GetDrawProof() != nil {
+		drawproof, err = drawproof.FromBytes(element.GetDrawProof())
+		if err != nil {
+			return CryptoElement{}, err
+		}
+	}
+	return CryptoElement{
+		SRS:                     nil,
+		SrsUpdateProof:          nil,
+		ShuffleProof:            shuffleproof,
+		DrawProof:               drawproof,
+		HolderPKLists:           holderpkilist,
+		ShareCommitLists:        sharecommitlist,
+		CoeffCommitLists:        coeffcommitlist,
+		EncShareLists:           encsharelist,
+		CommitteePKList:         committeePKList,
+		CommitteeWorkHeightList: element.GetCommitteeWorkHeightList(),
+	}, nil
 }
