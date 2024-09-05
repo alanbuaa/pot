@@ -2,8 +2,8 @@ package roots_of_unity
 
 import (
 	"context"
+	"errors"
 	"fmt"
-
 	"github.com/zzz136454872/upgradeable-consensus/crypto/pb"
 	"github.com/zzz136454872/upgradeable-consensus/crypto/proof/caulk_plus"
 	. "github.com/zzz136454872/upgradeable-consensus/crypto/types/curve/bls12381"
@@ -30,7 +30,7 @@ func CalcRootsOfUnity(size uint32) ([]*Fr, error) {
 		return nil, err
 	}
 	if size != res.Size {
-		return nil, fmt.Errorf("wrong size of unity roots: %d != %d", size, res.Size)
+		return nil, errors.New(fmt.Sprintf("wrong size of unity roots: %d != %d", size, res.Size))
 	}
 	ret := make([]*Fr, size)
 	for i := uint32(0); i < size; i++ {

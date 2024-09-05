@@ -1,8 +1,8 @@
 package ibve
 
 import (
+	"bytes"
 	"crypto/rand"
-
 	. "github.com/zzz136454872/upgradeable-consensus/crypto/types/curve/bls12381"
 )
 
@@ -12,35 +12,89 @@ var (
 	gt = NewGT()
 )
 
+type CipherText struct {
+	C1 *PointG1
+	C2 *PointG2
+	C3 *E
+}
+
+func (c *CipherText) ToBytes() []byte {
+	buffer := new(bytes.Buffer)
+	buffer.Write(g1.ToCompressed(c.C1))
+	buffer.Write(g2.ToCompressed(c.C2))
+	buffer.Write(gt.ToBytes(c.C3))
+	return buffer.Bytes()
+}
+
+func (c *CipherText) FromBytes(data []byte) (*CipherText, error) {
+	pointG1Buf := make([]byte, 48)
+	pointG2Buf := make([]byte, 96)
+	pointGTBuf := make([]byte, 576)
+	buffer := bytes.NewBuffer(data)
+	// c1
+	_, err := buffer.Read(pointG1Buf)
+	if err != nil {
+		return nil, err
+	}
+	c.C1, err = g1.FromCompressed(pointG1Buf)
+	if err != nil {
+		return nil, err
+	}
+	// c2
+	_, err = buffer.Read(pointG2Buf)
+	if err != nil {
+		return nil, err
+	}
+	c.C2, err = g2.FromCompressed(pointG2Buf)
+	if err != nil {
+		return nil, err
+	}
+	// c3
+	_, err = buffer.Read(pointGTBuf)
+	if err != nil {
+		return nil, err
+	}
+	c.C3, err = gt.FromBytes(pointGTBuf)
+	if err != nil {
+		return nil, err
+	}
+	return c, nil
+}
+
 func Keygen() (*Fr, *PointG1) {
-	sk, _ := NewFr().Rand(rand.Reader)
-	pk := g1.MulScalar(g1.New(), g1.One(), sk)
-	return sk, pk
+	x, _ := NewFr().Rand(rand.Reader)
+	y := g1.MulScalar(g1.New(), g1.One(), x)
+	return x, y
 }
 
-func Encrypt(pk *PointG1, msg *E) (g1r *PointG1, g2r *PointG2, c2 *E) {
-	// 生成随机数 r
+func Encrypt(y *PointG1, msg *E) *CipherText {
+	// random r
 	r, _ := NewFr().Rand(rand.Reader)
-	// c1 = g2 ^ r
-	// ID = (g1^r, g2^r)
-	g1r = g1.MulScalar(g1.New(), g1.One(), r)
-	g2r = g2.MulScalar(g2.New(), g2.One(), r)
-	// c2 = e(y^r, c1) * m
-	c2 = NewPairingEngine().AddPair(g1.MulScalar(g1.New(), pk, r), g2r).Result()
-	gt.Mul(c2, c2, msg)
-	return g1r, g2r, c2
+	// c1 = g1 ^ r
+	c1 := g1.MulScalar(g1.New(), g1.One(), r)
+	// c2 = g2 ^ r
+	c2 := g2.MulScalar(g2.New(), g2.One(), r)
+	// c3 = e(y^r, c2) * m
+	c3 := NewPairingEngine().AddPair(g1.MulScalar(g1.New(), y, r), c2).Result()
+	gt.Mul(c3, c3, msg)
+	return &CipherText{
+		C1: c1,
+		C2: c2,
+		C3: c3,
+	}
 }
 
-func Decrypt(sk *Fr, pk *PointG1, g1r *PointG1, g2r *PointG2, c2 *E) (res bool, msg *E) {
+func Decrypt(sigma *PointG1, cipherText *CipherText) (msg *E) {
 	// sigma = c1 ^ x
-	sigma := g2.MulScalar(g2.New(), g2r, sk)
-
-	// m = c2 / e(g1^r, σ)
+	// m = c3 / e(σ, c2)
 	eInv := gt.New()
-	gt.Inverse(eInv, NewPairingEngine().AddPair(g1r, sigma).Result())
+	gt.Inverse(eInv, NewPairingEngine().AddPair(sigma, cipherText.C2).Result())
 	msg = gt.New()
-	gt.Mul(msg, c2, eInv)
+	gt.Mul(msg, cipherText.C3, eInv)
+	return msg
+}
 
-	// 验证 e(σ, g2) = e(y, g2r)
-	return NewPairingEngine().AddPair(g1.One(), sigma).AddPairInv(pk, g2r).Check(), msg
+func Verify(sigma *PointG1, y *PointG1, c2 *PointG2) bool {
+	// e(σ, g2) = e(y, c2)
+	return NewPairingEngine().AddPair(sigma, g2.One()).AddPairInv(y, c2).Check()
 }

@@ -21,6 +21,6 @@ func SimpleShuffle(s *srs.SRS, pubKeyList []*PointG1, prevRCommit *PointG1) *ver
 }
 
 func Verify(s *srs.SRS, pubKeyList []*PointG1, prevRCommit *PointG1, shuffleProof *verifiable_draw.DrawProof) bool {
-	num := uint64(len(pubKeyList))
-	return verifiable_draw.Verify(s, num, pubKeyList, uint32(num), prevRCommit, shuffleProof)
+	num := uint32(len(pubKeyList))
+	return verifiable_draw.Verify(s, num, pubKeyList, num, prevRCommit, shuffleProof)
 }

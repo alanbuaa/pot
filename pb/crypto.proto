@@ -1,0 +1,45 @@
+syntax = "proto3";
+package pb;
+
+option go_package="./pb";
+
+message SRS{
+  bytes SRSBytes = 1;
+}
+
+message PointG1{
+  bytes Pointbytes = 1;
+}
+
+message EncShare{
+  bytes Sharebytes = 1;
+}
+
+message SchnorrProof{
+
+}
+
+message DrawProof{
+
+}
+
+message PointG1List{
+  repeated PointG1 PointG1s = 1;
+}
+
+message EncShareList{
+  repeated EncShare EncShares = 1;
+}
+
+message CryptoElement{
+  bytes SRS = 1;
+  repeated PointG1List HolderPKLists = 2;
+  repeated PointG1List ShareCommitLists = 3;
+  repeated PointG1List CoeffCommitLists = 4;
+  repeated EncShareList EncSharesLists = 5;
+  repeated PointG1 CommitteePKLists = 6;
+  bytes SrsUpdateProof = 7;
+  bytes ShuffleProof = 8;
+  bytes DrawProof = 9;
+  repeated uint64 CommitteeWorkHeightList =10;
+}

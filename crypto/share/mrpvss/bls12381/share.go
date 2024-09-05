@@ -69,8 +69,3 @@ func (e *EncShare) FromBytes(data []byte) (*EncShare, error) {
 		DealProof: dleqProof,
 	}, nil
 }
-
-type RoundShare struct {
-	Share *PointG1
-	Proof *dleq.Proof
-}

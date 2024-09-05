@@ -37,7 +37,7 @@ func NewPairingEngine() *Engine {
 
 type pairingEngineTemp struct {
 	t2  [9]*Fe2
-	t12 [3]fe12
+	t12 [3]Fe12
 }
 
 func newEngineTemp() pairingEngineTemp {
@@ -45,7 +45,7 @@ func newEngineTemp() pairingEngineTemp {
 	for i := 0; i < len(t2); i++ {
 		t2[i] = &Fe2{}
 	}
-	t12 := [3]fe12{}
+	t12 := [3]Fe12{}
 	return pairingEngineTemp{t2, t12}
 }
 
@@ -74,7 +74,7 @@ func (e *Engine) Reset() *Engine {
 	return e
 }
 
-func (e *Engine) double(f *fe12, r *PointG2, k int) {
+func (e *Engine) double(f *Fe12, r *PointG2, k int) {
 	fp2, t := e.fp2, e.t2
 
 	fp2.mul(t[0], &r[0], &r[1])
@@ -116,7 +116,7 @@ func (e *Engine) double(f *fe12, r *PointG2, k int) {
 
 }
 
-func (e *Engine) add(f *fe12, r *PointG2, k int) {
+func (e *Engine) add(f *Fe12, r *PointG2, k int) {
 	fp2, t := e.fp2, e.t2
 
 	fp2.mul(t[0], &e.pairs[k].g2[1], &r[2])
@@ -151,7 +151,7 @@ func (e *Engine) add(f *fe12, r *PointG2, k int) {
 	e.fp12.mul014(f, t[3], t[0], t[1])
 }
 
-func (e *Engine) nDoubleAdd(f *fe12, r []PointG2, n int) {
+func (e *Engine) nDoubleAdd(f *Fe12, r []PointG2, n int) {
 	for i := 0; i < n; i++ {
 		e.fp12.squareAssign(f)
 		for j := 0; j < len(e.pairs); j++ {
@@ -163,7 +163,7 @@ func (e *Engine) nDoubleAdd(f *fe12, r []PointG2, n int) {
 	}
 }
 
-func (e *Engine) nDouble(f *fe12, r []PointG2, n int) {
+func (e *Engine) nDouble(f *Fe12, r []PointG2, n int) {
 	for i := 0; i < n; i++ {
 		e.fp12.squareAssign(f)
 		for j := 0; j < len(e.pairs); j++ {
@@ -172,7 +172,7 @@ func (e *Engine) nDouble(f *fe12, r []PointG2, n int) {
 	}
 }
 
-func (e *Engine) millerLoop(f *fe12) {
+func (e *Engine) millerLoop(f *Fe12) {
 	f.one()
 
 	r := make([]PointG2, len(e.pairs))
@@ -197,7 +197,7 @@ func (e *Engine) millerLoop(f *fe12) {
 }
 
 // exp raises element by x = -15132376222941642752
-func (e *Engine) exp(c, a *fe12) {
+func (e *Engine) exp(c, a *Fe12) {
 	c.set(a)
 	e.fp12.cyclotomicSquare(c) // (a ^ 2)
 
@@ -239,7 +239,7 @@ func (e *Engine) exp(c, a *fe12) {
 }
 
 // expDrop raises element by x = -15132376222941642752 / 2
-func (e *Engine) expDrop(c, a *fe12) {
+func (e *Engine) expDrop(c, a *Fe12) {
 	c.set(a)
 	e.fp12.cyclotomicSquare(c) // (a ^ 2)
 
@@ -280,7 +280,7 @@ func (e *Engine) expDrop(c, a *fe12) {
 	fp12Conjugate(c, c)
 }
 
-func (e *Engine) finalExp(f *fe12) {
+func (e *Engine) finalExp(f *Fe12) {
 	t := e.t12
 	// Efficient Final Exponentiation via Cyclotomic Structure for Pairings over Families of Elliptic Curves
 	// https: //eprint.iacr.org/2020/875.pdf
@@ -316,7 +316,7 @@ func (e *Engine) finalExp(f *fe12) {
 	e.fp12.mulAssign(f, &t[1])
 }
 
-func (e *Engine) calculate() *fe12 {
+func (e *Engine) calculate() *Fe12 {
 	f := e.fp12.one()
 	if len(e.pairs) == 0 {
 		return f

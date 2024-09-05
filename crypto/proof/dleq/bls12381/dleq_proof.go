@@ -1,10 +1,10 @@
 package dleq
 
 import (
-	. "github.com/zzz136454872/upgradeable-consensus/crypto/types/curve/bls12381"
 	"bytes"
 	"crypto/rand"
 	"encoding/binary"
+	. "github.com/zzz136454872/upgradeable-consensus/crypto/types/curve/bls12381"
 )
 
 var (

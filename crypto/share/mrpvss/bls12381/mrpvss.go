@@ -11,12 +11,12 @@ import (
 
 var group1 = NewG1()
 
-func EncShares(g *PointG1, h *PointG1, holderPKList []*PointG1, secret *Fr, threshold uint64) (shareCommitments []*PointG1, coeffCommits []*PointG1, encShares []*EncShare, y *PointG1, err error) {
+func EncShares(g *PointG1, h *PointG1, holderPKList []*PointG1, secret *Fr, threshold uint32) (shareCommitments []*PointG1, coeffCommits []*PointG1, encShares []*EncShare, y *PointG1, err error) {
 
 	if g == nil || h == nil || holderPKList == nil || secret == nil {
 		return nil, nil, nil, nil, errors.New("invalid params")
 	}
-	n := uint64(len(holderPKList))
+	n := uint32(len(holderPKList))
 	if n < threshold {
 		return nil, nil, nil, nil, errors.New("threshold is higher than num of public keys")
 	}
@@ -33,14 +33,14 @@ func EncShares(g *PointG1, h *PointG1, holderPKList []*PointG1, secret *Fr, thre
 	}
 	// 计算份额 s_i = p(i)
 	shares := make([]*Fr, n)
-	for i := uint64(0); i < n; i++ {
+	for i := uint32(0); i < n; i++ {
 		shares[i] = secretPoly.Eval(FrFromUInt32(i + 1))
 	}
 
 	encShares = make([]*EncShare, n)
 	// share commitment S_i = h^(s_i)
 	shareCommitments = make([]*PointG1, n)
-	for i := uint64(0); i < n; i++ {
+	for i := uint32(0); i < n; i++ {
 		index := i + 1
 		// share commitment S_i = h^(s_i)
 		shareCommitments[i] = group1.MulScalar(group1.New(), h, shares[i])
@@ -67,7 +67,7 @@ func EncShares(g *PointG1, h *PointG1, holderPKList []*PointG1, secret *Fr, thre
 		}
 		// 分发证明 log_(pk_i) Y_i = log_(h) S_i 证明分发的是 s_i
 		dleqParams := dleq.DLEQ{
-			Index: uint32(index),
+			Index: index,
 			G1:    h,
 			H1:    shareCommitments[i],
 			G2:    group1.Add(group1.New(), g, group1.MulScalar(group1.New(), holderPKList[i], FrFromInt(32))),
@@ -82,11 +82,11 @@ func EncShares(g *PointG1, h *PointG1, holderPKList []*PointG1, secret *Fr, thre
 	return shareCommitments, coeffCommits, encShares, y, nil
 }
 
-func VerifyEncShares(n uint64, t uint32, g, h *PointG1, pubKeyList, shareCommits, coeffCommits []*PointG1, encShares []*EncShare) bool {
+func VerifyEncShares(n uint32, t uint32, g, h *PointG1, pubKeyList []*PointG1, shareCommits []*PointG1, coeffCommits []*PointG1, encShares []*EncShare) bool {
 	// 计算 {S_i} \prod B_ij
 
 	BProdList := make([]*PointG1, n)
-	for i := uint64(0); i < n; i++ {
+	for i := uint32(0); i < n; i++ {
 		calcShareCommits := group1.Zero()
 		exponent := NewFr().One()
 		BProdList[i] = group1.Zero()
@@ -105,7 +105,7 @@ func VerifyEncShares(n uint64, t uint32, g, h *PointG1, pubKeyList, shareCommits
 		}
 	}
 	// 验证加密份额 log_h S_i = log_(g · pk_i^k) \prod B_ij
-	for i := uint32(0); i < uint32(n); i++ {
+	for i := uint32(0); i < n; i++ {
 		base2 := group1.Add(group1.New(), g, group1.MulScalar(group1.New(), pubKeyList[i], FrFromInt(32)))
 		if !dleq.Verify(i+1, h, shareCommits[i], base2, BProdList[i], encShares[i].DealProof) {
 			return false
@@ -193,9 +193,9 @@ func DecryptAggregateShare(g *PointG1, privKey *Fr, encShare *EncShare, m uint32
 	return share
 }
 
-func CalcRoundShare(index uint32, h *PointG1, c *PointG1, shareCommit *PointG1, share *Fr) (*RoundShare, error) {
+func CalcRoundShare(index uint32, h *PointG1, c *PointG1, shareCommit *PointG1, share *Fr) (*PointG1, *dleq.Proof, error) {
 	if c == nil || share == nil {
-		return nil, errors.New("invalid parameter")
+		return nil, nil, errors.New("invalid parameter")
 	}
 	roundShare := group1.Affine(group1.MulScalar(group1.New(), c, share))
 	dleqParams := dleq.DLEQ{
@@ -205,41 +205,38 @@ func CalcRoundShare(index uint32, h *PointG1, c *PointG1, shareCommit *PointG1, 
 		G2:    h,
 		H2:    shareCommit,
 	}
-	return &RoundShare{
-		Share: roundShare,
-		Proof: dleqParams.Prove(share),
-	}, nil
+	return roundShare, dleqParams.Prove(share), nil
 }
 
-func VerifyRoundShare(index uint32, h *PointG1, c *PointG1, shareCommit *PointG1, roundShare *RoundShare) bool {
+func VerifyRoundShare(index uint32, h *PointG1, c *PointG1, shareCommit *PointG1, roundShare *PointG1, roundShareProof *dleq.Proof) bool {
 	// log_c c^(s_i) = log_(h) S_i
-	return dleq.Verify(index, c, roundShare.Share, h, shareCommit, roundShare.Proof)
+	return dleq.Verify(index, c, roundShare, h, shareCommit, roundShareProof)
 }
 
-func RecoverSecret(threshold uint32, roundShares []*PointG1) *PointG1 {
+func RecoverRoundSecret(threshold uint32, indices []uint32, roundShares []*PointG1) *PointG1 {
 	t := int(threshold)
 	if t > len(roundShares) {
 		return nil
 	}
 	secret := group1.Zero()
-	// numerator = t!
+	// numerator = ∏ xᵢ
 	numerator := NewFr().One()
-	for i := uint32(1); i <= threshold; i++ {
-		numerator.Mul(numerator, FrFromUInt32(uint64(i)))
+	for i := uint32(0); i < threshold; i++ {
+		numerator.Mul(numerator, FrFromUInt32(indices[i]))
 	}
 	// ∏_(i∈[1,t]) (c^(s_i))^(λ_i)
-	for i := 1; i <= t; i++ {
-		// λ_i = t! / i / [∏_(j∈[1,t],j≠i) (j - i)]
-		lagrangeBasis := NewFr().Mul(numerator, NewFr().Inverse(FrFromInt(i)))
+	for i := 0; i < t; i++ {
+		// λ_i = t! / x_i / [∏_(j∈[1,t],j≠i) (x_j - x_i)]
+		lagrangeBasis := NewFr().Mul(numerator, NewFr().Inverse(FrFromUInt32(indices[i])))
 		denominator := NewFr().One()
-		for j := 1; j <= t; j++ {
+		for j := 0; j < t; j++ {
 			if j != i {
-				denominator.Mul(denominator, FrFromInt(j-i))
+				denominator.Mul(denominator, NewFr().Sub(FrFromUInt32(indices[j]), FrFromUInt32(indices[i])))
 			}
 		}
 		lagrangeBasis.Mul(lagrangeBasis, NewFr().Inverse(denominator))
 		// ∏_(i∈[1,t]) rs^(λ_i) , rs = c^(s_i)
-		group1.Add(secret, secret, group1.MulScalar(group1.New(), roundShares[i-1], lagrangeBasis))
+		group1.Add(secret, secret, group1.MulScalar(group1.New(), roundShares[i], lagrangeBasis))
 	}
 	return group1.Affine(secret)
 }

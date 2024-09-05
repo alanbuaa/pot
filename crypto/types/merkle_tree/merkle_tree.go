@@ -1,9 +1,8 @@
 package merkle_tree
 
 import (
-	"sort"
-
 	"github.com/zzz136454872/upgradeable-consensus/crypto/hash"
+	"sort"
 )
 
 // ComputeMerkleRoot compute the root hash of a merkle tree composed of input hashes.

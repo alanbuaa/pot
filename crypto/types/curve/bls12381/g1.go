@@ -70,25 +70,25 @@ func (g *G1) FromUncompressed(uncompressed []byte) (*PointG1, error) {
 	var in [2 * fpByteSize]byte
 	copy(in[:], uncompressed[:2*fpByteSize])
 	if in[0]&(1<<7) != 0 {
-		return nil, errors.New("compression flag must be Zero")
+		return nil, errors.New("compression flag must be zero")
 	}
 	if in[0]&(1<<5) != 0 {
-		return nil, errors.New("sort flag must be Zero")
+		return nil, errors.New("sort flag must be zero")
 	}
 	if in[0]&(1<<6) != 0 {
 		for i, v := range in {
 			if (i == 0 && v != 0x40) || (i != 0 && v != 0x00) {
-				return nil, errors.New("input string must be Zero when infinity flag is Set")
+				return nil, errors.New("input string must be zero when infinity flag is Set")
 			}
 		}
 		return g.Zero(), nil
 	}
 	in[0] &= 0x1f
-	x, err := fromBytes(in[:fpByteSize])
+	x, err := FromBytes(in[:fpByteSize])
 	if err != nil {
 		return nil, err
 	}
-	y, err := fromBytes(in[fpByteSize:])
+	y, err := FromBytes(in[fpByteSize:])
 	if err != nil {
 		return nil, err
 	}
@@ -114,15 +114,15 @@ func (g *G1) ToUncompressed(p *PointG1) []byte {
 		return out
 	}
 	g.Affine(p)
-	copy(out[:fpByteSize], toBytes(&p[0]))
-	copy(out[fpByteSize:], toBytes(&p[1]))
+	copy(out[:fpByteSize], ToBytes(&p[0]))
+	copy(out[fpByteSize:], ToBytes(&p[1]))
 	return out
 }
 
 // FromCompressed expects byte slice at least 48 Bytes and given Bytes returns a new point in G1.
 // $\mathbb{G}_1$ elements occupy 96 bytes in uncompressed form, and 48 bytes in compressed form.
 // The most significant bit (1<<6) indicates that the point is at infinity. If this bit is set, the remaining bits of the
-// group element's encoding should be set to zero.
+// group element's encoding should be set to Zero.
 // The second-most significant bit (1<<7) is set if (and only if) this point is in compressed form and it is not the point
 // at infinity and its y-coordinate is the lexicographically largest of the two associated with the encoded x-coordinate.
 func (g *G1) FromCompressed(compressed []byte) (*PointG1, error) {
@@ -136,7 +136,7 @@ func (g *G1) FromCompressed(compressed []byte) (*PointG1, error) {
 		// in[0] == (1 << 6)
 		for i, v := range in {
 			if (i == 0 && v != 0x40) || (i != 0 && v != 0x00) {
-				return nil, errors.New("input string must be Zero when infinity flag is Set")
+				return nil, errors.New("input string must be zero when infinity flag is Set")
 			}
 		}
 		return g.Zero(), nil
@@ -145,7 +145,7 @@ func (g *G1) FromCompressed(compressed []byte) (*PointG1, error) {
 	// at infinity and its y-coordinate is the lexicographically largest of the two associated with the encoded x-coordinate.
 	a := in[0]&(1<<7) != 0
 	in[0] &= 0x1f
-	x, err := fromBytes(in[:])
+	x, err := FromBytes(in[:])
 	if err != nil {
 		return nil, err
 	}
@@ -168,10 +168,56 @@ func (g *G1) FromCompressed(compressed []byte) (*PointG1, error) {
 	return p, nil
 }
 
+// FromCompressedUncheck expects byte slice at least 48 Bytes and given Bytes returns a new point in G1.
+// $\mathbb{G}_1$ elements occupy 96 bytes in uncompressed form, and 48 bytes in compressed form.
+// The most significant bit (1<<6) indicates that the point is at infinity. If this bit is set, the remaining bits of the
+// group element's encoding should be set to Zero.
+// The second-most significant bit (1<<7) is set if (and only if) this point is in compressed form and it is not the point
+// at infinity and its y-coordinate is the lexicographically largest of the two associated with the encoded x-coordinate.
+func (g *G1) FromCompressedUncheck(compressed []byte) (*PointG1, error) {
+	if len(compressed) != fpByteSize {
+		return nil, errors.New("input string length must be equal to 48 Bytes")
+	}
+	var in [fpByteSize]byte
+	copy(in[:], compressed[:])
+	// If this bit is set, the remaining bits of the group element's encoding should be set to zero.
+	if in[0]&(1<<6) != 0 {
+		// in[0] == (1 << 6)
+		for i, v := range in {
+			if (i == 0 && v != 0x40) || (i != 0 && v != 0x00) {
+				return nil, errors.New("input string must be zero when infinity flag is Set")
+			}
+		}
+		return g.Zero(), nil
+	}
+	// The second-most significant bit is set if (and only if) this point is in compressed form and it is not the point
+	// at infinity and its y-coordinate is the lexicographically largest of the two associated with the encoded x-coordinate.
+	a := in[0]&(1<<7) != 0
+	in[0] &= 0x1f
+	x, err := FromBytes(in[:])
+	if err != nil {
+		return nil, err
+	}
+	// solve curve equation
+	y := &Fe{}
+	square(y, x)
+	mul(y, y, x)
+	add(y, y, b)
+	if ok := Sqrt(y, y); !ok {
+		return nil, errors.New("point is not on curve")
+	}
+	if y.signBE() == a {
+		neg(y, y)
+	}
+	z := new(Fe).One()
+	p := &PointG1{*x, *y, *z}
+	return p, nil
+}
+
 // ToCompressed given a G1 point returns Bytes in compressed form of the point.
 // $\mathbb{G}_1$ elements occupy 96 bytes in uncompressed form, and 48 bytes in compressed form.
 // The most significant bit (1<<6) indicates that the point is at infinity. If this bit is set, the remaining bits of the
-// group element's encoding should be set to zero.
+// group element's encoding should be set to Zero.
 // The second-most significant bit (1<<7) is set if (and only if) this point is in compressed form and it is not the point
 // at infinity and its y-coordinate is the lexicographically largest of the two associated with the encoded x-coordinate.
 func (g *G1) ToCompressed(p *PointG1) []byte {
@@ -181,7 +227,7 @@ func (g *G1) ToCompressed(p *PointG1) []byte {
 	if g.IsZero(p) {
 		out[0] |= 1 << 6
 	} else {
-		copy(out[:], toBytes(&p[0]))
+		copy(out[:], ToBytes(&p[0]))
 		// The second-most significant bit is set if (and only if) this point is in compressed form and it is not the point
 		// at infinity and its y-coordinate is the lexicographically largest of the two associated with the encoded x-coordinate.
 		if !p[1].signBE() {
@@ -192,11 +238,11 @@ func (g *G1) ToCompressed(p *PointG1) []byte {
 }
 
 func (g *G1) fromBytesUnchecked(in []byte) (*PointG1, error) {
-	p0, err := fromBytes(in[:fpByteSize])
+	p0, err := FromBytes(in[:fpByteSize])
 	if err != nil {
 		return nil, err
 	}
-	p1, err := fromBytes(in[fpByteSize:])
+	p1, err := FromBytes(in[fpByteSize:])
 	if err != nil {
 		return nil, err
 	}
@@ -211,11 +257,11 @@ func (g *G1) FromBytes(in []byte) (*PointG1, error) {
 	if len(in) != 2*fpByteSize {
 		return nil, errors.New("input string length must be equal to 96 Bytes")
 	}
-	p0, err := fromBytes(in[:fpByteSize])
+	p0, err := FromBytes(in[:fpByteSize])
 	if err != nil {
 		return nil, err
 	}
-	p1, err := fromBytes(in[fpByteSize:])
+	p1, err := FromBytes(in[fpByteSize:])
 	if err != nil {
 		return nil, err
 	}
@@ -239,8 +285,8 @@ func (g *G1) ToBytes(p *PointG1) []byte {
 		return out
 	}
 	g.Affine(p)
-	copy(out[:fpByteSize], toBytes(&p[0]))
-	copy(out[fpByteSize:], toBytes(&p[1]))
+	copy(out[:fpByteSize], ToBytes(&p[0]))
+	copy(out[fpByteSize:], ToBytes(&p[1]))
 	return out
 }
 
@@ -790,7 +836,7 @@ func (g *G1) ClearCofactor(p *PointG1) *PointG1 {
 // https://tools.ietf.org/html/draft-irtf-cfrg-hash-to-curve-06
 // Input byte slice should be a valid field element, otherwise an error is returned.
 func (g *G1) MapToCurve(in []byte) (*PointG1, error) {
-	u, err := fromBytes(in)
+	u, err := FromBytes(in)
 	if err != nil {
 		return nil, err
 	}

@@ -3,19 +3,18 @@ package srs
 import (
 	"crypto/rand"
 	"fmt"
-	"math/big"
-	"testing"
-	"time"
-
 	"github.com/stretchr/testify/assert"
 	schnorr_proof "github.com/zzz136454872/upgradeable-consensus/crypto/proof/schnorr_proof/bls12381"
 	. "github.com/zzz136454872/upgradeable-consensus/crypto/types/curve/bls12381"
+	"math/big"
+	"testing"
+	"time"
 )
 
 func TestVerifyTrue1(t *testing.T) {
 	s, initProof := NewSRS(128, 16)
 	assert.True(t, Verify(s, g1, initProof))
-	prevSRSG1FirstElem := s.G1Power(1)
+	prevSRSG1FirstElem := s.G1PowerOf(1)
 	x, _ := NewFr().Rand(rand.Reader)
 	newSrs, proof := s.Update(x)
 	assert.True(t, Verify(newSrs, prevSRSG1FirstElem, proof))
@@ -31,7 +30,7 @@ func TestVerifyTrue2(t *testing.T) {
 		x, _ := NewFr().Rand(rand.Reader)
 
 		startTime = time.Now()
-		prevSRSG1FirstElem := s.G1Power(1)
+		prevSRSG1FirstElem := s.G1PowerOf(1)
 		newSrs, proof := s.Update(x)
 		fmt.Println("update time:", time.Since(startTime))
 
@@ -59,9 +58,9 @@ func TestSRS_Update(t *testing.T) {
 		g1Powers: g1Powers,
 		g2Powers: g2Powers,
 	}
-	prevSRSG1FirstElem := s1.G1Power(1)
+	prevSRSG1FirstElem := s1.G1PowerOf(1)
 	_, proof := s1.Update(FrFromInt(3))
-	assert.True(t, schnorr_proof.Verify(prevSRSG1FirstElem, s1.G1Power(1), proof))
+	assert.True(t, schnorr_proof.Verify(prevSRSG1FirstElem, s1.G1PowerOf(1), proof))
 	for i := uint32(0); i < g1Degree; i++ {
 		assert.True(t, group1.Equal(s1.g1Powers[i], group1.MulScalar(group1.New(), s1.g1Powers[0], NewFr().Exp(FrFromInt(3), big.NewInt(int64(i))))))
 	}

@@ -128,16 +128,16 @@ func CreateProof(s *srs.SRS, hBasePoints []*PointG1, h *PointG1, kzgCommit *Poin
 	// A
 	A := group1.Zero()
 	for i := 0; i < size; i++ {
-		group1.Add(A, A, group1.MulScalar(group1.New(), s.G1Power(uint32(i)), APoly.Coeffs[i]))
+		group1.Add(A, A, group1.MulScalar(group1.New(), s.G1PowerOf(uint32(i)), APoly.Coeffs[i]))
 	}
 	AHat := group1.MulScalar(group1.New(), h, rDot)
 	for i := 0; i < size; i++ {
-		group1.Add(AHat, AHat, group1.MulScalar(group1.New(), hBasePoints[i], rDot))
+		group1.Add(AHat, AHat, group1.MulScalar(group1.New(), hBasePoints[i], rVector[i]))
 	}
+	AHat = group1.Affine(AHat)
 
 	// calculate challenge
 	challenge := HashToFr(append(group1.ToBytes(A), group1.ToBytes(AHat)...))
-
 	// calculate {z_i}
 	zVector := make([]*Fr, size)
 	for i := 0; i < size; i++ {
@@ -169,12 +169,11 @@ func VerifyProof(s *srs.SRS, hBasePoints []*PointG1, h *PointG1, vectorLinkProof
 
 	right1 := group1.Zero()
 	for i := uint32(0); i < size; i++ {
-		group1.Add(right1, right1, group1.MulScalar(group1.New(), s.G1Power(i), right1Poly.Coeffs[i]))
+		group1.Add(right1, right1, group1.MulScalar(group1.New(), s.G1PowerOf(i), right1Poly.Coeffs[i]))
 	}
 	if !group1.Equal(left1, right1) {
 		return false
 	}
-
 	left2 := group1.Add(group1.New(), vectorLinkProof.PedCommit, group1.MulScalar(group1.New(), vectorLinkProof.AHat, challenge))
 	right2 := group1.MulScalar(group1.New(), h, vectorLinkProof.Omega)
 	for i := uint32(0); i < size; i++ {

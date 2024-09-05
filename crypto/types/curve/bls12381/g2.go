@@ -79,15 +79,15 @@ func (g *G2) FromUncompressed(uncompressed []byte) (*PointG2, error) {
 	var in [4 * fpByteSize]byte
 	copy(in[:], uncompressed[:4*fpByteSize])
 	if in[0]&(1<<7) != 0 {
-		return nil, errors.New("compression flag must be Zero")
+		return nil, errors.New("compression flag must be zero")
 	}
 	if in[0]&(1<<5) != 0 {
-		return nil, errors.New("sort flag must be Zero")
+		return nil, errors.New("sort flag must be zero")
 	}
 	if in[0]&(1<<6) != 0 {
 		for i, v := range in {
 			if (i == 0 && v != 0x40) || (i != 0 && v != 0x00) {
-				return nil, errors.New("input string must be Zero when infinity flag is Set")
+				return nil, errors.New("input string must be zero when infinity flag is Set")
 			}
 		}
 		return g.Zero(), nil
@@ -139,12 +139,12 @@ func (g *G2) FromCompressed(compressed []byte) (*PointG2, error) {
 	}
 	var in [2 * fpByteSize]byte
 	copy(in[:], compressed[:])
-	// Zero
+	// zero
 	if in[0]&(1<<6) != 0 {
 		// in[0] == (1 << 6) + (1 << 7)
 		for i, v := range in {
 			if (i == 0 && v != 0x40) || (i != 0 && v != 0x00) {
-				return nil, errors.New("input string must be Zero when infinity flag is Set")
+				return nil, errors.New("input string must be zero when infinity flag is Set")
 			}
 		}
 		return g.Zero(), nil

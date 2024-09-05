@@ -4,11 +4,6 @@ import (
 	"bytes"
 	"crypto/rand"
 	"fmt"
-	schnorr_proof "github.com/zzz136454872/upgradeable-consensus/crypto/proof/schnorr_proof/bls12381"
-	mrpvss "github.com/zzz136454872/upgradeable-consensus/crypto/share/mrpvss/bls12381"
-	"github.com/zzz136454872/upgradeable-consensus/crypto/types/curve/bls12381"
-	"github.com/zzz136454872/upgradeable-consensus/crypto/types/srs"
-	"github.com/zzz136454872/upgradeable-consensus/crypto/verifiable_draw"
 	"math/big"
 	"time"
 
@@ -23,38 +18,23 @@ type ConsensusBlock interface {
 	GetShardingName() []byte
 	protoreflect.ProtoMessage
 }
-type CryptoSet struct {
-	SRS            *srs.SRS
-	SrsUpdateProof *schnorr_proof.SchnorrProof // SRS更新证明
-	// 置换阶段
-	ShuffleProof *verifiable_draw.DrawProof // 公钥列表置换证明（包含置换输出的公钥列表）
-	// 抽签阶段
-	DrawProof *verifiable_draw.DrawProof // 抽签证明（包含抽签输出的公钥列表）
-	// DPVSS阶段
-	HolderPKLists           [][]*bls12381.PointG1 // 多个PVSS参与者公钥列表
-	ShareCommitLists        [][]*bls12381.PointG1 // 多个PVSS份额承诺列表
-	CoeffCommitLists        [][]*bls12381.PointG1 // 多个PVSS系数承诺列表
-	EncShareLists           [][]*mrpvss.EncShare  // 多个PVSS加密份额列表
-	CommitteePKList         []*bls12381.PointG1   // 多个PVSS对应的委员会公钥（公钥y = g^s，s为秘密）
-	CommitteeWorkHeightList []uint64              // 每个PVSS所对应委员会的工作高度
-}
 
 type Header struct {
-	Height     uint64
-	ParentHash []byte
-	UncleHash  [][]byte
-	Mixdigest  []byte
-	Difficulty *big.Int
-	Nonce      int64
-	Timestamp  time.Time
-	PoTProof   [][]byte
-	Address    int64
-	PeerId     string
-	TxHash     []byte
-	ExeHash    []byte
-	Hashes     []byte
-	PublicKey  []byte
-	CryptoSet  CryptoSet
+	Height        uint64
+	ParentHash    []byte
+	UncleHash     [][]byte
+	Mixdigest     []byte
+	Difficulty    *big.Int
+	Nonce         int64
+	Timestamp     time.Time
+	PoTProof      [][]byte
+	Address       int64
+	PeerId        string
+	TxHash        []byte
+	ExeHash       []byte
+	Hashes        []byte
+	PublicKey     []byte
+	CryptoElement CryptoElement
 }
 
 type Block struct {
@@ -138,6 +118,9 @@ func ToExeHeaders(exeheaders []*pb.ExecuteHeader) []*ExecuteHeader {
 }
 
 func (b *Header) Hash() []byte {
+	if b == nil {
+		return crypto.NilTxsHash
+	}
 	if b.Hashes != nil {
 		return b.Hashes
 	}

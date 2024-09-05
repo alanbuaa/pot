@@ -31,18 +31,18 @@ func TestFrSerialization(t *testing.T) {
 
 	e := new(Fr).FromBytes(in)
 	if !e.IsZero() {
-		t.Fatal("serialization failed, from Bytes Zero")
+		t.Fatal("serialization failed, from Bytes zero")
 	}
 	if !bytes.Equal(in, e.ToBytes()) {
-		t.Fatal("serialization failed, to Bytes Zero")
+		t.Fatal("serialization failed, to Bytes zero")
 	}
 
 	e = new(Fr).RedFromBytes(in)
 	if !e.IsZero() {
-		t.Fatal("serialization failed, from Bytes Zero, reduced")
+		t.Fatal("serialization failed, from Bytes zero, reduced")
 	}
 	if !bytes.Equal(in, e.RedToBytes()) {
-		t.Fatal("serialization failed, to Bytes Zero, reduced")
+		t.Fatal("serialization failed, to Bytes zero, reduced")
 	}
 
 	a, err := new(Fr).Rand(rand.Reader)

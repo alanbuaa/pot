@@ -121,7 +121,7 @@ func TestG2IsOnCurve(t *testing.T) {
 	g := NewG2()
 	zero := g.Zero()
 	if !g.IsOnCurve(zero) {
-		t.Fatal("Zero must be on curve")
+		t.Fatal("zero must be on curve")
 	}
 	one := new(Fe2).One()
 	p := &PointG2{*one, *one, *one}
@@ -313,7 +313,7 @@ func TestG2MultiplicativeProperties(t *testing.T) {
 // 		panic(err)
 // 	}
 // 	g := NewG2()
-// 	p1 := g.Zero()
+// 	p1 := g.zero()
 // 	for i := 0; i < 1000; i++ {
 // 		vector := data[i*192 : (i+1)*192]
 // 		p2, err := g.FromUncompressed(vector)
@@ -334,7 +334,7 @@ func TestG2MultiplicativeProperties(t *testing.T) {
 // 		panic(err)
 // 	}
 // 	g := NewG2()
-// 	p1 := g.Zero()
+// 	p1 := g.zero()
 // 	for i := 0; i < 1000; i++ {
 // 		vector := data[i*2*fpByteSize : (i+1)*2*fpByteSize]
 // 		p2, err := g.FromCompressed(vector)

@@ -8,23 +8,23 @@ import (
 )
 
 func TestFpSerialization(t *testing.T) {
-	t.Run("Zero", func(t *testing.T) {
+	t.Run("zero", func(t *testing.T) {
 		in := make([]byte, fpByteSize)
-		fe, err := fromBytes(in)
+		fe, err := FromBytes(in)
 		if err != nil {
 			t.Fatal(err)
 		}
 		if !fe.isZero() {
 			t.Fatal("serialization failed")
 		}
-		if !bytes.Equal(in, toBytes(fe)) {
+		if !bytes.Equal(in, ToBytes(fe)) {
 			t.Fatal("serialization failed")
 		}
 	})
 	t.Run("Bytes", func(t *testing.T) {
 		for i := 0; i < fuz; i++ {
 			a, _ := new(Fe).Rand(rand.Reader)
-			b, err := fromBytes(toBytes(a))
+			b, err := FromBytes(ToBytes(a))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -48,7 +48,7 @@ func TestFpSerialization(t *testing.T) {
 	t.Run("big", func(t *testing.T) {
 		for i := 0; i < fuz; i++ {
 			a, _ := new(Fe).Rand(rand.Reader)
-			b, err := fromBig(toBig(a))
+			b, err := FromBig(ToBig(a))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -303,11 +303,11 @@ func TestFpMultiplicationCrossAgainstBigInt(t *testing.T) {
 		a, _ := new(Fe).Rand(rand.Reader)
 		b, _ := new(Fe).Rand(rand.Reader)
 		c := new(Fe)
-		big_a := toBig(a)
-		big_b := toBig(b)
+		big_a := ToBig(a)
+		big_b := ToBig(b)
 		big_c := new(big.Int)
 		mul(c, a, b)
-		out_1 := toBytes(c)
+		out_1 := ToBytes(c)
 		out_2 := padBytes(big_c.Mul(big_a, big_b).Mod(big_c, modulus.big()).Bytes(), fpByteSize)
 		if !bytes.Equal(out_1, out_2) {
 			t.Fatal("cross test against big.Int is failed")
@@ -477,7 +477,7 @@ func TestFpNonResidue(t *testing.T) {
 		t.Fatal("One is not quadratic non residue")
 	}
 	if !IsQuadraticNonResidue(new(Fe).zero()) {
-		t.Fatal("should accept Zero as quadratic non residue")
+		t.Fatal("should accept zero as quadratic non residue")
 	}
 	for i := 0; i < fuz; i++ {
 		a, _ := new(Fe).Rand(rand.Reader)
@@ -503,7 +503,7 @@ func TestWFp(t *testing.T) {
 	a := new(Fe)
 	fromWide(a, w)
 	if !a.isZero() {
-		t.Fatal("expect Zero")
+		t.Fatal("expect zero")
 	}
 	w[0] = r1[0]
 	w[1] = r1[1]
@@ -1026,7 +1026,7 @@ func TestFp2NonResidue(t *testing.T) {
 		t.Fatal("One is not quadratic non residue")
 	}
 	if !f.isQuadraticNonResidue(new(Fe2).Zero()) {
-		t.Fatal("should accept Zero as quadratic non residue")
+		t.Fatal("should accept zero as quadratic non residue")
 	}
 	for i := 0; i < fuz; i++ {
 		a, _ := new(Fe2).Rand(rand.Reader)
@@ -1625,7 +1625,7 @@ func TestFp6SparseMultiplicationCross(t *testing.T) {
 func TestFp12Serialization(t *testing.T) {
 	f := newFp12(nil)
 	for i := 0; i < fuz; i++ {
-		a, _ := new(fe12).rand(rand.Reader)
+		a, _ := new(Fe12).Rand(rand.Reader)
 		b, err := f.fromBytes(f.toBytes(a))
 		if err != nil {
 			t.Fatal(err)
@@ -1640,15 +1640,15 @@ func TestFp12AdditionProperties(t *testing.T) {
 	f := newFp12(nil)
 	for i := 0; i < fuz; i++ {
 		zero := f.zero()
-		a, _ := new(fe12).rand(rand.Reader)
-		b, _ := new(fe12).rand(rand.Reader)
+		a, _ := new(Fe12).Rand(rand.Reader)
+		b, _ := new(Fe12).Rand(rand.Reader)
 		c1 := f.new()
 		c2 := f.new()
-		fp12Add(c1, a, zero)
+		Fp12Add(c1, a, zero)
 		if !c1.equal(a) {
 			t.Fatal("a + 0 == a")
 		}
-		fp12Sub(c1, a, zero)
+		Fp12Sub(c1, a, zero)
 		if !c1.equal(a) {
 			t.Fatal("a - 0 == a")
 		}
@@ -1656,43 +1656,43 @@ func TestFp12AdditionProperties(t *testing.T) {
 		if !c1.equal(zero) {
 			t.Fatal("2 * 0 == 0")
 		}
-		fp12Neg(c1, zero)
+		Fp12Neg(c1, zero)
 		if !c1.equal(zero) {
 			t.Fatal("-0 == 0")
 		}
-		fp12Sub(c1, zero, a)
-		fp12Neg(c2, a)
+		Fp12Sub(c1, zero, a)
+		Fp12Neg(c2, a)
 		if !c1.equal(c2) {
 			t.Fatal("0-a == -a")
 		}
 		fp12Double(c1, a)
-		fp12Add(c2, a, a)
+		Fp12Add(c2, a, a)
 		if !c1.equal(c2) {
 			t.Fatal("2 * a == a + a")
 		}
-		fp12Add(c1, a, b)
-		fp12Add(c2, b, a)
+		Fp12Add(c1, a, b)
+		Fp12Add(c2, b, a)
 		if !c1.equal(c2) {
 			t.Fatal("a + b = b + a")
 		}
-		fp12Sub(c1, a, b)
-		fp12Sub(c2, b, a)
-		fp12Neg(c2, c2)
+		Fp12Sub(c1, a, b)
+		Fp12Sub(c2, b, a)
+		Fp12Neg(c2, c2)
 		if !c1.equal(c2) {
 			t.Fatal("a - b = - ( b - a )")
 		}
-		cx, _ := new(fe12).rand(rand.Reader)
-		fp12Add(c1, a, b)
-		fp12Add(c1, c1, cx)
-		fp12Add(c2, a, cx)
-		fp12Add(c2, c2, b)
+		cx, _ := new(Fe12).Rand(rand.Reader)
+		Fp12Add(c1, a, b)
+		Fp12Add(c1, c1, cx)
+		Fp12Add(c2, a, cx)
+		Fp12Add(c2, c2, b)
 		if !c1.equal(c2) {
 			t.Fatal("(a + b) + c == (a + c ) + b")
 		}
-		fp12Sub(c1, a, b)
-		fp12Sub(c1, c1, cx)
-		fp12Sub(c2, a, cx)
-		fp12Sub(c2, c2, b)
+		Fp12Sub(c1, a, b)
+		Fp12Sub(c1, c1, cx)
+		Fp12Sub(c2, a, cx)
+		Fp12Sub(c2, c2, b)
 		if !c1.equal(c2) {
 			t.Fatal("(a - b) - c == (a - c ) -b")
 		}
@@ -1702,8 +1702,8 @@ func TestFp12AdditionProperties(t *testing.T) {
 func TestFp12MultiplicationProperties(t *testing.T) {
 	f := newFp12(nil)
 	for i := 0; i < fuz; i++ {
-		a, _ := new(fe12).rand(rand.Reader)
-		b, _ := new(fe12).rand(rand.Reader)
+		a, _ := new(Fe12).Rand(rand.Reader)
+		b, _ := new(Fe12).Rand(rand.Reader)
 		zero := f.zero()
 		one := f.one()
 		c1, c2 := f.new(), f.new()
@@ -1720,7 +1720,7 @@ func TestFp12MultiplicationProperties(t *testing.T) {
 		if !c1.equal(c2) {
 			t.Fatal("a * b == b * a")
 		}
-		cx, _ := new(fe12).rand(rand.Reader)
+		cx, _ := new(Fe12).Rand(rand.Reader)
 		f.mul(c1, a, b)
 		f.mul(c1, c1, cx)
 		f.mul(c2, cx, b)
@@ -1736,7 +1736,7 @@ func TestFp12MultiplicationProperties(t *testing.T) {
 		if !a.equal(one) {
 			t.Fatal("1^2 == 1")
 		}
-		_, _ = a.rand(rand.Reader)
+		_, _ = a.Rand(rand.Reader)
 		f.square(c1, a)
 		f.mul(c2, a, a)
 		if !c2.equal(c1) {
@@ -1747,28 +1747,28 @@ func TestFp12MultiplicationProperties(t *testing.T) {
 
 func TestFp12MultiplicationPropertiesAssigned(t *testing.T) {
 	f := newFp12(nil)
-	zero, one := new(fe12).zero(), new(fe12).one()
+	zero, one := new(Fe12).zero(), new(Fe12).one()
 	for i := 0; i < fuz; i++ {
-		a, _ := new(fe12).rand(rand.Reader)
+		a, _ := new(Fe12).Rand(rand.Reader)
 		f.mulAssign(a, zero)
 		if !a.equal(zero) {
 			t.Fatal("a * 0 == 0")
 		}
-		_, _ = a.rand(rand.Reader)
-		a0 := new(fe12).set(a)
+		_, _ = a.Rand(rand.Reader)
+		a0 := new(Fe12).set(a)
 		f.mulAssign(a, one)
 		if !a.equal(a0) {
 			t.Fatal("a * 1 == a")
 		}
-		_, _ = a.rand(rand.Reader)
-		b, _ := new(fe12).rand(rand.Reader)
+		_, _ = a.Rand(rand.Reader)
+		b, _ := new(Fe12).Rand(rand.Reader)
 		a0.set(a)
 		f.mulAssign(a, b)
 		f.mulAssign(b, a0)
 		if !a.equal(b) {
 			t.Fatal("a * b == b * a")
 		}
-		c, _ := new(fe12).rand(rand.Reader)
+		c, _ := new(Fe12).Rand(rand.Reader)
 		a0.set(a)
 		f.mul(a, a, b)
 		f.mul(a, a, c)
@@ -1782,11 +1782,11 @@ func TestFp12MultiplicationPropertiesAssigned(t *testing.T) {
 
 func TestFp12SparseMultiplication(t *testing.T) {
 	fp12 := newFp12(nil)
-	var a, b, u *fe12
+	var a, b, u *Fe12
 	for j := 0; j < fuz; j++ {
-		a, _ = new(fe12).rand(rand.Reader)
-		b, _ = new(fe12).rand(rand.Reader)
-		u, _ = new(fe12).rand(rand.Reader)
+		a, _ = new(Fe12).Rand(rand.Reader)
+		b, _ = new(Fe12).Rand(rand.Reader)
+		u, _ = new(Fe12).Rand(rand.Reader)
 		b[0][2].Zero()
 		b[1][0].Zero()
 		b[1][2].Zero()
@@ -1801,7 +1801,7 @@ func TestFp12SparseMultiplication(t *testing.T) {
 func TestFp12Exponentiation(t *testing.T) {
 	f := newFp12(nil)
 	for i := 0; i < fuz; i++ {
-		a, _ := new(fe12).rand(rand.Reader)
+		a, _ := new(Fe12).Rand(rand.Reader)
 		u := f.new()
 		f.exp(u, a, big.NewInt(0))
 		if !u.equal(f.one()) {
@@ -1836,7 +1836,7 @@ func TestFp12Inversion(t *testing.T) {
 		if !u.equal(one) {
 			t.Fatal("(1^-1) == 1)")
 		}
-		a, _ := new(fe12).rand(rand.Reader)
+		a, _ := new(Fe12).Rand(rand.Reader)
 		f.inverse(u, a)
 		f.mul(u, u, a)
 		if !u.equal(one) {
@@ -1940,7 +1940,7 @@ func TestFrobeniusMapping12(t *testing.T) {
 	}
 	f := newFp12(nil)
 	r0, r1 := f.new(), f.new()
-	e, _ := new(fe12).rand(rand.Reader)
+	e, _ := new(Fe12).Rand(rand.Reader)
 	p := modulus.big()
 	f.exp(r0, e, p)
 	r1.set(e)
@@ -1966,10 +1966,10 @@ func TestFrobeniusMapping12(t *testing.T) {
 
 func TestFp12MultiplicationCross(t *testing.T) {
 	f := newFp12(nil)
-	a, b, c0, c1, c2 := new(fe12), new(fe12), new(fe12), new(fe12), new(fe12)
+	a, b, c0, c1, c2 := new(Fe12), new(Fe12), new(Fe12), new(Fe12), new(Fe12)
 	for i := 0; i < fuz; i++ {
-		_, _ = a.rand(rand.Reader)
-		_, _ = b.rand(rand.Reader)
+		_, _ = a.Rand(rand.Reader)
+		_, _ = b.Rand(rand.Reader)
 		f.mul(c0, a, b)
 		c1.set(a)
 		f.mulAssign(c1, b)
@@ -1986,14 +1986,14 @@ func TestFp12MultiplicationCross(t *testing.T) {
 
 func TestFp12SparseMultiplicationCross(t *testing.T) {
 	f := newFp12(nil)
-	a, c0, c1 := new(fe12), new(fe12), new(fe12)
+	a, c0, c1 := new(Fe12), new(Fe12), new(Fe12)
 
 	for i := 0; i < fuz; i++ {
-		_, _ = a.rand(rand.Reader)
+		_, _ = a.Rand(rand.Reader)
 		b0, _ := new(Fe2).Rand(rand.Reader)
 		b1, _ := new(Fe2).Rand(rand.Reader)
 		b4, _ := new(Fe2).Rand(rand.Reader)
-		b := new(fe12)
+		b := new(Fe12)
 		b[0][0].Set(b0)
 		b[0][1].Set(b1)
 		b[1][1].Set(b4)
@@ -2211,7 +2211,7 @@ func (e *fp6) _square(c, a *fe6) {
 	fp2Sub(&c[2], t1, t0)
 }
 
-func (e *fp12) _mul(c, a, b *fe12) {
+func (e *fp12) _mul(c, a, b *Fe12) {
 	t0, t1, t2, t3 := new(fe6), new(fe6), new(fe6), new(fe6)
 	e.fp6.mul(t1, &a[0], &b[0])   // v0 = a0b0
 	e.fp6.mul(t2, &a[1], &b[1])   // v1 = a1b1

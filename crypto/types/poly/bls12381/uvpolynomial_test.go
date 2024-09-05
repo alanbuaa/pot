@@ -3,12 +3,11 @@ package poly
 import (
 	"crypto/rand"
 	"fmt"
+	"github.com/stretchr/testify/assert"
+	. "github.com/zzz136454872/upgradeable-consensus/crypto/types/curve/bls12381"
 	"math/big"
 	math_rand "math/rand"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
-	. "github.com/zzz136454872/upgradeable-consensus/crypto/types/curve/bls12381"
 )
 
 func TestEval(t *testing.T) {

@@ -1,16 +1,19 @@
 package bls12381
 
 import (
-	"errors"
 	"math/big"
 )
 
 // E is type for target group element
-type E = fe12
+type E = Fe12
 
 // GT is type for target multiplicative group GT.
 type GT struct {
 	fp12 *fp12
+}
+
+func NewE() *E {
+	return new(E)
 }
 
 // Set copies given value into the destination
@@ -20,7 +23,12 @@ func (e *E) Set(e2 *E) *E {
 
 // One sets a new target group element to One
 func (e *E) One() *E {
-	e = new(fe12).one()
+	e.one()
+	return e
+}
+
+func (e *E) Zero() *E {
+	e.zero()
 	return e
 }
 
@@ -52,9 +60,9 @@ func (g *GT) FromBytes(in []byte) (*E, error) {
 	if err != nil {
 		return nil, err
 	}
-	if !g.IsValid(e) {
-		return e, errors.New("invalid element")
-	}
+	// if !g.IsValid(e) {
+	// 	return e, errors.New("invalid element")
+	// }
 	return e, nil
 }
 
@@ -90,12 +98,12 @@ func (g *GT) New() *E {
 
 // Add adds two field element `a` and `b` and assigns the result to the element in first argument.
 func (g *GT) Add(c, a, b *E) {
-	fp12Add(c, a, b)
+	Fp12Add(c, a, b)
 }
 
 // Sub subtracts two field element `a` and `b`, and assigns the result to the element in first argument.
 func (g *GT) Sub(c, a, b *E) {
-	fp12Sub(c, a, b)
+	Fp12Sub(c, a, b)
 }
 
 // Mul multiplies two field element `a` and `b` and assigns the result to the element in first argument.

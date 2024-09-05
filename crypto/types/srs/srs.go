@@ -6,11 +6,10 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"io"
-	"os"
-
 	schnorr_proof "github.com/zzz136454872/upgradeable-consensus/crypto/proof/schnorr_proof/bls12381"
 	. "github.com/zzz136454872/upgradeable-consensus/crypto/types/curve/bls12381"
+	"io"
+	"os"
 )
 
 var (
@@ -359,7 +358,7 @@ func (s *SRS) G1Powers() []*PointG1 {
 	return s.g1Powers
 }
 
-func (s *SRS) G1Power(i uint32) *PointG1 {
+func (s *SRS) G1PowerOf(i uint32) *PointG1 {
 	if i > s.g1Degree {
 		return nil
 	}

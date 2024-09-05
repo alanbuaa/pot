@@ -11,7 +11,7 @@ func TestFieldElementValidation(t *testing.T) {
 	// Fe
 	zero := new(Fe).zero()
 	if !zero.isValid() {
-		t.Fatal("Zero must be valid")
+		t.Fatal("zero must be valid")
 	}
 	one := new(Fe).One()
 	if !one.isValid() {
@@ -83,20 +83,20 @@ func TestFieldElementEquality(t *testing.T) {
 		t.Fatal("a != a + 1")
 	}
 	// fe12
-	zero12 := new(fe12).zero()
+	zero12 := new(Fe12).zero()
 	if !zero12.equal(zero12) {
 		t.Fatal("0 == 0")
 	}
-	one12 := new(fe12).one()
+	one12 := new(Fe12).one()
 	if !one12.equal(one12) {
 		t.Fatal("1 == 1")
 	}
-	a12, _ := new(fe12).rand(rand.Reader)
+	a12, _ := new(Fe12).Rand(rand.Reader)
 	if !a12.equal(a12) {
 		t.Fatal("a == a")
 	}
-	b12 := new(fe12)
-	fp12Add(b12, a12, one12)
+	b12 := new(Fe12)
+	Fp12Add(b12, a12, one12)
 	if a12.equal(b12) {
 		t.Fatal("a != a + 1")
 	}
@@ -107,7 +107,7 @@ func TestFieldElementHelpers(t *testing.T) {
 	// Fe
 	zero := new(Fe).zero()
 	if !zero.isZero() {
-		t.Fatal("'Zero' is not Zero")
+		t.Fatal("'zero' is not zero")
 	}
 	one := new(Fe).One()
 	if !one.isOne() {
@@ -130,7 +130,7 @@ func TestFieldElementHelpers(t *testing.T) {
 	// Fe2
 	zero2 := new(Fe2).Zero()
 	if !zero2.isZero() {
-		t.Fatal("'Zero' is not Zero, 2")
+		t.Fatal("'zero' is not zero, 2")
 	}
 	one2 := new(Fe2).One()
 	if !one2.isOne() {
@@ -139,25 +139,25 @@ func TestFieldElementHelpers(t *testing.T) {
 	// fe6
 	zero6 := new(fe6).zero()
 	if !zero6.isZero() {
-		t.Fatal("'Zero' is not Zero, 6")
+		t.Fatal("'zero' is not zero, 6")
 	}
 	one6 := new(fe6).one()
 	if !one6.isOne() {
 		t.Fatal("'One' is not One, 6")
 	}
 	// fe12
-	zero12 := new(fe12).zero()
+	zero12 := new(Fe12).zero()
 	if !zero12.isZero() {
-		t.Fatal("'Zero' is not Zero, 12")
+		t.Fatal("'zero' is not zero, 12")
 	}
-	one12 := new(fe12).one()
+	one12 := new(Fe12).one()
 	if !one12.isOne() {
 		t.Fatal("'One' is not One, 12")
 	}
 }
 
 func TestFieldElementSerialization(t *testing.T) {
-	t.Run("Zero", func(t *testing.T) {
+	t.Run("zero", func(t *testing.T) {
 		in := make([]byte, fpByteSize)
 		fe := new(Fe).setBytes(in)
 		if !fe.isZero() {
@@ -241,8 +241,8 @@ func TestFieldElementCopy(t *testing.T) {
 	if !a6.equal(b6) {
 		t.Fatal("copy failed")
 	}
-	a12, _ := new(fe12).rand(rand.Reader)
-	b12 := new(fe12).set(a12)
+	a12, _ := new(Fe12).Rand(rand.Reader)
+	b12 := new(Fe12).set(a12)
 	if !a12.equal(b12) {
 		t.Fatal("copy failed2")
 	}

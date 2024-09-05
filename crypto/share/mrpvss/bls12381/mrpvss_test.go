@@ -1,7 +1,9 @@
 package mrpvss
 
 import (
+	"crypto/rand"
 	"fmt"
+	dleq "github.com/zzz136454872/upgradeable-consensus/crypto/proof/dleq/bls12381"
 	. "github.com/zzz136454872/upgradeable-consensus/crypto/types/curve/bls12381"
 	"math/big"
 	"testing"
@@ -81,7 +83,8 @@ func TestMRPVSS(t *testing.T) {
 
 	// 解密份额并计算轮份额
 	shares := make([]*Fr, n)
-	roundShares := make([]*RoundShare, n)
+	roundShares := make([]*PointG1, n)
+	roundShareProofs := make([]*dleq.Proof, n)
 	for i := 0; i < n; i++ {
 		// g^(s_ij)  = (B_ij)/(A_i^sk_i)
 		shares[i] = DecryptShare(g, privKeyList[i], encShares[i])
@@ -90,7 +93,7 @@ func TestMRPVSS(t *testing.T) {
 			return
 		}
 		// c, c^(s_i), h, S_i
-		roundShares[i], err = CalcRoundShare(uint32(i+1), h, c, shareCommitments[i], shares[i])
+		roundShares[i], roundShareProofs[i], err = CalcRoundShare(uint32(i+1), h, c, shareCommitments[i], shares[i])
 		if err != nil {
 			return
 		}
@@ -99,18 +102,18 @@ func TestMRPVSS(t *testing.T) {
 	// 验证轮份额
 	for i := 0; i < n; i++ {
 		index := i + 1
-		verifyRoundShareRes := VerifyRoundShare(uint32(index), h, c, shareCommitments[i], roundShares[i])
+		verifyRoundShareRes := VerifyRoundShare(uint32(index), h, c, shareCommitments[i], roundShares[i], roundShareProofs[i])
 		if !verifyRoundShareRes {
 			fmt.Println("fail to verify Round Share at:", index)
 		}
 	}
 
 	// 重构秘密
-	secretPieces := make([]*PointG1, n)
+	indices := make([]uint32, n)
 	for i := 0; i < n; i++ {
-		secretPieces[i] = roundShares[i].Share
+		indices[i] = uint32(i + 1)
 	}
-	recoveredSecret := RecoverSecret(threshold, secretPieces)
+	recoveredSecret := RecoverRoundSecret(threshold, indices, roundShares)
 	fmt.Println("s: ", s[0])
 	fmt.Println("c^s: ", group1.Affine(group1.MulScalar(group1.One(), c, s)))
 	fmt.Println("recovered: ", recoveredSecret)
@@ -123,8 +126,8 @@ func TestDPVSS(t *testing.T) {
 
 	// 生成 g, h
 	g := group1.One()
-	// random, _ := NewFr().Rand(rand.Reader)
-	random := FrFromInt(5)
+	random, _ := NewFr().Rand(rand.Reader)
+	// random := FrFromInt(5)
 	h := group1.Affine(group1.MulScalar(group1.New(), g, random))
 
 	// 轮ID
@@ -142,8 +145,8 @@ func TestDPVSS(t *testing.T) {
 	privKeyList := make([]*Fr, n)
 	pubKeyList := make([]*PointG1, n)
 	for i := 0; i < n; i++ {
-		// random, _ = NewFr().Rand(rand.Reader)
-		random = FrFromInt(i + 1)
+		random, _ = NewFr().Rand(rand.Reader)
+		// random = FrFromInt(i + 1)
 		privKeyList[i] = random
 		pubKeyList[i] = group1.Affine(group1.MulScalar(group1.New(), g, random))
 	}
@@ -188,7 +191,8 @@ func TestDPVSS(t *testing.T) {
 
 	// 解密份额并计算轮份额
 	shares := make([]*Fr, n)
-	roundShares := make([]*RoundShare, n)
+	roundShares := make([]*PointG1, n)
+	roundShareProofs := make([]*dleq.Proof, n)
 	for i := 0; i < n; i++ {
 		// g^(s_ij)  = (B_ij)/(A_i^sk_i)
 		// TODO
@@ -199,7 +203,7 @@ func TestDPVSS(t *testing.T) {
 		}
 		// c, c^(s_i), h, S_i
 		var err error
-		roundShares[i], err = CalcRoundShare(uint32(i+1), h, c, aggrShareCommits[i], shares[i])
+		roundShares[i], roundShareProofs[i], err = CalcRoundShare(uint32(i+1), h, c, aggrShareCommits[i], shares[i])
 		if err != nil {
 			return
 		}
@@ -208,18 +212,17 @@ func TestDPVSS(t *testing.T) {
 	// 验证轮份额
 	for i := 0; i < n; i++ {
 		index := i + 1
-		verifyRoundShareRes := VerifyRoundShare(uint32(index), h, c, aggrShareCommits[i], roundShares[i])
+		verifyRoundShareRes := VerifyRoundShare(uint32(index), h, c, aggrShareCommits[i], roundShares[i], roundShareProofs[i])
 		if !verifyRoundShareRes {
 			fmt.Println("fail to verify Round Share at:", index)
 		}
 	}
-
-	// 重构秘密
-	secretPieces := make([]*PointG1, n)
+	indices := make([]uint32, n)
 	for i := 0; i < n; i++ {
-		secretPieces[i] = roundShares[i].Share
+		indices[i] = uint32(i + 1)
 	}
-	recoveredSecret := RecoverSecret(threshold, secretPieces)
+	// 重构秘密
+	recoveredSecret := RecoverRoundSecret(threshold, indices, roundShares)
 	fmt.Println("s: ", aggrS[0])
 	fmt.Println("c^s: ", group1.Affine(group1.MulScalar(group1.One(), c, aggrS)))
 	fmt.Println("recovered: ", recoveredSecret)

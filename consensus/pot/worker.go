@@ -297,9 +297,10 @@ func (w *Worker) OnGetVdf0Response() {
 				w.log.Infof("[PoT]\tepoch %d:parent block hash is : %s Difficulty %d from %d", epoch+1, hex.EncodeToString(parentblock.Hash()), parentblock.GetHeader().Difficulty.Int64(), parentblock.GetHeader().Address)
 			} else {
 				if len(backupblock) != 0 {
-					w.chainReader.SetHeight(epoch, backupblock[0])
-					parentblock = backupblock[0]
-					w.log.Infof("[PoT]\tepoch %d:parent block hash is nil,execset nil block %s as parent", epoch+1, hex.EncodeToString(parentblock.GetHeader().Hashes))
+					//w.chainReader.SetHeight(epoch, backupblock[0])
+					//parentblock = backupblock[0]
+					//w.log.Infof("[PoT]\tepoch %d:parent block hash is nil,execset nil block %s as parent", epoch+1, hex.EncodeToString(parentblock.GetHeader().Hashes))
+					continue
 				} else {
 					w.log.Errorf("[PoT]\tepoch %d:dont't find any parent block", epoch+1)
 					panic(fmt.Errorf("[PoT]\tepoch %d:dont't find any parent block", epoch+1))
@@ -317,6 +318,8 @@ func (w *Worker) OnGetVdf0Response() {
 			if err != nil {
 				w.log.Errorf("[PoT]\tepoch %d: Handle Txs for block %s err for %s", epoch+1, hexutil.Encode(parentblock.Hash()), err)
 			}
+
+			//w.UpdateLocalCryptoSetByBlock(parentblock.GetHeader().Height, parentblock)
 
 			// if epoch > 1 {
 			// 	w.simpleLeaderUpdate(parentblock)
@@ -344,6 +347,7 @@ func (w *Worker) mine(epoch uint64, vdf0res []byte, nonce int64, workerid int, a
 	defer wg.Done()
 	defer w.setWorkFlagFalse()
 
+	w.log.Infof("[PoT]\tepoch %d:workerid %d start to mine", epoch, workerid)
 	mixdigest := w.calcMixdigest(epoch, parentblock, uncleblock, difficulty, w.PeerId)
 	tmp := new(big.Int)
 	tmp.SetInt64(nonce)
@@ -374,9 +378,9 @@ func (w *Worker) mine(epoch uint64, vdf0res []byte, nonce int64, workerid int, a
 			tmp.SetBytes(crypto.Hash(res1))
 			if tmp.Cmp(target) >= 0 {
 
-				block := w.createNilBlock(epoch, parentblock, uncleblock, difficulty, mixdigest, nonce, vdf0res, res1)
-				w.log.Infof("[PoT]\tepoch %d:workerid %d fail to find a %d block, create a nil block %s", epoch, workerid, difficulty.Int64(), hexutil.Encode(block.Hash()))
-				w.blockStorage.Put(block)
+				//block := w.createNilBlock(epoch, parentblock, uncleblock, difficulty, mixdigest, nonce, vdf0res, res1)
+				w.log.Infof("[PoT]\tepoch %d:workerid %d fail to find a %d block", epoch, workerid, difficulty.Int64())
+				//w.blockStorage.Put(block)
 
 				nonce += 1
 				tmp.SetInt64(nonce)
@@ -386,7 +390,7 @@ func (w *Worker) mine(epoch uint64, vdf0res []byte, nonce int64, workerid int, a
 				w.vdf1[workerid] = types.NewVDFwithInput(w.vdf1Chan, hashinput2, w.config.PoT.Vdf1Iteration, w.ID)
 
 				go func() {
-					w.log.Debugf("[PoT]\tepoch %d:Start run vdf1 %d to mine", epoch, workerid)
+					w.log.Infof("[PoT]\tepoch %d:Start run vdf1 %d to mine", epoch, workerid)
 					err := w.vdf1[workerid].Exec(epoch)
 					if err != nil {
 						return
@@ -477,6 +481,11 @@ func (w *Worker) createBlock(epoch uint64, parentBlock *types.Block, uncleBlock 
 	id := w.ID
 	peerid := w.PeerId
 
+	//cryptoset, err := w.GenerateCryptoSetFromLocal(epoch)
+	//if err != nil {
+	//	return nil
+	//}
+
 	h := &types.Header{
 		Height:     epoch,
 		ParentHash: parentblockhash,
@@ -491,6 +500,7 @@ func (w *Worker) createBlock(epoch uint64, parentBlock *types.Block, uncleBlock 
 		TxHash:     txshash,
 		Hashes:     nil,
 		PublicKey:  publicKeyBytes,
+		//CryptoElement:  cryptoset,
 	}
 
 	h.Hashes = h.Hash()

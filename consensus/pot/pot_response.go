@@ -194,6 +194,9 @@ func (w *Worker) getParentBlock(block *types.Block) (*types.Block, error) {
 }
 
 func (w *Worker) getUncleBlock(block *types.Block) ([]*types.Block, error) {
+	if block.GetHeader().Height == 1 {
+		return nil, nil
+	}
 	n := len(block.GetHeader().UncleHash)
 	uncleblock := make([]*types.Block, n)
 	header := block.GetHeader()

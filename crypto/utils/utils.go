@@ -50,7 +50,6 @@ func GenRandomPermutation(n uint32) ([]uint32, error) {
 	for i := uint32(0); i < n; i++ {
 		permutation[i] = i + 1
 	}
-
 	// 使用Fisher-Yates洗牌算法生成随机排列
 	for i := n - 1; i > 0; i-- {
 		// 生成一个[0, i]范围内的随机数
@@ -58,7 +57,6 @@ func GenRandomPermutation(n uint32) ([]uint32, error) {
 		if err != nil {
 			return nil, err
 		}
-
 		// 因为rand.Int返回的是*big.Int类型，我们需要转换为int
 		jInt := int(j.Int64())
 		// 交换元素

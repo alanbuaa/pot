@@ -177,27 +177,32 @@ pub fn convert_roots_of_unity_to_proto_roots_of_unity(size: u32, roots_of_unity:
 
 #[cfg(test)]
 mod tests {
-    use ark_bls12_381::{Fq, Fq2, Fr, G1Affine, G2Affine};
+    use std::ops::Mul;
+    use ark_bls12_381::{Bls12_381, Fq, Fq2, Fr, G1Affine, G2Affine};
     use ark_bls12_381::g1::{G1_GENERATOR_X, G1_GENERATOR_Y};
     use ark_bls12_381::g2::{G2_GENERATOR_X, G2_GENERATOR_Y};
-    use ark_ff::{PrimeField, UniformRand};
+    use ark_ec::{AffineCurve, ProjectiveCurve};
+    use ark_ff::{PrimeField, ToBytes, UniformRand};
     use rand::{Rng, thread_rng};
+    use caulk_plus::api::API;
     use crate::bls12_381::{Fr as ProtoFr, Fq as ProtoFq, Fq2 as ProtoFq2, G1Affine as ProtoG1Affine, G2Affine as ProtoG2Affine};
-    use crate::utils::{convert_fq2_to_proto_fq2, convert_fq_to_proto_fq, convert_fr_to_proto_fr, convert_g1_to_proto_g1, convert_g2_to_proto_g2, convert_proto_fq2_to_fq2, convert_proto_fq_to_fq, convert_proto_fr_to_fr, convert_proto_g1_to_g1, convert_proto_g2_to_g2};
+    use crate::utils::{convert_fq2_to_proto_fq2, convert_fq_to_proto_fq, convert_fr_to_proto_fr, convert_g1_to_proto_g1, convert_g2_to_proto_g2, convert_multi_proof_to_proto_multi_proof, convert_proto_fq2_to_fq2, convert_proto_fq_to_fq, convert_proto_fr_to_fr, convert_proto_g1_to_g1, convert_proto_g2_to_g2, convert_proto_multi_proof_to_multi_proof};
 
     #[test]
     fn test_convert_between_proto_fr_and_fr() {
-        let fr = Fr::from(1234567890123456789u64);
-        println!("fr: {}", fr);
-        let convert_proto_fr = convert_fr_to_proto_fr(&fr);
+        let fr123 = Fr::from(123);
+        println!("fr: {}", fr123);
+        println!("fr: {:?}", fr123);
+        let convert_proto_fr = convert_fr_to_proto_fr(&fr123);
         println!("convert_proto_fr: {:?}", convert_proto_fr);
         let res_fr = convert_proto_fr_to_fr(&convert_proto_fr);
         println!("res_fr: {}\n", res_fr);
-        assert!(fr.eq(&res_fr));
+        assert!(fr123.eq(&res_fr));
 
-        let proto_fr = ProtoFr { e1: 1234567890123456789, e2: 0, e3: 0, e4: 0 };
-        println!("proto_fr: {}", fr);
+        let proto_fr = ProtoFr { e1: 12995873202578071081, e2: 16055258479306406044, e3: 12580165684082946707, e4: 5686935703723219923 };
+        println!("proto_fr: {:?}", proto_fr);
         let conv_fr = convert_proto_fr_to_fr(&proto_fr);
+        println!("conv_fr: {:?}", conv_fr);
         println!("conv_fr: {}", conv_fr);
         let res_proto_fr = convert_fr_to_proto_fr(&conv_fr);
         println!("res_proto_fr: {:?}", res_proto_fr);
@@ -206,10 +211,11 @@ mod tests {
 
     #[test]
     fn test_convert_between_proto_fq_and_fq() {
-        let rng = &mut thread_rng();
-
-        let fq = Fq::from(1234567890123456789u64);
+        let g1: G1Affine = G1Affine::new(G1_GENERATOR_X, G1_GENERATOR_Y, false);
+        let g123 = g1.mul(123).into_affine();
+        let fq = g123.x;
         println!("fq: {}", fq);
+        println!("fq: {:?}", fq);
         let convert_proto_fq = convert_fq_to_proto_fq(&fq);
         println!("convert_proto_fq: {:?}", convert_proto_fq);
         let res_fq = convert_proto_fq_to_fq(&convert_proto_fq);
@@ -217,16 +223,17 @@ mod tests {
         assert!(fq.eq(&res_fq));
 
         let proto_fq = ProtoFq {
-            e1: 1234567890123456789,
-            e2: 0,
-            e3: 0,
-            e4: 0,
-            e5: 0,
-            e6: 0,
+            e1: 9643578314753161704,
+            e2: 12363969365937116593,
+            e3: 17370378380101614273,
+            e4: 10525188256555326244,
+            e5: 625377410555126400,
+            e6: 66496752359416402,
         };
         println!("proto_fq: {:?}", proto_fq);
         let convert_fq = convert_proto_fq_to_fq(&proto_fq);
         println!("convert_fq: {}", convert_fq);
+        println!("convert_fq: {:?}", convert_fq);
         let res_proto_fq = convert_fq_to_proto_fq(&convert_fq);
         println!("res_proto_fq: {:?}", res_proto_fq);
         assert!(res_proto_fq.eq(&proto_fq));
@@ -234,37 +241,40 @@ mod tests {
 
     #[test]
     fn test_convert_between_proto_fq2_and_fq2() {
-        let rng = &mut thread_rng();
-
-        let fq2 = Fq2::rand(rng);
+        let g1: G2Affine = G2Affine::new(G2_GENERATOR_X, G2_GENERATOR_Y, false);
+        let g123 = g1.mul(123).into_affine();
+        let fq2 = g123.x;
         println!("fq2: {}", fq2);
+        println!("fq2: {:?}", fq2);
         let convert_proto_fq2 = convert_fq2_to_proto_fq2(&fq2);
         println!("convert_proto_fq2: {:?}", convert_proto_fq2);
         let res_fq2 = convert_proto_fq2_to_fq2(&convert_proto_fq2);
-        println!("res_fq2: {}\n", res_fq2);
+        println!("res_fq2: {}", res_fq2);
+        println!("res_fq2: {:?}\n", res_fq2);
         assert!(fq2.eq(&res_fq2));
 
         let proto_fq2 = ProtoFq2 {
             c1: ProtoFq {
-                e1: 15312334153293348280,
-                e2: 841050694974028783,
-                e3: 12993178926126977399,
-                e4: 14331714969349929730,
-                e5: 2740446039084699729,
-                e6: 165123225776229009,
+                e1: 1159306823142176013,
+                e2: 10447810949987217124,
+                e3: 3083478465137856249,
+                e4: 5899801630485792087,
+                e5: 1445135372160517734,
+                e6: 678458133818818382,
             }.into(),
             c2: ProtoFq {
-                e1: 16549740192668593022,
-                e2: 3696594454104530263,
-                e3: 13103893525273989193,
-                e4: 6443473286224459290,
-                e5: 9055845637167730533,
-                e6: 1432192374203850592,
+                e1: 5594160341619071078,
+                e2: 8955073851498511001,
+                e3: 8812007552358678521,
+                e4: 17602816475186738576,
+                e5: 16890608467270166650,
+                e6: 1576694991520513337,
             }.into(),
         };
         println!("proto_fq2: {:?}", proto_fq2);
         let convert_fq2 = convert_proto_fq2_to_fq2(&proto_fq2);
         println!("convert_fq2: {}", convert_fq2);
+        println!("convert_fq2: {:?}", convert_fq2);
         let res_proto_fq2 = convert_fq2_to_proto_fq2(&convert_fq2);
         println!("res_proto_fq2: {:?}", res_proto_fq2);
         assert!(res_proto_fq2.eq(&proto_fq2));
@@ -309,52 +319,41 @@ mod tests {
         assert!(res_proto_g2.eq(&proto_g2));
     }
 
-    // fn test_convert_between_proto_multi_proof_and_multi_proof() {
-    //     let mut rng = rand::thread_rng();
-    // 
-    //     let parent_vector_size = 32u32;
-    //     let mut parent_vector = Vec::with_capacity(parent_vector_size as usize);
-    //     for _ in 0..parent_vector_size {
-    //         parent_vector.push(ProtoFr {
-    //             e1: rng.gen(),
-    //             e2: rng.gen(),
-    //             e3: rng.gen(),
-    //             e4: rng.gen(),
-    //         });
-    //     }
-    //     let sub_vector_size = 16u32;
-    //     let mut sub_vector = Vec::with_capacity(sub_vector_size as usize);
-    //     for i in 0..sub_vector_size {
-    //         sub_vector.push(ProtoFr {
-    //             e1: i as u64 + 1,
-    //             e2: i as u64 * 100 + 1,
-    //             e3: i as u64 * 10000 + 1,
-    //             e4: i as u64 * 1000000 + 1,
-    //         });
-    //     }
-    //     let I = vec![1usize, 3, 4, 7, 23, 8, 9, 10, 12, 17, 21, 22, 30, 24, 16, 26, 27, 29, 25, 31, 2, 11, 5, 6, 20, 14, 28, 13, 19, 18, 15];
-    //     for i in 0..sub_vector_size as usize {
-    //         parent_vector[I[i]] = sub_vector[i].clone()
-    //     }
-    //     for i in 0..parent_vector_size as usize {
-    //         println!("parent [{}]: {:?}", i, parent_vector[i]);
-    //     }
-    //     for i in 0..sub_vector_size as usize {
-    //         println!("sub_vc [{}]: {:?}", i, sub_vector[i]);
-    //     }
-    // 
-    //     let request = API::<Bls12_381>::create_multi_proof(parent_vector_size)
-    // 
-    //     let g2 = G2Affine::new(G2_GENERATOR_X, G2_GENERATOR_Y, false);
-    //     let res_g2 = convert_proto_g2_to_g2(&convert_g2_to_proto_g2(&g2));
-    //     assert!(res_g2.eq(&g2));
-    // 
-    //     let proto_g2 = ProtoG2Affine {
-    //         x: convert_fq2_to_proto_fq2(&G2_GENERATOR_X).into(),
-    //         y: convert_fq2_to_proto_fq2(&G2_GENERATOR_Y).into(),
-    //         infinity: false,
-    //     };
-    //     let res_proto_g2 = &convert_g2_to_proto_g2(&convert_proto_g2_to_g2(&proto_g2));
-    //     assert!(res_proto_g2.eq(&proto_g2));
-    // }
+    #[test]
+    fn test_convert_between_proto_multi_proof_and_multi_proof() {
+        let rng = &mut thread_rng();
+        let parent_vec_size = 16u32;
+        let sub_vec_size = 8u32;
+
+        let mut parent_vec = vec![];
+        for _ in 0..parent_vec_size {
+            parent_vec.push(Fr::rand(rng));
+        }
+        let I = vec![6u32, 5, 3, 1, 4, 7, 2, 8];
+        let mut sub_vec = vec![];
+        for i in 0..sub_vec_size {
+            sub_vec.push(parent_vec[I[i as usize] as usize - 1]);
+        }
+
+        let proof = API::<Bls12_381>::create_multi_proof(16, &parent_vec, 8, &sub_vec).unwrap();
+        println!("{:?}", proof);
+        let proto_proof = convert_multi_proof_to_proto_multi_proof(&proof);
+        println!("{:?}", proto_proof);
+        let convert_proof = convert_proto_multi_proof_to_multi_proof(&proto_proof);
+        println!("{:?}", convert_proof);
+        let res = API::<Bls12_381>::verify_multi_proof(&convert_proof).unwrap();
+        println!("res = {}", res)
+    }
+    #[test]
+    fn test_g1_bytes() {
+        let g1: G1Affine = G1Affine::new(G1_GENERATOR_X, G1_GENERATOR_Y, false);
+        let g = g1.mul(123).into_affine();
+        let mut buf: Vec<u8> = vec![];
+        g.x.write(&mut buf).expect("TODO: panic message");
+        println!("{:?}", g.x);
+        println!("{:?}", buf);
+        println!("{:?}\n", Fq::from_le_bytes_mod_order(&buf));
+        println!("{:?}", convert_fq_to_proto_fq(&g.x));
+    }
 }
+

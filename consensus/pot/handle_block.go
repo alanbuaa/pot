@@ -91,6 +91,7 @@ func (w *Worker) handleBlock() {
 					if err != nil {
 						w.log.Errorf("[PoT]\tepoch %d:handle advanced block err for %s", epoch, err)
 					}
+
 				}()
 			}
 		}
@@ -181,6 +182,10 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 		if !flag {
 			return err
 		}
+
+		//if !w.uponReceivedBlock(block.GetHeader().Height, block) {
+		//	return fmt.Errorf("block %s fails the cryptoelement check", hexutil.Encode(block.Hash()))
+		//}
 
 		err := w.blockStorage.Put(block)
 
@@ -465,9 +470,8 @@ func (w *Worker) workReset(epoch uint64, block *types.Block) error {
 		w.abort.once.Do(func() {
 			close(w.abort.abortchannel)
 		})
-
 		w.wg.Wait()
-		//w.log.Infof("[PoT]\tthe vdf1 work got abort for chain reset, need %d ms", time2.Since(time)/time2.Millisecond)
+
 	}
 	w.startWorking()
 	w.abort = NewAbortcontrol()

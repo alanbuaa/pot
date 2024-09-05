@@ -49,7 +49,7 @@ func (e *fp12) fp2() *fp2 {
 	return e.fp6.fp2
 }
 
-func (e *fp12) fromBytes(in []byte) (*fe12, error) {
+func (e *fp12) fromBytes(in []byte) (*Fe12, error) {
 	if len(in) != 576 {
 		return nil, errors.New("input string length must be equal to 576 Bytes")
 	}
@@ -62,10 +62,10 @@ func (e *fp12) fromBytes(in []byte) (*fe12, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &fe12{*c0, *c1}, nil
+	return &Fe12{*c0, *c1}, nil
 }
 
-func (e *fp12) toBytes(a *fe12) []byte {
+func (e *fp12) toBytes(a *Fe12) []byte {
 	fp6 := e.fp6
 	out := make([]byte, 12*fpByteSize)
 	copy(out[:6*fpByteSize], fp6.toBytes(&a[1]))
@@ -73,45 +73,46 @@ func (e *fp12) toBytes(a *fe12) []byte {
 	return out
 }
 
-func (e *fp12) new() *fe12 {
-	return new(fe12)
+func (e *fp12) new() *Fe12 {
+	return new(Fe12)
 }
 
-func (e *fp12) zero() *fe12 {
-	return new(fe12)
+func (e *fp12) zero() *Fe12 {
+	return new(Fe12)
 }
 
-func (e *fp12) one() *fe12 {
-	return new(fe12).one()
+func (e *fp12) one() *Fe12 {
+	return new(Fe12).one()
 }
 
-func fp12Add(c, a, b *fe12) {
+func Fp12Add(c, a, b *Fe12) *Fe12 {
 	fp6Add(&c[0], &a[0], &b[0])
 	fp6Add(&c[1], &a[1], &b[1])
+	return c
 }
 
-func fp12Double(c, a *fe12) {
+func fp12Double(c, a *Fe12) {
 	fp6Double(&c[0], &a[0])
 	fp6Double(&c[1], &a[1])
 }
 
-func fp12Sub(c, a, b *fe12) {
+func Fp12Sub(c, a, b *Fe12) {
 	fp6Sub(&c[0], &a[0], &b[0])
 	fp6Sub(&c[1], &a[1], &b[1])
 
 }
 
-func fp12Neg(c, a *fe12) {
+func Fp12Neg(c, a *Fe12) {
 	fp6Neg(&c[0], &a[0])
 	fp6Neg(&c[1], &a[1])
 }
 
-func fp12Conjugate(c, a *fe12) {
+func fp12Conjugate(c, a *Fe12) {
 	c[0].set(&a[0])
 	fp6Neg(&c[1], &a[1])
 }
 
-func (e *fp12) mul(c, a, b *fe12) {
+func (e *fp12) mul(c, a, b *Fe12) {
 	wt, t := e.wt6, e.t6
 	e.fp6.wmul(wt[1], &a[0], &b[0])
 	e.fp6.wmul(wt[2], &a[1], &b[1])
@@ -127,7 +128,7 @@ func (e *fp12) mul(c, a, b *fe12) {
 
 }
 
-func (e *fp12) mulAssign(a, b *fe12) {
+func (e *fp12) mulAssign(a, b *Fe12) {
 	wt, t := e.wt6, e.t6
 	e.fp6.wmul(wt[1], &a[0], &b[0])
 	e.fp6.wmul(wt[2], &a[1], &b[1])
@@ -142,7 +143,7 @@ func (e *fp12) mulAssign(a, b *fe12) {
 	a[0].fromWide(wt[1])
 }
 
-func (e *fp12) mul014(a *fe12, b0, b1, b4 *Fe2) {
+func (e *fp12) mul014(a *Fe12, b0, b1, b4 *Fe2) {
 	wt, t := e.wt6, e.t6
 	e.fp6.wmul01(wt[0], &a[0], b0, b1)
 	e.fp6.wmul1(wt[1], &a[1], b4)
@@ -157,7 +158,7 @@ func (e *fp12) mul014(a *fe12, b0, b1, b4 *Fe2) {
 	a[0].fromWide(wt[0])
 }
 
-func (e *fp12) square(c, a *fe12) {
+func (e *fp12) square(c, a *Fe12) {
 	t := e.t6
 	// Multiplication and Squaring on Pairing-Friendly Fields
 	// Complex squaring algorithm
@@ -174,7 +175,7 @@ func (e *fp12) square(c, a *fe12) {
 	fp6Double(&c[1], t[2])
 }
 
-func (e *fp12) squareAssign(a *fe12) {
+func (e *fp12) squareAssign(a *Fe12) {
 	t := e.t6
 	// Multiplication and Squaring on Pairing-Friendly Fields
 	// Complex squaring algorithm
@@ -191,7 +192,7 @@ func (e *fp12) squareAssign(a *fe12) {
 	fp6Double(&a[1], t[2])
 }
 
-func (e *fp12) inverse(c, a *fe12) {
+func (e *fp12) inverse(c, a *Fe12) {
 	// Guide to Pairing Based Cryptography
 	// Algorithm 5.16
 
@@ -206,7 +207,7 @@ func (e *fp12) inverse(c, a *fe12) {
 	fp6Neg(&c[1], t[1])               // c1 = -a1v
 }
 
-func (e *fp12) exp(c, a *fe12, s *big.Int) {
+func (e *fp12) exp(c, a *Fe12, s *big.Int) {
 	z := e.one()
 	for i := s.BitLen() - 1; i >= 0; i-- {
 		e.square(z, z)
@@ -217,7 +218,7 @@ func (e *fp12) exp(c, a *fe12, s *big.Int) {
 	c.set(z)
 }
 
-func (e *fp12) cyclotomicExp(c, a *fe12, s *big.Int) {
+func (e *fp12) cyclotomicExp(c, a *Fe12, s *big.Int) {
 	z := e.one()
 	for i := s.BitLen() - 1; i >= 0; i-- {
 		e.cyclotomicSquare(z)
@@ -228,7 +229,7 @@ func (e *fp12) cyclotomicExp(c, a *fe12, s *big.Int) {
 	c.set(z)
 }
 
-func (e *fp12) cyclotomicSquare(a *fe12) {
+func (e *fp12) cyclotomicSquare(a *Fe12) {
 	t := e.t2
 	// Guide to Pairing Based Cryptography
 	// 5.5.4 Airthmetic in Cyclotomic Groups
@@ -275,7 +276,7 @@ func (e *fp12) fp4Square(c0, c1, a0, a1 *Fe2) {
 	c1.fromWide(wt[2])
 }
 
-func (e *fp12) frobeniusMap1(a *fe12) {
+func (e *fp12) frobeniusMap1(a *Fe12) {
 	fp6, fp2 := e.fp6, e.fp6.fp2
 	fp6.frobeniusMap1(&a[0])
 	fp6.frobeniusMap1(&a[1])
@@ -284,7 +285,7 @@ func (e *fp12) frobeniusMap1(a *fe12) {
 	fp2.mulAssign(&a[1][2], &frobeniusCoeffs12[1])
 }
 
-func (e *fp12) frobeniusMap2(a *fe12) {
+func (e *fp12) frobeniusMap2(a *Fe12) {
 	fp6, fp2 := e.fp6, e.fp6.fp2
 	fp6.frobeniusMap2(&a[0])
 	fp6.frobeniusMap2(&a[1])
@@ -293,7 +294,7 @@ func (e *fp12) frobeniusMap2(a *fe12) {
 	fp2.mulAssign(&a[1][2], &frobeniusCoeffs12[2])
 }
 
-func (e *fp12) frobeniusMap3(a *fe12) {
+func (e *fp12) frobeniusMap3(a *Fe12) {
 	fp6, fp2 := e.fp6, e.fp6.fp2
 	fp6.frobeniusMap3(&a[0])
 	fp6.frobeniusMap3(&a[1])

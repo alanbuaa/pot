@@ -86,7 +86,6 @@ func CreateSingleProof(hGenerator *PointG1, parentVectorSize uint32, parentVecto
 }
 
 func VerifySingleProof(hGenerator *PointG1, proof *pb.SingleProof) (bool, error) {
-
 	conn, err := grpc.NewClient(serviceHost, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		fmt.Println(err)

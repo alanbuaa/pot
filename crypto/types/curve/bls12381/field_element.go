@@ -19,9 +19,9 @@ type Fe2 /**			***/ [2]Fe
 // Representation follows c[0] + c[1] * v + c[2] * v^2 encoding order.
 type fe6 /**			***/ [3]Fe2
 
-// fe12 is element representation of 'fp12' field which is quadratic extention of 'fp6'
+// Fe12 is element representation of 'fp12' field which is quadratic extention of 'fp6'
 // Representation follows c[0] + c[1] * w encoding order.
-type fe12 /**			***/ [2]fe6
+type Fe12 /**			***/ [2]fe6
 
 type wfe /***			***/ [fpNumberOfLimbs * 2]uint64
 type wfe2 /**			***/ [2]wfe
@@ -29,6 +29,39 @@ type wfe6 /**			***/ [3]wfe2
 
 func NewFe() *Fe {
 	return &Fe{}
+}
+
+func NewFe12() *Fe12 {
+	return new(Fe12).zero()
+}
+
+func (fe *Fe) SetBytesToMont(in []byte) *Fe {
+	l := len(in)
+	if l >= fpByteSize {
+		l = fpByteSize
+	}
+	padded := make([]byte, fpByteSize)
+	copy(padded[fpByteSize-l:], in[:])
+	var a int
+	for i := 0; i < fpNumberOfLimbs; i++ {
+		a = i * 8
+		fe[i] = uint64(padded[a]) | uint64(padded[a+1])<<8 |
+			uint64(padded[a+2])<<16 | uint64(padded[a+3])<<24 |
+			uint64(padded[a+4])<<32 | uint64(padded[a+5])<<40 |
+			uint64(padded[a+6])<<48 | uint64(padded[a+7])<<56
+	}
+	toMont(fe, fe)
+	return fe
+}
+
+func (fe *Fe) ToMont() *Fe {
+	toMont(fe, fe)
+	return fe
+}
+
+func (fe *Fe) FromMont() *Fe {
+	fromMont(fe, fe)
+	return fe
 }
 
 func (fe *Fe) setBytes(in []byte) *Fe {
@@ -47,10 +80,6 @@ func (fe *Fe) setBytes(in []byte) *Fe {
 			uint64(padded[a-7])<<48 | uint64(padded[a-8])<<56
 	}
 	return fe
-}
-
-func (fe *Fe) SetBytes(in []byte) *Fe {
-	return fe.setBytes(in)
 }
 
 func (fe *Fe) SetBig(a *big.Int) *Fe {
@@ -79,6 +108,25 @@ func (fe *Fe) Set(fe2 *Fe) *Fe {
 	return fe
 }
 
+func (fe *Fe) BytesFromMont() []byte {
+	tmp := new(Fe)
+	fromMont(tmp, fe)
+	out := make([]byte, fpByteSize)
+	var a int
+	for i := 0; i < fpNumberOfLimbs; i++ {
+		a = i * 8
+		out[a] = byte(tmp[i])
+		out[a+1] = byte(tmp[i] >> 8)
+		out[a+2] = byte(tmp[i] >> 16)
+		out[a+3] = byte(tmp[i] >> 24)
+		out[a+4] = byte(tmp[i] >> 32)
+		out[a+5] = byte(tmp[i] >> 40)
+		out[a+6] = byte(tmp[i] >> 48)
+		out[a+7] = byte(tmp[i] >> 56)
+	}
+	return out
+}
+
 func (fe *Fe) Bytes() []byte {
 	out := make([]byte, fpByteSize)
 	var a int
@@ -94,6 +142,10 @@ func (fe *Fe) Bytes() []byte {
 		out[a-8] = byte(fe[i] >> 56)
 	}
 	return out
+}
+
+func (fe *Fe) ToBig() *big.Int {
+	return new(big.Int).SetBytes(fe.BytesFromMont())
 }
 
 func (fe *Fe) big() *big.Int {
@@ -226,6 +278,11 @@ func (e *Fe2) fromMont(a *Fe2) {
 	fromMont(&e[1], &a[1])
 }
 
+func (e *Fe2) toMont(a *Fe2) {
+	toMont(&e[0], &a[0])
+	toMont(&e[1], &a[1])
+}
+
 func (e *Fe2) fromWide(w *wfe2) {
 	fromWide(&e[0], &w[0])
 	fromWide(&e[1], &w[1])
@@ -301,6 +358,12 @@ func (e *fe6) fromMont(a *fe6) {
 	e[2].fromMont(&a[2])
 }
 
+func (e *fe6) toMont(a *fe6) {
+	e[0].toMont(&a[0])
+	e[1].toMont(&a[1])
+	e[2].toMont(&a[2])
+}
+
 func (e *fe6) fromWide(w *wfe6) {
 	e[0].fromWide(&w[0])
 	e[1].fromWide(&w[1])
@@ -338,30 +401,35 @@ func (e *fe6) equal(e2 *fe6) bool {
 	return e[0].equal(&e2[0]) && e[1].equal(&e2[1]) && e[2].equal(&e2[2])
 }
 
-func (e *fe12) zero() *fe12 {
+func (e *Fe12) zero() *Fe12 {
 	e[0].zero()
 	e[1].zero()
 	return e
 }
 
-func (e *fe12) one() *fe12 {
+func (e *Fe12) one() *Fe12 {
 	e[0].one()
 	e[1].zero()
 	return e
 }
 
-func (e *fe12) set(e2 *fe12) *fe12 {
+func (e *Fe12) set(e2 *Fe12) *Fe12 {
 	e[0].set(&e2[0])
 	e[1].set(&e2[1])
 	return e
 }
 
-func (e *fe12) fromMont(a *fe12) {
+func (e *Fe12) FromMont(a *Fe12) {
 	e[0].fromMont(&a[0])
 	e[1].fromMont(&a[1])
 }
 
-func (e *fe12) rand(r io.Reader) (*fe12, error) {
+func (e *Fe12) ToMont(a *Fe12) {
+	e[0].toMont(&a[0])
+	e[1].toMont(&a[1])
+}
+
+func (e *Fe12) Rand(r io.Reader) (*Fe12, error) {
 	a0, err := new(fe6).rand(r)
 	if err != nil {
 		return nil, err
@@ -375,15 +443,15 @@ func (e *fe12) rand(r io.Reader) (*fe12, error) {
 	return e, nil
 }
 
-func (e *fe12) isOne() bool {
+func (e *Fe12) isOne() bool {
 	return e[0].isOne() && e[1].isZero()
 }
 
-func (e *fe12) isZero() bool {
+func (e *Fe12) isZero() bool {
 	return e[0].isZero() && e[1].isZero()
 }
 
-func (e *fe12) equal(e2 *fe12) bool {
+func (e *Fe12) equal(e2 *Fe12) bool {
 	return e[0].equal(&e2[0]) && e[1].equal(&e2[1])
 }
 

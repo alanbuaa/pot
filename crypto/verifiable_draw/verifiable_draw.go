@@ -34,7 +34,6 @@ type DrawProof struct {
 }
 
 func (d *DrawProof) ToBytes() ([]byte, error) {
-
 	uint32Bytes := make([]byte, 4)
 	uint64Bytes := make([]byte, 8)
 	buffer := bytes.Buffer{}
@@ -78,7 +77,7 @@ func (d *DrawProof) FromBytes(data []byte) (*DrawProof, error) {
 	DLEQBuf := make([]byte, 128)
 	uint32Buf := make([]byte, 4)
 	uint64Buf := make([]byte, 8)
-	SchnorrBuf := make([]byte, 128)
+	SchnorrBuf := make([]byte, 80)
 	buffer := bytes.NewBuffer(data)
 	// RCommit
 	_, err := buffer.Read(pointG1Buf)
@@ -105,13 +104,13 @@ func (d *DrawProof) FromBytes(data []byte) (*DrawProof, error) {
 	}
 	SelectedPubKeysSize := binary.BigEndian.Uint32(uint32Buf)
 	// SelectedPubKeys
-	SelectedPubKeys := make([]*PointG1, SelectedPubKeysSize)
+	d.SelectedPubKeys = make([]*PointG1, SelectedPubKeysSize)
 	for i := uint32(0); i < SelectedPubKeysSize; i++ {
 		_, err = buffer.Read(pointG1Buf)
 		if err != nil {
 			return nil, err
 		}
-		SelectedPubKeys[i], err = group1.FromCompressed(pointG1Buf)
+		d.SelectedPubKeys[i], err = group1.FromCompressed(pointG1Buf)
 		if err != nil {
 			return nil, err
 		}
@@ -150,7 +149,7 @@ func (d *DrawProof) FromBytes(data []byte) (*DrawProof, error) {
 		return nil, err
 	}
 	//	CaulkPlusProof *pb.MultiProof
-	_, err = buffer.Read(uint32Buf)
+	_, err = buffer.Read(uint64Buf)
 	if err != nil {
 		return nil, err
 	}
@@ -165,7 +164,7 @@ func (d *DrawProof) FromBytes(data []byte) (*DrawProof, error) {
 	if err != nil {
 		return nil, err
 	}
-	//	SchnorrProof   *schnorr_proof.SchnorrProof
+	// SchnorrProof
 	_, err = buffer.Read(SchnorrBuf)
 	if err != nil {
 		return nil, err
@@ -174,7 +173,7 @@ func (d *DrawProof) FromBytes(data []byte) (*DrawProof, error) {
 	if err != nil {
 		return nil, err
 	}
-	//	LnkProof       *kzg_ped_linkability.VectorLinkProof
+	// LnkProof
 	d.LnkProof, err = new(kzg_ped_linkability.VectorLinkProof).FromBytes(buffer.Bytes())
 	if err != nil {
 		return nil, err
@@ -185,15 +184,11 @@ func (d *DrawProof) FromBytes(data []byte) (*DrawProof, error) {
 func Draw(s *srs.SRS, candidatesNum uint32, candidatesPubKey []*PointG1, quota uint32, secretVector []uint32, prevRCommit *PointG1) (*DrawProof, error) {
 	// blind factor
 	r, _ := NewFr().Rand(rand.Reader)
-	// r := FrFromInt(123)
-	fmt.Println("r:", r)
 
 	selectedPubKeys := make([]*PointG1, quota)
 	var selectedPubKeyBytes []byte
 	for i := uint32(0); i < quota; i++ {
 		selectedPubKeys[i] = group1.Affine(group1.MulScalar(group1.New(), candidatesPubKey[secretVector[i]-1], r))
-		fmt.Printf(" pk %d:%v\n", secretVector[i], candidatesPubKey[secretVector[i]-1])
-		fmt.Printf("spk %d:%v\n\n", i+1, selectedPubKeys[i])
 		selectedPubKeyBytes = append(selectedPubKeyBytes, group1.ToBytes(selectedPubKeys[i])...)
 	}
 	// TODO
@@ -209,11 +204,6 @@ func Draw(s *srs.SRS, candidatesNum uint32, candidatesPubKey []*PointG1, quota u
 	for i := uint32(0); i < quota; i++ {
 		aVector[i] = HashToFr(append(preImageBytes, utils.Uint32ToBytes(i)...))
 	}
-	// calc kzg commitment and poly
-	// aCommit, aPoly, err := kzg_vector_commit.Commit(srs, aVector)
-	// if err != nil {
-	// 	return nil, err
-	// }
 	// construct vector v
 	vVector := make([]*Fr, candidatesNum)
 	for i := uint32(0); i < candidatesNum; i++ {
@@ -240,13 +230,14 @@ func Draw(s *srs.SRS, candidatesNum uint32, candidatesPubKey []*PointG1, quota u
 		}
 	}
 	B := NewFr().Mul(b, r)
+
+	// h
 	domain := []byte("BLS12381G1_XMD:SHA-256_SSWU_RO_TESTGEN")
 	h, err := group1.HashToCurve(candidatesPubKeyBytes, domain)
 	if err != nil {
 		fmt.Println(err)
 		return nil, err
 	}
-
 	// calc C
 	C := group1.Zero()
 	for i := 0; i < int(quota); i++ {
@@ -268,7 +259,7 @@ func Draw(s *srs.SRS, candidatesNum uint32, candidatesPubKey []*PointG1, quota u
 	schnorrProof := schnorr_proof.CreateWitness(DBlind, CBlind, r)
 
 	// generate kzg and pedersen linkability proof
-	lnkProof, err := kzg_ped_linkability.CreateProof(s, candidatesPubKey, h, vCommit, DBlind, vVector, B)
+	lnkProof, err := kzg_ped_linkability.CreateProof(s, candidatesPubKey, h, vCommit, DBlind, vVector, b)
 	if err != nil {
 		return nil, err
 	}
@@ -298,7 +289,7 @@ func Draw(s *srs.SRS, candidatesNum uint32, candidatesPubKey []*PointG1, quota u
 	}, nil
 }
 
-func Verify(s *srs.SRS, candidatesNum uint64, candidatesPubKey []*PointG1, quota uint32, prevRCommit *PointG1, drawProof *DrawProof) bool {
+func Verify(s *srs.SRS, candidatesNum uint32, candidatesPubKey []*PointG1, quota uint32, prevRCommit *PointG1, drawProof *DrawProof) bool {
 	if quota != uint32(len(drawProof.SelectedPubKeys)) {
 		return false
 	}
@@ -309,7 +300,7 @@ func Verify(s *srs.SRS, candidatesNum uint64, candidatesPubKey []*PointG1, quota
 	}
 
 	var candidatesPubKeyBytes []byte
-	for i := uint64(0); i < candidatesNum; i++ {
+	for i := uint32(0); i < candidatesNum; i++ {
 		candidatesPubKeyBytes = append(candidatesPubKeyBytes, group1.ToBytes(candidatesPubKey[i])...)
 	}
 	preImageBytes := append(candidatesPubKeyBytes, selectedPubKeyBytes...)
@@ -320,13 +311,12 @@ func Verify(s *srs.SRS, candidatesNum uint64, candidatesPubKey []*PointG1, quota
 		aVector[i] = HashToFr(append(preImageBytes, utils.Uint32ToBytes(i)...))
 	}
 
+	// h
 	domain := []byte("BLS12381G1_XMD:SHA-256_SSWU_RO_TESTGEN")
 	h, err := group1.HashToCurve(candidatesPubKeyBytes, domain)
 	if err != nil {
-		fmt.Println(err)
 		return false
 	}
-
 	// verify C'
 	C := group1.Zero()
 	for i := 0; i < int(quota); i++ {

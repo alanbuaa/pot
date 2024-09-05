@@ -33,6 +33,7 @@ type DciReward struct {
 	ChainID int64
 	weight  float64
 }
+
 type DciProof struct {
 	Height    uint64
 	BlockHash []byte
