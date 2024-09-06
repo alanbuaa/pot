@@ -182,3 +182,20 @@ func TestFqConvert(t *testing.T) {
 	fmt.Printf("%X\n", fe)
 	fmt.Println(fe.Bytes())
 }
+
+func TestSRS_ToCompressedBytes(t *testing.T) {
+	s, proof := NewSRS(256, 256)
+	srsBytes, err := s.ToCompressedBytes()
+	if err != nil {
+		fmt.Println("to byte", err)
+		return
+	}
+
+	fmt.Println("from byte")
+	recoverSRS, err := FromCompressedBytes(srsBytes)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	fmt.Println(Verify(recoverSRS, group1.One(), proof))
+}

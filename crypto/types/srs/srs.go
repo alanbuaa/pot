@@ -202,24 +202,32 @@ func FromBinaryFile() (*SRS, error) {
 }
 
 func FromCompressedBytes(input []byte) (*SRS, error) {
-	buf := bytes.NewBuffer(input)
+	buffer := bytes.NewBuffer(input)
+	uint32Buf := make([]byte, 4)
+	pointG1Buf := make([]byte, 48)
+	pointG2Buf := make([]byte, 96)
 	// degree
-	read, err := buf.ReadBytes(4)
+	_, err := buffer.Read(uint32Buf)
 	if err != nil {
 		return nil, err
 	}
-	g1Degree := binary.BigEndian.Uint32(read)
-	read, err = buf.ReadBytes(4)
-	g2Degree := binary.BigEndian.Uint32(read)
+	g1Degree := binary.BigEndian.Uint32(uint32Buf)
+
+	_, err = buffer.Read(uint32Buf)
+	if err != nil {
+		return nil, err
+	}
+	g2Degree := binary.BigEndian.Uint32(uint32Buf)
 	g1PowersSize := g1Degree + 1
 	g2PowersSize := g2Degree + 1
 	// for g1 power
 	g1Powers := make([]*PointG1, g1PowersSize)
 	for i := uint32(0); i < g1PowersSize; i++ {
-		if read, err = buf.ReadBytes(48); err != nil {
+		_, err = buffer.Read(pointG1Buf)
+		if err != nil {
 			return nil, err
 		}
-		g1Powers[i], err = group1.FromCompressed(read)
+		g1Powers[i], err = group1.FromCompressed(pointG1Buf)
 		if err != nil {
 			return nil, err
 		}
@@ -227,10 +235,11 @@ func FromCompressedBytes(input []byte) (*SRS, error) {
 	// for g2 power
 	g2Powers := make([]*PointG2, g2PowersSize)
 	for i := uint32(0); i < g2PowersSize; i++ {
-		if read, err = buf.ReadBytes(96); err != nil {
+		_, err = buffer.Read(pointG2Buf)
+		if err != nil {
 			return nil, err
 		}
-		g2Powers[i], err = group2.FromCompressed(read)
+		g2Powers[i], err = group2.FromCompressed(pointG2Buf)
 		if err != nil {
 			return nil, err
 		}
@@ -254,14 +263,10 @@ func (s *SRS) ToCompressedBytes() ([]byte, error) {
 	g1PowersSize := s.g1Degree + 1
 	g2PowersSize := s.g2Degree + 1
 	for i := uint32(0); i < g1PowersSize; i++ {
-		if err := binary.Write(buf, binary.BigEndian, group1.ToCompressed(s.g1Powers[i])); err != nil {
-			return nil, err
-		}
+		buf.Write(group1.ToCompressed(s.g1Powers[i]))
 	}
 	for i := uint32(0); i < g2PowersSize; i++ {
-		if err := binary.Write(buf, binary.BigEndian, group2.ToCompressed(s.g2Powers[i])); err != nil {
-			return nil, err
-		}
+		buf.Write(group2.ToCompressed(s.g2Powers[i]))
 	}
 	return buf.Bytes(), nil
 }

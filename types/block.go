@@ -319,6 +319,9 @@ func ToHeader(header *pb.Header) *Header {
 }
 
 func (b *Header) ToProto() *pb.Header {
+	if b == nil {
+		panic("block is nil")
+	}
 	ts, err := b.Timestamp.MarshalJSON()
 	if err != nil {
 		return nil
