@@ -1,7 +1,6 @@
 package types
 
 import (
-	"fmt"
 	schnorr_proof "github.com/zzz136454872/upgradeable-consensus/crypto/proof/schnorr_proof/bls12381"
 	mrpvss "github.com/zzz136454872/upgradeable-consensus/crypto/share/mrpvss/bls12381"
 	"github.com/zzz136454872/upgradeable-consensus/crypto/types/curve/bls12381"
@@ -131,7 +130,7 @@ func (s *CryptoElement) ToProto() *pb.CryptoElement {
 
 func ToCryptoElement(element *pb.CryptoElement) (CryptoElement, error) {
 	if element == nil {
-		return CryptoElement{}, fmt.Errorf("element is nil")
+		return CryptoElement{}, nil
 	}
 	if element.GetSRS() != nil {
 		Srs, err := srs.FromCompressedBytes(element.GetSRS())

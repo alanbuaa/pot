@@ -294,20 +294,26 @@ func ToHeader(header *pb.Header) *Header {
 	difficulty := bigint.SetBytes(header.Difficulty)
 	//var Evidence Evidence
 	//Evidence.FromByte(header.Evidence)
+	cryptoelement, err := ToCryptoElement(header.GetCryptoElement())
+	if err != nil {
+		fmt.Println(err)
+		return nil
+	}
 	h := &Header{
-		Height:     header.GetHeight(),
-		ParentHash: header.GetParentHash(),
-		UncleHash:  header.GetUncleHash(),
-		Mixdigest:  header.GetMixdigest(),
-		Difficulty: difficulty,
-		Nonce:      header.GetNonce(),
-		Timestamp:  timestamp,
-		PoTProof:   header.PoTProof,
-		Address:    header.GetAddress(),
-		Hashes:     header.GetHashes(),
-		PeerId:     header.GetPeerId(),
-		PublicKey:  header.GetPubkey(),
-		TxHash:     header.GetTxhash(),
+		Height:        header.GetHeight(),
+		ParentHash:    header.GetParentHash(),
+		UncleHash:     header.GetUncleHash(),
+		Mixdigest:     header.GetMixdigest(),
+		Difficulty:    difficulty,
+		Nonce:         header.GetNonce(),
+		Timestamp:     timestamp,
+		PoTProof:      header.PoTProof,
+		Address:       header.GetAddress(),
+		Hashes:        header.GetHashes(),
+		PeerId:        header.GetPeerId(),
+		PublicKey:     header.GetPubkey(),
+		TxHash:        header.GetTxhash(),
+		CryptoElement: cryptoelement,
 	}
 	return h
 }
@@ -345,7 +351,7 @@ func (b *Header) ToProto() *pb.Header {
 		b.Hash()
 	}
 
-	return &pb.Header{
+	header := &pb.Header{
 		Height:     b.Height,
 		ParentHash: b.ParentHash,
 		UncleHash:  b.UncleHash,
@@ -360,6 +366,10 @@ func (b *Header) ToProto() *pb.Header {
 		Pubkey:     b.PublicKey,
 		Txhash:     b.TxHash,
 	}
+	if b.Height > 0 {
+		header.CryptoElement = b.CryptoElement.ToProto()
+	}
+	return header
 }
 
 func DefaultGenesisHeader() *Header {

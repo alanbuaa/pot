@@ -2,6 +2,7 @@ package bls12381
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"math/big"
 )
@@ -127,7 +128,7 @@ func (g *G1) ToUncompressed(p *PointG1) []byte {
 // at infinity and its y-coordinate is the lexicographically largest of the two associated with the encoded x-coordinate.
 func (g *G1) FromCompressed(compressed []byte) (*PointG1, error) {
 	if len(compressed) != fpByteSize {
-		return nil, errors.New("input string length must be equal to 48 Bytes")
+		return nil, fmt.Errorf("input string length must be equal to 48 Bytes, get len %d", len(compressed))
 	}
 	var in [fpByteSize]byte
 	copy(in[:], compressed[:])

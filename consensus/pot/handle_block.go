@@ -183,9 +183,9 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 			return err
 		}
 
-		//if !w.uponReceivedBlock(block.GetHeader().Height, block) {
-		//	return fmt.Errorf("block %s fails the cryptoelement check", hexutil.Encode(block.Hash()))
-		//}
+		if !w.uponReceivedBlock(block.GetHeader().Height, block) {
+			return fmt.Errorf("block %s fails the cryptoelement check", hexutil.Encode(block.Hash()))
+		}
 
 		err := w.blockStorage.Put(block)
 

@@ -142,6 +142,22 @@ func NewWorker(id int64, config *config.ConsensusConfig, logger *logrus.Entry, b
 		once:         new(sync.Once),
 	}
 
+	cryptoset := &CryptoSet{
+		CandidateBlockPrivateKey: nil,
+		BigN:                     32,
+		SmallN:                   4,
+
+		G:                           nil,
+		H:                           nil,
+		LocalSRS:                    nil,
+		PrevShuffledPKList:          nil,
+		PrevRCommitForShuffle:       nil,
+		PrevRCommitForDraw:          nil,
+		UnenabledCommitteeQueue:     nil,
+		UnenabledSelfCommitteeQueue: nil,
+		Threshold:                   3,
+	}
+
 	w := &Worker{
 		abort:         aborts,
 		Engine:        engine,
@@ -172,6 +188,7 @@ func NewWorker(id int64, config *config.ConsensusConfig, logger *logrus.Entry, b
 		CommiteeNum:    int32(1),
 		BackupCommitee: BackupCommitee,
 		chainresetflag: false,
+		Cryptoset:      cryptoset,
 	}
 	rpcserver := grpc.NewServer()
 	pb.RegisterDciExectorServer(rpcserver, w)
@@ -319,7 +336,9 @@ func (w *Worker) OnGetVdf0Response() {
 				w.log.Errorf("[PoT]\tepoch %d: Handle Txs for block %s err for %s", epoch+1, hexutil.Encode(parentblock.Hash()), err)
 			}
 
-			//w.UpdateLocalCryptoSetByBlock(parentblock.GetHeader().Height, parentblock)
+			if parentblock.Header.Height > 0 {
+				w.UpdateLocalCryptoSetByBlock(parentblock.GetHeader().Height, parentblock)
+			}
 
 			// if epoch > 1 {
 			// 	w.simpleLeaderUpdate(parentblock)
@@ -481,26 +500,26 @@ func (w *Worker) createBlock(epoch uint64, parentBlock *types.Block, uncleBlock 
 	id := w.ID
 	peerid := w.PeerId
 
-	//cryptoset, err := w.GenerateCryptoSetFromLocal(epoch)
-	//if err != nil {
-	//	return nil
-	//}
+	cryptoset, err := w.GenerateCryptoSetFromLocal(epoch)
+	if err != nil {
+		return nil
+	}
 
 	h := &types.Header{
-		Height:     epoch,
-		ParentHash: parentblockhash,
-		UncleHash:  uncleBlockhash,
-		Mixdigest:  mixdigest,
-		Difficulty: difficulty,
-		Nonce:      nonce,
-		Timestamp:  time.Now(),
-		PoTProof:   PotProof,
-		Address:    id,
-		PeerId:     peerid,
-		TxHash:     txshash,
-		Hashes:     nil,
-		PublicKey:  publicKeyBytes,
-		//CryptoElement:  cryptoset,
+		Height:        epoch,
+		ParentHash:    parentblockhash,
+		UncleHash:     uncleBlockhash,
+		Mixdigest:     mixdigest,
+		Difficulty:    difficulty,
+		Nonce:         nonce,
+		Timestamp:     time.Now(),
+		PoTProof:      PotProof,
+		Address:       id,
+		PeerId:        peerid,
+		TxHash:        txshash,
+		Hashes:        nil,
+		PublicKey:     publicKeyBytes,
+		CryptoElement: cryptoset,
 	}
 
 	h.Hashes = h.Hash()

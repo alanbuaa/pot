@@ -2,8 +2,7 @@ package crypto
 
 import (
 	"crypto/rand"
-	"github.com/zzz136454872/upgradeable-consensus/crypto/curve/bls12381"
-	"math/big"
+	"github.com/zzz136454872/upgradeable-consensus/crypto/types/curve/bls12381"
 )
 
 const (
@@ -20,15 +19,14 @@ type PrivateKey struct {
 }
 
 func GenerateKey() *PrivateKey {
-	randBytes := make([]byte, PrivateKeyLen)
-	_, err := rand.Read(randBytes)
+	privKey, err := bls12381.NewFr().Rand(rand.Reader)
 	if err != nil {
 		return nil
 	}
 
 	return &PrivateKey{
-		priv: randBytes,
-		pub:  *g1Group.MulScalar(g1Group.New(), g1Group.One(), new(big.Int).SetBytes(randBytes)),
+		priv: privKey.ToBytes(),
+		pub:  *g1Group.MulScalar(g1Group.New(), g1Group.One(), privKey),
 	}
 }
 

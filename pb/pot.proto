@@ -1,6 +1,7 @@
 syntax = "proto3";
 package pb;
 
+import "pb/cryptoelement.proto";
 option go_package="./pb";
 
 enum MessageType{
@@ -42,6 +43,7 @@ message Header{
   string PeerId = 11;
   bytes Pubkey = 12;
   bytes Txhash = 13;
+  CryptoElement CryptoElement = 14;
 //  bytes ExeHash = 14;
 //  bytes Command = 15;
 }

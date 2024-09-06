@@ -3,9 +3,9 @@ package pot
 import (
 	"container/list"
 	"crypto/rand"
-	"encoding/json"
-
-	bc_api "blockchain-crypto/blockchain_api"
+	"fmt"
+	schnorr_proof "github.com/zzz136454872/upgradeable-consensus/crypto/proof/schnorr_proof/bls12381"
+	"github.com/zzz136454872/upgradeable-consensus/crypto/utils"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/zzz136454872/upgradeable-consensus/config"
@@ -49,7 +49,8 @@ type CommitteeMark struct {
 // SelfCommitteeMark 记录自己所在的委员会相关信息
 type SelfCommitteeMark struct {
 	WorkHeight   uint64            // 委员会工作的PoT区块高度
-	SelfPK       *bls12381.PointG1 // 自己的公钥,用于查找自己的份额
+	SelfPubKey   *bls12381.PointG1 // 自己的公钥,用于查找自己的份额
+	SelfPrivKey  *bls12381.Fr      // 自己的私钥, 用于解密自己的份额
 	AggrEncShare *mrpvss.EncShare  // 聚合加密份额
 	Share        *bls12381.Fr      // 解密份额（聚合的）
 }
@@ -116,86 +117,6 @@ func (w *Worker) GetPeerQueue() chan *types.Block {
 }
 
 func (w *Worker) CommitteeUpdate(height uint64) {
-
-	if height >= CommiteeDelay+Commiteelen {
-		committee := make([]string, Commiteelen)
-		selfaddress := make([]string, 0)
-		for i := uint64(0); i < Commiteelen; i++ {
-			block, err := w.chainReader.GetByHeight(height - CommiteeDelay - i)
-			if err != nil {
-				return
-			}
-			if block != nil {
-				header := block.GetHeader()
-				committee[i] = hexutil.Encode(header.PublicKey)
-				flag, _ := w.TryFindKey(crypto.Convert(header.Hash()))
-				if flag {
-					selfaddress = append(selfaddress, hexutil.Encode(header.PublicKey))
-				}
-			}
-		}
-		// potsignal := &simpleWhirly.PoTSignal{
-		// 	Epoch:               int64(epoch),
-		// 	Proof:               nil,
-		// 	ID:                  0,
-		// 	LeaderPublicAddress: committee[0],
-		// 	Committee:           committee,
-		// 	SelfPublicAddress:   selfaddress,
-		// 	CryptoElements:      nil,
-		// }
-		whilyConsensus := &config.WhirlyConfig{
-			Type:      "simple",
-			BatchSize: 2,
-			Timeout:   2,
-		}
-
-		consensus := config.ConsensusConfig{
-			Type:        "whirly",
-			ConsensusID: 1201,
-			Whirly:      whilyConsensus,
-			Nodes:       w.config.Nodes,
-			Topic:       w.config.Topic,
-			F:           w.config.F,
-		}
-
-		sharding1 := nodeController.PoTSharding{
-			Name:                hexutil.EncodeUint64(1),
-			ParentSharding:      nil,
-			LeaderPublicAddress: committee[0],
-			Committee:           committee,
-			CryptoElements:      bc_api.CommitteeConfig{},
-			SubConsensus:        consensus,
-		}
-
-		//w.log.Error(len(committee))
-
-		//sharding2 := simpleWhirly.PoTSharding{
-		//	Name:                "hello_world",
-		//	ParentSharding:      nil,
-		//	LeaderPublicAddress: committee[0],
-		//	Committee:           committee,
-		//	CryptoElements:      nil,
-		//	SubConsensus:        consensus,
-		//}
-		//shardings := []simpleWhirly.PoTSharding{sharding1, sharding2}
-
-		shardings := []nodeController.PoTSharding{sharding1}
-		potsignal := &nodeController.PoTSignal{
-			Epoch:             int64(height),
-			Proof:             make([]byte, 0),
-			ID:                0,
-			SelfPublicAddress: selfaddress,
-			Shardings:         shardings,
-		}
-		b, err := json.Marshal(potsignal)
-		if err != nil {
-			w.log.WithError(err)
-			return
-		}
-		if w.potSignalChan != nil {
-			w.potSignalChan <- b
-		}
-	}
 	//if epoch > 10 && w.ID == 1 {
 	//	block, err := w.chainReader.GetByHeight(epoch - 1)
 	//	if err != nil {
@@ -212,17 +133,99 @@ func (w *Worker) CommitteeUpdate(height uint64) {
 	//	}
 	//	fill.Close()
 	//}
+	// potsignal := &simpleWhirly.PoTSignal{
+	// 	Epoch:               int64(epoch),
+	// 	Proof:               nil,
+	// 	ID:                  0,
+	// 	LeaderPublicAddress: committee[0],
+	// 	Committee:           committee,
+	// 	SelfPublicAddress:   selfaddress,
+	// 	CryptoElements:      nil,
+	// }
+	//if height >= CommiteeDelay+Commiteelen {
+	//	committee := make([]string, Commiteelen)
+	//	selfaddress := make([]string, 0)
+	//	for i := uint64(0); i < Commiteelen; i++ {
+	//		block, err := w.chainReader.GetByHeight(height - CommiteeDelay - i)
+	//		if err != nil {
+	//			return
+	//		}
+	//		if block != nil {
+	//			header := block.GetHeader()
+	//			committee[i] = hexutil.Encode(header.PublicKey)
+	//			flag, _ := w.TryFindKey(crypto.Convert(header.Hash()))
+	//			if flag {
+	//				selfaddress = append(selfaddress, hexutil.Encode(header.PublicKey))
+	//			}
+	//		}
+	//	}
+	//
+	//	whilyConsensus := &config.WhirlyConfig{
+	//		Type:      "simple",
+	//		BatchSize: 2,
+	//		Timeout:   2,
+	//	}
+	//
+	//	consensus := config.ConsensusConfig{
+	//		Type:        "whirly",
+	//		ConsensusID: 1201,
+	//		Whirly:      whilyConsensus,
+	//		Nodes:       w.config.Nodes,
+	//		Topic:       w.config.Topic,
+	//		F:           w.config.F,
+	//	}
+	//
+	//	sharding1 := nodeController.PoTSharding{
+	//		Name:                hexutil.EncodeUint64(1),
+	//		ParentSharding:      nil,
+	//		LeaderPublicAddress: committee[0],
+	//		Committee:           committee,
+	//		CryptoElements:      bc_api.CommitteeConfig{},
+	//		SubConsensus:        consensus,
+	//	}
+	//
+	//	//w.log.Error(len(committee))
+	//
+	//	//sharding2 := simpleWhirly.PoTSharding{
+	//	//	Name:                "hello_world",
+	//	//	ParentSharding:      nil,
+	//	//	LeaderPublicAddress: committee[0],
+	//	//	Committee:           committee,
+	//	//	CryptoElements:      nil,
+	//	//	SubConsensus:        consensus,
+	//	//}
+	//	//shardings := []simpleWhirly.PoTSharding{sharding1, sharding2}
+	//
+	//	shardings := []nodeController.PoTSharding{sharding1}
+	//	potsignal := &nodeController.PoTSignal{
+	//		Epoch:             int64(height),
+	//		Proof:             make([]byte, 0),
+	//		ID:                0,
+	//		SelfPublicAddress: selfaddress,
+	//		Shardings:         shardings,
+	//	}
+	//	b, err := json.Marshal(potsignal)
+	//	if err != nil {
+	//		w.log.WithError(err)
+	//		return
+	//	}
+	//	if w.potSignalChan != nil {
+	//		w.potSignalChan <- b
+	//	}
+	//}
+
 }
 
 type queue = list.List
 
 type CryptoSet struct {
 	// 通用
-	BigN   uint32            // 候选公钥列表大小
-	SmallN uint64            // 委员会大小
-	SK     *bls12381.Fr      // 该节点的私钥
-	G      *bls12381.PointG1 // G1生成元
-	H      *bls12381.PointG1 // G1生成元
+	CandidateBlockPrivateKey *bls12381.Fr // 候选块的
+	BigN                     uint64       // 候选公钥列表大小
+	SmallN                   uint64       // 委员会大小
+
+	G *bls12381.PointG1 // G1生成元
+	H *bls12381.PointG1 // G1生成元
 	// 参数生成阶段
 	LocalSRS *srs.SRS // 本地记录的最新有效SRS
 	// 置换阶段
@@ -264,11 +267,27 @@ func isTheLastShuffle(height uint64) bool {
 func inDrawStage(height uint64) bool {
 	return height > CandidateKeyLen+Commitees
 }
+func isTheFirstShuffle(height uint64) bool {
+	// 置换阶段（简单置换） [1+kN, SmallN+kN] k>0
+	if height <= BigN {
+		return false
+	}
+	if height%BigN == 1 {
+		return true
+	}
+	return false
+}
+
 func inDPVSSStage(height uint64) bool {
 	return height > CandidateKeyLen+Commitees+1
 }
 func inWorkStage(height uint64) bool {
 	return height > BigN+2*SmallN
+}
+
+// TODO isSelfBlock 判断高度为 height 的区块是否是自己出块的
+func isSelfBlock(height uint64) bool {
+	return false
 }
 
 // uponReceivedBlock 当收到区块，height 为该区块的高度, 返回该区块是否验证通过
@@ -278,8 +297,14 @@ func (w *Worker) uponReceivedBlock(
 	// 如果处于初始化阶段（参数生成阶段）
 	receivedBlock := block.GetHeader().CryptoElement
 	if inInitStage(height) {
+		prevSRSG1FirstElem := group1.One()
+		if w.Cryptoset.LocalSRS != nil {
+			w.Cryptoset.LocalSRS.G1PowerOf(1)
+		}
+
 		// 检查srs的更新证明，如果验证失败，则丢弃
-		if !srs.Verify(receivedBlock.SRS, w.Cryptoset.LocalSRS.G1PowerOf(1), receivedBlock.SrsUpdateProof) {
+		if !srs.Verify(receivedBlock.SRS, prevSRSG1FirstElem, receivedBlock.SrsUpdateProof) {
+			fmt.Printf("[Height %d]:Verify SRS error\n", height)
 			return false
 		}
 		return true
@@ -287,6 +312,11 @@ func (w *Worker) uponReceivedBlock(
 	// 如果处于置换阶段，则验证置换
 	if inShuffleStage(height) {
 		// 验证置换
+		// 第一次置换
+		if isTheFirstShuffle(height) {
+			// 获取前面BigN个区块的公钥
+			w.Cryptoset.PrevShuffledPKList = w.getPrevNBlockPKList(height-BigN, height-1)
+		}
 		// 如果验证失败，丢弃
 		if !shuffle.Verify(w.Cryptoset.LocalSRS, w.Cryptoset.PrevShuffledPKList, w.Cryptoset.PrevRCommitForShuffle, receivedBlock.ShuffleProof) {
 			return false
@@ -341,16 +371,25 @@ func (w *Worker) UpdateLocalCryptoSetByBlock(height uint64, receivedBlock *types
 			PKList:      receivedBlock.GetHeader().CryptoElement.DrawProof.SelectedPubKeys,
 			CommitteePK: group1.Zero(),
 		})
-		// 获取抽签结果
-		isSelected, pk := verifiable_draw.IsSelected(w.Cryptoset.SK, receivedBlock.GetHeader().CryptoElement.DrawProof.RCommit, receivedBlock.GetHeader().CryptoElement.DrawProof.SelectedPubKeys)
-		// 如果抽中，在自己所在的委员会队列创建新条目记录
-		if isSelected {
-			w.Cryptoset.UnenabledSelfCommitteeQueue.PushBack(SelfCommitteeMark{
-				WorkHeight:   height + SmallN,
-				SelfPK:       pk,
-				AggrEncShare: mrpvss.NewEmptyEncShare(),
-				Share:        bls12381.NewFr().Zero(),
-			})
+		// 对于每个自己区块的公私钥对获取抽签结果，是否被选中，如果被选中则获取自己的公钥
+		// 获取自己的区块私钥(同一置换/抽签分组内的，即1~32，33~64...)
+		maxHeight := ((height - w.Cryptoset.SmallN) >> 5) << 5
+		minHeight := maxHeight - w.Cryptoset.SmallN + 1
+		selfPrivKeyList := w.getSelfPrivKeyList(minHeight, maxHeight)
+		for _, privKey := range selfPrivKeyList {
+			isSelected, pk := verifiable_draw.IsSelected(privKey, receivedBlock.GetHeader().CryptoElement.DrawProof.RCommit, receivedBlock.GetHeader().CryptoElement.DrawProof.SelectedPubKeys)
+			// 如果抽中，在自己所在的委员会队列创建新条目记录
+			if isSelected {
+				// test
+				fmt.Printf("Mark committee you are in, current height: %d, committee work height: %d\n", height, height+w.Cryptoset.SmallN)
+				w.Cryptoset.UnenabledSelfCommitteeQueue.PushBack(&SelfCommitteeMark{
+					WorkHeight:   height + w.Cryptoset.SmallN,
+					SelfPubKey:   pk,
+					SelfPrivKey:  privKey,
+					AggrEncShare: mrpvss.NewEmptyEncShare(),
+					Share:        bls12381.NewFr().Zero(),
+				})
+			}
 		}
 	}
 	// DPVSS阶段
@@ -364,22 +403,22 @@ func (w *Worker) UpdateLocalCryptoSetByBlock(height uint64, receivedBlock *types
 				}
 			}
 			for e := w.Cryptoset.UnenabledSelfCommitteeQueue.Front(); e != nil; e = e.Next() {
+				mark := e.Value.(*SelfCommitteeMark)
 				// 如果自己是对应份额持有者(委员会工作高度相等)，则获取对应加密份额，聚合加密份额
-				if e.Value.(SelfCommitteeMark).WorkHeight == receivedBlock.GetHeader().CryptoElement.CommitteeWorkHeightList[i] {
+				if mark.WorkHeight == receivedBlock.GetHeader().CryptoElement.CommitteeWorkHeightList[i] {
 					holderPKList := receivedBlock.GetHeader().CryptoElement.HolderPKLists[i]
 					encShares := receivedBlock.GetHeader().CryptoElement.EncShareLists[i]
 					holderNum := len(holderPKList)
 					for j := 0; j < holderNum; j++ {
-						if group1.Equal(e.Value.(*SelfCommitteeMark).SelfPK, holderPKList[j]) {
+						if group1.Equal(mark.SelfPubKey, holderPKList[j]) {
 							// 聚合加密份额
-							mrpvss.AggregateEncShares(e.Value.(*SelfCommitteeMark).AggrEncShare, encShares[j])
-							e.Value.(*SelfCommitteeMark).AggrEncShare = encShares[j]
+							mark.AggrEncShare = mrpvss.AggregateEncShares(mark.AggrEncShare, encShares[j])
 						}
 					}
 					// 如果当前是该委员会的最后一次PVSS，后续没有新的PVSS份额，则解密聚合份额
-					if int64(e.Value.(*SelfCommitteeMark).WorkHeight)-int64(height) == 1 {
+					if int64(mark.WorkHeight)-int64(height) == 1 {
 						// 解密聚合加密份额
-						e.Value.(*SelfCommitteeMark).Share = mrpvss.DecryptAggregateShare(w.Cryptoset.G, w.Cryptoset.SK, e.Value.(*SelfCommitteeMark).AggrEncShare, uint32(SmallN-1))
+						mark.Share = mrpvss.DecryptAggregateShare(w.Cryptoset.G, mark.SelfPrivKey, mark.AggrEncShare, uint32(SmallN-1))
 					}
 				}
 			}
@@ -388,19 +427,43 @@ func (w *Worker) UpdateLocalCryptoSetByBlock(height uint64, receivedBlock *types
 	}
 	// 委员会更新阶段
 	if inWorkStage(height) {
-		// 更新未工作的委员会队列，删除第一个元素
-		if w.Cryptoset.UnenabledCommitteeQueue.Front() != nil {
-			w.Cryptoset.UnenabledCommitteeQueue.Remove(w.Cryptoset.UnenabledCommitteeQueue.Front())
+		// TODO 判断自己是否作为领导者进行工作
+		if isSelfBlock(height) {
+			// 更新未工作的委员会队列，删除第一个元素(该元素对应委员会在这个epoch工作)
+			if w.Cryptoset.UnenabledCommitteeQueue.Front() != nil {
+				e := w.Cryptoset.UnenabledCommitteeQueue.Front()
+				// 获取该委员会公钥
+				committeeInfo := e.Value.(*CommitteeMark).CommitteePK
+				// 删除该委员会
+				w.Cryptoset.UnenabledCommitteeQueue.Remove(w.Cryptoset.UnenabledCommitteeQueue.Front())
+				// TODO 传递该委员会信息给业务链（作为委员会领导者）
+				handleCommitteeAsLeader(height, committeeInfo)
+				return
+			}
 		}
+
 		// 检查自己是否需要作为委员会成员工作
 		// 遍历队列查找，如果自己该作为委员会成员执行业务处理，则解密聚合加密份额，并发送信号
 		for e := w.Cryptoset.UnenabledSelfCommitteeQueue.Front(); e != nil; e = e.Next() {
 			if height == e.Value.(*SelfCommitteeMark).WorkHeight {
 				// 从自己所属委员会队列中移除该委员会标记
-				// TODO 移除前接收数据（如果需要）
+				memberInfo := e.Value.(*SelfCommitteeMark)
 				w.Cryptoset.UnenabledSelfCommitteeQueue.Remove(e)
 				// TODO 发送相关信号
+				handleCommitteeAsMember(height, memberInfo)
+				return
 			}
+		}
+		// 作为用户，传递抗审查数据
+		// 更新未工作的委员会队列，删除第一个元素(该元素对应委员会在这个epoch工作)
+		if w.Cryptoset.UnenabledCommitteeQueue.Front() != nil {
+			e := w.Cryptoset.UnenabledCommitteeQueue.Front()
+			// 获取该委员会公钥
+			committeeInfo := e.Value.(*CommitteeMark).CommitteePK
+			// 删除该委员会
+			w.Cryptoset.UnenabledCommitteeQueue.Remove(w.Cryptoset.UnenabledCommitteeQueue.Front())
+			// TODO 传递该委员会公钥给业务链(用于向该委员会发送交易)
+			handleCommitteeAsUser(height, committeeInfo)
 		}
 	}
 }
@@ -490,9 +553,17 @@ func IsContain(parent []string, son string) bool {
 func (w *Worker) GenerateCryptoSetFromLocal(height uint64) (types.CryptoElement, error) {
 	// 如果处于初始化阶段（参数生成阶段）
 	if inInitStage(height) {
+		w.log.Infof("[PoT]\tHeight %d: in Init Stage, update SRS and generate SRS update proof", height)
 		// 更新 srs, 并生成证明
-		r, _ := bls12381.NewFr().Rand(rand.Reader)
-		newSRS, newSrsUpdateProof := w.Cryptoset.LocalSRS.Update(r)
+		var newSRS *srs.SRS
+		var newSrsUpdateProof *schnorr_proof.SchnorrProof
+		// 如果之前未生成SRS，新生成一个SRS
+		if w.Cryptoset.LocalSRS == nil {
+			newSRS, newSrsUpdateProof = srs.NewSRS(g1Degree, g2Degree)
+		} else {
+			r, _ := bls12381.NewFr().Rand(rand.Reader)
+			newSRS, newSrsUpdateProof = w.Cryptoset.LocalSRS.Update(r)
+		}
 		// 更新后的SRS和更新证明写入区块
 		return types.CryptoElement{
 			SRS:            newSRS,
@@ -510,14 +581,24 @@ func (w *Worker) GenerateCryptoSetFromLocal(height uint64) (types.CryptoElement,
 	var committeePKList []*bls12381.PointG1 = nil
 	// 如果处于置换阶段，则进行置换
 	if inShuffleStage(height) {
+		w.log.Infof("[PoT]\tHeight %d: in Shuffle Stage, generate shuffle proof", height)
+		if isTheFirstShuffle(height) {
+			// 获取前面BigN个区块的公钥
+			w.Cryptoset.PrevShuffledPKList = w.getPrevNBlockPKList(height-BigN, height-1)
+		}
 		newShuffleProof = shuffle.SimpleShuffle(w.Cryptoset.LocalSRS, w.Cryptoset.PrevShuffledPKList, w.Cryptoset.PrevRCommitForShuffle)
 	}
 	// 如果处于抽签阶段，则进行抽签
 	if inDrawStage(height) {
-		// TODO 生成秘密向量用于抽签，向量元素范围为 [1,BigN]
-		secretVector := []uint32{9, 12, 5, 29}
-		newDrawProof, err = verifiable_draw.Draw(w.Cryptoset.LocalSRS, w.Cryptoset.BigN, w.Cryptoset.PrevShuffledPKList, uint32(SmallN), secretVector, w.Cryptoset.PrevRCommitForDraw)
-		// TODO handle error，能否直接return？还是循环调用？
+		// test
+		fmt.Printf("in Draw Stage, draw\n")
+		// 生成秘密向量用于抽签，向量元素范围为 [1, BigN]
+		permutation, err := utils.GenRandomPermutation(uint32(w.Cryptoset.BigN))
+		if err != nil {
+			return types.CryptoElement{}, err
+		}
+		secretVector := permutation[:w.Cryptoset.SmallN]
+		newDrawProof, err = verifiable_draw.Draw(w.Cryptoset.LocalSRS, uint32(w.Cryptoset.BigN), w.Cryptoset.PrevShuffledPKList, uint32(w.Cryptoset.SmallN), secretVector, w.Cryptoset.PrevRCommitForDraw)
 		if err != nil {
 			return types.CryptoElement{}, err
 		}
@@ -525,7 +606,7 @@ func (w *Worker) GenerateCryptoSetFromLocal(height uint64) (types.CryptoElement,
 	// 如果处于PVSS阶段，则进行PVSS的分发份额
 	if inDPVSSStage(height) {
 		// 计算向哪些委员会进行pvss(委员会index从1开始)
-		pvssTimes := height - BigN - SmallN - 1
+		pvssTimes := height - w.Cryptoset.BigN - w.Cryptoset.SmallN - 1
 		if pvssTimes > w.Cryptoset.SmallN-1 {
 			pvssTimes = w.Cryptoset.SmallN - 1
 		}
@@ -542,7 +623,7 @@ func (w *Worker) GenerateCryptoSetFromLocal(height uint64) (types.CryptoElement,
 			committeeWorkHeightList[i] = height - pvssTimes + i + SmallN
 			secret, _ := bls12381.NewFr().Rand(rand.Reader)
 			holderPKLists[i] = e.Value.(*CommitteeMark).PKList
-			shareCommitsList[i], coeffCommitsList[i], encSharesList[i], committeePKList[i], err = mrpvss.EncShares(w.Cryptoset.G, w.Cryptoset.H, holderPKLists[i], secret, uint32(uint64(w.Cryptoset.Threshold)))
+			shareCommitsList[i], coeffCommitsList[i], encSharesList[i], committeePKList[i], err = mrpvss.EncShares(w.Cryptoset.G, w.Cryptoset.H, holderPKLists[i], secret, (w.Cryptoset.Threshold))
 			// TODO handle error，能否直接return？还是循环调用？
 			if err != nil {
 				return types.CryptoElement{}, err
@@ -562,4 +643,56 @@ func (w *Worker) GenerateCryptoSetFromLocal(height uint64) (types.CryptoElement,
 		EncShareLists:           encSharesList,
 		CommitteePKList:         committeePKList,
 	}, nil
+}
+
+// TODO handleCommitteeAsUser 作为用户传递该委员会信息给业务链(用于向该委员会发送交易)
+func handleCommitteeAsUser(height uint64, pk *bls12381.PointG1) {
+
+}
+
+// TODO handleCommitteeAsMember 作为委员会成员传递该委员会信息给业务链(用于处理业务)
+func handleCommitteeAsMember(height uint64, info *SelfCommitteeMark) {
+
+}
+
+// TODO handleCommitteeAsLeader 作为委员会领导者传递该委员会信息给业务链(用于处理业务)
+func handleCommitteeAsLeader(height uint64, info *bls12381.PointG1) {
+
+}
+
+// TODO getSelfPrivKeyList 获取高度位于 [minHeight, maxHeight] 内所有自己出块的区块私钥
+func (w *Worker) getSelfPrivKeyList(minHeight, maxHeight uint64) []*bls12381.Fr {
+	var ret []*bls12381.Fr
+
+	for i := minHeight; i <= maxHeight; i++ {
+		block, err := w.chainReader.GetByHeight(i)
+		if err != nil {
+			return nil
+		}
+
+		flag, priv := w.TryFindKey(crypto.Convert(block.Hash()))
+		if flag {
+			fr := bls12381.NewFr().FromBytes(priv)
+			ret = append(ret, fr)
+		}
+	}
+	return ret
+}
+
+// TODO getPrevNBlockPKList 获取高度位于 [minHeight, maxHeight] 内所有区块的公钥
+func (w *Worker) getPrevNBlockPKList(minHeight, maxHeight uint64) []*bls12381.PointG1 {
+	ret := make([]*bls12381.PointG1, 0)
+	for i := minHeight; i <= maxHeight; i++ {
+		block, err := w.chainReader.GetByHeight(i)
+		if err != nil {
+			return nil
+		}
+		pub := block.GetHeader().PublicKey
+		point, err := bls12381.NewG1().FromBytes(pub)
+		if err != nil {
+			return nil
+		}
+		ret = append(ret, point)
+	}
+	return ret
 }
