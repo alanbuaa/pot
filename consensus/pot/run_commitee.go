@@ -25,6 +25,10 @@ var (
 )
 var (
 	group1 = bls12381.NewG1()
+	// test
+	g1Degree = uint32(1 << 8)
+	// test
+	g2Degree = uint32(1 << 8)
 )
 
 type Sharding struct {
