@@ -6,8 +6,21 @@ import (
 	"github.com/zzz136454872/upgradeable-consensus/types"
 	"math/big"
 	"strconv"
+	"sync"
 	time2 "time"
 )
+
+type Abortcontrol struct {
+	abortchannel chan struct{}
+	once         *sync.Once
+}
+
+func NewAbortcontrol() *Abortcontrol {
+	return &Abortcontrol{
+		abortchannel: make(chan struct{}),
+		once:         new(sync.Once),
+	}
+}
 
 func (w *Worker) calculateChainWeight(root, leaf *types.Block) *big.Int {
 	total := big.NewInt(0)

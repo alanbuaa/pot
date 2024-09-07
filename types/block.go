@@ -298,6 +298,7 @@ func ToHeader(header *pb.Header) *Header {
 		Height:     header.GetHeight(),
 		ParentHash: header.GetParentHash(),
 		UncleHash:  header.GetUncleHash(),
+
 		Mixdigest:  header.GetMixdigest(),
 		Difficulty: difficulty,
 		Nonce:      header.GetNonce(),

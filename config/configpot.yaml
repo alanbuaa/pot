@@ -1,14 +1,14 @@
 nodes:
-  - id: 0
-    address: 127.0.0.1:8080
-    rpc_address: 127.0.0.1:9080
-    dcirpcAddress : 127.0.0.1:9866
-    private_key_path: keys/r1.key
-  - id: 1
-    address: 127.0.0.1:8081
-    rpc_address: 127.0.0.1:9081
-    dcirpcAddress : 127.0.0.1:9867
-    private_key_path: keys/r2.key
+#  - id: 0
+#    address: 127.0.0.1:8080
+#    rpc_address: 127.0.0.1:9080
+#    dcirpcAddress : 127.0.0.1:9866
+#    private_key_path: keys/r1.key
+#  - id: 1
+#    address: 127.0.0.1:8081
+#    rpc_address: 127.0.0.1:9081
+#    dcirpcAddress : 127.0.0.1:9867
+#    private_key_path: keys/r2.key
   - id: 2
     address: 127.0.0.1:8082
     rpc_address: 127.0.0.1:9082

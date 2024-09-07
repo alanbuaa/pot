@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	config "github.com/zzz136454872/upgradeable-consensus/config"
 	"github.com/zzz136454872/upgradeable-consensus/logging"
 	"github.com/zzz136454872/upgradeable-consensus/node"
@@ -54,7 +55,8 @@ func main() {
 	signal.Notify(sigChan, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM,
 		syscall.SIGQUIT)
 	cfg, _ := config.NewConfig("config/configpot.yaml", 0)
-	total := cfg.Total
+	total := len(cfg.Nodes)
+	fmt.Println(len(cfg.Nodes))
 	nodes := make([]*node.Node, total)
 
 	defer func() {
@@ -70,9 +72,11 @@ func main() {
 	}()
 
 	// Your code that may cause panic
-	for i := int64(0); i < int64(total); i++ {
+	for i := int64(0); i < int64(len(cfg.Nodes)); i++ {
 		go func(index int64) {
-			nodes[index] = node.NewNode(index)
+			if cfg.Nodes[index] != nil {
+				nodes[index] = node.NewNode(cfg.Nodes[index].ID)
+			}
 		}(i)
 	}
 	//go testexecutor()
@@ -80,7 +84,9 @@ func main() {
 	<-sigChan
 	logger.Info("[UpgradeableConsensus] Exit...")
 	for i := 0; i < total; i++ {
-		nodes[i].Stop()
+		if nodes[i] != nil {
+			nodes[i].Stop()
+		}
 	}
 }
 

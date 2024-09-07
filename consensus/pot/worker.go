@@ -46,18 +46,6 @@ const (
 	Commitees          = 4  // 委员会大小
 )
 
-type Abortcontrol struct {
-	abortchannel chan struct{}
-	once         *sync.Once
-}
-
-func NewAbortcontrol() *Abortcontrol {
-	return &Abortcontrol{
-		abortchannel: make(chan struct{}),
-		once:         new(sync.Once),
-	}
-}
-
 type Worker struct {
 	// basic info
 	ID     int64
@@ -115,6 +103,7 @@ func NewWorker(id int64, config *config.ConsensusConfig, logger *logrus.Entry, b
 	ch0 := make(chan *types.VDF0res, 2048)
 	ch1 := make(chan *types.VDF0res, 2048)
 	potconfig := config.PoT
+
 	seed, err := crand.Int(crand.Reader, big.NewInt(math.MaxInt64))
 	if err != nil {
 		return nil
@@ -819,7 +808,7 @@ func (w *Worker) CheckParentBlockEnough(height uint64) (bool, error) {
 			count += 1
 		}
 	}
-	if count < w.config.PoT.Snum {
+	if count*2 < w.config.PoT.Snum {
 		return false, fmt.Errorf("not enough parent block for height %d", height)
 	}
 

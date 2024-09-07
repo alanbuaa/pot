@@ -6,7 +6,6 @@ import (
 	"os"
 
 	"github.com/niclabs/tcrsa"
-	"github.com/zzz136454872/upgradeable-consensus/crypto"
 	"gopkg.in/yaml.v3"
 )
 
@@ -117,18 +116,22 @@ func NewConfig(path string, id int64) (*Config, error) {
 	if err := yaml.Unmarshal(data, cfg); err != nil {
 		return nil, err
 	}
-	keys := new(KeySet)
-	keys.PublicKey, err = crypto.ReadThresholdPublicKeyFromFile(cfg.PublicKeyPath)
-	if err != nil {
-		return nil, err
+	//keys := new(KeySet)
+	//keys.PublicKey, err = crypto.ReadThresholdPublicKeyFromFile(cfg.PublicKeyPath)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//keys.PrivateKey, err = crypto.ReadThresholdPrivateKeyFromFile(cfg.GetNodeInfo(id).PrivateKeyPath)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//cfg.Keys = keys
+	cfg.Consensus.Nodes = make([]*ReplicaInfo, (cfg.Total))
+	for i := 0; i < len(cfg.Nodes); i++ {
+		cfg.Consensus.Nodes[cfg.Nodes[i].ID] = cfg.Nodes[i]
 	}
-	keys.PrivateKey, err = crypto.ReadThresholdPrivateKeyFromFile(cfg.GetNodeInfo(id).PrivateKeyPath)
-	if err != nil {
-		return nil, err
-	}
-	cfg.Keys = keys
-	cfg.Consensus.Nodes = cfg.Nodes
-	cfg.Consensus.Keys = keys
+	cfg.Nodes = cfg.Consensus.Nodes
+	//cfg.Consensus.Keys = keys
 	// cfg.Consensus.F = (len(cfg.Nodes) - 1) / 3
 	cfg.Consensus.F = (cfg.Total - 1) / 3
 	// cfg.Consensus.F = 1
@@ -147,8 +150,10 @@ func (c *ConsensusConfig) GetNodeInfo(id int64) *ReplicaInfo {
 
 func (c *Config) GetNodeInfo(id int64) *ReplicaInfo {
 	for _, info := range c.Nodes {
-		if info.ID == id {
-			return info
+		if info != nil {
+			if info.ID == id {
+				return info
+			}
 		}
 	}
 	panic(fmt.Sprintf("node %d does not exist", id))
