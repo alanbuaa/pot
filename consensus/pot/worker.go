@@ -501,6 +501,7 @@ func (w *Worker) createBlock(epoch uint64, parentBlock *types.Block, uncleBlock 
 	peerid := w.PeerId
 
 	cryptoset, err := w.GenerateCryptoSetFromLocal(epoch)
+
 	if err != nil {
 		return nil
 	}

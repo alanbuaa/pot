@@ -1,6 +1,9 @@
 package types
 
 import (
+	"fmt"
+
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	schnorr_proof "github.com/zzz136454872/upgradeable-consensus/crypto/proof/schnorr_proof/bls12381"
 	mrpvss "github.com/zzz136454872/upgradeable-consensus/crypto/share/mrpvss/bls12381"
 	"github.com/zzz136454872/upgradeable-consensus/crypto/types/curve/bls12381"
@@ -30,6 +33,7 @@ type CryptoElement struct {
 }
 
 func (s *CryptoElement) ToProto() *pb.CryptoElement {
+	G1 := bls12381.NewG1()
 	if s == nil {
 		return &pb.CryptoElement{}
 	}
@@ -37,6 +41,12 @@ func (s *CryptoElement) ToProto() *pb.CryptoElement {
 		srsbyte, err := s.SRS.ToCompressedBytes()
 		if err != nil {
 			return nil
+		}
+		// TODO test
+		_, testErr := srs.FromCompressedBytes(srsbyte)
+		if testErr != nil {
+			fmt.Printf("test FromCompressedBytes error:%v\n", err)
+
 		}
 		return &pb.CryptoElement{
 			SRS:            srsbyte,
@@ -133,6 +143,7 @@ func ToCryptoElement(element *pb.CryptoElement) (CryptoElement, error) {
 		return CryptoElement{}, nil
 	}
 	if element.GetSRS() != nil {
+		fmt.Println(hexutil.Encode(element.GetSRS()))
 		Srs, err := srs.FromCompressedBytes(element.GetSRS())
 		if err != nil {
 			return CryptoElement{}, err

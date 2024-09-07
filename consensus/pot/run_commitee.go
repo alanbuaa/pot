@@ -559,11 +559,12 @@ func (w *Worker) GenerateCryptoSetFromLocal(height uint64) (types.CryptoElement,
 		var newSrsUpdateProof *schnorr_proof.SchnorrProof
 		// 如果之前未生成SRS，新生成一个SRS
 		if w.Cryptoset.LocalSRS == nil {
-			newSRS, newSrsUpdateProof = srs.NewSRS(g1Degree, g2Degree)
+			newSRS, newSrsUpdateProof = srs.NewSRS(4, 4)
 		} else {
 			r, _ := bls12381.NewFr().Rand(rand.Reader)
 			newSRS, newSrsUpdateProof = w.Cryptoset.LocalSRS.Update(r)
 		}
+
 		// 更新后的SRS和更新证明写入区块
 		return types.CryptoElement{
 			SRS:            newSRS,

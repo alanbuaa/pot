@@ -6,17 +6,11 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	schnorr_proof "github.com/zzz136454872/upgradeable-consensus/crypto/proof/schnorr_proof/bls12381"
-	. "github.com/zzz136454872/upgradeable-consensus/crypto/types/curve/bls12381"
 	"io"
 	"os"
-)
 
-var (
-	group1 = NewG1()
-	g1     = group1.One()
-	group2 = NewG2()
-	g2     = group2.One()
+	schnorr_proof "github.com/zzz136454872/upgradeable-consensus/crypto/proof/schnorr_proof/bls12381"
+	. "github.com/zzz136454872/upgradeable-consensus/crypto/types/curve/bls12381"
 )
 
 const BinFileName = "srs.binary"
@@ -33,16 +27,18 @@ type SRS struct {
 }
 
 func NewSRS(g1Degree, g2Degree uint32) (*SRS, *schnorr_proof.SchnorrProof) {
+	group1 := NewG1()
+	group2 := NewG2()
 	// get generators
 	g1PowersSize := g1Degree + 1
 	g2PowersSize := g2Degree + 1
 	g1Powers := make([]*PointG1, g1PowersSize)
 	g2Powers := make([]*PointG2, g2PowersSize)
 	for i := uint32(0); i < g1PowersSize; i++ {
-		g1Powers[i] = group1.New().Set(g1)
+		g1Powers[i] = group1.New().Set(group1.One())
 	}
 	for i := uint32(0); i < g2PowersSize; i++ {
-		g2Powers[i] = group2.New().Set(g2)
+		g2Powers[i] = group2.New().Set(group2.One())
 	}
 	x, _ := NewFr().Rand(rand.Reader)
 	srs := &SRS{
@@ -55,6 +51,8 @@ func NewSRS(g1Degree, g2Degree uint32) (*SRS, *schnorr_proof.SchnorrProof) {
 }
 
 func (s *SRS) Update(r *Fr) (*SRS, *schnorr_proof.SchnorrProof) {
+	group1 := NewG1()
+	group2 := NewG2()
 	prevSRSG1FirstElem := s.g1Powers[1]
 	rPower := NewFr().Set(r)
 	g1PowersSize := len(s.g1Powers)
@@ -86,6 +84,8 @@ func (s *SRS) Update(r *Fr) (*SRS, *schnorr_proof.SchnorrProof) {
 }
 
 func Verify(s *SRS, prevSRSG1FirstElem *PointG1, proof *schnorr_proof.SchnorrProof) bool {
+	group1 := NewG1()
+	group2 := NewG2()
 	if s == nil || proof == nil {
 		return false
 	}
@@ -148,6 +148,8 @@ func (s *SRS) ToBinaryFile() error {
 }
 
 func FromBinaryFile() (*SRS, error) {
+	group1 := NewG1()
+	group2 := NewG2()
 	f, err := os.Open(BinFileName)
 	if err != nil {
 		return nil, err
@@ -202,6 +204,8 @@ func FromBinaryFile() (*SRS, error) {
 }
 
 func FromCompressedBytes(input []byte) (*SRS, error) {
+	group1 := NewG1()
+	group2 := NewG2()
 	buffer := bytes.NewBuffer(input)
 	uint32Buf := make([]byte, 4)
 	pointG1Buf := make([]byte, 48)
@@ -212,7 +216,6 @@ func FromCompressedBytes(input []byte) (*SRS, error) {
 		return nil, err
 	}
 	g1Degree := binary.BigEndian.Uint32(uint32Buf)
-
 	_, err = buffer.Read(uint32Buf)
 	if err != nil {
 		return nil, err
@@ -229,7 +232,14 @@ func FromCompressedBytes(input []byte) (*SRS, error) {
 		}
 		g1Powers[i], err = group1.FromCompressed(pointG1Buf)
 		if err != nil {
-			return nil, err
+			fmt.Printf("FCB: G1 at %v : %v, uncompressed: %v, error: %v\n",
+				i,
+				pointG1Buf,
+				g1Powers[i],
+				err,
+			)
+			return nil, fmt.Errorf("failed to deserialize pointG1 at %v: %v", i, err)
+
 		}
 	}
 	// for g2 power
@@ -241,7 +251,13 @@ func FromCompressedBytes(input []byte) (*SRS, error) {
 		}
 		g2Powers[i], err = group2.FromCompressed(pointG2Buf)
 		if err != nil {
-			return nil, err
+			fmt.Printf("FCB: G2 at %v : %v, uncompressed: %v, error: %v\n",
+				i,
+				pointG2Buf,
+				g2Powers[i],
+				err,
+			)
+			return nil, fmt.Errorf("failed to deserialize pointG2 at %v: %v", i, err)
 		}
 	}
 	return &SRS{
@@ -253,6 +269,8 @@ func FromCompressedBytes(input []byte) (*SRS, error) {
 }
 
 func (s *SRS) ToCompressedBytes() ([]byte, error) {
+	group1 := NewG1()
+	group2 := NewG2()
 	buf := bytes.NewBuffer([]byte{})
 	if err := binary.Write(buf, binary.BigEndian, s.g1Degree); err != nil {
 		return nil, err
@@ -263,15 +281,42 @@ func (s *SRS) ToCompressedBytes() ([]byte, error) {
 	g1PowersSize := s.g1Degree + 1
 	g2PowersSize := s.g2Degree + 1
 	for i := uint32(0); i < g1PowersSize; i++ {
-		buf.Write(group1.ToCompressed(s.g1Powers[i]))
+		pointBytes := group1.ToCompressed(s.g1Powers[i])
+		// recoveredPoint, err := group1.FromCompressed(pointBytes)
+		// fmt.Printf("TCB: G1 at %v: %v, curve?= %v, group?= %v, compressed: %v, curve?= %v, group?= %v, error: %v, eq?=%v\n",
+		// 	i,
+		// 	s.g1Powers[i],
+		// 	group1.IsOnCurve(s.g1Powers[i]),
+		// 	group1.InCorrectSubgroup(s.g1Powers[i]),
+		// 	pointBytes,
+		// 	group1.IsOnCurve(recoveredPoint),
+		// 	group1.InCorrectSubgroup(recoveredPoint),
+		// 	err,
+		// 	group1.Equal(recoveredPoint, s.g1Powers[i]),
+		// )
+		buf.Write(pointBytes)
 	}
 	for i := uint32(0); i < g2PowersSize; i++ {
-		buf.Write(group2.ToCompressed(s.g2Powers[i]))
+		pointBytes := group2.ToCompressed(s.g2Powers[i])
+		// recoveredPoint, err := group2.FromCompressed(pointBytes)
+		// fmt.Printf("TCB: G2 at %v : %v, curve?= %v, group?= %v, compressed: %v curve?= %v, group?= %v, error: %v, eq?=%v\n",
+		// 	i,
+		// 	s.g2Powers[i],
+		// 	group2.IsOnCurve(s.g2Powers[i]),
+		// 	group2.InCorrectSubgroup(s.g2Powers[i]),
+		// 	pointBytes,
+		// 	group2.IsOnCurve(recoveredPoint),
+		// 	group2.InCorrectSubgroup(recoveredPoint),
+		// 	err,
+		// 	group2.Equal(recoveredPoint, s.g2Powers[i]))
+		buf.Write(pointBytes)
 	}
 	return buf.Bytes(), nil
 }
 
 func FromBinaryFileWithDegree(neededG1Degree uint32, neededG2Degree uint32) (*SRS, error) {
+	group1 := NewG1()
+	group2 := NewG2()
 	f, err := os.Open(BinFileName)
 	if err != nil {
 		return nil, err
@@ -382,9 +427,11 @@ func (s *SRS) G2Powers() []*PointG2 {
 }
 
 func (s *SRS) G1Generator() *PointG1 {
+	group1 := NewG1()
 	return group1.New().Set(s.g1Powers[0])
 }
 
 func (s *SRS) G2Generator() *PointG2 {
+	group2 := NewG2()
 	return group2.New().Set(s.g2Powers[0])
 }

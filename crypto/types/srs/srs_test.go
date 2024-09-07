@@ -11,6 +11,13 @@ import (
 	"time"
 )
 
+var (
+	group1 = NewG1()
+	g1     = group1.One()
+	group2 = NewG2()
+	g2     = group2.One()
+)
+
 func TestVerifyTrue1(t *testing.T) {
 	s, initProof := NewSRS(128, 16)
 	assert.True(t, Verify(s, g1, initProof))
