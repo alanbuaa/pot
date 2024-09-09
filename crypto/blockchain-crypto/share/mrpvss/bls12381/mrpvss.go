@@ -9,10 +9,9 @@ import (
 	"fmt"
 )
 
-var group1 = NewG1()
 
 func EncShares(g *PointG1, h *PointG1, holderPKList []*PointG1, secret *Fr, threshold uint32) (shareCommitments []*PointG1, coeffCommits []*PointG1, encShares []*EncShare, y *PointG1, err error) {
-
+	group1 := NewG1()
 	if g == nil || h == nil || holderPKList == nil || secret == nil {
 		return nil, nil, nil, nil, errors.New("invalid params")
 	}
@@ -84,7 +83,7 @@ func EncShares(g *PointG1, h *PointG1, holderPKList []*PointG1, secret *Fr, thre
 
 func VerifyEncShares(n uint32, t uint32, g, h *PointG1, pubKeyList []*PointG1, shareCommits []*PointG1, coeffCommits []*PointG1, encShares []*EncShare) bool {
 	// 计算 {S_i} \prod B_ij
-
+	group1 := NewG1()
 	BProdList := make([]*PointG1, n)
 	for i := uint32(0); i < n; i++ {
 		calcShareCommits := group1.Zero()
@@ -115,11 +114,13 @@ func VerifyEncShares(n uint32, t uint32, g, h *PointG1, pubKeyList []*PointG1, s
 }
 
 func AggregateLeaderPK(prevPK *PointG1, pk *PointG1) *PointG1 {
+	group1 := NewG1()
 	group1.Add(prevPK, prevPK, pk)
 	return prevPK
 }
 
 func AggregateShareCommits(shareCommits []*PointG1) *PointG1 {
+	group1 := NewG1()
 	n := len(shareCommits)
 	aggrShareCommit := group1.Zero()
 	for i := 0; i < n; i++ {
@@ -129,6 +130,7 @@ func AggregateShareCommits(shareCommits []*PointG1) *PointG1 {
 }
 
 func AggregateEncShareList(encShares []*EncShare) *EncShare {
+	group1 := NewG1()
 	n := len(encShares)
 	aggrEncShare := &EncShare{
 		A:         group1.Zero(),
@@ -148,6 +150,7 @@ func AggregateEncShareList(encShares []*EncShare) *EncShare {
 }
 
 func AggregateEncShares(prevAggrEncShares, encShares *EncShare) *EncShare {
+	group1 := NewG1()
 	group1.Add(prevAggrEncShares.A, prevAggrEncShares.A, encShares.A)
 	for j := 0; j < 32; j++ {
 		group1.Add(prevAggrEncShares.BList[j], prevAggrEncShares.BList[j], encShares.BList[j])
@@ -156,6 +159,7 @@ func AggregateEncShares(prevAggrEncShares, encShares *EncShare) *EncShare {
 }
 
 func DecryptShare(g *PointG1, privKey *Fr, encShare *EncShare) *Fr {
+	group1 := NewG1()
 	// A_i^sk_i
 	denominator := group1.MulScalar(group1.New(), encShare.A, privKey)
 	// g^(s_ij)  = (B_ij)/(A_i^sk_i)
@@ -175,6 +179,7 @@ func DecryptShare(g *PointG1, privKey *Fr, encShare *EncShare) *Fr {
 }
 
 func DecryptAggregateShare(g *PointG1, privKey *Fr, encShare *EncShare, m uint32) *Fr {
+	group1 := NewG1()
 	// A_i^sk_i
 	denominator := group1.MulScalar(group1.New(), encShare.A, privKey)
 	// g^(s_ij)  = (B_ij)/(A_i^sk_i)
@@ -194,6 +199,7 @@ func DecryptAggregateShare(g *PointG1, privKey *Fr, encShare *EncShare, m uint32
 }
 
 func CalcRoundShare(index uint32, h *PointG1, c *PointG1, shareCommit *PointG1, share *Fr) (*PointG1, *dleq.Proof, error) {
+	group1 := NewG1()
 	if c == nil || share == nil {
 		return nil, nil, errors.New("invalid parameter")
 	}
@@ -214,6 +220,7 @@ func VerifyRoundShare(index uint32, h *PointG1, c *PointG1, shareCommit *PointG1
 }
 
 func RecoverRoundSecret(threshold uint32, indices []uint32, roundShares []*PointG1) *PointG1 {
+	group1 := NewG1()
 	t := int(threshold)
 	if t > len(roundShares) {
 		return nil

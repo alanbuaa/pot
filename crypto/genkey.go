@@ -9,9 +9,6 @@ const (
 	PrivateKeyLen = 32
 )
 
-var (
-	g1Group = bls12381.NewG1()
-)
 
 type PrivateKey struct {
 	priv []byte
@@ -23,10 +20,10 @@ func GenerateKey() *PrivateKey {
 	if err != nil {
 		return nil
 	}
-
+	group1 := bls12381.NewG1()
 	return &PrivateKey{
 		priv: privKey.ToBytes(),
-		pub:  *g1Group.MulScalar(g1Group.New(), g1Group.One(), privKey),
+		pub:  *group1.MulScalar(group1.New(), group1.One(), privKey),
 	}
 }
 
@@ -38,5 +35,6 @@ func (k *PrivateKey) PublicKey() bls12381.PointG1 {
 	return k.pub
 }
 func (k *PrivateKey) PublicKeyBytes() []byte {
-	return g1Group.ToBytes(&k.pub)
+	group1 := bls12381.NewG1()
+	return group1.ToBytes(&k.pub)
 }

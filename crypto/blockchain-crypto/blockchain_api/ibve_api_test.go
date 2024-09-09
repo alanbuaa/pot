@@ -10,6 +10,7 @@ import (
 )
 
 func TestIBVE(t *testing.T) {
+	g1 := bls12381.NewG1()
 	// 委员会公私钥 x , y=g^x
 	x, _ := bls12381.NewFr().Rand(rand.Reader)
 	y := g1.MulScalar(g1.New(), g1.One(), x)
@@ -37,6 +38,7 @@ func TestIBVE(t *testing.T) {
 }
 
 func TestDPVSSAndIBVE(t *testing.T) {
+	g1 := bls12381.NewG1()
 	// /////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// PoT部分
 	n := 15

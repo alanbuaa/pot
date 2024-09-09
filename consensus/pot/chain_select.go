@@ -249,6 +249,8 @@ func (w *Worker) chainreset(branch []*types.Block) error {
 			w.chainReader.SetHeight(height, blocks)
 			txs := blocks.GetExecutedHeaders()
 			w.mempool.MarkProposedByHeader(txs)
+
+			w.UpdateLocalCryptoSetByBlock(height, blocks)
 			//w.blockStorage.SetVDFres(height, branch[i].GetHeader().PoTProof[0])
 			branchstr = branchstr + "\t" + strconv.Itoa(int(height))
 		}

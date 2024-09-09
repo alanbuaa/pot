@@ -8,6 +8,7 @@ import (
 )
 
 func TestDLEQTrue(t *testing.T) {
+	group1 := NewG1()
 	g1 := group1.MulScalar(group1.New(), group1.One(), FrFromInt(3))
 	g2 := group1.MulScalar(group1.New(), group1.One(), FrFromInt(5))
 	// alpha, _ := NewFr().Rand(rand.Reader)
@@ -32,6 +33,7 @@ func TestDLEQTrue(t *testing.T) {
 }
 
 func TestDLEQFalse(t *testing.T) {
+	group1 := NewG1()
 	g1 := group1.MulScalar(group1.New(), group1.One(), FrFromInt(3))
 	g2 := group1.MulScalar(group1.New(), group1.One(), FrFromInt(5))
 	alpha, _ := NewFr().Rand(rand.Reader)
@@ -61,6 +63,7 @@ func TestDLEQFalse(t *testing.T) {
 }
 
 func TestProof_ToBytes_FromBytes(t *testing.T) {
+	group1 := NewG1()
 	g1 := group1.MulScalar(group1.New(), group1.One(), FrFromInt(3))
 	g2 := group1.MulScalar(group1.New(), group1.One(), FrFromInt(5))
 	// alpha, _ := NewFr().Rand(rand.Reader)

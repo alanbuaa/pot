@@ -10,6 +10,7 @@ import (
 func TestEncShare_ToBytes_FromBytes(t *testing.T) {
 	n := 15
 	threshold := uint32(7)
+	group1 := NewG1()
 
 	// 生成 g, h
 	g := group1.One()

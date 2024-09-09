@@ -14,7 +14,6 @@ import (
 )
 
 var (
-	group1 = bls12381.NewG1()
 	// test
 	g1Degree = uint32(1 << 8)
 	// test
@@ -144,6 +143,7 @@ func inWorkStage(height uint32, localStorage *MEVLocalStorage) bool {
 
 // checkReceivedBlock 当收到区块，height 为该区块的高度, 返回该区块是否验证通过
 func checkReceivedBlock(height uint32, localStorage *MEVLocalStorage, receivedBlock *CryptoSet) bool {
+	group1 := bls12381.NewG1()
 	// 如果处于初始化阶段
 	if inInitStage(height, localStorage) {
 		// 检查srs的更新证明，如果验证失败，则丢弃
@@ -194,6 +194,7 @@ func checkReceivedBlock(height uint32, localStorage *MEVLocalStorage, receivedBl
 
 // 全部验证通过后
 func updateLocalRecords(height uint32, localStorage *MEVLocalStorage, receivedBlock *CryptoSet) {
+	group1 := bls12381.NewG1()
 	// 初始化阶段
 	if inInitStage(height, localStorage) {
 		// 记录最新srs

@@ -38,6 +38,7 @@ func (r *RoundShare) ToBytes() []byte {
 }
 
 func CalcRoundShareOfDPVSS(index uint32, hBytes []byte, cBytes []byte, shareCommitBytes []byte, shareBytes []byte) (roundShareBytes []byte, roundShareProofBytes []byte, err error) {
+	g1 := bls12381.NewG1()
 	h, err := g1.FromCompressed(hBytes)
 	if err != nil {
 		return nil, nil, err
@@ -56,6 +57,7 @@ func CalcRoundShareOfDPVSS(index uint32, hBytes []byte, cBytes []byte, shareComm
 }
 
 func VerifyRoundShareOfDPVSS(index uint32, hBytes []byte, cBytes []byte, shareCommitBytes []byte, roundShareBytes []byte, roundShareProofBytes []byte) bool {
+	g1 := bls12381.NewG1()
 	h, err := g1.FromCompressed(hBytes)
 	if err != nil {
 		return false
@@ -80,6 +82,7 @@ func VerifyRoundShareOfDPVSS(index uint32, hBytes []byte, cBytes []byte, shareCo
 }
 
 func RecoverRoundSecret(threshold uint32, roundShares []*RoundShare) (roundSecretBytes []byte) {
+	g1 := bls12381.NewG1()
 	roundShareNum := len(roundShares)
 	indices := make([]uint32, roundShareNum)
 	roundSharesInner := make([]*bls12381.PointG1, roundShareNum)

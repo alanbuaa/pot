@@ -11,9 +11,6 @@ import (
 	"github.com/zzz136454872/upgradeable-consensus/crypto/types/srs"
 )
 
-var (
-	group1 = NewG1()
-)
 
 type VectorLinkProof struct {
 	KZGCommit *PointG1
@@ -25,6 +22,7 @@ type VectorLinkProof struct {
 }
 
 func (v *VectorLinkProof) ToBytes() []byte {
+	group1 := NewG1()
 	buffer := new(bytes.Buffer)
 	buffer.Write(group1.ToCompressed(v.KZGCommit))
 	buffer.Write(group1.ToCompressed(v.PedCommit))
@@ -41,6 +39,7 @@ func (v *VectorLinkProof) ToBytes() []byte {
 }
 
 func (v *VectorLinkProof) FromBytes(data []byte) (*VectorLinkProof, error) {
+	group1 := NewG1()
 	pointG1Buf := make([]byte, 48)
 	frBuf := make([]byte, 32)
 	uint32Buf := make([]byte, 4)
@@ -106,7 +105,7 @@ func (v *VectorLinkProof) FromBytes(data []byte) (*VectorLinkProof, error) {
 }
 
 func CreateProof(s *srs.SRS, hBasePoints []*PointG1, h *PointG1, kzgCommit *PointG1, pedCommit *PointG1, values []*Fr, r *Fr) (*VectorLinkProof, error) {
-
+	group1 := NewG1()
 	size := len(hBasePoints)
 	if size == 0 || size != len(values) {
 		return nil, errors.New("invalid parameter")
@@ -155,6 +154,7 @@ func CreateProof(s *srs.SRS, hBasePoints []*PointG1, h *PointG1, kzgCommit *Poin
 }
 
 func VerifyProof(s *srs.SRS, hBasePoints []*PointG1, h *PointG1, vectorLinkProof *VectorLinkProof) bool {
+	group1 := NewG1()
 	size := uint32(len(vectorLinkProof.ZVector))
 	// calculate challenge
 	challenge := HashToFr(append(group1.ToBytes(vectorLinkProof.A), group1.ToBytes(vectorLinkProof.AHat)...))

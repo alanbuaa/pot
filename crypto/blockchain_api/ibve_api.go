@@ -8,12 +8,6 @@ import (
 	"golang.org/x/crypto/chacha20poly1305"
 )
 
-var (
-	g1 = bls12381.NewG1()
-	g2 = bls12381.NewG2()
-	gt = bls12381.NewGT()
-)
-
 type TxCR struct {
 	C           []byte // 轮ID
 	CipherTxKey []byte // 交易密钥密文，交易密钥被门限加密
@@ -22,6 +16,8 @@ type TxCR struct {
 }
 
 func EncryptIBVE(yBytes []byte, msgBytes []byte) (c1 []byte, cipherTextBytes []byte, err error) {
+	g1 := bls12381.NewG1()
+	gt := bls12381.NewGT()
 	y, err := g1.FromCompressed(yBytes)
 	if err != nil {
 		return nil, nil, err
@@ -35,6 +31,8 @@ func EncryptIBVE(yBytes []byte, msgBytes []byte) (c1 []byte, cipherTextBytes []b
 }
 
 func DecryptIBVE(sigmaBytes []byte, cipherTextBytes []byte) ([]byte, error) {
+	g1 := bls12381.NewG1()
+	gt := bls12381.NewGT()
 	sigma, err := g1.FromCompressed(sigmaBytes)
 	if err != nil {
 		return nil, err
@@ -48,6 +46,7 @@ func DecryptIBVE(sigmaBytes []byte, cipherTextBytes []byte) ([]byte, error) {
 }
 
 func VerifyIBVE(sigmaBytes []byte, yBytes []byte, cipherTextBytes []byte) bool {
+	g1 := bls12381.NewG1()
 	sigma, err := g1.FromCompressed(sigmaBytes)
 	if err != nil {
 		return false

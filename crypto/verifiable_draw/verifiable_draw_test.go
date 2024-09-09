@@ -11,6 +11,7 @@ import (
 )
 
 func TestDraw(t *testing.T) {
+	group1 := NewG1()
 	candidatesNum := uint32(256)
 	quota := uint32(32)
 
@@ -104,6 +105,7 @@ func TestDraw(t *testing.T) {
 }
 
 func TestDrawProof_ToBytes_FromBytes(t *testing.T) {
+	group1 := NewG1()
 	candidatesNum := uint32(256)
 	quota := uint32(32)
 

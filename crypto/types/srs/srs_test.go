@@ -11,16 +11,10 @@ import (
 	"time"
 )
 
-var (
-	group1 = NewG1()
-	g1     = group1.One()
-	group2 = NewG2()
-	g2     = group2.One()
-)
-
 func TestVerifyTrue1(t *testing.T) {
+	group1 := NewG1()
 	s, initProof := NewSRS(128, 16)
-	assert.True(t, Verify(s, g1, initProof))
+	assert.True(t, Verify(s, group1.One(), initProof))
 	prevSRSG1FirstElem := s.G1PowerOf(1)
 	x, _ := NewFr().Rand(rand.Reader)
 	newSrs, proof := s.Update(x)
@@ -28,10 +22,11 @@ func TestVerifyTrue1(t *testing.T) {
 }
 
 func TestVerifyTrue2(t *testing.T) {
+	group1 := NewG1()
 	N := 10
 	startTime := time.Now()
 	s, initProof := NewSRS(2<<12, 2<<12)
-	assert.True(t, Verify(s, g1, initProof))
+	assert.True(t, Verify(s, group1.One(), initProof))
 	fmt.Println("init time:", time.Since(startTime))
 	for i := 0; i < N; i++ {
 		x, _ := NewFr().Rand(rand.Reader)
@@ -48,16 +43,18 @@ func TestVerifyTrue2(t *testing.T) {
 }
 
 func TestSRS_Update(t *testing.T) {
+	group1 := NewG1()
+	group2 := NewG2()
 	g1Degree := uint32(128)
 	g2Degree := uint32(128)
 
 	g1Powers := make([]*PointG1, g1Degree)
 	g2Powers := make([]*PointG2, g2Degree)
 	for i := uint32(0); i < g1Degree; i++ {
-		g1Powers[i] = group1.New().Set(g1)
+		g1Powers[i] = group1.New().Set(group1.One())
 	}
 	for i := uint32(0); i < g2Degree; i++ {
-		g2Powers[i] = group2.New().Set(g2)
+		g2Powers[i] = group2.New().Set(group2.One())
 	}
 	s1 := &SRS{
 		g1Degree: g1Degree,
@@ -77,6 +74,8 @@ func TestSRS_Update(t *testing.T) {
 }
 
 func TestNewSRS(t *testing.T) {
+	group1 := NewG1()
+	group2 := NewG2()
 	g1Degree := uint32(128)
 	g2Degree := uint32(128)
 
@@ -118,16 +117,18 @@ func TestUpdateSRSTime(t *testing.T) {
 }
 
 func TestG1ToBytes(t *testing.T) {
+	group1 := NewG1()
 	for i := 0; i < 1024; i++ {
-		g := group1.Affine(group1.MulScalar(group1.New(), g1, FrFromInt(i)))
+		g := group1.Affine(group1.MulScalar(group1.New(), group1.One(), FrFromInt(i)))
 		lastByte := group1.ToCompressed(g)[0]
 		fmt.Printf("%4v %3v %08b\n", i, lastByte, lastByte)
 	}
 }
 
 func TestG2ToBytes(t *testing.T) {
+	group2 := NewG2()
 	for i := 0; i < 1024; i++ {
-		g := group2.Affine(group2.MulScalar(group2.New(), g2, FrFromInt(i)))
+		g := group2.Affine(group2.MulScalar(group2.New(), group2.One(), FrFromInt(i)))
 		compressedG := group2.ToCompressed(g)
 		lastByte := compressedG[0]
 		fmt.Printf("%4v %3v %08b\n", i, lastByte, lastByte)
@@ -135,6 +136,7 @@ func TestG2ToBytes(t *testing.T) {
 }
 
 func TestSRS_ToBinaryFile(t *testing.T) {
+	group1 := NewG1()
 	g1Degree := uint32(2 << 14)
 	g2Degree := uint32(2 << 14)
 
@@ -191,6 +193,7 @@ func TestFqConvert(t *testing.T) {
 }
 
 func TestSRS_ToCompressedBytes(t *testing.T) {
+	group1 := NewG1()
 	s, proof := NewSRS(256, 256)
 	srsBytes, err := s.ToCompressedBytes()
 	if err != nil {

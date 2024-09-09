@@ -6,11 +6,6 @@ import (
 	. "github.com/zzz136454872/upgradeable-consensus/crypto/types/curve/bls12381"
 )
 
-var (
-	group1 = NewG1()
-	group2 = NewG2()
-)
-
 type MultiProof struct {
 	// common input
 	// size of domain H (origin)
@@ -89,6 +84,7 @@ func ConvertProtoFq2ToFe2(v *pb.Fq2) *Fe2 {
 }
 
 func ConvertPointG1ToProtoG1Affine(p *PointG1) *pb.G1Affine {
+	group1 := NewG1()
 	tmp := group1.New().Set(p)
 	if !tmp.IsAffine() {
 		tmp = group1.Affine(tmp)
@@ -105,6 +101,7 @@ func ConvertG1AffineToPointG1(p *pb.G1Affine) *PointG1 {
 }
 
 func ConvertPointG2ToProtoG2Affine(p *PointG2) *pb.G2Affine {
+	group2 := NewG2()
 	tmp := group2.New().Set(p)
 	if !tmp.IsAffine() {
 		tmp = group2.Affine(tmp)

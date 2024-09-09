@@ -24,7 +24,7 @@ var (
 	SmallN = uint64(4)
 )
 var (
-	group1 = bls12381.NewG1()
+
 	// test
 	g1Degree = uint32(1 << 8)
 	// test
@@ -294,12 +294,14 @@ func isSelfBlock(height uint64) bool {
 func (w *Worker) uponReceivedBlock(
 	height uint64, block *types.Block,
 ) bool {
+	group1 := bls12381.NewG1()
 	// 如果处于初始化阶段（参数生成阶段）
 	receivedBlock := block.GetHeader().CryptoElement
 	if inInitStage(height) {
+		// TODO
 		prevSRSG1FirstElem := group1.One()
 		if w.Cryptoset.LocalSRS != nil {
-			w.Cryptoset.LocalSRS.G1PowerOf(1)
+			prevSRSG1FirstElem = w.Cryptoset.LocalSRS.G1PowerOf(1)
 		}
 
 		// 检查srs的更新证明，如果验证失败，则丢弃
@@ -345,9 +347,17 @@ func (w *Worker) uponReceivedBlock(
 }
 
 func (w *Worker) UpdateLocalCryptoSetByBlock(height uint64, receivedBlock *types.Block) {
+	group1 := bls12381.NewG1()
+	// 初始化阶段
 	if inInitStage(height) {
 		// 记录最新srs
 		w.Cryptoset.LocalSRS = receivedBlock.GetHeader().CryptoElement.SRS
+		// 如果处于最后一次初始化阶段，保存SRS为文件（用于Caulk+）,并启动Caulk+进程
+		if !inInitStage(height + 1) {
+			// 保存SRS至srs.binary文件
+			w.Cryptoset.LocalSRS.ToBinaryFile()
+			RunCaulkPlusGRPC()
+		}
 	}
 	// 置换阶段
 	if inShuffleStage(height) {
@@ -644,6 +654,11 @@ func (w *Worker) GenerateCryptoSetFromLocal(height uint64) (types.CryptoElement,
 		EncShareLists:           encSharesList,
 		CommitteePKList:         committeePKList,
 	}, nil
+}
+
+// TODO RunCaulkPlusGRPC 启动Caulk+gRPC进程
+func RunCaulkPlusGRPC() {
+
 }
 
 // TODO handleCommitteeAsUser 作为用户传递该委员会信息给业务链(用于向该委员会发送交易)

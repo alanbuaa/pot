@@ -33,6 +33,7 @@ func TestSplitFr(t *testing.T) {
 }
 
 func TestBruteForceFindExp(t *testing.T) {
+	group1 := NewG1()
 	g := group1.One()
 	bias := NewFr().Exp(FrFromInt(256), big.NewInt(33))
 	expected := NewFr().Mul(FrFromInt(123), bias)
@@ -49,7 +50,7 @@ func TestBruteForceFindExp(t *testing.T) {
 func TestMRPVSS(t *testing.T) {
 	n := 15
 	threshold := uint32(7)
-
+	group1 := NewG1()
 	// 生成 g, h
 	g := group1.One()
 	// random, _ := NewFr().Rand(rand.Reader)
@@ -123,7 +124,7 @@ func TestDPVSS(t *testing.T) {
 	n := 15
 	threshold := uint32(7)
 	m := 3
-
+	group1 := NewG1()
 	// 生成 g, h
 	g := group1.One()
 	random, _ := NewFr().Rand(rand.Reader)

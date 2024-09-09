@@ -8,6 +8,7 @@ import (
 )
 
 func TestVerifyTrue(t *testing.T) {
+	group1 := NewG1()
 	x, _ := NewFr().Rand(rand.Reader)
 	y := group1.MulScalar(group1.New(), group1.One(), x)
 	proof := CreateWitness(group1.One(), y, x)
@@ -15,6 +16,7 @@ func TestVerifyTrue(t *testing.T) {
 }
 
 func TestProof_ToBytes_FromBytes(t *testing.T) {
+	group1 := NewG1()
 	x, _ := NewFr().Rand(rand.Reader)
 	y := group1.MulScalar(group1.New(), group1.One(), x)
 	proof := CreateWitness(group1.One(), y, x)

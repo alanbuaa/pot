@@ -16,10 +16,6 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-var (
-	group1 = NewG1()
-)
-
 type DrawProof struct {
 	RCommit         *PointG1    // prevRCommit^r
 	DLEQProof       *dleq.Proof // DLEQ(prevRCommit RCommit, D' C')
@@ -34,6 +30,7 @@ type DrawProof struct {
 }
 
 func (d *DrawProof) ToBytes() ([]byte, error) {
+	group1 := NewG1()
 	uint32Bytes := make([]byte, 4)
 	uint64Bytes := make([]byte, 8)
 	buffer := bytes.Buffer{}
@@ -72,6 +69,7 @@ func (d *DrawProof) ToBytes() ([]byte, error) {
 }
 
 func (d *DrawProof) FromBytes(data []byte) (*DrawProof, error) {
+	group1 := NewG1()
 	pointG1Buf := make([]byte, 48)
 	frBuf := make([]byte, 32)
 	DLEQBuf := make([]byte, 128)
@@ -184,7 +182,7 @@ func (d *DrawProof) FromBytes(data []byte) (*DrawProof, error) {
 func Draw(s *srs.SRS, candidatesNum uint32, candidatesPubKey []*PointG1, quota uint32, secretVector []uint32, prevRCommit *PointG1) (*DrawProof, error) {
 	// blind factor
 	r, _ := NewFr().Rand(rand.Reader)
-
+	group1 := NewG1()
 	selectedPubKeys := make([]*PointG1, quota)
 	var selectedPubKeyBytes []byte
 	for i := uint32(0); i < quota; i++ {
@@ -290,6 +288,7 @@ func Draw(s *srs.SRS, candidatesNum uint32, candidatesPubKey []*PointG1, quota u
 }
 
 func Verify(s *srs.SRS, candidatesNum uint32, candidatesPubKey []*PointG1, quota uint32, prevRCommit *PointG1, drawProof *DrawProof) bool {
+	group1 := NewG1()
 	if quota != uint32(len(drawProof.SelectedPubKeys)) {
 		return false
 	}
@@ -346,6 +345,7 @@ func Verify(s *srs.SRS, candidatesNum uint32, candidatesPubKey []*PointG1, quota
 
 // IsSelected check y'^(1/x) ?= g^r, y' = y^r
 func IsSelected(sk *Fr, rCommit *PointG1, selectedKeys []*PointG1) (bool, *PointG1) {
+	group1 := NewG1()
 	skInv := NewFr().Inverse(sk)
 	keysLen := len(selectedKeys)
 	for i := 0; i < keysLen; i++ {

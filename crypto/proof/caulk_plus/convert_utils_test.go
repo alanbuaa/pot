@@ -48,6 +48,7 @@ func TestConvertBetweenFrAndProtoFr(t *testing.T) {
 }
 
 func TestConvertBetweenFeAndProtoFq(t *testing.T) {
+	group1 := bls12381.NewG1()
 	g123 := group1.Affine(group1.MulScalar(group1.New(), group1.One(), bls12381.FrFromInt(123)))
 	fmt.Println("fq:", g123[0])
 	fmt.Printf("fq: %X\n", g123[0].ToBig())
@@ -76,6 +77,7 @@ func TestBytes(t *testing.T) {
 }
 
 func TestConvertBetweenFe2AndProtoFq2(t *testing.T) {
+	group2 := bls12381.NewG2()
 	g123 := group2.Affine(group2.MulScalar(group2.New(), group2.One(), bls12381.FrFromInt(123)))
 	fmt.Println("fq2:", g123[0])
 	fmt.Printf("fq2: %X, %X\n", g123[0][0].ToBig(), g123[0][1].ToBig())
@@ -107,6 +109,7 @@ func TestConvertBetweenFe2AndProtoFq2(t *testing.T) {
 }
 
 func TestConvertBetweenG1AffineAndProtoG1Affine(t *testing.T) {
+	group1 := bls12381.NewG1()
 	v := group1.MulScalar(group1.New(), group1.One(), bls12381.FrFromInt(123))
 	v = group1.Affine(v)
 	fmt.Println(v)
@@ -147,6 +150,7 @@ func TestConvertBetweenG1AffineAndProtoG1Affine(t *testing.T) {
 }
 
 func TestConvertBetweenG2AffineAndProtoG2Affine(t *testing.T) {
+	group2 := bls12381.NewG2()
 	v := group2.MulScalar(group2.New(), group2.One(), bls12381.FrFromInt(1234))
 	v = group2.Affine(v)
 	fmt.Println(v)
@@ -179,6 +183,7 @@ func TestFe(t *testing.T) {
 }
 
 func TestConvertProtoMultiProofBetweenMultiProof(t *testing.T) {
+	group1 := bls12381.NewG1()
 	candidatesNum := uint32(256)
 	quota := uint32(32)
 

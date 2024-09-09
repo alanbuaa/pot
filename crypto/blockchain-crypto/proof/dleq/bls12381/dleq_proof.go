@@ -7,11 +7,6 @@ import (
 	"encoding/binary"
 )
 
-var (
-	group1 = NewG1()
-	group2 = NewG2()
-)
-
 type DLEQ struct {
 	Index uint32
 	G1    *PointG1
@@ -27,6 +22,7 @@ type Proof struct {
 }
 
 func (p *Proof) ToBytes() []byte {
+	group1 := NewG1()
 	buffer := bytes.Buffer{}
 	buffer.Write(group1.ToCompressed(p.A1))
 	buffer.Write(group1.ToCompressed(p.A2))
@@ -35,6 +31,7 @@ func (p *Proof) ToBytes() []byte {
 }
 
 func (p *Proof) FromBytes(data []byte) (*Proof, error) {
+	group1 := NewG1()
 	pointG1Buf := make([]byte, 48)
 	frBuf := make([]byte, 32)
 	buffer := bytes.Buffer{}
@@ -66,6 +63,7 @@ func (p *Proof) FromBytes(data []byte) (*Proof, error) {
 }
 
 func (d *DLEQ) Prove(alpha *Fr) *Proof {
+	group1 := NewG1()
 	w, _ := NewFr().Rand(rand.Reader)
 	a1 := group1.MulScalar(group1.New(), d.G1, w)
 	a2 := group1.MulScalar(group1.New(), d.G2, w)
@@ -92,6 +90,7 @@ func (d *DLEQ) Prove(alpha *Fr) *Proof {
 }
 
 func (d *DLEQ) Verify(proof *Proof) bool {
+	group1 := NewG1()
 	// g1, h_1, g2, h_2, a_1, a_2
 	challenge := group1.ToBytes(d.G1)
 	challenge = append(challenge, group1.ToBytes(d.H1)...)
@@ -116,6 +115,7 @@ func (d *DLEQ) Verify(proof *Proof) bool {
 }
 
 func Verify(Index uint32, G1 *PointG1, H1 *PointG1, G2 *PointG1, H2 *PointG1, proof *Proof) bool {
+	group1 := NewG1()
 	// g1, h_1, g2, h_2, a_1, a_2
 	challenge := group1.ToBytes(G1)
 	challenge = append(challenge, group1.ToBytes(H1)...)

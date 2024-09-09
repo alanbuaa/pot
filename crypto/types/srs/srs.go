@@ -50,53 +50,83 @@ func NewSRS(g1Degree, g2Degree uint32) (*SRS, *schnorr_proof.SchnorrProof) {
 	return srs.Update(x)
 }
 
+func (s *SRS) Set(s1 *SRS) *SRS {
+	group1 := NewG1()
+	group2 := NewG2()
+	s.g1Degree = s1.g1Degree
+	s.g2Degree = s1.g2Degree
+	g1PowersSize := s.g1Degree + 1
+	g2PowersSize := s.g2Degree + 1
+	s.g1Powers = make([]*PointG1, g1PowersSize)
+	s.g2Powers = make([]*PointG2, g2PowersSize)
+	for i := uint32(0); i < g1PowersSize; i++ {
+		s.g1Powers[i] = group1.New().Set(s1.g1Powers[i])
+	}
+	for i := uint32(0); i < g2PowersSize; i++ {
+		s.g2Powers[i] = group2.New().Set(s1.g2Powers[i])
+	}
+	return s
+}
+
 func (s *SRS) Update(r *Fr) (*SRS, *schnorr_proof.SchnorrProof) {
 	group1 := NewG1()
 	group2 := NewG2()
-	prevSRSG1FirstElem := s.g1Powers[1]
 	rPower := NewFr().Set(r)
 	g1PowersSize := len(s.g1Powers)
 	g2PowersSize := len(s.g2Powers)
+	newSRS := &SRS{
+		g1Degree: s.g1Degree,
+		g2Degree: s.g2Degree,
+		g1Powers: make([]*PointG1, g1PowersSize),
+		g2Powers: make([]*PointG2, g2PowersSize),
+	}
+	newSRS.g1Powers[0] = s.g1Powers[0]
+	newSRS.g2Powers[0] = s.g2Powers[0]
 	if g1PowersSize > g2PowersSize {
 		for i := 1; i < g2PowersSize; i++ {
-			s.g1Powers[i] = group1.MulScalar(group1.New(), s.g1Powers[i], rPower)
-			s.g2Powers[i] = group2.MulScalar(group2.New(), s.g2Powers[i], rPower)
+			newSRS.g1Powers[i] = group1.MulScalar(group1.New(), s.g1Powers[i], rPower)
+			newSRS.g2Powers[i] = group2.MulScalar(group2.New(), s.g2Powers[i], rPower)
 			rPower.Mul(rPower, r)
 		}
 		for i := g2PowersSize; i < g1PowersSize; i++ {
-			s.g1Powers[i] = group1.MulScalar(group1.New(), s.g1Powers[i], rPower)
+			newSRS.g1Powers[i] = group1.MulScalar(group1.New(), s.g1Powers[i], rPower)
 			rPower.Mul(rPower, r)
 		}
 	} else {
 		for i := 1; i < g1PowersSize; i++ {
-			s.g1Powers[i] = group1.MulScalar(group1.New(), s.g1Powers[i], rPower)
-			s.g2Powers[i] = group2.MulScalar(group2.New(), s.g2Powers[i], rPower)
+			newSRS.g1Powers[i] = group1.MulScalar(group1.New(), s.g1Powers[i], rPower)
+			newSRS.g2Powers[i] = group2.MulScalar(group2.New(), s.g2Powers[i], rPower)
 			rPower.Mul(rPower, r)
 		}
 		for i := g1PowersSize; i < g2PowersSize; i++ {
-			s.g2Powers[i] = group2.MulScalar(group2.New(), s.g2Powers[i], rPower)
+			newSRS.g2Powers[i] = group2.MulScalar(group2.New(), s.g2Powers[i], rPower)
 			rPower.Mul(rPower, r)
 		}
 	}
 	// /////////////////////////////////////////////////////////////////////////////////////////////////
 	// check 1: updated setup builds on the work of the preceding participants
-	return s, schnorr_proof.CreateWitness(prevSRSG1FirstElem, s.g1Powers[1], r)
+	//fmt.Println(newSRS)
+	return newSRS, schnorr_proof.CreateWitness(s.g1Powers[1], newSRS.g1Powers[1], r)
 }
 
 func Verify(s *SRS, prevSRSG1FirstElem *PointG1, proof *schnorr_proof.SchnorrProof) bool {
 	group1 := NewG1()
 	group2 := NewG2()
 	if s == nil || proof == nil {
+		fmt.Println(00)
 		return false
 	}
 	// /////////////////////////////////////////////////////////////////////////////////////////////////
 	// check 3: updated setup is non-degenerative
 	if group1.IsZero(s.g1Powers[0]) || group1.IsZero(s.g1Powers[1]) {
+		fmt.Println(11)
 		return false
 	}
 	// /////////////////////////////////////////////////////////////////////////////////////////////////
 	// check 1: updated setup builds on the work of the preceding participants
+
 	if !schnorr_proof.Verify(prevSRSG1FirstElem, s.g1Powers[1], proof) {
+
 		return false
 	}
 	// /////////////////////////////////////////////////////////////////////////////////////////////////

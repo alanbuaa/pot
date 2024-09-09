@@ -6,10 +6,6 @@ import (
 	. "github.com/zzz136454872/upgradeable-consensus/crypto/types/curve/bls12381"
 )
 
-var (
-	group1 = NewG1()
-)
-
 type SchnorrProof struct {
 	// rand commit T = G^r
 	T *PointG1
@@ -18,12 +14,14 @@ type SchnorrProof struct {
 }
 
 func (p *SchnorrProof) ToBytes() []byte {
+	group1 := NewG1()
 	buffer := bytes.Buffer{}
 	buffer.Write(group1.ToCompressed(p.T))
 	buffer.Write(p.Response.ToBytes())
 	return buffer.Bytes()
 }
 func (p *SchnorrProof) FromBytes(data []byte) (*SchnorrProof, error) {
+	group1 := NewG1()
 	pointG1Buf := make([]byte, 48)
 	frBuf := make([]byte, 32)
 	buffer := bytes.Buffer{}
@@ -51,6 +49,7 @@ func (p *SchnorrProof) FromBytes(data []byte) (*SchnorrProof, error) {
 
 // CreateWitness base point g ,product point h = ^x
 func CreateWitness(g *PointG1, h *PointG1, x *Fr) *SchnorrProof {
+	group1 := NewG1()
 	r, _ := NewFr().Rand(rand.Reader)
 	t := group1.MulScalar(group1.New(), g, r)
 	// challenge c = H(g,h,T)
@@ -65,6 +64,7 @@ func CreateWitness(g *PointG1, h *PointG1, x *Fr) *SchnorrProof {
 }
 
 func Verify(g *PointG1, h *PointG1, proof *SchnorrProof) bool {
+	group1 := NewG1()
 	// challenge c = H(g,h,T)
 	c := HashToFr(append(append(group1.ToBytes(g), group1.ToBytes(h)...), group1.ToBytes(proof.T)...))
 	// G^s = T · H^c

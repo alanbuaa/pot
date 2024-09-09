@@ -4,9 +4,12 @@ import (
 	"crypto/rand"
 	"fmt"
 	"testing"
+	. "github.com/zzz136454872/upgradeable-consensus/crypto/types/curve/bls12381"
 )
 
 func TestIBVE(t *testing.T) {
+	g1 := NewG1()
+	gt := NewGT()
 	x, y := Keygen()
 	msg, _ := gt.New().Rand(rand.Reader)
 	cipherText := Encrypt(y, msg)
@@ -17,6 +20,8 @@ func TestIBVE(t *testing.T) {
 }
 
 func TestCipherText_ToBytes_FromBytes(t *testing.T) {
+	g1 := NewG1()
+	gt := NewGT()
 	msg, _ := gt.New().Rand(rand.Reader)
 	x, y := Keygen()
 	cipherText := Encrypt(y, msg)

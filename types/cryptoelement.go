@@ -3,17 +3,12 @@ package types
 import (
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	schnorr_proof "github.com/zzz136454872/upgradeable-consensus/crypto/proof/schnorr_proof/bls12381"
 	mrpvss "github.com/zzz136454872/upgradeable-consensus/crypto/share/mrpvss/bls12381"
 	"github.com/zzz136454872/upgradeable-consensus/crypto/types/curve/bls12381"
 	"github.com/zzz136454872/upgradeable-consensus/crypto/types/srs"
 	"github.com/zzz136454872/upgradeable-consensus/crypto/verifiable_draw"
 	"github.com/zzz136454872/upgradeable-consensus/pb"
-)
-
-var (
-	G1 = bls12381.NewG1()
 )
 
 type CryptoElement struct {
@@ -33,7 +28,7 @@ type CryptoElement struct {
 }
 
 func (s *CryptoElement) ToProto() *pb.CryptoElement {
-	G1 := bls12381.NewG1()
+	group1 := bls12381.NewG1()
 	if s == nil {
 		return &pb.CryptoElement{}
 	}
@@ -46,7 +41,6 @@ func (s *CryptoElement) ToProto() *pb.CryptoElement {
 		_, testErr := srs.FromCompressedBytes(srsbyte)
 		if testErr != nil {
 			fmt.Printf("test FromCompressedBytes error:%v\n", err)
-
 		}
 		return &pb.CryptoElement{
 			SRS:            srsbyte,
@@ -68,7 +62,7 @@ func (s *CryptoElement) ToProto() *pb.CryptoElement {
 
 			g1s := make([]*pb.PointG1, 0)
 			for _, g1 := range list {
-				g1bytes := G1.ToCompressed(g1)
+				g1bytes := group1.ToCompressed(g1)
 				pointg1 := &pb.PointG1{
 					Pointbytes: g1bytes,
 				}
@@ -81,7 +75,7 @@ func (s *CryptoElement) ToProto() *pb.CryptoElement {
 		for _, list := range s.ShareCommitLists {
 			g1s := make([]*pb.PointG1, 0)
 			for _, g1 := range list {
-				g1bytes := G1.ToCompressed(g1)
+				g1bytes := group1.ToCompressed(g1)
 				pointg1 := &pb.PointG1{
 					Pointbytes: g1bytes,
 				}
@@ -94,7 +88,7 @@ func (s *CryptoElement) ToProto() *pb.CryptoElement {
 		for _, list := range s.CoeffCommitLists {
 			g1s := make([]*pb.PointG1, 0)
 			for _, g1 := range list {
-				g1bytes := G1.ToCompressed(g1)
+				g1bytes := group1.ToCompressed(g1)
 				pointg1 := &pb.PointG1{
 					Pointbytes: g1bytes,
 				}
@@ -117,7 +111,7 @@ func (s *CryptoElement) ToProto() *pb.CryptoElement {
 
 		committeePKList := make([]*pb.PointG1, 0)
 		for _, g1 := range s.CommitteePKList {
-			g1bytes := G1.ToCompressed(g1)
+			g1bytes := group1.ToCompressed(g1)
 			committeePKList = append(committeePKList, &pb.PointG1{
 				Pointbytes: g1bytes,
 			})
@@ -139,11 +133,12 @@ func (s *CryptoElement) ToProto() *pb.CryptoElement {
 }
 
 func ToCryptoElement(element *pb.CryptoElement) (CryptoElement, error) {
+	group1 := bls12381.NewG1()
 	if element == nil {
 		return CryptoElement{}, nil
 	}
 	if element.GetSRS() != nil {
-		fmt.Println(hexutil.Encode(element.GetSRS()))
+		//fmt.Println(hexutil.Encode(element.GetSRS()))
 		Srs, err := srs.FromCompressedBytes(element.GetSRS())
 		if err != nil {
 			return CryptoElement{}, err
@@ -163,7 +158,7 @@ func ToCryptoElement(element *pb.CryptoElement) (CryptoElement, error) {
 	for _, list := range element.GetHolderPKLists() {
 		g1s := make([]*bls12381.PointG1, 0)
 		for _, g1 := range list.GetPointG1S() {
-			point, err := G1.FromCompressed(g1.GetPointbytes())
+			point, err := group1.FromCompressed(g1.GetPointbytes())
 			if err != nil {
 				return CryptoElement{}, err
 			}
@@ -176,7 +171,7 @@ func ToCryptoElement(element *pb.CryptoElement) (CryptoElement, error) {
 	for _, list := range element.GetShareCommitLists() {
 		g1s := make([]*bls12381.PointG1, 0)
 		for _, g1 := range list.GetPointG1S() {
-			point, err := G1.FromCompressed(g1.GetPointbytes())
+			point, err := group1.FromCompressed(g1.GetPointbytes())
 			if err != nil {
 				return CryptoElement{}, err
 			}
@@ -189,7 +184,7 @@ func ToCryptoElement(element *pb.CryptoElement) (CryptoElement, error) {
 	for _, list := range element.GetCoeffCommitLists() {
 		g1s := make([]*bls12381.PointG1, 0)
 		for _, g1 := range list.GetPointG1S() {
-			point, err := G1.FromCompressed(g1.GetPointbytes())
+			point, err := group1.FromCompressed(g1.GetPointbytes())
 			if err != nil {
 				return CryptoElement{}, err
 			}
@@ -213,7 +208,7 @@ func ToCryptoElement(element *pb.CryptoElement) (CryptoElement, error) {
 
 	committeePKList := make([]*bls12381.PointG1, 0)
 	for _, g1 := range element.GetCommitteePKLists() {
-		point, err := G1.FromCompressed(g1.GetPointbytes())
+		point, err := group1.FromCompressed(g1.GetPointbytes())
 		if err != nil {
 			return CryptoElement{}, err
 		}

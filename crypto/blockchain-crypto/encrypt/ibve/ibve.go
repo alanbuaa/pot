@@ -6,12 +6,6 @@ import (
 	"crypto/rand"
 )
 
-var (
-	g1 = NewG1()
-	g2 = NewG2()
-	gt = NewGT()
-)
-
 type CipherText struct {
 	C1 *PointG1
 	C2 *PointG2
@@ -19,6 +13,9 @@ type CipherText struct {
 }
 
 func (c *CipherText) ToBytes() []byte {
+	g1 := NewG1()
+	g2 := NewG2()
+	gt := NewGT()
 	buffer := new(bytes.Buffer)
 	buffer.Write(g1.ToCompressed(c.C1))
 	buffer.Write(g2.ToCompressed(c.C2))
@@ -27,6 +24,9 @@ func (c *CipherText) ToBytes() []byte {
 }
 
 func (c *CipherText) FromBytes(data []byte) (*CipherText, error) {
+	g1 := NewG1()
+	g2 := NewG2()
+	gt := NewGT()
 	pointG1Buf := make([]byte, 48)
 	pointG2Buf := make([]byte, 96)
 	pointGTBuf := make([]byte, 576)
@@ -62,12 +62,16 @@ func (c *CipherText) FromBytes(data []byte) (*CipherText, error) {
 }
 
 func Keygen() (*Fr, *PointG1) {
+	g1 := NewG1()
 	x, _ := NewFr().Rand(rand.Reader)
 	y := g1.MulScalar(g1.New(), g1.One(), x)
 	return x, y
 }
 
 func Encrypt(y *PointG1, msg *E) *CipherText {
+	g1 := NewG1()
+	g2 := NewG2()
+	gt := NewGT()
 	// random r
 	r, _ := NewFr().Rand(rand.Reader)
 	// c1 = g1 ^ r
@@ -85,6 +89,7 @@ func Encrypt(y *PointG1, msg *E) *CipherText {
 }
 
 func Decrypt(sigma *PointG1, cipherText *CipherText) (msg *E) {
+	gt := NewGT()
 	// sigma = c1 ^ x
 	// m = c3 / e(σ, c2)
 	eInv := gt.New()
@@ -95,6 +100,7 @@ func Decrypt(sigma *PointG1, cipherText *CipherText) (msg *E) {
 }
 
 func Verify(sigma *PointG1, y *PointG1, c2 *PointG2) bool {
+	g2 := NewG2()
 	// e(σ, g2) = e(y, c2)
 	return NewPairingEngine().AddPair(sigma, g2.One()).AddPairInv(y, c2).Check()
 }

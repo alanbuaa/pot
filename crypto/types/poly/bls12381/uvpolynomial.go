@@ -8,11 +8,6 @@ import (
 	"strings"
 )
 
-var (
-	group1 = NewG1()
-	group2 = NewG2()
-)
-
 // UVPolynomial represents a uni-variate polynomial.
 type UVPolynomial struct {
 	// Coefficients of the polynomial. The leftmost is the constant term.

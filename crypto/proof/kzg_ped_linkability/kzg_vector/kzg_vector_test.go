@@ -12,6 +12,7 @@ import (
 )
 
 func TestVerifyProof(t *testing.T) {
+	group1 := NewG1()
 	quota := uint32(4)
 
 	g1Degree, g2Degree := utils.CalcMinLimitedDegree(4, quota)
@@ -63,6 +64,7 @@ func TestVerifyProof(t *testing.T) {
 	fmt.Println(res)
 }
 func TestVectorLinkProof_FromBytes_ToBytes(t *testing.T) {
+	group1 := NewG1()
 	quota := uint32(4)
 
 	g1Degree, g2Degree := utils.CalcMinLimitedDegree(4, quota)

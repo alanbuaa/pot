@@ -15,6 +15,7 @@ type EncShare struct {
 }
 
 func NewEmptyEncShare() *EncShare {
+	group1 := NewG1()
 	bList := make([]*PointG1, 32)
 	for i := 0; i < 32; i++ {
 		bList[i] = group1.Zero()
@@ -27,6 +28,7 @@ func NewEmptyEncShare() *EncShare {
 }
 
 func (e *EncShare) ToBytes() []byte {
+	group1 := NewG1()
 	buffer := bytes.Buffer{}
 	buffer.Write(group1.ToCompressed(e.A))
 	for _, b := range e.BList {
@@ -37,6 +39,7 @@ func (e *EncShare) ToBytes() []byte {
 }
 
 func (e *EncShare) FromBytes(data []byte) (*EncShare, error) {
+	group1 := NewG1()
 	pointG1Buf := make([]byte, 48)
 	bList := make([]*PointG1, 32)
 	buffer := bytes.NewBuffer(data)
