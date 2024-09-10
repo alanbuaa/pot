@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"github.com/zzz136454872/upgradeable-consensus/crypto/types/curve/bls12381"
 	"math"
 	"math/big"
 	"math/rand"
@@ -42,8 +43,8 @@ const (
 	TotalReward        = 10000
 	BackupCommiteeSize = 64
 	ConfirmDelay       = 6
-	CandidateKeyLen    = 32 // 候选公钥列表大小
-	Commitees          = 4  // 委员会大小
+	CandidateKeyLen    = 8 // 候选公钥列表大小
+	Commitees          = 4 // 委员会大小
 )
 
 type Abortcontrol struct {
@@ -143,18 +144,18 @@ func NewWorker(id int64, config *config.ConsensusConfig, logger *logrus.Entry, b
 	}
 
 	cryptoset := &CryptoSet{
-		CandidateBlockPrivateKey: nil,
-		BigN:                     32,
-		SmallN:                   4,
-
-		G:                           nil,
-		H:                           nil,
+		CandidateBlockPrivateKey: bls12381.NewFr(),
+		BigN:                     BigN,
+		SmallN:                   SmallN,
+		G:                        bls12381.NewG1().One(),
+		// TODO edit H
+		H:                           bls12381.NewG1().MulScalar(bls12381.NewG1().New(), bls12381.NewG1().One(), bls12381.FrFromInt(5731132)),
 		LocalSRS:                    nil,
 		PrevShuffledPKList:          nil,
-		PrevRCommitForShuffle:       nil,
-		PrevRCommitForDraw:          nil,
-		UnenabledCommitteeQueue:     nil,
-		UnenabledSelfCommitteeQueue: nil,
+		PrevRCommitForShuffle:       bls12381.NewG1().One(),
+		PrevRCommitForDraw:          bls12381.NewG1().One(),
+		UnenabledCommitteeQueue:     new(queue),
+		UnenabledSelfCommitteeQueue: new(queue),
 		Threshold:                   3,
 	}
 
@@ -503,6 +504,7 @@ func (w *Worker) createBlock(epoch uint64, parentBlock *types.Block, uncleBlock 
 	cryptoset, err := w.GenerateCryptoSetFromLocal(epoch)
 
 	if err != nil {
+		fmt.Println(err)
 		return nil
 	}
 
@@ -839,7 +841,7 @@ func (w *Worker) CheckParentBlockEnough(height uint64) (bool, error) {
 			count += 1
 		}
 	}
-	if count < w.config.PoT.Snum {
+	if count < w.config.PoT.Snum/2 {
 		return false, fmt.Errorf("not enough parent block for height %d", height)
 	}
 

@@ -47,16 +47,25 @@ func (s *CryptoElement) ToProto() *pb.CryptoElement {
 			SrsUpdateProof: s.SrsUpdateProof.ToBytes(),
 		}
 	} else {
+		var shuffleproof []byte
+		var err error
+		var drawproof []byte
+		var commiteeworkheightlist []uint64
 
-		shuffleproof, err := s.ShuffleProof.ToBytes()
-		if err != nil {
-			return nil
+		if s.ShuffleProof != nil {
+			shuffleproof, err = s.ShuffleProof.ToBytes()
+			if err != nil {
+				return nil
+			}
+		}
+		if s.DrawProof != nil {
+
+			drawproof, err = s.DrawProof.ToBytes()
+			if err != nil {
+				return nil
+			}
 		}
 
-		drawproof, err := s.DrawProof.ToBytes()
-		if err != nil {
-			return nil
-		}
 		holderpkilist := make([]*pb.PointG1List, 0)
 		for _, list := range s.HolderPKLists {
 
@@ -96,6 +105,7 @@ func (s *CryptoElement) ToProto() *pb.CryptoElement {
 			}
 			coeffcommitlist = append(coeffcommitlist, &pb.PointG1List{PointG1S: g1s})
 		}
+
 		encsharelist := make([]*pb.EncShareList, 0)
 		for _, list := range s.EncShareLists {
 			shares := make([]*pb.EncShare, 0)
@@ -117,6 +127,10 @@ func (s *CryptoElement) ToProto() *pb.CryptoElement {
 			})
 		}
 
+		if s.CommitteeWorkHeightList != nil {
+			commiteeworkheightlist = s.CommitteeWorkHeightList
+		}
+
 		return &pb.CryptoElement{
 			//SRS:                     nil,
 			HolderPKLists:    holderpkilist,
@@ -127,7 +141,7 @@ func (s *CryptoElement) ToProto() *pb.CryptoElement {
 			//SrsUpdateProof:          nil,
 			ShuffleProof:            shuffleproof,
 			DrawProof:               drawproof,
-			CommitteeWorkHeightList: s.CommitteeWorkHeightList,
+			CommitteeWorkHeightList: commiteeworkheightlist,
 		}
 	}
 }
@@ -215,15 +229,17 @@ func ToCryptoElement(element *pb.CryptoElement) (CryptoElement, error) {
 		committeePKList = append(committeePKList, point)
 	}
 	var err error
-	shuffleproof := &verifiable_draw.DrawProof{}
+	var shuffleproof *verifiable_draw.DrawProof = nil
 	if element.GetShuffleProof() != nil {
+		shuffleproof = &verifiable_draw.DrawProof{}
 		shuffleproof, err = shuffleproof.FromBytes(element.GetShuffleProof())
 		if err != nil {
 			return CryptoElement{}, err
 		}
 	}
-	drawproof := &verifiable_draw.DrawProof{}
+	var drawproof *verifiable_draw.DrawProof = nil
 	if element.GetDrawProof() != nil {
+		drawproof = &verifiable_draw.DrawProof{}
 		drawproof, err = drawproof.FromBytes(element.GetDrawProof())
 		if err != nil {
 			return CryptoElement{}, err

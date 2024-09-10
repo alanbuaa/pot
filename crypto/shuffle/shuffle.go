@@ -1,6 +1,7 @@
 package shuffle
 
 import (
+	"fmt"
 	. "github.com/zzz136454872/upgradeable-consensus/crypto/types/curve/bls12381"
 	"github.com/zzz136454872/upgradeable-consensus/crypto/types/srs"
 	"github.com/zzz136454872/upgradeable-consensus/crypto/utils"
@@ -11,12 +12,15 @@ func SimpleShuffle(s *srs.SRS, pubKeyList []*PointG1, prevRCommit *PointG1) *ver
 	size := uint32(len(pubKeyList))
 	permutation, err := utils.GenRandomPermutation(size)
 	if err != nil {
+		fmt.Println("permutation is nil", err)
 		return nil
 	}
 	shuffleProof, err := verifiable_draw.Draw(s, size, pubKeyList, size, permutation, prevRCommit)
 	if err != nil {
+		fmt.Println("draw fail", err)
 		return nil
 	}
+
 	return shuffleProof
 }
 

@@ -227,3 +227,9 @@ func TestUTXO(t *testing.T) {
 	t.Log(string(b))
 
 }
+
+func TestNil(t *testing.T) {
+
+	var drawproof []byte
+	t.Log(drawproof == nil)
+}

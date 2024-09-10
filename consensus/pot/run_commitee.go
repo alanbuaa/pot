@@ -4,6 +4,7 @@ import (
 	"container/list"
 	"crypto/rand"
 	"fmt"
+
 	schnorr_proof "github.com/zzz136454872/upgradeable-consensus/crypto/proof/schnorr_proof/bls12381"
 	"github.com/zzz136454872/upgradeable-consensus/crypto/utils"
 
@@ -20,15 +21,15 @@ import (
 )
 
 var (
-	BigN   = uint64(64)
+	BigN   = uint64(8)
 	SmallN = uint64(4)
 )
-var (
 
+var (
 	// test
-	g1Degree = uint32(1 << 8)
+	g1Degree = uint32(1 << 7)
 	// test
-	g2Degree = uint32(1 << 8)
+	g2Degree = uint32(1 << 7)
 )
 
 type Sharding struct {
@@ -92,7 +93,7 @@ type SelfCommitteeMark struct {
 //		b, err := json.Marshal(potSignal)
 //		if err != nil {
 //			w.log.WithError(err)
-//			return
+//			returnf
 //		}
 //		if w.potSignalChan != nil {
 //			w.potSignalChan <- b
@@ -348,23 +349,30 @@ func (w *Worker) uponReceivedBlock(
 
 func (w *Worker) UpdateLocalCryptoSetByBlock(height uint64, receivedBlock *types.Block) {
 	group1 := bls12381.NewG1()
+	cm := receivedBlock.GetHeader().CryptoElement
 	// 初始化阶段
 	if inInitStage(height) {
+		fmt.Printf("[Update]: Init | Node %v, Block %v\n", w.ID, height)
 		// 记录最新srs
-		w.Cryptoset.LocalSRS = receivedBlock.GetHeader().CryptoElement.SRS
+		w.Cryptoset.LocalSRS = cm.SRS
 		// 如果处于最后一次初始化阶段，保存SRS为文件（用于Caulk+）,并启动Caulk+进程
 		if !inInitStage(height + 1) {
 			// 保存SRS至srs.binary文件
 			w.Cryptoset.LocalSRS.ToBinaryFile()
-			RunCaulkPlusGRPC()
+			// err := utils.RunCaulkPlusGRPC()
 		}
 	}
 	// 置换阶段
 	if inShuffleStage(height) {
+		fmt.Printf("[Update]: Shuffle | Node %v, Block %v\n", w.ID, height)
 		// 记录该置换公钥列表为最新置换公钥列表
-		w.Cryptoset.PrevShuffledPKList = receivedBlock.GetHeader().CryptoElement.ShuffleProof.SelectedPubKeys
+		w.Cryptoset.PrevShuffledPKList = cm.ShuffleProof.SelectedPubKeys
+		//fmt.Println(cm.ShuffleProof.SelectedPubKeys)
 		// 记录该置换随机数承诺为最新置换随机数承诺 localStorage.PrevRCommitForShuffle
-		w.Cryptoset.PrevRCommitForShuffle.Set(receivedBlock.GetHeader().CryptoElement.ShuffleProof.RCommit)
+		if cm.ShuffleProof.RCommit == nil || w.Cryptoset.PrevShuffledPKList == nil {
+			panic("shuffle proof Rcommit is nil")
+		}
+		w.Cryptoset.PrevRCommitForShuffle.Set(cm.ShuffleProof.RCommit)
 		// 如果处于置换阶段的最后一次置换（height%localStorage.BigN==SmallN），更新抽签随机数承诺
 		//     因为先进行置换验证，再进行抽签验证，抽签使用的是同周期最后一次置换输出的
 		//     顺序： 验证最后置换（收到区块）->进行抽签（出新区块）->验证抽签（收到区块）
@@ -375,10 +383,11 @@ func (w *Worker) UpdateLocalCryptoSetByBlock(height uint64, receivedBlock *types
 	}
 	// 抽签阶段
 	if inDrawStage(height) {
+		fmt.Printf("[Update]: Draw | Node %v, Block %v\n", w.ID, height)
 		// 记录抽出来的委员会（公钥列表）
-		w.Cryptoset.UnenabledCommitteeQueue.PushBack(CommitteeMark{
+		w.Cryptoset.UnenabledCommitteeQueue.PushBack(&CommitteeMark{
 			WorkHeight:  height + SmallN,
-			PKList:      receivedBlock.GetHeader().CryptoElement.DrawProof.SelectedPubKeys,
+			PKList:      cm.DrawProof.SelectedPubKeys,
 			CommitteePK: group1.Zero(),
 		})
 		// 对于每个自己区块的公私钥对获取抽签结果，是否被选中，如果被选中则获取自己的公钥
@@ -387,7 +396,7 @@ func (w *Worker) UpdateLocalCryptoSetByBlock(height uint64, receivedBlock *types
 		minHeight := maxHeight - w.Cryptoset.SmallN + 1
 		selfPrivKeyList := w.getSelfPrivKeyList(minHeight, maxHeight)
 		for _, privKey := range selfPrivKeyList {
-			isSelected, pk := verifiable_draw.IsSelected(privKey, receivedBlock.GetHeader().CryptoElement.DrawProof.RCommit, receivedBlock.GetHeader().CryptoElement.DrawProof.SelectedPubKeys)
+			isSelected, pk := verifiable_draw.IsSelected(privKey, cm.DrawProof.RCommit, cm.DrawProof.SelectedPubKeys)
 			// 如果抽中，在自己所在的委员会队列创建新条目记录
 			if isSelected {
 				// test
@@ -404,20 +413,21 @@ func (w *Worker) UpdateLocalCryptoSetByBlock(height uint64, receivedBlock *types
 	}
 	// DPVSS阶段
 	if inDPVSSStage(height) {
-		pvssTimes := len(receivedBlock.GetHeader().CryptoElement.CommitteeWorkHeightList)
+		fmt.Printf("[Update]: DPVSS | Node %v, Block %v\n", w.ID, height)
+		pvssTimes := len(cm.CommitteeWorkHeightList)
 		for i := 0; i < pvssTimes; i++ {
 			// 聚合对应委员会的公钥
 			for e := w.Cryptoset.UnenabledCommitteeQueue.Front(); e != nil; e = e.Next() {
-				if e.Value.(*CommitteeMark).WorkHeight == receivedBlock.GetHeader().CryptoElement.CommitteeWorkHeightList[i] {
-					e.Value.(*CommitteeMark).CommitteePK = mrpvss.AggregateLeaderPK(e.Value.(*CommitteeMark).CommitteePK, receivedBlock.GetHeader().CryptoElement.CommitteePKList[i])
+				if e.Value.(*CommitteeMark).WorkHeight == cm.CommitteeWorkHeightList[i] {
+					e.Value.(*CommitteeMark).CommitteePK = mrpvss.AggregateLeaderPK(e.Value.(*CommitteeMark).CommitteePK, cm.CommitteePKList[i])
 				}
 			}
 			for e := w.Cryptoset.UnenabledSelfCommitteeQueue.Front(); e != nil; e = e.Next() {
 				mark := e.Value.(*SelfCommitteeMark)
 				// 如果自己是对应份额持有者(委员会工作高度相等)，则获取对应加密份额，聚合加密份额
-				if mark.WorkHeight == receivedBlock.GetHeader().CryptoElement.CommitteeWorkHeightList[i] {
-					holderPKList := receivedBlock.GetHeader().CryptoElement.HolderPKLists[i]
-					encShares := receivedBlock.GetHeader().CryptoElement.EncShareLists[i]
+				if mark.WorkHeight == cm.CommitteeWorkHeightList[i] {
+					holderPKList := cm.HolderPKLists[i]
+					encShares := cm.EncShareLists[i]
 					holderNum := len(holderPKList)
 					for j := 0; j < holderNum; j++ {
 						if group1.Equal(mark.SelfPubKey, holderPKList[j]) {
@@ -437,6 +447,7 @@ func (w *Worker) UpdateLocalCryptoSetByBlock(height uint64, receivedBlock *types
 	}
 	// 委员会更新阶段
 	if inWorkStage(height) {
+		fmt.Printf("[Update]: Update Committee | Node %v, Block %v\n", w.ID, height)
 		// TODO 判断自己是否作为领导者进行工作
 		if isSelfBlock(height) {
 			// 更新未工作的委员会队列，删除第一个元素(该元素对应委员会在这个epoch工作)
@@ -563,13 +574,13 @@ func IsContain(parent []string, son string) bool {
 func (w *Worker) GenerateCryptoSetFromLocal(height uint64) (types.CryptoElement, error) {
 	// 如果处于初始化阶段（参数生成阶段）
 	if inInitStage(height) {
-		w.log.Infof("[PoT]\tHeight %d: in Init Stage, update SRS and generate SRS update proof", height)
+		fmt.Printf("[Mining]: Init | Node %v, Block %v\n", w.ID, height)
 		// 更新 srs, 并生成证明
 		var newSRS *srs.SRS
 		var newSrsUpdateProof *schnorr_proof.SchnorrProof
 		// 如果之前未生成SRS，新生成一个SRS
 		if w.Cryptoset.LocalSRS == nil {
-			newSRS, newSrsUpdateProof = srs.NewSRS(4, 4)
+			newSRS, newSrsUpdateProof = srs.NewSRS(g1Degree, g2Degree)
 		} else {
 			r, _ := bls12381.NewFr().Rand(rand.Reader)
 			newSRS, newSrsUpdateProof = w.Cryptoset.LocalSRS.Update(r)
@@ -592,17 +603,23 @@ func (w *Worker) GenerateCryptoSetFromLocal(height uint64) (types.CryptoElement,
 	var committeePKList []*bls12381.PointG1 = nil
 	// 如果处于置换阶段，则进行置换
 	if inShuffleStage(height) {
-		w.log.Infof("[PoT]\tHeight %d: in Shuffle Stage, generate shuffle proof", height)
+		fmt.Printf("[Mining]: Shuffle | Node %v, Block %v\n", w.ID, height)
 		if isTheFirstShuffle(height) {
 			// 获取前面BigN个区块的公钥
 			w.Cryptoset.PrevShuffledPKList = w.getPrevNBlockPKList(height-BigN, height-1)
+			fmt.Println(len(w.Cryptoset.PrevShuffledPKList))
 		}
 		newShuffleProof = shuffle.SimpleShuffle(w.Cryptoset.LocalSRS, w.Cryptoset.PrevShuffledPKList, w.Cryptoset.PrevRCommitForShuffle)
+
+		//shuffleproofbyte, _ := newShuffleProof.ToBytes()
+		//var shuffleproof *verifiable_draw.DrawProof = nil
+		//shuffleproof, _ = shuffleproof.FromBytes(shuffleproofbyte)
+
 	}
 	// 如果处于抽签阶段，则进行抽签
 	if inDrawStage(height) {
 		// test
-		fmt.Printf("in Draw Stage, draw\n")
+		fmt.Printf("[Mining]: Draw | Node %v, Block %v\n", w.ID, height)
 		// 生成秘密向量用于抽签，向量元素范围为 [1, BigN]
 		permutation, err := utils.GenRandomPermutation(uint32(w.Cryptoset.BigN))
 		if err != nil {
@@ -618,6 +635,7 @@ func (w *Worker) GenerateCryptoSetFromLocal(height uint64) (types.CryptoElement,
 	if inDPVSSStage(height) {
 		// 计算向哪些委员会进行pvss(委员会index从1开始)
 		pvssTimes := height - w.Cryptoset.BigN - w.Cryptoset.SmallN - 1
+		fmt.Printf("[Mining]: DPVSS | Node %v, Block %v | PVSS Times: %v\n", w.ID, height, pvssTimes)
 		if pvssTimes > w.Cryptoset.SmallN-1 {
 			pvssTimes = w.Cryptoset.SmallN - 1
 		}
@@ -634,8 +652,7 @@ func (w *Worker) GenerateCryptoSetFromLocal(height uint64) (types.CryptoElement,
 			committeeWorkHeightList[i] = height - pvssTimes + i + SmallN
 			secret, _ := bls12381.NewFr().Rand(rand.Reader)
 			holderPKLists[i] = e.Value.(*CommitteeMark).PKList
-			shareCommitsList[i], coeffCommitsList[i], encSharesList[i], committeePKList[i], err = mrpvss.EncShares(w.Cryptoset.G, w.Cryptoset.H, holderPKLists[i], secret, (w.Cryptoset.Threshold))
-			// TODO handle error，能否直接return？还是循环调用？
+			shareCommitsList[i], coeffCommitsList[i], encSharesList[i], committeePKList[i], err = mrpvss.EncShares(w.Cryptoset.G, w.Cryptoset.H, holderPKLists[i], secret, w.Cryptoset.Threshold)
 			if err != nil {
 				return types.CryptoElement{}, err
 			}
@@ -654,11 +671,6 @@ func (w *Worker) GenerateCryptoSetFromLocal(height uint64) (types.CryptoElement,
 		EncShareLists:           encSharesList,
 		CommitteePKList:         committeePKList,
 	}, nil
-}
-
-// TODO RunCaulkPlusGRPC 启动Caulk+gRPC进程
-func RunCaulkPlusGRPC() {
-
 }
 
 // TODO handleCommitteeAsUser 作为用户传递该委员会信息给业务链(用于向该委员会发送交易)
