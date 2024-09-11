@@ -32,6 +32,8 @@ var (
 	g2Degree = uint32(1 << 7)
 )
 
+type Queue = list.List
+
 type Sharding struct {
 	Name            string
 	Id              int32
@@ -56,7 +58,48 @@ type SelfCommitteeMark struct {
 	Share        *bls12381.Fr      // 解密份额（聚合的）
 }
 
-//func (w *Worker) simpleLeaderUpdate(parent *types.Header) {
+func (c *CommitteeMark) DeepCopy() *CommitteeMark {
+	group1 := bls12381.NewG1()
+	newPKList := make([]*bls12381.PointG1, len(c.PKList))
+	for i := 0; i < len(c.PKList); i++ {
+		if c.PKList[i] != nil {
+			newPKList[i] = group1.New().Set(c.PKList[i])
+		}
+	}
+	return &CommitteeMark{
+		WorkHeight:  c.WorkHeight,
+		PKList:      newPKList,
+		CommitteePK: group1.New().Set(c.CommitteePK),
+	}
+}
+
+func (s *SelfCommitteeMark) DeepCopy() *SelfCommitteeMark {
+	group1 := bls12381.NewG1()
+	return &SelfCommitteeMark{
+		WorkHeight:   s.WorkHeight,
+		SelfPubKey:   group1.New().Set(s.SelfPubKey),
+		SelfPrivKey:  bls12381.NewFr().Set(s.SelfPrivKey),
+		AggrEncShare: s.AggrEncShare.DeepCopy(),
+		Share:        bls12381.NewFr().Set(s.Share),
+	}
+}
+
+func BackUpUnenabledCommitteeQueue(q *Queue) *Queue {
+	backup := new(Queue)
+	for e := q.Front(); e != nil; e = e.Next() {
+		backup.PushBack(e.Value.(*CommitteeMark).DeepCopy())
+	}
+	return backup
+}
+func BackUpUnenabledSelfCommitteeQueue(q *Queue) *Queue {
+	backup := new(Queue)
+	for e := q.Front(); e != nil; e = e.Next() {
+		backup.PushBack(e.Value.(*SelfCommitteeMark).DeepCopy())
+	}
+	return backup
+}
+
+// func (w *Worker) simpleLeaderUpdate(parent *types.Header) {
 //	if parent != nil {
 //		// address := parent.Address
 //		address := parent.Address
@@ -99,26 +142,26 @@ type SelfCommitteeMark struct {
 //			w.potSignalChan <- b
 //		}
 //	}
-//}
+// }
 
-//func (w *Worker) committeeCheck(id int64, header *types.Header) bool {
+// func (w *Worker) committeeCheck(id int64, header *types.Header) bool {
 //	if _, exist := w.committee.Get(id); !exist {
 //		w.committee.Set(id, header)
 //		return false
 //	}
 //	return true
-//}
+// }
 //
-//func (w *Worker) committeeSizeCheck() bool {
+// func (w *Worker) committeeSizeCheck() bool {
 //	return w.committee.Len() == 4
-//}
+// }
 
 func (w *Worker) GetPeerQueue() chan *types.Block {
 	return w.peerMsgQueue
 }
 
 func (w *Worker) CommitteeUpdate(height uint64) {
-	//if epoch > 10 && w.ID == 1 {
+	// if epoch > 10 && w.ID == 1 {
 	//	block, err := w.chainReader.GetByHeight(epoch - 1)
 	//	if err != nil {
 	//		return
@@ -133,7 +176,7 @@ func (w *Worker) CommitteeUpdate(height uint64) {
 	//		fmt.Println(err)
 	//	}
 	//	fill.Close()
-	//}
+	// }
 	// potsignal := &simpleWhirly.PoTSignal{
 	// 	Epoch:               int64(epoch),
 	// 	Proof:               nil,
@@ -143,7 +186,7 @@ func (w *Worker) CommitteeUpdate(height uint64) {
 	// 	SelfPublicAddress:   selfaddress,
 	// 	CryptoElements:      nil,
 	// }
-	//if height >= CommiteeDelay+Commiteelen {
+	// if height >= CommiteeDelay+Commiteelen {
 	//	committee := make([]string, Commiteelen)
 	//	selfaddress := make([]string, 0)
 	//	for i := uint64(0); i < Commiteelen; i++ {
@@ -213,11 +256,9 @@ func (w *Worker) CommitteeUpdate(height uint64) {
 	//	if w.potSignalChan != nil {
 	//		w.potSignalChan <- b
 	//	}
-	//}
+	// }
 
 }
-
-type queue = list.List
 
 type CryptoSet struct {
 	// 通用
@@ -234,8 +275,8 @@ type CryptoSet struct {
 	PrevRCommitForShuffle *bls12381.PointG1   // 前一有效置换随机数承诺
 	// 抽签阶段
 	PrevRCommitForDraw          *bls12381.PointG1 // 前一有效抽签随机数承诺
-	UnenabledCommitteeQueue     *queue            // 抽签产生的委员会队列（未启用的）
-	UnenabledSelfCommitteeQueue *queue            // 自己所在的委员会队列（未启用的）
+	UnenabledCommitteeQueue     *Queue            // 抽签产生的委员会队列（未启用的）
+	UnenabledSelfCommitteeQueue *Queue            // 自己所在的委员会队列（未启用的）
 	// DPVSS阶段
 	Threshold uint32 // DPVSS恢复门限
 }
@@ -367,7 +408,7 @@ func (w *Worker) UpdateLocalCryptoSetByBlock(height uint64, receivedBlock *types
 		fmt.Printf("[Update]: Shuffle | Node %v, Block %v\n", w.ID, height)
 		// 记录该置换公钥列表为最新置换公钥列表
 		w.Cryptoset.PrevShuffledPKList = cm.ShuffleProof.SelectedPubKeys
-		//fmt.Println(cm.ShuffleProof.SelectedPubKeys)
+		// fmt.Println(cm.ShuffleProof.SelectedPubKeys)
 		// 记录该置换随机数承诺为最新置换随机数承诺 localStorage.PrevRCommitForShuffle
 		if cm.ShuffleProof.RCommit == nil || w.Cryptoset.PrevShuffledPKList == nil {
 			panic("shuffle proof Rcommit is nil")
@@ -494,18 +535,18 @@ func (w *Worker) SetWhirly(impl *nodeController.NodeController) {
 	w.potSignalChan = impl.GetPoTByteEntrance()
 }
 
-//func (w *Worker) CommiteeLenCheck() bool {
+// func (w *Worker) CommiteeLenCheck() bool {
 //	if len(w.Commitee) != Commiteelen {
 //		return false
 //	}
 //	return true
-//}
+// }
 
-//func (w *Worker) GetCommiteeLeader() string {
+// func (w *Worker) GetCommiteeLeader() string {
 //	return w.Commitee[Commiteelen-1]
-//}
+// }
 
-//func (w *Worker) UpdateCommitee(commiteeid int, peerid string) []string {
+// func (w *Worker) UpdateCommitee(commiteeid int, peerid string) []string {
 //	if w.CommiteeLenCheck() {
 //		w.Commitee[commiteeid] = w.Commitee[commiteeid][1:Commiteelen]
 //		w.Commitee[commiteeid] = append(w.Commitee[commiteeid], peerid)
@@ -514,11 +555,11 @@ func (w *Worker) SetWhirly(impl *nodeController.NodeController) {
 //		return w.Commitee[commiteeid]
 //	}
 //	return nil
-//}
+// }
 //
-//func (w *Worker) AppendCommitee(commiteeid int, peerid string) {
+// func (w *Worker) AppendCommitee(commiteeid int, peerid string) {
 //	w.Commitee[commiteeid] = append(w.Commitee[commiteeid], peerid)
-//}
+// }
 
 func (w *Worker) GetBackupCommitee(epoch uint64) ([]string, []string) {
 	commitee := make([]string, Commiteelen)
@@ -611,9 +652,9 @@ func (w *Worker) GenerateCryptoSetFromLocal(height uint64) (types.CryptoElement,
 		}
 		newShuffleProof = shuffle.SimpleShuffle(w.Cryptoset.LocalSRS, w.Cryptoset.PrevShuffledPKList, w.Cryptoset.PrevRCommitForShuffle)
 
-		//shuffleproofbyte, _ := newShuffleProof.ToBytes()
-		//var shuffleproof *verifiable_draw.DrawProof = nil
-		//shuffleproof, _ = shuffleproof.FromBytes(shuffleproofbyte)
+		// shuffleproofbyte, _ := newShuffleProof.ToBytes()
+		// var shuffleproof *verifiable_draw.DrawProof = nil
+		// shuffleproof, _ = shuffleproof.FromBytes(shuffleproofbyte)
 
 	}
 	// 如果处于抽签阶段，则进行抽签

@@ -109,7 +109,7 @@ type Worker struct {
 	BackupCommitee []string
 	SelfAddress    []string
 	Cryptoset      *CryptoSet
-	//committee     *orderedmap.OrderedMap
+	// committee     *orderedmap.OrderedMap
 }
 
 func NewWorker(id int64, config *config.ConsensusConfig, logger *logrus.Entry, bst *types.BlockStorage, engine *PoTEngine) *Worker {
@@ -154,8 +154,8 @@ func NewWorker(id int64, config *config.ConsensusConfig, logger *logrus.Entry, b
 		PrevShuffledPKList:          nil,
 		PrevRCommitForShuffle:       bls12381.NewG1().One(),
 		PrevRCommitForDraw:          bls12381.NewG1().One(),
-		UnenabledCommitteeQueue:     new(queue),
-		UnenabledSelfCommitteeQueue: new(queue),
+		UnenabledCommitteeQueue:     new(Queue),
+		UnenabledSelfCommitteeQueue: new(Queue),
 		Threshold:                   3,
 	}
 
@@ -176,10 +176,10 @@ func NewWorker(id int64, config *config.ConsensusConfig, logger *logrus.Entry, b
 		mutex:         new(sync.Mutex),
 		rwmutex:       new(sync.RWMutex),
 		executeheight: uint64(0),
-		//storage:      st,
+		// storage:      st,
 		mempool:      mempool,
 		blockStorage: bst,
-		//committee:    orderedmap.NewOrderedMap(),
+		// committee:    orderedmap.NewOrderedMap(),
 		vdfChecker:     vdf.New("wesolowski_rust", []byte(""), potconfig.Vdf0Iteration, id),
 		chainReader:    NewChainReader(bst),
 		PeerId:         engine.GetPeerID(),
@@ -240,7 +240,7 @@ func (w *Worker) OnGetVdf0Response() {
 			epoch := w.getEpoch()
 			timer := time.Since(w.timestamp) / time.Millisecond
 			w.log.Infof("[PoT]\tepoch %d:Receive epoch %d vdf0 res %s, use %d ms\n", epoch, res.Epoch, hexutil.Encode(crypto.Hash(res.Res)), timer)
-			//time.Sleep(10 * time.Second)
+			// time.Sleep(10 * time.Second)
 
 			if epoch > res.Epoch {
 				w.log.Errorf("[PoT]\tthe epoch already execset")
@@ -250,11 +250,11 @@ func (w *Worker) OnGetVdf0Response() {
 				w.log.Errorf("[PoT]\treceive vdf0 res is empty")
 			}
 
-			//timestop := math.Floor(float64(timer) * float64(10-w.config.PoT.Slowrate) / float64(w.config.PoT.Slowrate))
-			//time.Sleep(time.Duration(timestop) * time.Millisecond)
+			// timestop := math.Floor(float64(timer) * float64(10-w.config.PoT.Slowrate) / float64(w.config.PoT.Slowrate))
+			// time.Sleep(time.Duration(timestop) * time.Millisecond)
 			//
-			//timer = time.Since(w.timestamp) / time.Millisecond
-			//w.log.Infof("[PoT]\tepoch %d:Receive epoch %d vdf0 res %s, use %d ms\Commitees", epoch, res.Epoch, hexutil.Encode(crypto.Hash(res.Res)), timer)
+			// timer = time.Since(w.timestamp) / time.Millisecond
+			// w.log.Infof("[PoT]\tepoch %d:Receive epoch %d vdf0 res %s, use %d ms\Commitees", epoch, res.Epoch, hexutil.Encode(crypto.Hash(res.Res)), timer)
 
 			flag, err := w.CheckParentBlockEnough(epoch)
 
@@ -315,9 +315,9 @@ func (w *Worker) OnGetVdf0Response() {
 				w.log.Infof("[PoT]\tepoch %d:parent block hash is : %s Difficulty %d from %d", epoch+1, hex.EncodeToString(parentblock.Hash()), parentblock.GetHeader().Difficulty.Int64(), parentblock.GetHeader().Address)
 			} else {
 				if len(backupblock) != 0 {
-					//w.chainReader.SetHeight(epoch, backupblock[0])
-					//parentblock = backupblock[0]
-					//w.log.Infof("[PoT]\tepoch %d:parent block hash is nil,execset nil block %s as parent", epoch+1, hex.EncodeToString(parentblock.GetHeader().Hashes))
+					// w.chainReader.SetHeight(epoch, backupblock[0])
+					// parentblock = backupblock[0]
+					// w.log.Infof("[PoT]\tepoch %d:parent block hash is nil,execset nil block %s as parent", epoch+1, hex.EncodeToString(parentblock.GetHeader().Hashes))
 					continue
 				} else {
 					w.log.Errorf("[PoT]\tepoch %d:dont't find any parent block", epoch+1)
@@ -398,9 +398,9 @@ func (w *Worker) mine(epoch uint64, vdf0res []byte, nonce int64, workerid int, a
 			tmp.SetBytes(crypto.Hash(res1))
 			if tmp.Cmp(target) >= 0 {
 
-				//block := w.createNilBlock(epoch, parentblock, uncleblock, difficulty, mixdigest, nonce, vdf0res, res1)
+				// block := w.createNilBlock(epoch, parentblock, uncleblock, difficulty, mixdigest, nonce, vdf0res, res1)
 				w.log.Infof("[PoT]\tepoch %d:workerid %d fail to find a %d block", epoch, workerid, difficulty.Int64())
-				//w.blockStorage.Put(block)
+				// w.blockStorage.Put(block)
 
 				nonce += 1
 				tmp.SetInt64(nonce)
@@ -465,7 +465,7 @@ func (w *Worker) createBlock(epoch uint64, parentBlock *types.Block, uncleBlock 
 	for _, exeblock := range exeblocks {
 		exeheader = append(exeheader, exeblock.Header)
 	}
-	//w.log.Infof("Txs len %d", len(Txs))
+	// w.log.Infof("Txs len %d", len(Txs))
 	parentblockhash := make([]byte, 0)
 	if parentBlock != nil {
 		parentblockhash = parentBlock.Hash()
@@ -484,7 +484,7 @@ func (w *Worker) createBlock(epoch uint64, parentBlock *types.Block, uncleBlock 
 
 	privateKey := crypto.GenerateKey()
 	publicKeyBytes := privateKey.PublicKeyBytes()
-	//publicKeyBytes32 := crypto.Convert(publicKeyBytes)
+	// publicKeyBytes32 := crypto.Convert(publicKeyBytes)
 
 	coinbasetx := w.GenerateCoinbaseTx(publicKeyBytes, vdf0res, TotalReward)
 	Txs := []*types.Tx{coinbasetx}
@@ -547,7 +547,7 @@ func (w *Worker) GetExcutedTxsFromExecutor(epoch uint64) ([]*types.ExecutedBlock
 	}
 	response, err := client.GetTxs(context.Background(), request)
 	if err != nil {
-		//w.log.Errorf("[PoT]\tGet Txs from executor error for %s",err)
+		// w.log.Errorf("[PoT]\tGet Txs from executor error for %s",err)
 		return nil, err
 	}
 
@@ -558,11 +558,11 @@ func (w *Worker) GetExcutedTxsFromExecutor(epoch uint64) ([]*types.ExecutedBlock
 		w.executeheight = excuteheight
 	}
 
-	//executedtxs := make([]*types.ExecutedTxData, 0)
-	//for i := 0; i < len(executeblocks); i++ {
-	//height := executeblocks[i].GetHeader().GetHeight()
-	//executedTxs := executeblocks[i].GetTxs()
-	//for _, executedtx := range executedTxs {
+	// executedtxs := make([]*types.ExecutedTxData, 0)
+	// for i := 0; i < len(executeblocks); i++ {
+	// height := executeblocks[i].GetHeader().GetHeight()
+	// executedTxs := executeblocks[i].GetTxs()
+	// for _, executedtx := range executedTxs {
 	//	exectx := &types.ExecutedTxData{
 	//		ExecutedHeight: height,
 	//		TxHash:         executedtx.GetTxHash(),
@@ -570,9 +570,9 @@ func (w *Worker) GetExcutedTxsFromExecutor(epoch uint64) ([]*types.ExecutedBlock
 	//	//exectxdata, _ := exectx.EncodeToByte()
 	//	executedtxs = append(executedtxs, exectx)
 	//	w.mempool.Add(exectx)
-	//}
+	// }
 
-	//}
+	// }
 	blocks := make([]*types.ExecutedBlock, 0)
 	for _, executeblock := range executeblocks {
 		pbheader := executeblock.GetHeader()
@@ -621,7 +621,7 @@ func (w *Worker) createNilBlock(epoch uint64, parentBlock *types.Block, uncleBlo
 	Potproof := [][]byte{vdf0res, vdf1res}
 	privateKey := crypto.GenerateKey()
 	publicKeyBytes := privateKey.PublicKeyBytes()
-	//privkeybyte32 := crypto.Convert(privateKey.Private())
+	// privkeybyte32 := crypto.Convert(privateKey.Private())
 
 	h := &types.Header{
 		Height:     epoch,
@@ -744,7 +744,7 @@ func (w *Worker) calcDifficulty(parentblock *types.Block, uncleBlock []*types.Bl
 	snum := new(big.Int)
 	snum.SetInt64(w.config.PoT.Snum)
 	diffculty := diff.Div(diff, snum)
-	//w.log.Infof("[PoT]\tSum difficulty is %d and blocks num is %d, next is %d", diff.Int64(), len(uncleBlock)+1, diffculty.Int64())
+	// w.log.Infof("[PoT]\tSum difficulty is %d and blocks num is %d, next is %d", diff.Int64(), len(uncleBlock)+1, diffculty.Int64())
 
 	if diffculty.Cmp(big.NewInt(0)) == 0 {
 		return diffculty.SetInt64(1)
@@ -765,7 +765,7 @@ func (w *Worker) calcMixdigest(epoch uint64, parentblock *types.Block, unclebloc
 	tmp := new(big.Int)
 	tmp.Set(difficulty)
 	difficultyBytes := tmp.Bytes()
-	//tmp.SetInt64(ID)
+	// tmp.SetInt64(ID)
 	IDBytes := []byte(peerid)
 	tmp.SetInt64(int64(epoch))
 	epochBytes := tmp.Bytes()
@@ -908,12 +908,12 @@ func (w *Worker) IsVDF1Working() bool {
 	// }
 	w.mutex.Lock()
 	defer w.mutex.Unlock()
-	//for i := 0; i < cpuCounter; i++ {
+	// for i := 0; i < cpuCounter; i++ {
 	//	_, ok := <-w.vdf1[i].OutputChan
 	//	if ok {
 	//		return true
 	//	}
-	//}
+	// }
 
 	if w.workFlag {
 		return true
@@ -934,13 +934,13 @@ func (w *Worker) SetEngine(engine *PoTEngine) {
 
 func (w *Worker) handleBlockExecutedHeader(block *types.Block) error {
 	executedHeaders := block.GetExecutedHeaders()
-	//fmt.Println("len of executed headers is :", len(executedHeaders))
+	// fmt.Println("len of executed headers is :", len(executedHeaders))
 	for _, header := range executedHeaders {
 		hash := header.Hash()
 		exeblock := w.mempool.GetBlockByHash(hash)
 		if exeblock != nil {
 			err := w.blockStorage.PutExcutedBlock(exeblock)
-			//w.log.Error("the exe block height ", exeblock.Header.Height)
+			// w.log.Error("the exe block height ", exeblock.Header.Height)
 			if err != nil {
 				return err
 			}
@@ -954,10 +954,10 @@ func (w *Worker) handleBlockExecutedHeader(block *types.Block) error {
 }
 
 func (w *Worker) handleBlockRawTx(block *types.Block) error {
-	//w.log.Errorf("len of rawtx is %d", len(block.GetRawTx()))
-	//if len(block.GetRawTx()) != 0 {
+	// w.log.Errorf("len of rawtx is %d", len(block.GetRawTx()))
+	// if len(block.GetRawTx()) != 0 {
 	//	fmt.Println(hexutil.Encode(block.GetRawTx()[0].Txid[:]))
-	//}
+	// }
 
 	txs := block.GetRawTx()
 	for _, tx := range txs {
