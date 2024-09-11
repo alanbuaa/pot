@@ -398,6 +398,8 @@ func (w *Worker) UpdateLocalCryptoSetByBlock(height uint64, receivedBlock *types
 		w.Cryptoset.LocalSRS = cm.SRS
 		// 如果处于最后一次初始化阶段，保存SRS为文件（用于Caulk+）,并启动Caulk+进程
 		if !inInitStage(height + 1) {
+			// 更新 H
+			w.Cryptoset.H = bls12381.NewG1().New().Set(w.Cryptoset.LocalSRS.G1PowerOf(1))
 			// 保存SRS至srs.binary文件
 			w.Cryptoset.LocalSRS.ToBinaryFile()
 			// err := utils.RunCaulkPlusGRPC()
@@ -626,7 +628,6 @@ func (w *Worker) GenerateCryptoSetFromLocal(height uint64) (types.CryptoElement,
 			r, _ := bls12381.NewFr().Rand(rand.Reader)
 			newSRS, newSrsUpdateProof = w.Cryptoset.LocalSRS.Update(r)
 		}
-
 		// 更新后的SRS和更新证明写入区块
 		return types.CryptoElement{
 			SRS:            newSRS,
