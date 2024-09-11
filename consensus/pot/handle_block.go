@@ -2,6 +2,7 @@ package pot
 
 import (
 	"bytes"
+	"context"
 	"encoding/hex"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
@@ -13,6 +14,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"math/big"
 	"math/rand"
+	"sync"
 	"time"
 )
 
@@ -120,6 +122,20 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 			defer w.SetChainSelectFlagFalse()
 			w.mutex.Unlock()
 
+			done := make(chan struct{})
+			var doonce sync.Once
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			go func() {
+				select {
+				case <-ctx.Done():
+					doonce.Do(func() {
+						close(done)
+						w.log.Errorf("[PoT]\thandle fork timeout")
+					})
+				}
+			}()
+
 			currentblock := w.chainReader.GetCurrentBlock()
 			ances, err := w.GetSharedAncestor(block, currentblock)
 
@@ -174,6 +190,12 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 			if err != nil {
 				w.log.Errorf("[PoT]\twork reset error for %s", err)
 			}
+			doonce.Do(func() {
+				close(done)
+			})
+
+			<-done
+			return nil
 			//txs := block.GetExcutedTxs()
 			//w.mempool.MarkProposed(txs)
 		}
@@ -232,7 +254,19 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 	//	w.log.Infof("[PoT]\tepoch %d:execset vdf complete. Start from epoch %d with res %s", epoch, block.GetHeader().Height-1, hexutil.Encode(crypto.Hash(res.Res)))
 	//	return nil
 	//}
-
+	done := make(chan struct{})
+	var doonce sync.Once
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	go func() {
+		select {
+		case <-ctx.Done():
+			doonce.Do(func() {
+				close(done)
+				w.log.Errorf("[PoT]\thandle fork timeout")
+			})
+		}
+	}()
 	ances, err := w.GetSharedAncestor(block, current)
 	if err != nil {
 		return err
@@ -302,6 +336,11 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 	//w.mutex.Lock()
 	//w.log.Error(w.chainresetflag)
 	//w.mutex.Unlock()
+	doonce.Do(func() {
+		close(done)
+	})
+
+	<-done
 	return nil
 
 }

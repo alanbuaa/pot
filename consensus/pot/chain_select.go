@@ -163,6 +163,10 @@ func (w *Worker) GetSharedAncestor(forkblock *types.Block, currentblock *types.B
 	return nil, fmt.Errorf("get ancestor error for unknown end")
 }
 
+func checktick(ticker time2.Ticker) {
+
+}
+
 func (w *Worker) GetBranch(root, leaf *types.Block) ([]*types.Block, [][]*types.Block, error) {
 	if root == nil || leaf == nil {
 		return nil, nil, fmt.Errorf("branch is nil")
@@ -180,22 +184,40 @@ func (w *Worker) GetBranch(root, leaf *types.Block) ([]*types.Block, [][]*types.
 	ommerbranch[0] = make([]*types.Block, 0)
 	// var err error
 
-	for i := leaf; !bytes.Equal(i.GetHeader().ParentHash, root.GetHeader().Hashes); {
-		// h -= 1
-		parentBlock, err := w.getParentBlock(i)
+	//for i := leaf; !bytes.Equal(i.GetHeader().ParentHash, root.GetHeader().Hashes); {
+	//	// h -= 1
+	//	parentBlock, err := w.getParentBlock(i)
+	//	if err != nil {
+	//		return nil, nil, err
+	//	}
+	//	mainbranch = append(mainbranch, parentBlock)
+	//	// ommerblock := make([]*types.Header, 0)
+	//	for k := 0; k < len(i.GetHeader().UncleHash); k++ {
+	//		ommer, err := w.getUncleBlock(i)
+	//		if err != nil {
+	//			return nil, nil, err
+	//		}
+	//		ommerbranch = append(ommerbranch, ommer)
+	//	}
+	//	i = parentBlock
+	//}
+	pointer := leaf
+	for i := leaf.Header.Height; i != root.Header.Height; i-- {
+		parentblock, err := w.getParentBlock(pointer)
 		if err != nil {
 			return nil, nil, err
 		}
-		mainbranch = append(mainbranch, parentBlock)
-		// ommerblock := make([]*types.Header, 0)
-		for k := 0; k < len(i.GetHeader().UncleHash); k++ {
-			ommer, err := w.getUncleBlock(i)
-			if err != nil {
-				return nil, nil, err
-			}
-			ommerbranch = append(ommerbranch, ommer)
+
+		mainbranch = append(mainbranch, parentblock)
+
+		ommer, err := w.getUncleBlock(pointer)
+		if err != nil {
+			return nil, nil, err
 		}
-		i = parentBlock
+
+		ommerbranch = append(ommerbranch, ommer)
+
+		pointer = parentblock
 	}
 
 	for i := 0; i < len(root.GetHeader().UncleHash); i++ {
