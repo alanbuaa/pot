@@ -191,6 +191,7 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 				w.log.Errorf("[PoT]\twork reset error for %s", err)
 			}
 			doonce.Do(func() {
+				w.log.Warn("[PoT]\tHandle fork done")
 				close(done)
 			})
 
@@ -337,7 +338,9 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 	//w.log.Error(w.chainresetflag)
 	//w.mutex.Unlock()
 	doonce.Do(func() {
+
 		close(done)
+		w.log.Warn("[PoT]\tHandle fork done")
 	})
 
 	<-done
