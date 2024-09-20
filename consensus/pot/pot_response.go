@@ -155,6 +155,7 @@ func (w *Worker) getParentBlock(block *types.Block) (*types.Block, error) {
 		return types.DefaultGenesisBlock(), nil
 	}
 
+	//w.log.Warnf("request for parent block at height %d", block.GetHeader().Height)
 	parentHash := block.GetHeader().ParentHash
 	if parentHash == nil {
 		return nil, fmt.Errorf("the epcoh %d block %s from %d without parent", block.GetHeader().Height, hexutil.Encode(block.Hash()), block.GetHeader().Address)
@@ -194,7 +195,8 @@ func (w *Worker) getParentBlock(block *types.Block) (*types.Block, error) {
 }
 
 func (w *Worker) getUncleBlock(block *types.Block) ([]*types.Block, error) {
-	if block.GetHeader().Height == 1 {
+
+	if block.GetHeader().Height == 1 || block.GetHeader().Height == 0 {
 		return nil, nil
 	}
 	n := len(block.GetHeader().UncleHash)

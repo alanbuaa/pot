@@ -132,7 +132,9 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 					doonce.Do(func() {
 						close(done)
 						w.log.Errorf("[PoT]\thandle fork timeout")
+						return
 					})
+					return
 				}
 			}()
 
@@ -265,11 +267,16 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 			doonce.Do(func() {
 				close(done)
 				w.log.Errorf("[PoT]\thandle fork timeout")
+				return
 			})
+			return
 		}
 	}()
 	ances, err := w.GetSharedAncestor(block, current)
 	if err != nil {
+		doonce.Do(func() {
+			close(done)
+		})
 		return err
 	}
 
@@ -283,6 +290,9 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 	}
 	if err != nil {
 		w.log.Errorf("[PoT]\tGet branch error for: %s", err)
+		doonce.Do(func() {
+			close(done)
+		})
 		return err
 	}
 
@@ -293,6 +303,9 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 	err = w.chainResetAdvanced(branch)
 	if err != nil {
 		w.log.Errorf("[PoT]\tchain reset error for %s", err)
+		doonce.Do(func() {
+			close(done)
+		})
 		return err
 	}
 	finishflag := w.vdf0.Finished
@@ -311,14 +324,11 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 		_, err := w.getUncleBlock(block)
 		if err != nil {
 			w.log.Errorf("[PoT]\tGet uncle block err for %s", err)
+			doonce.Do(func() {
+				close(done)
+			})
 			return err
 		}
-	}
-
-	err = w.setVDF0epoch(block.GetHeader().Height - 1)
-	if err != nil {
-		w.log.Warnf("[PoT]\tepoch %d: execset vdf error for %s:", epoch, err)
-		return err
 	}
 	w.mutex.Lock()
 	// w.backupBlock = append(w.backupBlock, block)
@@ -327,6 +337,15 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 	//err = w.storage.Put(block)
 	err = w.blockStorage.Put(block)
 	w.mutex.Unlock()
+
+	err = w.setVDF0epoch(block.GetHeader().Height - 1)
+	if err != nil {
+		w.log.Warnf("[PoT]\tepoch %d: execset vdf error for %s:", epoch, err)
+		doonce.Do(func() {
+			close(done)
+		})
+		return err
+	}
 
 	res := &types.VDF0res{
 		Res:   block.GetHeader().PoTProof[0],
@@ -338,7 +357,6 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 	//w.log.Error(w.chainresetflag)
 	//w.mutex.Unlock()
 	doonce.Do(func() {
-
 		close(done)
 		w.log.Warn("[PoT]\tHandle fork done")
 	})
@@ -398,13 +416,19 @@ func (w *Worker) CheckVDF0ForBranch(branch []*types.Block) (bool, error) {
 		storageheight := w.blockStorage.GetVDFHeight()
 		header := branch[i].GetHeader()
 		if header.Height <= storageheight {
+			//if header.Height == 0 {
+			//	return true, nil
+			//}
 			vdfres, err := w.blockStorage.GetVDFresbyEpoch(header.Height)
+
 			if err != nil {
 				return false, err
 			}
 			if !bytes.Equal(vdfres, header.PoTProof[0]) {
-				return false, fmt.Errorf("the vdf0 proof is wrong ")
+				fmt.Println(hexutil.Encode(vdfres), hexutil.Encode(header.PoTProof[0]))
+				return false, fmt.Errorf("the vdf0 proof is wrong of height %d", header.Height)
 			}
+
 		} else if header.Height == storageheight+1 {
 			vdfres, err := w.blockStorage.GetVDFresbyEpoch(storageheight)
 			if err != nil {
@@ -414,7 +438,7 @@ func (w *Worker) CheckVDF0ForBranch(branch []*types.Block) (bool, error) {
 			vdfoutput := header.PoTProof[0]
 			times := time.Now()
 			if !w.vdfChecker.CheckVDF(vdfinput, vdfoutput) {
-				return false, fmt.Errorf("the vdf0 proof is wrong ")
+				return false, fmt.Errorf("the vdf0 proof is wrong for height %d", header.Height)
 			}
 			w.log.Infof("[PoT]\tVDF Check need %d ms", time.Since(times)/time.Millisecond)
 			w.blockStorage.SetVDFres(header.Height, header.PoTProof[0])
