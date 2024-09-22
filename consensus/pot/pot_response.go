@@ -182,12 +182,17 @@ func (w *Worker) getParentBlock(block *types.Block) (*types.Block, error) {
 
 		flag, err := w.checkblock(parent)
 
-		if flag {
-			w.blockStorage.Put(parent)
-			return parent, nil
-		} else {
+		if !flag {
 			return nil, err
 		}
+
+		flag = w.CheckBlockNumEnough(parent)
+		if !flag {
+			return nil, fmt.Errorf("the block %s parent is not enough", hexutil.Encode(parentHash))
+		}
+
+		w.blockStorage.Put(parent)
+		return parent, nil
 	} else {
 		return parent, nil
 	}
@@ -220,12 +225,17 @@ func (w *Worker) getUncleBlock(block *types.Block) ([]*types.Block, error) {
 			pbUncle := blockResponse.GetBlock()
 			uncle := types.ToBlock(pbUncle)
 			flag, err := w.checkblock(uncle)
-			if flag {
-				w.blockStorage.Put(uncle)
-				uncleHeader = uncle
-			} else {
+			if !flag {
 				return nil, err
 			}
+
+			flag = w.CheckBlockNumEnough(uncle)
+			if !flag {
+				return nil, fmt.Errorf("the block %s parent is not enough", hexutil.Encode(uncle.Hash()))
+			}
+
+			w.blockStorage.Put(uncle)
+			uncleHeader = uncle
 		}
 		uncleblock[i] = uncleHeader
 	}

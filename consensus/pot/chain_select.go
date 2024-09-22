@@ -324,5 +324,5 @@ func (w *Worker) SetChainSelectFlagFalse() {
 	w.mutex.Lock()
 	defer w.mutex.Unlock()
 	w.chainresetflag = false
-	w.log.Error(w.chainresetflag)
+	//w.log.Error(w.chainresetflag)
 }

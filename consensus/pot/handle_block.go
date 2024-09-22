@@ -283,11 +283,6 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 	w.log.Infof("[PoT]\tGet shared ancestor of block %s is %s at height %d", hexutil.Encode(block.Hash()), hexutil.Encode(ances.Hash()), ances.GetHeader().Height)
 
 	branch, _, err := w.GetBranch(ances, block)
-	w.log.Errorf("get branch end")
-	flag, err := w.CheckVDF0ForBranch(branch)
-	if flag {
-		w.log.Infof("[PoT]\tPass VDF Check")
-	}
 	if err != nil {
 		w.log.Errorf("[PoT]\tGet branch error for: %s", err)
 		doonce.Do(func() {
@@ -295,6 +290,31 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 		})
 		return err
 	}
+
+	flag, err := w.CheckVDF0ForBranch(branch)
+	if flag {
+		w.log.Infof("[PoT]\tPass VDF Check")
+	}
+	if err != nil {
+		w.log.Errorf("[PoT]\tCheck Branch VDF0 error for: %s", err)
+		doonce.Do(func() {
+			close(done)
+		})
+		return err
+	}
+
+	weightnow := w.calculateChainWeight(ances, current)
+	weightadvanced := w.calculateChainWeight(ances, block)
+
+	if weightnow.Cmp(weightadvanced) < 0 {
+		w.log.Infof("[PoT]\tthe current chain weight %d is greater than the fork chain weight %d", weightnow.Int64(), weightadvanced.Int64())
+		doonce.Do(func() {
+			close(done)
+		})
+		return fmt.Errorf("the current chain weight %d is greater than the fork chain weight %d", weightnow.Int64(), weightadvanced.Int64())
+	}
+
+	w.log.Infof("[PoT]\tthe chain weight %d, the fork chain weight %d", weightnow, w.calculateChainWeight(ances, block).Int64())
 
 	//for i := 0; i < len(branch); i++ {
 	//	w.log.Infof("[PoT]\tthe nowbranch at height %d: %s", branch[i].GetHeader().ExecHeight, hexutil.Encode(branch[i].Hash()))
@@ -358,7 +378,7 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 	//w.mutex.Unlock()
 	doonce.Do(func() {
 		close(done)
-		w.log.Warn("[PoT]\tHandle fork done")
+		w.log.Debug("[PoT]\tHandle fork done")
 	})
 
 	<-done
@@ -550,4 +570,24 @@ func (w *Worker) workReset(epoch uint64, block *types.Block) error {
 	}
 
 	return nil
+}
+
+func (w *Worker) CheckBlockNumEnough(block *types.Block) bool {
+	if block.GetHeader().Height == 0 {
+		return true
+	}
+	cnt := 0
+	if block.GetHeader().ParentHash != nil {
+		cnt += 1
+	}
+	if block.GetHeader().UncleHash != nil {
+		cnt += len(block.GetHeader().UncleHash)
+	}
+
+	low := w.config.PoT.Snum / 2
+	if int64(cnt) < low {
+		return false
+	} else {
+		return true
+	}
 }
