@@ -280,6 +280,7 @@ type CryptoSet struct {
 	Threshold uint32 // DPVSS恢复门限
 }
 
+// Backup the CryptoSet at height `height`, `c` should be a new CryptoSet
 func (c *CryptoSet) Backup(height uint64) *CryptoSet {
 	group1 := bls12381.NewG1()
 	backup := &CryptoSet{
@@ -312,7 +313,49 @@ func (c *CryptoSet) Backup(height uint64) *CryptoSet {
 	}
 	if c.UnenabledCommitteeQueue != nil {
 		backup.UnenabledCommitteeQueue = BackUpUnenabledCommitteeQueue(c.UnenabledCommitteeQueue)
+	}
+	if c.UnenabledSelfCommitteeQueue != nil {
 		backup.UnenabledSelfCommitteeQueue = BackUpUnenabledSelfCommitteeQueue(c.UnenabledSelfCommitteeQueue)
+	}
+	return backup
+}
+
+// Restore the CryptoSet using `backup` at height `height`, `c` should be a existing CryptoSet, can not be nil or new
+func (c *CryptoSet) Restore(height uint64, backup *CryptoSet) *CryptoSet {
+	group1 := bls12381.NewG1()
+
+	c.BigN = backup.BigN
+	c.SmallN = backup.SmallN
+	c.Threshold = backup.Threshold
+
+	if backup.G != nil {
+		c.G = group1.New().Set(backup.G)
+	}
+	if backup.H != nil {
+		c.H = group1.New().Set(backup.H)
+	}
+	if backup.PrevRCommitForShuffle != nil {
+		c.PrevRCommitForShuffle = group1.New().Set(backup.PrevRCommitForShuffle)
+	}
+	if backup.PrevRCommitForDraw != nil {
+		c.PrevRCommitForDraw = group1.New().Set(backup.PrevRCommitForDraw)
+	}
+	if inInitStage(height) && backup.LocalSRS != nil {
+		c.LocalSRS = new(srs.SRS).Set(backup.LocalSRS)
+	}
+	if backup.PrevShuffledPKList != nil {
+		c.PrevShuffledPKList = make([]*bls12381.PointG1, len(backup.PrevShuffledPKList))
+		for i, p := range backup.PrevShuffledPKList {
+			if p != nil {
+				c.PrevShuffledPKList[i] = new(bls12381.PointG1).Set(p)
+			}
+		}
+	}
+	if backup.UnenabledCommitteeQueue != nil {
+		c.UnenabledCommitteeQueue = BackUpUnenabledCommitteeQueue(backup.UnenabledCommitteeQueue)
+	}
+	if backup.UnenabledSelfCommitteeQueue != nil {
+		c.UnenabledSelfCommitteeQueue = BackUpUnenabledSelfCommitteeQueue(backup.UnenabledSelfCommitteeQueue)
 	}
 	return backup
 }
