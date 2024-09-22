@@ -144,10 +144,9 @@ func NewWorker(id int64, config *config.ConsensusConfig, logger *logrus.Entry, b
 	}
 
 	cryptoset := &CryptoSet{
-		CandidateBlockPrivateKey: bls12381.NewFr(),
-		BigN:                     BigN,
-		SmallN:                   SmallN,
-		G:                        bls12381.NewG1().One(),
+		BigN:   BigN,
+		SmallN: SmallN,
+		G:      bls12381.NewG1().One(),
 		// TODO edit H
 		H:                           bls12381.NewG1().MulScalar(bls12381.NewG1().New(), bls12381.NewG1().One(), bls12381.FrFromInt(5731132)),
 		LocalSRS:                    nil,

@@ -91,6 +91,7 @@ func BackUpUnenabledCommitteeQueue(q *Queue) *Queue {
 	}
 	return backup
 }
+
 func BackUpUnenabledSelfCommitteeQueue(q *Queue) *Queue {
 	backup := new(Queue)
 	for e := q.Front(); e != nil; e = e.Next() {
@@ -262,12 +263,10 @@ func (w *Worker) CommitteeUpdate(height uint64) {
 
 type CryptoSet struct {
 	// 通用
-	CandidateBlockPrivateKey *bls12381.Fr // 候选块的
-	BigN                     uint64       // 候选公钥列表大小
-	SmallN                   uint64       // 委员会大小
-
-	G *bls12381.PointG1 // G1生成元
-	H *bls12381.PointG1 // G1生成元
+	BigN   uint64            // 候选公钥列表大小
+	SmallN uint64            // 委员会大小
+	G      *bls12381.PointG1 // G1生成元
+	H      *bls12381.PointG1 // G1生成元
 	// 参数生成阶段
 	LocalSRS *srs.SRS // 本地记录的最新有效SRS
 	// 置换阶段
@@ -279,6 +278,43 @@ type CryptoSet struct {
 	UnenabledSelfCommitteeQueue *Queue            // 自己所在的委员会队列（未启用的）
 	// DPVSS阶段
 	Threshold uint32 // DPVSS恢复门限
+}
+
+func (c *CryptoSet) Backup(height uint64) *CryptoSet {
+	group1 := bls12381.NewG1()
+	backup := &CryptoSet{
+		BigN:      c.BigN,
+		SmallN:    c.SmallN,
+		Threshold: c.Threshold,
+	}
+	if c.G != nil {
+		backup.G = group1.New().Set(c.G)
+	}
+	if c.H != nil {
+		backup.H = group1.New().Set(c.H)
+	}
+	if c.PrevRCommitForShuffle != nil {
+		backup.PrevRCommitForShuffle = group1.New().Set(c.PrevRCommitForShuffle)
+	}
+	if c.PrevRCommitForDraw != nil {
+		backup.PrevRCommitForDraw = group1.New().Set(c.PrevRCommitForDraw)
+	}
+	if inInitStage(height) && c.LocalSRS != nil {
+		backup.LocalSRS = new(srs.SRS).Set(c.LocalSRS)
+	}
+	if c.PrevShuffledPKList != nil {
+		backup.PrevShuffledPKList = make([]*bls12381.PointG1, len(c.PrevShuffledPKList))
+		for i, p := range c.PrevShuffledPKList {
+			if p != nil {
+				backup.PrevShuffledPKList[i] = new(bls12381.PointG1).Set(p)
+			}
+		}
+	}
+	if c.UnenabledCommitteeQueue != nil {
+		backup.UnenabledCommitteeQueue = BackUpUnenabledCommitteeQueue(c.UnenabledCommitteeQueue)
+		backup.UnenabledSelfCommitteeQueue = BackUpUnenabledSelfCommitteeQueue(c.UnenabledSelfCommitteeQueue)
+	}
+	return backup
 }
 
 func inInitStage(height uint64) bool {
@@ -690,6 +726,9 @@ func (w *Worker) GenerateCryptoSetFromLocal(height uint64) (types.CryptoElement,
 		committeePKList = make([]*bls12381.PointG1, pvssTimes)
 		i := uint64(0)
 		for e := w.Cryptoset.UnenabledCommitteeQueue.Front(); e != nil; e = e.Next() {
+			if i >= pvssTimes {
+				break
+			}
 			// 委员会的工作高度 height - pvssTimes + i + SmallN
 			committeeWorkHeightList[i] = height - pvssTimes + i + SmallN
 			secret, _ := bls12381.NewFr().Rand(rand.Reader)
