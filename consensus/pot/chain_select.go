@@ -136,7 +136,7 @@ func (w *Worker) GetSharedAncestor(forkblock *types.Block, currentblock *types.B
 			if err != nil {
 				return nil, err
 			}
-			//header, err := w.storage.Get(header.ParentHash)
+			// header, err := w.storage.Get(header.ParentHash)
 			fork, err := w.getParentBlock(fork)
 			if err != nil {
 				return nil, err
@@ -250,8 +250,11 @@ func (w *Worker) chainreset(branch []*types.Block) error {
 			txs := blocks.GetExecutedHeaders()
 			w.mempool.MarkProposedByHeader(txs)
 
-			w.UpdateLocalCryptoSetByBlock(height, blocks)
-			//w.blockStorage.SetVDFres(height, branch[i].GetHeader().PoTProof[0])
+			err = w.UpdateLocalCryptoSetByBlock(height, blocks)
+			if err != nil {
+				w.log.Errorf("[PoT]\tepoch %v: [chain reset] update local crypto set err: for %v", epoch+1, err)
+			}
+			// w.blockStorage.SetVDFres(height, branch[i].GetHeader().PoTProof[0])
 			branchstr = branchstr + "\t" + strconv.Itoa(int(height))
 		}
 
@@ -259,7 +262,7 @@ func (w *Worker) chainreset(branch []*types.Block) error {
 
 	w.log.Infof("[PoT]\tepoch %d: the chain has been reset by branch %s", epoch, branchstr)
 	flag := w.IsVDF1Working()
-	//w.log.Infof("[PoT]\tflag: %t", flag)
+	// w.log.Infof("[PoT]\tflag: %t", flag)
 	time := time2.Now()
 	if flag {
 		w.setWorkFlagFalse()

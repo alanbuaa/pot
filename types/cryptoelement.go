@@ -1,13 +1,13 @@
 package types
 
 import (
+	"blockchain-crypto/proof/schnorr_proof/bls12381"
+	"blockchain-crypto/types/curve/bls12381"
+	"blockchain-crypto/types/srs"
+	"blockchain-crypto/verifiable_draw"
 	"fmt"
 
-	schnorr_proof "github.com/zzz136454872/upgradeable-consensus/crypto/proof/schnorr_proof/bls12381"
-	mrpvss "github.com/zzz136454872/upgradeable-consensus/crypto/share/mrpvss/bls12381"
-	"github.com/zzz136454872/upgradeable-consensus/crypto/types/curve/bls12381"
-	"github.com/zzz136454872/upgradeable-consensus/crypto/types/srs"
-	"github.com/zzz136454872/upgradeable-consensus/crypto/verifiable_draw"
+	"blockchain-crypto/share/mrpvss/bls12381"
 	"github.com/zzz136454872/upgradeable-consensus/pb"
 )
 
@@ -132,13 +132,13 @@ func (s *CryptoElement) ToProto() *pb.CryptoElement {
 		}
 
 		return &pb.CryptoElement{
-			//SRS:                     nil,
+			// SRS:                     nil,
 			HolderPKLists:    holderpkilist,
 			ShareCommitLists: sharecommitlist,
 			CoeffCommitLists: coeffcommitlist,
 			EncSharesLists:   encsharelist,
 			CommitteePKLists: committeePKList,
-			//SrsUpdateProof:          nil,
+			// SrsUpdateProof:          nil,
 			ShuffleProof:            shuffleproof,
 			DrawProof:               drawproof,
 			CommitteeWorkHeightList: commiteeworkheightlist,
@@ -152,7 +152,7 @@ func ToCryptoElement(element *pb.CryptoElement) (CryptoElement, error) {
 		return CryptoElement{}, nil
 	}
 	if element.GetSRS() != nil {
-		//fmt.Println(hexutil.Encode(element.GetSRS()))
+		// fmt.Println(hexutil.Encode(element.GetSRS()))
 		Srs, err := srs.FromCompressedBytes(element.GetSRS())
 		if err != nil {
 			return CryptoElement{}, err

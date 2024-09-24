@@ -153,20 +153,20 @@ func (b *Header) Hash() []byte {
 	if b.PublicKey == nil {
 		panic("PublicKey is nil")
 	}
-	//fmt.Println("height:", height)
-	//fmt.Println("b.ParentHash:", b.ParentHash)
-	//fmt.Println("b.unclelen", len(b.UncleHash))
-	//fmt.Println("unclehash:", unclehash)
-	//fmt.Println("b.Mixdigest:", b.Mixdigest)
-	//fmt.Println("difficulty:", difficulty)
-	//fmt.Println("nonce:", nonce)
-	//fmt.Println("timestamp:", timestamp)
-	//fmt.Println("b.PoTProof[0]:", b.PoTProof[0])
-	//fmt.Println("b.PoTProof[1]:", b.PoTProof[1])
-	//fmt.Println("address:", address)
-	//fmt.Println("peeridbyte:", peeridbyte)
-	//fmt.Println("b.TxHash:", b.TxHash)
-	//fmt.Println("b.PublicKey:", b.PublicKey)
+	// fmt.Println("height:", height)
+	// fmt.Println("b.ParentHash:", b.ParentHash)
+	// fmt.Println("b.unclelen", len(b.UncleHash))
+	// fmt.Println("unclehash:", unclehash)
+	// fmt.Println("b.Mixdigest:", b.Mixdigest)
+	// fmt.Println("difficulty:", difficulty)
+	// fmt.Println("nonce:", nonce)
+	// fmt.Println("timestamp:", timestamp)
+	// fmt.Println("b.PoTProof[0]:", b.PoTProof[0])
+	// fmt.Println("b.PoTProof[1]:", b.PoTProof[1])
+	// fmt.Println("address:", address)
+	// fmt.Println("peeridbyte:", peeridbyte)
+	// fmt.Println("b.TxHash:", b.TxHash)
+	// fmt.Println("b.PublicKey:", b.PublicKey)
 
 	hashinput := bytes.Join([][]byte{
 		height, b.ParentHash, unclehash,
@@ -292,8 +292,8 @@ func ToHeader(header *pb.Header) *Header {
 	}
 	var bigint big.Int
 	difficulty := bigint.SetBytes(header.Difficulty)
-	//var Evidence Evidence
-	//Evidence.FromByte(header.Evidence)
+	// var Evidence Evidence
+	// Evidence.FromByte(header.Evidence)
 	cryptoelement, err := ToCryptoElement(header.GetCryptoElement())
 	if err != nil {
 		fmt.Println(err)

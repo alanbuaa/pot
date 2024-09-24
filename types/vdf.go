@@ -2,9 +2,9 @@
 package types
 
 import (
+	"blockchain-crypto/vdf"
+	"blockchain-crypto/vdf/wesolowski_rust"
 	"errors"
-	"github.com/zzz136454872/upgradeable-consensus/crypto/vdf"
-	"github.com/zzz136454872/upgradeable-consensus/crypto/vdf/wesolowski_rust"
 )
 
 type VDF0res struct {
@@ -31,7 +31,7 @@ func (v *VDF) Exec(epoch uint64) error {
 
 	v.Finished = false
 	defer v.setFinished()
-	//start := time.Now()
+	// start := time.Now()
 	res, err := v.Vdf.Execute()
 	if err != nil {
 		return err
@@ -42,14 +42,14 @@ func (v *VDF) Exec(epoch uint64) error {
 		Epoch: epoch,
 	}
 	if res != nil {
-		//exectime := time.Since(start) / time.Millisecond
-		//if v.ID != 3 {
+		// exectime := time.Since(start) / time.Millisecond
+		// if v.ID != 3 {
 		//	timestop := math.Floor(float64(exectime) * float64((10-8)/10))
 		//	time.Sleep(time.Duration(timestop) * time.Millisecond)
 		//	fmt.Printf("vdf execute need %d ms\n", time.Since(start)/time.Millisecond)
-		//}
+		// }
 		v.OutputChan <- vdfRes
-		//v.Finished = true
+		// v.Finished = true
 		return nil
 	} else {
 		return errors.New("Exec vdf0 failed for res is nil\n")

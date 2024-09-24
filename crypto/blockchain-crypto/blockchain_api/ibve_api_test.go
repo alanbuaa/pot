@@ -87,7 +87,7 @@ func TestDPVSSAndIBVE(t *testing.T) {
 		verifyEncShareRes := mrpvss.VerifyEncShares(uint32(n), threshold, g, h, pubKeyList, shareCommitmentsList[k], coeffCommitsList[k], encsharesList[k])
 		// 聚合委员会公钥
 		if verifyEncShareRes {
-			mrpvss.AggregateLeaderPK(aggrY, y)
+			mrpvss.AggregateCommitteePK(aggrY, y)
 		} else {
 			fmt.Println("VerifyEncShareRes is false")
 		}
@@ -129,8 +129,8 @@ func TestDPVSSAndIBVE(t *testing.T) {
 	// /////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// 公开输入
 	userInput := &CommitteeConfig{
-		H:  g1.ToCompressed(h),
-		PK: g1.ToCompressed(aggrY),
+		H:           g1.ToCompressed(h),
+		CommitteePK: g1.ToCompressed(aggrY),
 	}
 	// PoT节点传递给委员会共识节点的结构
 	committeeMemberInputList := make([]*CommitteeConfig, n)
@@ -140,9 +140,9 @@ func TestDPVSSAndIBVE(t *testing.T) {
 			aggrShareCommitsBytes[j] = g1.ToCompressed(aggrShareCommits[j])
 		}
 		committeeMemberInputList[i] = &CommitteeConfig{
-			H:  g1.ToCompressed(h),
-			PK: g1.ToCompressed(aggrY),
-			DPVSSConfigForMember: DPVSSConfig{
+			H:           g1.ToCompressed(h),
+			CommitteePK: g1.ToCompressed(aggrY),
+			DPVSSConfig: DPVSSConfig{
 				ShareCommits: aggrShareCommitsBytes,
 				Share:        shares[i].ToBytes()},
 		}
@@ -164,7 +164,7 @@ func TestDPVSSAndIBVE(t *testing.T) {
 		return
 	}
 	// 用户使用委员会公钥加密交易密钥，得到门限加密密文
-	c1, cipherTxKeyBytes, err2 := EncryptIBVE(userInput.PK, txKeyBytes)
+	c1, cipherTxKeyBytes, err2 := EncryptIBVE(userInput.CommitteePK, txKeyBytes)
 	if err2 != nil {
 		fmt.Println(err2)
 		return
@@ -184,8 +184,8 @@ func TestDPVSSAndIBVE(t *testing.T) {
 			uint32(i+1),
 			committeeMemberInputList[i].H,
 			txCR.C,
-			committeeMemberInputList[i].DPVSSConfigForMember.ShareCommits[i],
-			committeeMemberInputList[i].DPVSSConfigForMember.Share,
+			committeeMemberInputList[i].DPVSSConfig.ShareCommits[i],
+			committeeMemberInputList[i].DPVSSConfig.Share,
 		)
 		if err != nil {
 			fmt.Println(err)
@@ -200,14 +200,14 @@ func TestDPVSSAndIBVE(t *testing.T) {
 
 	// 领导者验证轮份额
 	leaderInput := committeeMemberInputList[0] // 实际中需要根据IsLeader字段判断
-	leaderInput.DPVSSConfigForMember.IsLeader = true
+	leaderInput.DPVSSConfig.IsLeader = true
 	var validRoundSharesBytes []*RoundShare
 	for i := 0; i < n; i++ {
 		verifyRoundShareRes := VerifyRoundShareOfDPVSS(
 			roundShareList[i].Index,
 			leaderInput.H,
 			txCR.C,
-			leaderInput.DPVSSConfigForMember.ShareCommits[i],
+			leaderInput.DPVSSConfig.ShareCommits[i],
 			roundShareList[i].Piece, roundShareList[i].Proof)
 		// 有效则使用
 		if verifyRoundShareRes {
@@ -237,7 +237,7 @@ func TestDPVSSAndIBVE(t *testing.T) {
 	// 领导者公开txCR
 	// 委员会验证交易明文解密正确
 	for i := 0; i < n; i++ {
-		res := VerifyIBVE(roundSecretBytes, committeeMemberInputList[i].PK, txCR.CipherTxKey)
+		res := VerifyIBVE(roundSecretBytes, committeeMemberInputList[i].CommitteePK, txCR.CipherTxKey)
 		if !res {
 			fmt.Println("VerifyIBVE error")
 		}

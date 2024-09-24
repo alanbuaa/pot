@@ -1,10 +1,10 @@
 package ibve
 
 import (
+	. "blockchain-crypto/types/curve/bls12381"
 	"crypto/rand"
 	"fmt"
 	"testing"
-	. "blockchain-crypto/types/curve/bls12381"
 )
 
 func TestIBVE(t *testing.T) {

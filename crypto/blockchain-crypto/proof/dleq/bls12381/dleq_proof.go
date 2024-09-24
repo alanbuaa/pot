@@ -21,6 +21,15 @@ type Proof struct {
 	R  *Fr
 }
 
+func (p *Proof) DeepCopy() *Proof {
+	group1 := NewG1()
+	return &Proof{
+		A1: group1.New().Set(p.A1),
+		A2: group1.New().Set(p.A2),
+		R:  NewFr().Set(p.R),
+	}
+}
+
 func (p *Proof) ToBytes() []byte {
 	group1 := NewG1()
 	buffer := bytes.Buffer{}

@@ -1,13 +1,14 @@
 package pot
 
 import (
+	"blockchain-crypto/types/curve/bls12381"
+	"blockchain-crypto/vdf"
 	"bytes"
 	"context"
 	crand "crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"github.com/zzz136454872/upgradeable-consensus/crypto/types/curve/bls12381"
 	"math"
 	"math/big"
 	"math/rand"
@@ -23,7 +24,6 @@ import (
 	"github.com/zzz136454872/upgradeable-consensus/config"
 	"github.com/zzz136454872/upgradeable-consensus/consensus/whirly/nodeController"
 	"github.com/zzz136454872/upgradeable-consensus/crypto"
-	"github.com/zzz136454872/upgradeable-consensus/crypto/vdf"
 	"github.com/zzz136454872/upgradeable-consensus/pb"
 	"github.com/zzz136454872/upgradeable-consensus/types"
 	"google.golang.org/grpc"
@@ -108,7 +108,7 @@ type Worker struct {
 	Shardings      []Sharding
 	BackupCommitee []string
 	SelfAddress    []string
-	Cryptoset      *CryptoSet
+	CryptoSet      *CryptoSet
 	// committee     *orderedmap.OrderedMap
 }
 
@@ -148,14 +148,13 @@ func NewWorker(id int64, config *config.ConsensusConfig, logger *logrus.Entry, b
 		SmallN: SmallN,
 		G:      bls12381.NewG1().One(),
 		// TODO edit H
-		H:                           bls12381.NewG1().MulScalar(bls12381.NewG1().New(), bls12381.NewG1().One(), bls12381.FrFromInt(5731132)),
-		LocalSRS:                    nil,
-		PrevShuffledPKList:          nil,
-		PrevRCommitForShuffle:       bls12381.NewG1().One(),
-		PrevRCommitForDraw:          bls12381.NewG1().One(),
-		UnenabledCommitteeQueue:     new(Queue),
-		UnenabledSelfCommitteeQueue: new(Queue),
-		Threshold:                   3,
+		H:                     bls12381.NewG1().MulScalar(bls12381.NewG1().New(), bls12381.NewG1().One(), bls12381.FrFromInt(5731132)),
+		LocalSRS:              nil,
+		PrevShuffledPKList:    nil,
+		PrevRCommitForShuffle: bls12381.NewG1().One(),
+		PrevRCommitForDraw:    bls12381.NewG1().One(),
+		CommitteeMarkQueue:    new(Queue),
+		Threshold:             3,
 	}
 
 	w := &Worker{
@@ -188,7 +187,7 @@ func NewWorker(id int64, config *config.ConsensusConfig, logger *logrus.Entry, b
 		CommiteeNum:    int32(1),
 		BackupCommitee: BackupCommitee,
 		chainresetflag: false,
-		Cryptoset:      cryptoset,
+		CryptoSet:      cryptoset,
 	}
 	rpcserver := grpc.NewServer()
 	pb.RegisterDciExectorServer(rpcserver, w)
@@ -337,7 +336,10 @@ func (w *Worker) OnGetVdf0Response() {
 			}
 
 			if parentblock.Header.Height > 0 {
-				w.UpdateLocalCryptoSetByBlock(parentblock.GetHeader().Height, parentblock)
+				err = w.UpdateLocalCryptoSetByBlock(parentblock.GetHeader().Height, parentblock)
+				if err != nil {
+					w.log.Errorf("[PoT]\tepoch %v: update local crypto set err: for %v", epoch+1, err)
+				}
 			}
 
 			// if epoch > 1 {

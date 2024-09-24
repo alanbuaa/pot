@@ -1,13 +1,13 @@
 package pot
 
 import (
+	"blockchain-crypto/vdf/wesolowski_rust"
 	"bytes"
 	"encoding/hex"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/zzz136454872/upgradeable-consensus/crypto"
-	"github.com/zzz136454872/upgradeable-consensus/crypto/vdf/wesolowski_rust"
 	"github.com/zzz136454872/upgradeable-consensus/pb"
 	"github.com/zzz136454872/upgradeable-consensus/types"
 	"google.golang.org/protobuf/proto"
@@ -45,7 +45,7 @@ func (w *Worker) handleBlock() {
 
 					w.mutex.Lock()
 					// w.backupBlock = append(w.backupBlock, header)
-					//err := w.storage.Put(header)
+					// err := w.storage.Put(header)
 					err := w.blockStorage.Put(block)
 					w.mutex.Unlock()
 
@@ -57,7 +57,7 @@ func (w *Worker) handleBlock() {
 
 				} else {
 					w.log.Infof("[PoT]\tepoch %d:Receive block from node %d, Difficulty %d, with parent %s, transport need %f millseconds", epoch, header.Address, header.Difficulty.Int64(), hex.EncodeToString(header.ParentHash), float64(time.Since(header.Timestamp))/float64(time.Millisecond))
-					//if w.ID == 0 {
+					// if w.ID == 0 {
 					//	transfertime := float64(time.Since(header.Timestamp)) / float64(time.Millisecond)
 					//	fill, err := os.OpenFile("transfertime", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
 					//	if err != nil {
@@ -68,9 +68,9 @@ func (w *Worker) handleBlock() {
 					//		fmt.Println(err)
 					//	}
 					//	fill.Close()
-					//}
+					// }
 					if header.Difficulty.Cmp(common.Big0) == 0 {
-						//w.storage.Put(header)
+						// w.storage.Put(header)
 						w.blockStorage.Put(block)
 						continue
 					}
@@ -135,7 +135,7 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 			}
 
 			w.log.Debugf("[PoT]\tthe shared ancestor of fork is %s at %d,match %t", hexutil.Encode(ances.GetHeader().Hashes), ances.GetHeader().Height, bytes.Equal(c.GetHeader().Hashes, ances.GetHeader().Hashes))
-			//nowBranch, _, err := w.GetBranch(ances, currentblock)
+			// nowBranch, _, err := w.GetBranch(ances, currentblock)
 
 			forkBranch, _, err := w.GetBranch(ances, block)
 			if err != nil {
@@ -150,12 +150,12 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 				return err
 			}
 
-			//for i := 0; i < len(nowBranch); i++ {
+			// for i := 0; i < len(nowBranch); i++ {
 			//	w.log.Errorf("[PoT]\tthe nowBranch at height %d: %s", nowBranch[i].GetHeader().ExecHeight, hexutil.Encode(nowBranch[i].Hash()))
-			//}
-			//for i := 0; i < len(forkBranch); i++ {
+			// }
+			// for i := 0; i < len(forkBranch); i++ {
 			//	w.log.Errorf("[PoT]\tthe fork chain at height %d: %s", forkBranch[i].GetHeader().ExecHeight, hexutil.Encode(forkBranch[i].Hash()))
-			//}
+			// }
 
 			w1 := w.calculateChainWeight(ances, currentblock)
 			w2 := w.calculateChainWeight(ances, block)
@@ -174,8 +174,8 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 			if err != nil {
 				w.log.Errorf("[PoT]\twork reset error for %s", err)
 			}
-			//txs := block.GetExcutedTxs()
-			//w.mempool.MarkProposed(txs)
+			// txs := block.GetExcutedTxs()
+			// w.mempool.MarkProposed(txs)
 		}
 	} else {
 		flag, err = header.BasicVerify()
@@ -183,7 +183,7 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 			return err
 		}
 
-		if !w.uponReceivedBlock(block.GetHeader().Height, block) {
+		if !w.VerifyCryptoSet(block.GetHeader().Height, block) {
 			return fmt.Errorf("block %s fails the cryptoelement check", hexutil.Encode(block.Hash()))
 		}
 
@@ -209,8 +209,8 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 	defer w.SetChainSelectFlagFalse()
 	w.mutex.Unlock()
 
-	//w.log.Errorf("Start handleing fork at epoch %d block %s", block.GetHeader().Height, hexutil.Encode(block.GetHeader().Hashes))
-	//if epoch+100 < block.GetHeader().Height {
+	// w.log.Errorf("Start handleing fork at epoch %d block %s", block.GetHeader().Height, hexutil.Encode(block.GetHeader().Hashes))
+	// if epoch+100 < block.GetHeader().Height {
 	//	err := w.setVDF0epoch(block.GetHeader().Height - 1)
 	//	if err != nil {
 	//		w.log.Warnf("[PoT]\tepoch %d: execset vdf error for %s", epoch, err)
@@ -231,7 +231,7 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 	//	w.vdf0Chan <- res
 	//	w.log.Infof("[PoT]\tepoch %d:execset vdf complete. Start from epoch %d with res %s", epoch, block.GetHeader().Height-1, hexutil.Encode(crypto.Hash(res.Res)))
 	//	return nil
-	//}
+	// }
 
 	ances, err := w.GetSharedAncestor(block, current)
 	if err != nil {
@@ -251,9 +251,9 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 		return err
 	}
 
-	//for i := 0; i < len(branch); i++ {
+	// for i := 0; i < len(branch); i++ {
 	//	w.log.Infof("[PoT]\tthe nowbranch at height %d: %s", branch[i].GetHeader().ExecHeight, hexutil.Encode(branch[i].Hash()))
-	//}
+	// }
 
 	err = w.chainResetAdvanced(branch)
 	if err != nil {
@@ -289,7 +289,7 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 	// w.backupBlock = append(w.backupBlock, block)
 
 	w.blockCounter += 1
-	//err = w.storage.Put(block)
+	// err = w.storage.Put(block)
 	err = w.blockStorage.Put(block)
 	w.mutex.Unlock()
 
@@ -299,9 +299,9 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 	}
 	w.vdf0Chan <- res
 	w.log.Infof("[PoT]\tepoch %d:execset vdf complete. Start from epoch %d with res %s", epoch, block.GetHeader().Height-1, hexutil.Encode(crypto.Hash(res.Res)))
-	//w.mutex.Lock()
-	//w.log.Error(w.chainresetflag)
-	//w.mutex.Unlock()
+	// w.mutex.Lock()
+	// w.log.Error(w.chainresetflag)
+	// w.mutex.Unlock()
 	return nil
 
 }
@@ -438,7 +438,7 @@ func (w *Worker) CheckBlock(block *types.Block) (bool, error) {
 		return flag, err
 	}
 	return true, nil
-	//excutedtxs := block.GetExecutedHeaders()
+	// excutedtxs := block.GetExecutedHeaders()
 
 }
 

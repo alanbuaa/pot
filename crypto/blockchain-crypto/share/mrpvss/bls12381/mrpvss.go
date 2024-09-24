@@ -9,7 +9,6 @@ import (
 	"fmt"
 )
 
-
 func EncShares(g *PointG1, h *PointG1, holderPKList []*PointG1, secret *Fr, threshold uint32) (shareCommitments []*PointG1, coeffCommits []*PointG1, encShares []*EncShare, y *PointG1, err error) {
 	group1 := NewG1()
 	if g == nil || h == nil || holderPKList == nil || secret == nil {
@@ -113,7 +112,7 @@ func VerifyEncShares(n uint32, t uint32, g, h *PointG1, pubKeyList []*PointG1, s
 	return true
 }
 
-func AggregateLeaderPK(prevPK *PointG1, pk *PointG1) *PointG1 {
+func AggregateCommitteePK(prevPK *PointG1, pk *PointG1) *PointG1 {
 	group1 := NewG1()
 	group1.Add(prevPK, prevPK, pk)
 	return prevPK
@@ -127,6 +126,31 @@ func AggregateShareCommits(shareCommits []*PointG1) *PointG1 {
 		group1.Add(aggrShareCommit, aggrShareCommit, shareCommits[i])
 	}
 	return aggrShareCommit
+}
+
+func AggregateShareCommitList(list1 []*PointG1, list2 []*PointG1) ([]*PointG1, error) {
+	group1 := NewG1()
+	if list1 == nil {
+		return nil, fmt.Errorf("list1 is nil")
+	}
+	if list2 == nil {
+		return nil, fmt.Errorf("list2 is nil")
+	}
+	if len(list1) != len(list2) {
+		return nil, fmt.Errorf("size of list2 is not equal to size of list2")
+	}
+	for i := 0; i < len(list1); i++ {
+		if list1[i] == nil {
+			return nil, fmt.Errorf("list1 [%v] is nil", i)
+		}
+		if list2[i] == nil {
+			return nil, fmt.Errorf("list2 [%v] is nil", i)
+		}
+	}
+	for i := 0; i < len(list1); i++ {
+		group1.Add(list1[i], list1[i], list2[i])
+	}
+	return list1, nil
 }
 
 func AggregateEncShareList(encShares []*EncShare) *EncShare {

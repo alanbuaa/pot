@@ -10,9 +10,9 @@ import (
 )
 
 type CommitteeConfig struct {
-	H                    []byte      // 生成元h
-	PK                   []byte      // 委员会公钥
-	DPVSSConfigForMember DPVSSConfig // 委员会成员拥有
+	H           []byte      // 生成元h
+	CommitteePK []byte      // 委员会公钥
+	DPVSSConfig DPVSSConfig // 委员会成员拥有
 }
 
 type DPVSSConfig struct {

@@ -35,6 +35,35 @@ func NewFe12() *Fe12 {
 	return new(Fe12).zero()
 }
 
+func (fe *Fe) SetBytesToMont(in []byte) *Fe {
+	l := len(in)
+	if l >= fpByteSize {
+		l = fpByteSize
+	}
+	padded := make([]byte, fpByteSize)
+	copy(padded[fpByteSize-l:], in[:])
+	var a int
+	for i := 0; i < fpNumberOfLimbs; i++ {
+		a = i * 8
+		fe[i] = uint64(padded[a]) | uint64(padded[a+1])<<8 |
+			uint64(padded[a+2])<<16 | uint64(padded[a+3])<<24 |
+			uint64(padded[a+4])<<32 | uint64(padded[a+5])<<40 |
+			uint64(padded[a+6])<<48 | uint64(padded[a+7])<<56
+	}
+	toMont(fe, fe)
+	return fe
+}
+
+func (fe *Fe) ToMont() *Fe {
+	toMont(fe, fe)
+	return fe
+}
+
+func (fe *Fe) FromMont() *Fe {
+	fromMont(fe, fe)
+	return fe
+}
+
 func (fe *Fe) setBytes(in []byte) *Fe {
 	l := len(in)
 	if l >= fpByteSize {
@@ -51,10 +80,6 @@ func (fe *Fe) setBytes(in []byte) *Fe {
 			uint64(padded[a-7])<<48 | uint64(padded[a-8])<<56
 	}
 	return fe
-}
-
-func (fe *Fe) SetBytes(in []byte) *Fe {
-	return fe.setBytes(in)
 }
 
 func (fe *Fe) SetBig(a *big.Int) *Fe {
@@ -83,6 +108,25 @@ func (fe *Fe) Set(fe2 *Fe) *Fe {
 	return fe
 }
 
+func (fe *Fe) BytesFromMont() []byte {
+	tmp := new(Fe)
+	fromMont(tmp, fe)
+	out := make([]byte, fpByteSize)
+	var a int
+	for i := 0; i < fpNumberOfLimbs; i++ {
+		a = i * 8
+		out[a] = byte(tmp[i])
+		out[a+1] = byte(tmp[i] >> 8)
+		out[a+2] = byte(tmp[i] >> 16)
+		out[a+3] = byte(tmp[i] >> 24)
+		out[a+4] = byte(tmp[i] >> 32)
+		out[a+5] = byte(tmp[i] >> 40)
+		out[a+6] = byte(tmp[i] >> 48)
+		out[a+7] = byte(tmp[i] >> 56)
+	}
+	return out
+}
+
 func (fe *Fe) Bytes() []byte {
 	out := make([]byte, fpByteSize)
 	var a int
@@ -98,6 +142,10 @@ func (fe *Fe) Bytes() []byte {
 		out[a-8] = byte(fe[i] >> 56)
 	}
 	return out
+}
+
+func (fe *Fe) ToBig() *big.Int {
+	return new(big.Int).SetBytes(fe.BytesFromMont())
 }
 
 func (fe *Fe) big() *big.Int {

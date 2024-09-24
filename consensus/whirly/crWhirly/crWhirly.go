@@ -334,9 +334,9 @@ func (sw *CrWhirlyImpl) handleMsg(msg *pb.WhirlyMsg) {
 	switch msg.Payload.(type) {
 	case *pb.WhirlyMsg_Request:
 		request := msg.GetRequest()
-		//if sw.ID == 0 {
+		// if sw.ID == 0 {
 		//	sw.Log.WithField("content", request.String()).Error("[SIMPLE WHIRLY] Get request msg.")
-		//}
+		// }
 
 		// put the cmd into the cmdset
 		sw.MemPool.Add(types.RawTransaction(request.Tx))
@@ -438,7 +438,7 @@ func (sw *CrWhirlyImpl) OnCommit(block *pb.WhirlyBlock) {
 			sw.Log.WithField("error", err.Error()).Fatal("Update block state failed")
 		}
 		// }()
-		//sw.Log.WithField("blockHash", hex.EncodeToString(block.Hash)).Trace("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] [SIMPLE WHIRLY] EXEC.")
+		// sw.Log.WithField("blockHash", hex.EncodeToString(block.Hash)).Trace("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] [SIMPLE WHIRLY] EXEC.")
 		// 只有 DaemonNode 需要提交交易
 		_, _, address := DecodeAddress(sw.PublicAddress)
 		if sw.ID == 0 || address == DaemonNodePublicAddress {
@@ -558,8 +558,8 @@ func (sw *CrWhirlyImpl) OnReceiveProposal(newBlock *pb.WhirlyBlock, crProof *pb.
 				uint32(sw.ID+1),
 				sw.CommitteeCryptoElements.H,
 				txCR.C,
-				sw.CommitteeCryptoElements.DPVSSConfigForMember.ShareCommits[sw.ID],
-				sw.CommitteeCryptoElements.DPVSSConfigForMember.Share,
+				sw.CommitteeCryptoElements.DPVSSConfig.ShareCommits[sw.ID],
+				sw.CommitteeCryptoElements.DPVSSConfig.Share,
 			)
 			if err != nil {
 				sw.Log.Warn("CalcRoundShareOfDPVSS error: ", err)
@@ -688,7 +688,7 @@ func (sw *CrWhirlyImpl) OnReceiveVote(whirlyVoteMsg *pb.CrWhirlyVote) {
 						roundShare.Index,
 						sw.CommitteeCryptoElements.H,
 						sw.txCRs[i].C,
-						sw.CommitteeCryptoElements.DPVSSConfigForMember.ShareCommits[i],
+						sw.CommitteeCryptoElements.DPVSSConfig.ShareCommits[i],
 						roundShare.Piece, roundShare.Proof)
 					// 有效则使用
 					if verifyRoundShareRes {
