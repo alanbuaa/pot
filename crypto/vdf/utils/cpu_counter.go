@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"fmt"
 	"sync"
 )
 
@@ -36,7 +37,6 @@ func (c *CPUCounter) Occupy(ctrl *Controller) {
 	}
 	if !ctrl.IsAbort {
 		ctrl.CpuNo = c.idleCpuList[0]
-		
 		c.idleCpuList = c.idleCpuList[1:]
 		ctrl.IsAllocated = true
 
@@ -50,5 +50,6 @@ func (c *CPUCounter) Release(ctrl *Controller) {
 		c.idleCpuList = append(c.idleCpuList, ctrl.CpuNo)
 		c.cond.Signal()
 	}
+	fmt.Println(c.idleCpuList)
 	c.cond.L.Unlock()
 }

@@ -304,9 +304,10 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 	}
 
 	weightnow := w.calculateChainWeight(ances, current)
+
 	weightadvanced := w.calculateChainWeight(ances, block)
 
-	if weightnow.Cmp(weightadvanced) < 0 {
+	if weightnow.Cmp(weightadvanced) > 0 {
 		w.log.Infof("[PoT]\tthe current chain weight %d is greater than the fork chain weight %d", weightnow.Int64(), weightadvanced.Int64())
 		doonce.Do(func() {
 			close(done)
