@@ -1,7 +1,9 @@
 package main
 
 import (
-	config "github.com/zzz136454872/upgradeable-consensus/config"
+	"blockchain-crypto/utils"
+	"fmt"
+	"github.com/zzz136454872/upgradeable-consensus/config"
 	"github.com/zzz136454872/upgradeable-consensus/logging"
 	"github.com/zzz136454872/upgradeable-consensus/node"
 	"log"
@@ -75,12 +77,17 @@ func main() {
 			nodes[index] = node.NewNode(index)
 		}(i)
 	}
-	//go testexecutor()
+	// go testexecutor()
 
 	<-sigChan
 	logger.Info("[UpgradeableConsensus] Exit...")
 	for i := 0; i < total; i++ {
 		nodes[i].Stop()
+	}
+	err := utils.KillCaulkPlusGRPC()
+	if err != nil {
+		fmt.Printf("kill caulk+ gRPC error: %v", err)
+		return
 	}
 }
 
@@ -117,7 +124,7 @@ func main() {
 //
 //		fmt.Printf("Benchmark finished in %dms\n", time.Since(startTime)/time.Millisecond)
 //	}
-//func testexecutor() {
+// func testexecutor() {
 //	listen, err := net.Listen("tcp", "127.0.0.1:9877")
 //	if err != nil {
 //		return
@@ -134,21 +141,21 @@ func main() {
 //		exec.blocks = append(exec.blocks, blocks)
 //		exec.height += 1
 //	}
-//}
+// }
 //
-//type PoTexecutor struct {
+// type PoTexecutor struct {
 //	height uint64
 //	blocks []*Testblock
-//}
+// }
 //
-//func NewExec() *PoTexecutor {
+// func NewExec() *PoTexecutor {
 //	return &PoTexecutor{
 //		height: 0,
 //		blocks: make([]*Testblock, 0),
 //	}
-//}
+// }
 //
-//func (p *PoTexecutor) GetTxs(ctx context.Context, request *pb.GetTxRequest) (*pb.GetTxResponse, error) {
+// func (p *PoTexecutor) GetTxs(ctx context.Context, request *pb.GetTxRequest) (*pb.GetTxResponse, error) {
 //	//fmt.Printf("receive request, start %d, end %d\n", request.StartHeight, p.height)
 //	start := request.GetStartHeight()
 //	if start > p.height {
@@ -179,9 +186,9 @@ func main() {
 //		Blocks: execblock,
 //	}, nil
 //
-//}
+// }
 //
-//func (p *PoTexecutor) VerifyTxs(ctx context.Context, request *pb.VerifyTxRequest) (*pb.VerifyTxResponse, error) {
+// func (p *PoTexecutor) VerifyTxs(ctx context.Context, request *pb.VerifyTxRequest) (*pb.VerifyTxResponse, error) {
 //	flag := make([]bool, len(request.GetTxs()))
 //	for i := 0; i < len(flag); i++ {
 //		flag[i] = true
@@ -191,9 +198,9 @@ func main() {
 //		Flag: flag,
 //	}
 //	return reponse, nil
-//}
+// }
 //
-//func (p *PoTexecutor) GenerateTxsForHeight(height uint64) *Testblock {
+// func (p *PoTexecutor) GenerateTxsForHeight(height uint64) *Testblock {
 //	txs := make([][]byte, 0)
 //	for i := 0; i < 1000; i++ {
 //		bigint := big.NewInt(int64(i))
@@ -204,9 +211,9 @@ func main() {
 //		Height: height,
 //		Txs:    txs,
 //	}
-//}
+// }
 //
-//type Testblock struct {
+// type Testblock struct {
 //	Height uint64
 //	Txs    [][]byte
-//}
+// }
