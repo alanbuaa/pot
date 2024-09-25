@@ -403,8 +403,9 @@ func inWorkStage(height, N, n uint64) bool {
 }
 
 // TODO isSelfBlock 判断高度为 height 的区块是否是自己出块的
-func isSelfBlock(height uint64) bool {
-	return false
+func (w *Worker) isSelfBlock(block *types.Block) bool {
+	ok, _ := w.TryFindKey(crypto.Convert(block.Hash()))
+	return ok
 }
 
 // VerifyCryptoSet 当收到区块，height 为该区块的高度, 返回该区块是否验证通过
@@ -539,7 +540,7 @@ func (w *Worker) UpdateLocalCryptoSetByBlock(height uint64, receivedBlock *types
 			},
 		}
 		// 如果自己是出块人
-		if isSelfBlock(height) {
+		if w.isSelfBlock(receivedBlock) {
 			mark.IsLeader = true
 			mark.DPVSSConfig.ShareCommits = make([]*bls12381.PointG1, n)
 			for i := uint64(0); i < n; i++ {
@@ -916,12 +917,17 @@ func (w *Worker) getPrevNBlockPKListByBranch(minHeight, maxHeight uint64, branch
 
 	n := len(branch)
 	k := 1
-	branchheight := branch[n-k].GetHeader().Height
+	if n < 1 {
+		return nil
+	}
+	branchstartheight := branch[n-k].GetHeader().Height
 
 	ret := make([]*bls12381.PointG1, 0)
 	for i := minHeight; i <= maxHeight; i++ {
-		if i >= branchheight {
+		if i >= branchstartheight {
+
 			block := branch[n-k]
+
 			pub := block.GetHeader().PublicKey
 			point, err := bls12381.NewG1().FromBytes(pub)
 			if err != nil {
@@ -945,5 +951,32 @@ func (w *Worker) getPrevNBlockPKListByBranch(minHeight, maxHeight uint64, branch
 	return ret
 }
 
-
-
+// TODO getSelfPrivKeyList 获取高度位于 [minHeight, maxHeight] 内所有自己出块的区块私钥
+func (w *Worker) getSelfPrivKeyListByBranch(minHeight, maxHeight uint64, branch []*types.Block) []*bls12381.Fr {
+	var ret []*bls12381.Fr
+	n := len(branch)
+	k := 1
+	branchheight := branch[n-k].GetHeader().Height
+	for i := minHeight; i <= maxHeight; i++ {
+		if i >= branchheight {
+			block := branch[n-k]
+			flag, priv := w.TryFindKey(crypto.Convert(block.Hash()))
+			if flag {
+				fr := bls12381.NewFr().FromBytes(priv)
+				ret = append(ret, fr)
+			}
+			k++
+		} else {
+			block, err := w.chainReader.GetByHeight(i)
+			if err != nil {
+				return nil
+			}
+			flag, priv := w.TryFindKey(crypto.Convert(block.Hash()))
+			if flag {
+				fr := bls12381.NewFr().FromBytes(priv)
+				ret = append(ret, fr)
+			}
+		}
+	}
+	return ret
+}
