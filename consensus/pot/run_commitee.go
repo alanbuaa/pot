@@ -627,8 +627,8 @@ func (w *Worker) UpdateLocalCryptoSetByBlock(height uint64, receivedBlock *types
 		// 删除该委员会
 		cryptoSet.CommitteeMarkQueue.Remove(cryptoSet.CommitteeMarkQueue.Front())
 
-		// 如果自己是领导者
 		if committeeMark.IsLeader {
+			// 如果自己是领导者
 			leaderInput := &blockchain_api.CommitteeConfig{
 				H:           group1.ToCompressed(cryptoSet.H),
 				CommitteePK: group1.ToCompressed(committeeMark.CommitteePK),
@@ -643,10 +643,8 @@ func (w *Worker) UpdateLocalCryptoSetByBlock(height uint64, receivedBlock *types
 				leaderInput.DPVSSConfig.ShareCommits[j] = group1.ToCompressed(committeeMark.DPVSSConfig.ShareCommits[j])
 			}
 			handleCommitteeAsLeader(height, leaderInput)
-			return nil
-		}
-		// 如果自己是委员会成员
-		if committeeMark.IsMember {
+		} else if committeeMark.IsMember {
+			// 如果自己是委员会成员
 			memberInput := &blockchain_api.CommitteeConfig{
 				H:           group1.ToCompressed(cryptoSet.H),
 				CommitteePK: group1.ToCompressed(committeeMark.CommitteePK),
@@ -661,17 +659,19 @@ func (w *Worker) UpdateLocalCryptoSetByBlock(height uint64, receivedBlock *types
 				memberInput.DPVSSConfig.ShareCommits[j] = group1.ToCompressed(committeeMark.DPVSSConfig.ShareCommits[j])
 			}
 			handleCommitteeAsMember(height, memberInput)
-			return nil
+		} else {
+			handleCommitteeAsUser(
+				// 自己是用户
+				height,
+				&blockchain_api.CommitteeConfig{
+					H:           group1.ToCompressed(cryptoSet.H),
+					CommitteePK: group1.ToCompressed(committeeMark.CommitteePK),
+				})
+
 		}
-		// 自己是用户
-		handleCommitteeAsUser(
-			height,
-			&blockchain_api.CommitteeConfig{
-				H:           group1.ToCompressed(cryptoSet.H),
-				CommitteePK: group1.ToCompressed(committeeMark.CommitteePK),
-			})
-		return nil
 	}
+
+	w.CryptoSetMap[crypto.Convert(receivedBlock.GetHeader().Hash())] = w.CryptoSet.Backup(receivedBlock.Header.Height)
 
 	return nil
 }

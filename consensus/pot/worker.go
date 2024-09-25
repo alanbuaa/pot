@@ -109,6 +109,7 @@ type Worker struct {
 	BackupCommitee []string
 	SelfAddress    []string
 	CryptoSet      *CryptoSet
+	CryptoSetMap   map[[crypto.Hashlen]byte]*CryptoSet
 	// committee     *orderedmap.OrderedMap
 }
 
@@ -188,6 +189,7 @@ func NewWorker(id int64, config *config.ConsensusConfig, logger *logrus.Entry, b
 		BackupCommitee: BackupCommitee,
 		chainresetflag: false,
 		CryptoSet:      cryptoset,
+		CryptoSetMap:   make(map[[crypto.Hashlen]byte]*CryptoSet),
 	}
 	rpcserver := grpc.NewServer()
 	pb.RegisterDciExectorServer(rpcserver, w)
@@ -205,6 +207,7 @@ func (w *Worker) Init() {
 	w.vdf0.SetInput(crypto.Hash([]byte("aa")), w.config.PoT.Vdf0Iteration)
 	w.SetVdf0res(0, []byte("aa"))
 	w.blockStorage.Put(types.DefaultGenesisBlock())
+	w.CryptoSetMap[crypto.Convert(types.DefaultGenesisBlock().Hash())] = w.CryptoSet
 	w.blockCounter = 0
 
 }

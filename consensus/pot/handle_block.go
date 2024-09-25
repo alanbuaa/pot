@@ -134,12 +134,11 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 				return err
 			}
 
-			w.log.Debugf("[PoT]\tthe shared ancestor of fork is %s at %d,match %t", hexutil.Encode(ances.GetHeader().Hashes), ances.GetHeader().Height, bytes.Equal(c.GetHeader().Hashes, ances.GetHeader().Hashes))
+			w.log.Infof("[PoT]\tthe shared ancestor of fork is %s at %d,match %t", hexutil.Encode(ances.GetHeader().Hashes), ances.GetHeader().Height, bytes.Equal(c.GetHeader().Hashes, ances.GetHeader().Hashes))
 			// nowBranch, _, err := w.GetBranch(ances, currentblock)
 
 			forkBranch, _, err := w.GetBranch(ances, block)
 			if err != nil {
-
 				return fmt.Errorf("get Branch error for %s", err.Error())
 			}
 
@@ -150,12 +149,17 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 				return err
 			}
 
+			//cryptoset, ok := w.CryptoSetMap[crypto.Convert(ances.Hash())]
+			//if !ok {
+			//	return fmt.Errorf("can not find the crypto set for block %s", hexutil.Encode(c.Hash()))
+			//}
+
 			// for i := 0; i < len(nowBranch); i++ {
 			//	w.log.Errorf("[PoT]\tthe nowBranch at height %d: %s", nowBranch[i].GetHeader().ExecHeight, hexutil.Encode(nowBranch[i].Hash()))
 			// }
-			// for i := 0; i < len(forkBranch); i++ {
-			//	w.log.Errorf("[PoT]\tthe fork chain at height %d: %s", forkBranch[i].GetHeader().ExecHeight, hexutil.Encode(forkBranch[i].Hash()))
-			// }
+			for i := 0; i < len(forkBranch); i++ {
+				w.log.Errorf("[PoT]\tthe fork chain at height %d: %s", forkBranch[i].GetHeader().Height, hexutil.Encode(forkBranch[i].Hash()))
+			}
 
 			w1 := w.calculateChainWeight(ances, currentblock)
 			w2 := w.calculateChainWeight(ances, block)
@@ -251,9 +255,9 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 		return err
 	}
 
-	// for i := 0; i < len(branch); i++ {
-	//	w.log.Infof("[PoT]\tthe nowbranch at height %d: %s", branch[i].GetHeader().ExecHeight, hexutil.Encode(branch[i].Hash()))
-	// }
+	for i := 0; i < len(branch); i++ {
+		w.log.Infof("[PoT]\tthe nowbranch at height %d: %s", branch[i].GetHeader().Height, hexutil.Encode(branch[i].Hash()))
+	}
 
 	err = w.chainResetAdvanced(branch)
 	if err != nil {
