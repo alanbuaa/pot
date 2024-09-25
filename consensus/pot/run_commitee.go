@@ -40,53 +40,53 @@ type Sharding struct {
 
 // CommitteeMark 记录委员会相关信息
 type CommitteeMark struct {
-	WorkHeight  uint64            // 委员会工作的PoT区块高度
-	CommitteePK *bls12381.PointG1 // 委员会聚合公钥 y = g^s
-	IsLeader    bool              // 自己是否为该委员会的领导者
-	IsMember    bool              // 自己是否为该委员会的成员
-	DPVSSConfig *DPVSSMark        // 委员会成员相关信息
+	WorkHeight     uint64              // 委员会工作的PoT区块高度
+	CommitteePK    *bls12381.PointG1   // 委员会聚合公钥 y = g^s
+	MemberPKList   []*bls12381.PointG1 // 份额持有者的公钥列表，用于PVSS分发份额时查找委员会成员
+	ShareCommits   []*bls12381.PointG1 // 聚合的份额承诺列表
+	IsLeader       bool                // 自己是否为该委员会的领导者
+	SelfMemberList []*DPVSSMember      // 每个委员会成员的DPVSS相关信息，数量为自己出的块中作为委员会成员的数量
 }
 
-// DPVSSMark 记录委员会成员相关信息
-type DPVSSMark struct {
-	Index        uint32              // 下标
-	MemberPKList []*bls12381.PointG1 // 份额持有者的公钥列表，用于PVSS分发份额时查找委员会成员
-	ShareCommits []*bls12381.PointG1 //
-	SelfPK       *bls12381.PointG1   // 自己用于份额分发的公钥, 用于查找自己的份额
-	SelfSK       *bls12381.Fr        // 自己用于份额分发的私钥, 用于解密自己的份额
-	AggrEncShare *mrpvss.EncShare    // 聚合加密份额
-	Share        *bls12381.Fr        // 解密份额（聚合的）
+// DPVSSMember 记录委员会成员相关信息
+type DPVSSMember struct {
+	Index        uint32            // 下标
+	SelfPK       *bls12381.PointG1 // 自己用于份额分发的公钥, 用于查找自己的份额
+	SelfSK       *bls12381.Fr      // 自己用于份额分发的私钥, 用于解密自己的份额
+	AggrEncShare *mrpvss.EncShare  // 聚合加密份额
+	Share        *bls12381.Fr      // 解密份额（聚合的）
 }
 
 func (c *CommitteeMark) DeepCopy() *CommitteeMark {
 	group1 := bls12381.NewG1()
-	return &CommitteeMark{
-		WorkHeight:  c.WorkHeight,
-		CommitteePK: group1.New().Set(c.CommitteePK),
-		IsLeader:    c.IsLeader,
-		IsMember:    c.IsMember,
-		DPVSSConfig: c.DPVSSConfig.DeepCopy(),
+	ret := &CommitteeMark{
+		WorkHeight:     c.WorkHeight,
+		CommitteePK:    group1.New().Set(c.CommitteePK),
+		MemberPKList:   make([]*bls12381.PointG1, len(c.MemberPKList)),
+		ShareCommits:   make([]*bls12381.PointG1, len(c.ShareCommits)),
+		IsLeader:       c.IsLeader,
+		SelfMemberList: make([]*DPVSSMember, len(c.SelfMemberList)),
 	}
+	for i := 0; i < len(c.MemberPKList); i++ {
+		if c.MemberPKList[i] != nil {
+			ret.MemberPKList[i] = group1.New().Set(c.MemberPKList[i])
+		}
+	}
+	for i := 0; i < len(c.ShareCommits); i++ {
+		if c.ShareCommits[i] != nil {
+			ret.ShareCommits[i] = group1.New().Set(c.ShareCommits[i])
+		}
+	}
+	for i := 0; i < len(c.SelfMemberList); i++ {
+		ret.SelfMemberList[i] = c.SelfMemberList[i].DeepCopy()
+	}
+	return ret
 }
 
-func (d *DPVSSMark) DeepCopy() *DPVSSMark {
+func (d *DPVSSMember) DeepCopy() *DPVSSMember {
 	group1 := bls12381.NewG1()
-	newMemberPKList := make([]*bls12381.PointG1, len(d.MemberPKList))
-	for i := 0; i < len(d.MemberPKList); i++ {
-		if d.MemberPKList[i] != nil {
-			newMemberPKList[i] = group1.New().Set(d.MemberPKList[i])
-		}
-	}
-	newShareCommits := make([]*bls12381.PointG1, len(d.ShareCommits))
-	for i := 0; i < len(d.ShareCommits); i++ {
-		if d.ShareCommits[i] != nil {
-			newShareCommits[i] = group1.New().Set(d.ShareCommits[i])
-		}
-	}
-	return &DPVSSMark{
+	return &DPVSSMember{
 		Index:        d.Index,
-		MemberPKList: newMemberPKList,
-		ShareCommits: newShareCommits,
 		SelfPK:       group1.New().Set(d.SelfPK),
 		SelfSK:       bls12381.NewFr().Set(d.SelfSK),
 		AggrEncShare: d.AggrEncShare.DeepCopy(),
@@ -403,7 +403,7 @@ func inWorkStage(height, N, n uint64) bool {
 }
 
 // TODO isSelfBlock 判断高度为 height 的区块是否是自己出块的
-func isSelfBlock(height uint64) bool {
+func isSelfBlock(block *types.Block) bool {
 	return false
 }
 
@@ -463,8 +463,8 @@ func (w *Worker) VerifyCryptoSet(height uint64, block *types.Block) bool {
 				return false
 			}
 			// 如果成员公钥列表对不上，丢弃
-			for j := 0; j < len(mark.DPVSSConfig.MemberPKList); j++ {
-				if !group1.Equal(mark.DPVSSConfig.MemberPKList[j], receivedBlock.HolderPKLists[i][j]) {
+			for j := 0; j < len(mark.MemberPKList); j++ {
+				if !group1.Equal(mark.MemberPKList[j], receivedBlock.HolderPKLists[i][j]) {
 					fmt.Printf("[Height %d]:Verify DPVSS error: incorrect member pk list, pvss index = %v \n", height, i)
 					return false
 				}
@@ -524,49 +524,43 @@ func (w *Worker) UpdateLocalCryptoSetByBlock(height uint64, receivedBlock *types
 		fmt.Printf("[Update]: Draw | Node %v, Block %v\n", w.ID, height)
 		// 初始化 CommitteeMark
 		mark := &CommitteeMark{
-			WorkHeight:  height + SmallN,
-			CommitteePK: group1.Zero(),
-			IsLeader:    false,
-			IsMember:    false,
-			DPVSSConfig: &DPVSSMark{
-				Index:        0,
-				MemberPKList: cryptoElems.DrawProof.SelectedPubKeys,
-				ShareCommits: nil,
-				SelfPK:       nil,
-				SelfSK:       nil,
-				AggrEncShare: nil,
-				Share:        nil,
-			},
+			WorkHeight:     height + SmallN,
+			CommitteePK:    group1.Zero(),
+			MemberPKList:   nil,
+			ShareCommits:   nil,
+			IsLeader:       false,
+			SelfMemberList: nil,
 		}
+
 		// 如果自己是出块人
-		if isSelfBlock(height) {
+		if isSelfBlock(receivedBlock) {
 			mark.IsLeader = true
-			mark.DPVSSConfig.ShareCommits = make([]*bls12381.PointG1, n)
-			for i := uint64(0); i < n; i++ {
-				mark.DPVSSConfig.ShareCommits[i] = group1.New()
+		}
+
+		// 查找自己出的块是否被选为委员会成员
+		// 对于每个自己区块的公私钥对获取抽签结果，是否被选中，如果被选中则获取自己的公钥
+		// 获取自己的区块私钥(同一置换/抽签分组内的，即1~32，33~64...)
+		maxHeight := ((height - cryptoSet.SmallN) >> 5) << 5
+		minHeight := maxHeight - cryptoSet.SmallN + 1
+		selfPrivKeyList := w.getSelfPrivKeyList(minHeight, maxHeight)
+		for _, sk := range selfPrivKeyList {
+			isSelected, index, pk := verifiable_draw.IsSelected(sk, cryptoElems.DrawProof.RCommit, cryptoElems.DrawProof.SelectedPubKeys)
+			// 如果抽中，在自己所在的委员会队列创建新条目记录
+			if isSelected {
+				mark.SelfMemberList = append(mark.SelfMemberList, &DPVSSMember{
+					Index:        index,
+					SelfPK:       pk,
+					SelfSK:       sk,
+					AggrEncShare: mrpvss.NewEmptyEncShare(),
+					Share:        bls12381.NewFr().Zero(),
+				})
 			}
-		} else {
-			// 如果自己是委员会成员
-			// 对于每个自己区块的公私钥对获取抽签结果，是否被选中，如果被选中则获取自己的公钥
-			// 获取自己的区块私钥(同一置换/抽签分组内的，即1~32，33~64...)
-			maxHeight := ((height - cryptoSet.SmallN) >> 5) << 5
-			minHeight := maxHeight - cryptoSet.SmallN + 1
-			selfPrivKeyList := w.getSelfPrivKeyList(minHeight, maxHeight)
-			for _, sk := range selfPrivKeyList {
-				isSelected, index, pk := verifiable_draw.IsSelected(sk, cryptoElems.DrawProof.RCommit, cryptoElems.DrawProof.SelectedPubKeys)
-				// 如果抽中，在自己所在的委员会队列创建新条目记录
-				if isSelected {
-					mark.IsMember = true
-					mark.DPVSSConfig.Index = index
-					mark.DPVSSConfig.SelfPK = pk
-					mark.DPVSSConfig.SelfSK = sk
-					mark.DPVSSConfig.AggrEncShare = mrpvss.NewEmptyEncShare()
-					mark.DPVSSConfig.Share = bls12381.NewFr().Zero()
-				}
-				mark.DPVSSConfig.ShareCommits = make([]*bls12381.PointG1, n)
-				for i := uint64(0); i < n; i++ {
-					mark.DPVSSConfig.ShareCommits[i] = group1.New()
-				}
+		}
+		// 如果不只是用户，则记录份额承诺
+		if mark.IsLeader || len(mark.SelfMemberList) > 0 {
+			mark.ShareCommits = make([]*bls12381.PointG1, n)
+			for i := uint64(0); i < n; i++ {
+				mark.ShareCommits[i] = group1.New()
 			}
 		}
 		// 记录抽出来的委员会
@@ -580,38 +574,39 @@ func (w *Worker) UpdateLocalCryptoSetByBlock(height uint64, receivedBlock *types
 		for i := 0; i < pvssTimes; i++ {
 			// 寻找对应委员会
 			mark := GetMarkByWorkHeight(cryptoSet.CommitteeMarkQueue, cryptoElems.CommitteeWorkHeightList[i])
+			// should checked in verify function
 			if mark == nil {
 				fmt.Printf("[Update]: DPVSS | Node %v, Block %v : cannot find committee to aggregate pvss, pvss index = %v\n", w.ID, height, i)
-				break
 			}
+
 			// 聚合对应委员会的公钥
 			mark.CommitteePK = mrpvss.AggregateCommitteePK(mark.CommitteePK, cryptoElems.CommitteePKList[i])
 			// 如果自己是委员会的领导者或成员，则聚合份额承诺
-			if mark.IsLeader || mark.IsMember {
-				shareCommitList, err := mrpvss.AggregateShareCommitList(mark.DPVSSConfig.ShareCommits, cryptoElems.ShareCommitLists[i])
+			if mark.IsLeader || len(mark.SelfMemberList) > 0 {
+				shareCommitList, err := mrpvss.AggregateShareCommitList(mark.ShareCommits, cryptoElems.ShareCommitLists[i])
 				if err != nil {
 					return err
 				}
-				mark.DPVSSConfig.ShareCommits = shareCommitList
+				mark.ShareCommits = shareCommitList
 			}
-			// 如果自己是委员会成员，则聚合份额承诺
-			if mark.IsMember {
+			// 对于每个是委员会成员的自己的节点，聚合份额承诺
+			for j := 0; j < len(mark.SelfMemberList); j++ {
 				holderPKList := cryptoElems.HolderPKLists[i]
 				encShares := cryptoElems.EncShareLists[i]
 				holderNum := len(holderPKList)
-				for j := 0; j < holderNum; j++ {
-					if group1.Equal(mark.DPVSSConfig.SelfPK, holderPKList[j]) {
+				member := mark.SelfMemberList[j]
+				for k := 0; k < holderNum; k++ {
+					if group1.Equal(member.SelfPK, holderPKList[k]) {
 						// 聚合加密份额
-						mark.DPVSSConfig.AggrEncShare = mrpvss.AggregateEncShares(mark.DPVSSConfig.AggrEncShare, encShares[j])
+						member.AggrEncShare = mrpvss.AggregateEncShares(member.AggrEncShare, encShares[j])
 					}
 				}
 				// 如果当前是该委员会的最后一次PVSS，后续没有新的PVSS份额，则解密聚合份额
-				if int64(mark.WorkHeight)-int64(height) == 1 {
+				if mark.WorkHeight-height == 1 {
 					// 解密聚合加密份额
-					mark.DPVSSConfig.Share = mrpvss.DecryptAggregateShare(cryptoSet.G, mark.DPVSSConfig.SelfSK, mark.DPVSSConfig.AggrEncShare, uint32(SmallN-1))
+					member.Share = mrpvss.DecryptAggregateShare(cryptoSet.G, member.SelfSK, member.AggrEncShare, uint32(SmallN-1))
 				}
 			}
-
 		}
 	}
 	// 委员会更新阶段
@@ -626,10 +621,12 @@ func (w *Worker) UpdateLocalCryptoSetByBlock(height uint64, receivedBlock *types
 		committeeMark := e.Value.(*CommitteeMark)
 		// 删除该委员会
 		cryptoSet.CommitteeMarkQueue.Remove(cryptoSet.CommitteeMarkQueue.Front())
-
+		var leaderInput *blockchain_api.CommitteeConfig
+		var memberInputs []*blockchain_api.CommitteeConfig
+		var userInput *blockchain_api.CommitteeConfig
+		// 如果自己是领导者
 		if committeeMark.IsLeader {
-			// 如果自己是领导者
-			leaderInput := &blockchain_api.CommitteeConfig{
+			leaderInput = &blockchain_api.CommitteeConfig{
 				H:           group1.ToCompressed(cryptoSet.H),
 				CommitteePK: group1.ToCompressed(committeeMark.CommitteePK),
 				DPVSSConfig: blockchain_api.DPVSSConfig{
@@ -640,39 +637,37 @@ func (w *Worker) UpdateLocalCryptoSetByBlock(height uint64, receivedBlock *types
 				},
 			}
 			for j := uint64(0); j < n; j++ {
-				leaderInput.DPVSSConfig.ShareCommits[j] = group1.ToCompressed(committeeMark.DPVSSConfig.ShareCommits[j])
+				leaderInput.DPVSSConfig.ShareCommits[j] = group1.ToCompressed(committeeMark.ShareCommits[j])
 			}
-			handleCommitteeAsLeader(height, leaderInput)
-		} else if committeeMark.IsMember {
-			// 如果自己是委员会成员
+		}
+		// 如果有委员会成员节点
+		for i := 0; i < len(committeeMark.SelfMemberList); i++ {
+			member := committeeMark.SelfMemberList[i]
 			memberInput := &blockchain_api.CommitteeConfig{
 				H:           group1.ToCompressed(cryptoSet.H),
 				CommitteePK: group1.ToCompressed(committeeMark.CommitteePK),
 				DPVSSConfig: blockchain_api.DPVSSConfig{
-					Index:        committeeMark.DPVSSConfig.Index,
+					Index:        member.Index,
 					ShareCommits: make([][]byte, n),
-					Share:        committeeMark.DPVSSConfig.Share.ToBytes(),
+					Share:        member.Share.ToBytes(),
 					IsLeader:     false,
 				},
 			}
 			for j := uint64(0); j < n; j++ {
-				memberInput.DPVSSConfig.ShareCommits[j] = group1.ToCompressed(committeeMark.DPVSSConfig.ShareCommits[j])
+				memberInput.DPVSSConfig.ShareCommits[j] = group1.ToCompressed(committeeMark.ShareCommits[j])
 			}
-			handleCommitteeAsMember(height, memberInput)
-		} else {
-			handleCommitteeAsUser(
-				// 自己是用户
-				height,
-				&blockchain_api.CommitteeConfig{
-					H:           group1.ToCompressed(cryptoSet.H),
-					CommitteePK: group1.ToCompressed(committeeMark.CommitteePK),
-				})
-
+			memberInputs = append(memberInputs, memberInput)
 		}
+		// 作为用户
+		if leaderInput == nil && memberInputs == nil {
+			userInput = &blockchain_api.CommitteeConfig{
+				H:           group1.ToCompressed(cryptoSet.H),
+				CommitteePK: group1.ToCompressed(committeeMark.CommitteePK),
+			}
+		}
+		sendConsensusNodeInputs(height, leaderInput, memberInputs, userInput)
 	}
-
 	w.CryptoSetMap[crypto.Convert(receivedBlock.GetHeader().Hash())] = w.CryptoSet.Backup(receivedBlock.Header.Height)
-
 	return nil
 }
 
@@ -838,7 +833,7 @@ func (w *Worker) GenerateCryptoSetFromLocal(height uint64) (types.CryptoElement,
 			// 委员会的工作高度 height - pvssTimes + i + SmallN
 			committeeWorkHeightList[i] = height - pvssTimes + i + SmallN
 			secret, _ := bls12381.NewFr().Rand(rand.Reader)
-			holderPKLists[i] = e.Value.(*CommitteeMark).DPVSSConfig.MemberPKList
+			holderPKLists[i] = e.Value.(*CommitteeMark).MemberPKList
 			shareCommitsList[i], coeffCommitsList[i], encSharesList[i], committeePKList[i], err = mrpvss.EncShares(cryptoSet.G, cryptoSet.H, holderPKLists[i], secret, cryptoSet.Threshold)
 			if err != nil {
 				return types.CryptoElement{}, err
@@ -860,19 +855,23 @@ func (w *Worker) GenerateCryptoSetFromLocal(height uint64) (types.CryptoElement,
 	}, nil
 }
 
-// TODO handleCommitteeAsLeader 作为委员会领导者传递该委员会信息给业务链(用于处理业务)
-func handleCommitteeAsLeader(height uint64, committeeConfig *blockchain_api.CommitteeConfig) {
+// TODO
+func sendConsensusNodeInputs(
+	height uint64,
+	leaderInput *blockchain_api.CommitteeConfig,
+	memberInputs []*blockchain_api.CommitteeConfig,
+	userInput *blockchain_api.CommitteeConfig,
+) {
+	if leaderInput != nil {
 
-}
+	}
+	for _, input := range memberInputs {
 
-// TODO handleCommitteeAsMember 作为委员会成员传递该委员会信息给业务链(用于处理业务)
-func handleCommitteeAsMember(height uint64, committeeConfig *blockchain_api.CommitteeConfig) {
+	}
+	// TODO
+	if leaderInput == nil && (memberInputs == nil || len(memberInputs) == 0) {
 
-}
-
-// TODO handleCommitteeAsUser 作为用户传递该委员会信息给业务链(用于向该委员会发送交易)
-func handleCommitteeAsUser(height uint64, committeeConfig *blockchain_api.CommitteeConfig) {
-
+	}
 }
 
 // TODO getSelfPrivKeyList 获取高度位于 [minHeight, maxHeight] 内所有自己出块的区块私钥
@@ -944,6 +943,3 @@ func (w *Worker) getPrevNBlockPKListByBranch(minHeight, maxHeight uint64, branch
 	}
 	return ret
 }
-
-
-
