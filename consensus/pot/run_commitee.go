@@ -912,6 +912,38 @@ func (w *Worker) getPrevNBlockPKList(minHeight, maxHeight uint64) []*bls12381.Po
 	return ret
 }
 
-func (w *Worker) getPrevNBlockPKListByBranch() {
+func (w *Worker) getPrevNBlockPKListByBranch(minHeight, maxHeight uint64, branch []*types.Block) []*bls12381.PointG1 {
 
+	n := len(branch)
+	k := 1
+	branchheight := branch[n-k].GetHeader().Height
+
+	ret := make([]*bls12381.PointG1, 0)
+	for i := minHeight; i <= maxHeight; i++ {
+		if i >= branchheight {
+			block := branch[n-k]
+			pub := block.GetHeader().PublicKey
+			point, err := bls12381.NewG1().FromBytes(pub)
+			if err != nil {
+				return nil
+			}
+			ret = append(ret, point)
+			k++
+		} else {
+			block, err := w.chainReader.GetByHeight(i)
+			if err != nil {
+				return nil
+			}
+			pub := block.GetHeader().PublicKey
+			point, err := bls12381.NewG1().FromBytes(pub)
+			if err != nil {
+				return nil
+			}
+			ret = append(ret, point)
+		}
+	}
+	return ret
 }
+
+
+

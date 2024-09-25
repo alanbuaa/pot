@@ -250,7 +250,6 @@ func (w *Worker) chainreset(branch []*types.Block) error {
 			txs := blocks.GetExecutedHeaders()
 			w.mempool.MarkProposedByHeader(txs)
 
-			err = w.UpdateLocalCryptoSetByBlock(height, blocks)
 			if err != nil {
 				w.log.Errorf("[PoT]\tepoch %v: [chain reset] update local crypto set err: for %v", epoch+1, err)
 			}
