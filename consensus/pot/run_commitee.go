@@ -3,6 +3,7 @@ package pot
 import (
 	"blockchain-crypto/blockchain_api"
 	"blockchain-crypto/proof/schnorr_proof/bls12381"
+	"blockchain-crypto/share/mrpvss/bls12381"
 	"blockchain-crypto/shuffle"
 	"blockchain-crypto/types/curve/bls12381"
 	"blockchain-crypto/types/srs"
@@ -11,9 +12,6 @@ import (
 	"container/list"
 	"crypto/rand"
 	"fmt"
-	"os/exec"
-
-	"blockchain-crypto/share/mrpvss/bls12381"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/zzz136454872/upgradeable-consensus/config"
 	"github.com/zzz136454872/upgradeable-consensus/consensus/whirly/nodeController"
@@ -27,8 +25,7 @@ var (
 	// test
 	g1Degree = uint32(1 << 7)
 	// test
-	g2Degree          = uint32(1 << 7)
-	caulkPlusGRPCProc *exec.Cmd
+	g2Degree = uint32(1 << 7)
 )
 
 type Queue = list.List
@@ -412,6 +409,9 @@ func isSelfBlock(height uint64) bool {
 
 // VerifyCryptoSet 当收到区块，height 为该区块的高度, 返回该区块是否验证通过
 func (w *Worker) VerifyCryptoSet(height uint64, block *types.Block) bool {
+	if block.GetHeader().Height == 0 {
+		return true
+	}
 	group1 := bls12381.NewG1()
 	cryptoSet := w.CryptoSet
 	N := cryptoSet.BigN
@@ -497,7 +497,7 @@ func (w *Worker) UpdateLocalCryptoSetByBlock(height uint64, receivedBlock *types
 			cryptoSet.LocalSRS.ToBinaryFile()
 			var err error
 			// Caulkplus GRPC error: exec: "caulk-plus-server": executable file not found in $PATH
-			caulkPlusGRPCProc, err = utils.RunCaulkPlusGRPC()
+			err = utils.RunCaulkPlusGRPC()
 			if err != nil {
 				fmt.Printf("[Update]: Caulkplus GRPC error: %v\n", err)
 				return fmt.Errorf("failed to start caulk-plus gRPC process: %v", err)
@@ -910,4 +910,8 @@ func (w *Worker) getPrevNBlockPKList(minHeight, maxHeight uint64) []*bls12381.Po
 		ret = append(ret, point)
 	}
 	return ret
+}
+
+func (w *Worker) getPrevNBlockPKListByBranch() {
+
 }

@@ -173,7 +173,7 @@ func (w *Worker) getParentBlock(block *types.Block) (*types.Block, error) {
 		blockResponse, err := w.request(request)
 
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("get block %s from %s failed for %s", hexutil.Encode(block.Hash()), block.GetHeader().PeerId, err.Error())
 		}
 
 		pbParent := blockResponse.GetBlock()
@@ -194,7 +194,7 @@ func (w *Worker) getParentBlock(block *types.Block) (*types.Block, error) {
 }
 
 func (w *Worker) getUncleBlock(block *types.Block) ([]*types.Block, error) {
-	if block.GetHeader().Height == 1 {
+	if block.GetHeader().Height == 1 || block.GetHeader().Height == 0 {
 		return nil, nil
 	}
 	n := len(block.GetHeader().UncleHash)

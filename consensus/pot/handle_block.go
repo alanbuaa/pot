@@ -120,8 +120,10 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 			defer w.SetChainSelectFlagFalse()
 			w.mutex.Unlock()
 
-			currentblock := w.chainReader.GetCurrentBlock()
-			ances, err := w.GetSharedAncestor(block, currentblock)
+			current := w.chainReader.GetCurrentBlock()
+			currentset := w.CryptoSet.Backup(current.GetHeader().Height)
+
+			ances, err := w.GetSharedAncestor(block, current)
 
 			if err != nil {
 				w.log.Error(err)
@@ -134,8 +136,8 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 				return err
 			}
 
-			w.log.Infof("[PoT]\tthe shared ancestor of fork is %s at %d,match %t", hexutil.Encode(ances.GetHeader().Hashes), ances.GetHeader().Height, bytes.Equal(c.GetHeader().Hashes, ances.GetHeader().Hashes))
-			// nowBranch, _, err := w.GetBranch(ances, currentblock)
+			w.log.Debugf("[PoT]\tthe shared ancestor of fork is %s at %d,match %t", hexutil.Encode(ances.GetHeader().Hashes), ances.GetHeader().Height, bytes.Equal(c.GetHeader().Hashes, ances.GetHeader().Hashes))
+			// nowBranch, _, err := w.GetBranch(ances, current)
 
 			forkBranch, _, err := w.GetBranch(ances, block)
 			if err != nil {
@@ -149,11 +151,6 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 				return err
 			}
 
-			//cryptoset, ok := w.CryptoSetMap[crypto.Convert(ances.Hash())]
-			//if !ok {
-			//	return fmt.Errorf("can not find the crypto set for block %s", hexutil.Encode(c.Hash()))
-			//}
-
 			// for i := 0; i < len(nowBranch); i++ {
 			//	w.log.Errorf("[PoT]\tthe nowBranch at height %d: %s", nowBranch[i].GetHeader().ExecHeight, hexutil.Encode(nowBranch[i].Hash()))
 			// }
@@ -161,7 +158,46 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 				w.log.Errorf("[PoT]\tthe fork chain at height %d: %s", forkBranch[i].GetHeader().Height, hexutil.Encode(forkBranch[i].Hash()))
 			}
 
-			w1 := w.calculateChainWeight(ances, currentblock)
+			cryptoset, ok := w.CryptoSetMap[crypto.Convert(ances.Hash())]
+			if !ok {
+				return fmt.Errorf("can not find the crypto set for block %s", hexutil.Encode(c.Hash()))
+			}
+
+			w.CryptoSet.Restore(ances.GetHeader().Height, cryptoset)
+			w.log.Errorf("restore at height %d,current is %d", ances.GetHeader().Height, current.GetHeader().Height)
+
+			flag = true
+			n := len(forkBranch)
+			for i := n - 1; i > 0; i-- {
+				w.log.Errorf("check block at height %d", forkBranch[i].GetHeader().Height)
+
+				forkblock := forkBranch[i]
+				if !w.VerifyCryptoSet(forkblock.Header.Height, forkblock) {
+					flag = false
+					break
+				}
+				err := w.UpdateLocalCryptoSetByBlock(forkblock.Header.Height, forkblock)
+				if err != nil {
+					flag = false
+					break
+				}
+			}
+
+			if !flag {
+				w.CryptoSet.Restore(current.GetHeader().Height, currentset)
+				return fmt.Errorf("the fork chain fails the cryptoelement check")
+			}
+
+			if n <= 0 || !w.VerifyCryptoSet(forkBranch[0].GetHeader().Height, forkBranch[0]) {
+				w.log.Errorf("check block at height %d", forkBranch[0].GetHeader().Height)
+				flag = false
+			}
+			if !flag {
+				w.CryptoSet.Restore(current.GetHeader().Height, currentset)
+				return fmt.Errorf("the fork chain fails the cryptoelement check")
+			}
+
+			w1 := w.calculateChainWeight(ances, current)
 			w2 := w.calculateChainWeight(ances, block)
 			w.log.Infof("[PoT]\tthe chain weight %d, the fork chain weight %d", w1.Int64(), w2.Int64())
 
@@ -246,17 +282,59 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 
 	branch, _, err := w.GetBranch(ances, block)
 	w.log.Errorf("get branch end")
-	flag, err := w.CheckVDF0ForBranch(branch)
-	if flag {
-		w.log.Infof("[PoT]\tPass VDF Check")
-	}
 	if err != nil {
 		w.log.Errorf("[PoT]\tGet branch error for: %s", err)
 		return err
 	}
 
+	flag, err := w.CheckVDF0ForBranch(branch)
+	if !flag {
+		w.log.Infof("[PoT]\tFail  VDF Check")
+		return err
+	}
+
 	for i := 0; i < len(branch); i++ {
-		w.log.Infof("[PoT]\tthe nowbranch at height %d: %s", branch[i].GetHeader().Height, hexutil.Encode(branch[i].Hash()))
+		w.log.Warnf("[PoT]\tthe forkbranch at height %d: %s", branch[i].GetHeader().Height, hexutil.Encode(branch[i].Hash()))
+	}
+
+	currentset := w.CryptoSet.Backup(current.GetHeader().Height)
+
+	cryptoset, ok := w.CryptoSetMap[crypto.Convert(ances.Hash())]
+	if !ok {
+		return fmt.Errorf("can not find the crypto set for block %s", hexutil.Encode(ances.Hash()))
+	}
+
+	w.CryptoSet.Restore(ances.GetHeader().Height, cryptoset)
+	w.log.Errorf("restore at height %d,current is %d", ances.GetHeader().Height, current.GetHeader().Height)
+
+	flag = true
+	n := len(branch)
+	for i := n - 1; i > 0; i-- {
+		w.log.Errorf("check block at height %d", branch[i].GetHeader().Height)
+		forkblock := branch[i]
+		if !w.VerifyCryptoSet(forkblock.Header.Height, forkblock) {
+			flag = false
+			break
+		}
+		err := w.UpdateLocalCryptoSetByBlock(forkblock.Header.Height, forkblock)
+		if err != nil {
+			flag = false
+			break
+		}
+	}
+
+	if !flag {
+		w.CryptoSet.Restore(current.GetHeader().Height, currentset)
+		return fmt.Errorf("the fork chain fails the cryptoelement check")
+	}
+
+	if n <= 0 || !w.VerifyCryptoSet(branch[0].GetHeader().Height, branch[0]) {
+		w.log.Errorf("check block at height %d", branch[0].GetHeader().Height)
+		flag = false
+	}
+	if !flag {
+		w.CryptoSet.Restore(current.GetHeader().Height, currentset)
+		return fmt.Errorf("the fork chain fails the cryptoelement check")
 	}
 
 	err = w.chainResetAdvanced(branch)
