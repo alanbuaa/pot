@@ -48,22 +48,10 @@ func TestSRS_Update(t *testing.T) {
 	g1Degree := uint32(128)
 	g2Degree := uint32(128)
 
-	g1Powers := make([]*PointG1, g1Degree)
-	g2Powers := make([]*PointG2, g2Degree)
-	for i := uint32(0); i < g1Degree; i++ {
-		g1Powers[i] = group1.New().Set(group1.One())
-	}
-	for i := uint32(0); i < g2Degree; i++ {
-		g2Powers[i] = group2.New().Set(group2.One())
-	}
-	s1 := &SRS{
-		g1Degree: g1Degree,
-		g2Degree: g2Degree,
-		g1Powers: g1Powers,
-		g2Powers: g2Powers,
-	}
+	s1 := TrivialSRS(g1Degree, g2Degree)
 	prevSRSG1FirstElem := s1.G1PowerOf(1)
-	_, proof := s1.Update(FrFromInt(3))
+	var proof *schnorr_proof.SchnorrProof
+	s1, proof = s1.Update(FrFromInt(3))
 	assert.True(t, schnorr_proof.Verify(prevSRSG1FirstElem, s1.G1PowerOf(1), proof))
 	for i := uint32(0); i < g1Degree; i++ {
 		assert.True(t, group1.Equal(s1.g1Powers[i], group1.MulScalar(group1.New(), s1.g1Powers[0], NewFr().Exp(FrFromInt(3), big.NewInt(int64(i))))))
