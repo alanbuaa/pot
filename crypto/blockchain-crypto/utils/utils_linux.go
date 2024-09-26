@@ -11,6 +11,9 @@ var (
 
 // RunCaulkPlusGRPC 启动Caulk+gRPC进程
 func RunCaulkPlusGRPC() error {
+	if caulkCmd != nil {
+		return nil
+	}
 	// 创建一个新的命令
 	caulkCmd = exec.Command(caulkExecutable)
 
