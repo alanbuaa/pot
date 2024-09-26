@@ -929,7 +929,7 @@ func (w *Worker) getPrevNBlockPKListByBranch(minHeight, maxHeight uint64, branch
 		if i >= branchstartheight {
 
 			block := branch[n-k]
-
+			fmt.Println("use branch block at height: ", block.GetHeader().Height)
 			pub := block.GetHeader().PublicKey
 			point, err := bls12381.NewG1().FromBytes(pub)
 			if err != nil {
@@ -942,6 +942,7 @@ func (w *Worker) getPrevNBlockPKListByBranch(minHeight, maxHeight uint64, branch
 			if err != nil {
 				return nil
 			}
+			fmt.Println("use chain block at height: ", block.GetHeader().Height)
 			pub := block.GetHeader().PublicKey
 			point, err := bls12381.NewG1().FromBytes(pub)
 			if err != nil {
