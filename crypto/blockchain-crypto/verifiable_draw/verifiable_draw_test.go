@@ -92,7 +92,7 @@ func TestDraw(t *testing.T) {
 				break
 			}
 		}
-		isSelected, _ := IsSelected(secretKeys[i], drawProof.RCommit, drawProof.SelectedPubKeys)
+		isSelected, _, _ := IsSelected(secretKeys[i], drawProof.RCommit, drawProof.SelectedPubKeys)
 		if selected {
 
 			if !isSelected {
@@ -195,7 +195,7 @@ func TestDrawProof_ToBytes_FromBytes(t *testing.T) {
 				break
 			}
 		}
-		isSelected, _ := IsSelected(secretKeys[i], drawProof.RCommit, drawProof.SelectedPubKeys)
+		isSelected, _, _ := IsSelected(secretKeys[i], drawProof.RCommit, drawProof.SelectedPubKeys)
 		if selected {
 			if !isSelected {
 				fmt.Println("selected but not in proof, at index:", i)

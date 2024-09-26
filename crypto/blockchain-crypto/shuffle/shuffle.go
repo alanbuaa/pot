@@ -17,7 +17,7 @@ func SimpleShuffle(s *srs.SRS, pubKeyList []*PointG1, prevRCommit *PointG1) (*ve
 	return verifiable_draw.Draw(s, size, pubKeyList, size, permutation, prevRCommit)
 }
 
-func Verify(s *srs.SRS, pubKeyList []*PointG1, prevRCommit *PointG1, shuffleProof *verifiable_draw.DrawProof) bool {
+func Verify(s *srs.SRS, pubKeyList []*PointG1, prevRCommit *PointG1, shuffleProof *verifiable_draw.DrawProof) error {
 	num := uint32(len(pubKeyList))
 	return verifiable_draw.Verify(s, num, pubKeyList, num, prevRCommit, shuffleProof)
 }

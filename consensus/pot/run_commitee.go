@@ -421,16 +421,6 @@ func (w *Worker) VerifyCryptoSet(height uint64, block *types.Block) bool {
 	// 如果处于初始化阶段（参数生成阶段）
 	receivedBlock := block.GetHeader().CryptoElement
 	if inInitStage(height, N) {
-		// prevSRSG1FirstElem := group1.One()
-		// if cryptoSet.LocalSRS != nil {
-		// 	prevSRSG1FirstElem = cryptoSet.LocalSRS.G1PowerOf(1)
-		// }
-		// 检查srs的更新证明，如果验证失败，则丢弃
-		if height == 1 {
-			fmt.Printf("[Node %v] Height %d, LocalSRS: SRS[0] = %v, SRS[1]= %v,SRS[2]= %v\n", w.ID, height, cryptoSet.LocalSRS.G1PowerOf(0), cryptoSet.LocalSRS.G1PowerOf(0), cryptoSet.LocalSRS.G1PowerOf(0))
-			fmt.Printf("[Node %v] Height %d, received: SRS[0] = %v, SRS[1]= %v,SRS[2]= %v\n", w.ID, height, receivedBlock.SRS.G1PowerOf(0), receivedBlock.SRS.G1PowerOf(0), receivedBlock.SRS.G1PowerOf(0))
-		}
-		// if !srs.Verify(receivedBlock.SRS, prevSRSG1FirstElem, receivedBlock.SrsUpdateProof) {
 		err := srs.Verify(receivedBlock.SRS, cryptoSet.LocalSRS.G1PowerOf(1), receivedBlock.SrsUpdateProof)
 		if err != nil {
 			fmt.Printf("[Node %v] Height %d: Verify SRS error\n", w.ID, height)
@@ -447,7 +437,9 @@ func (w *Worker) VerifyCryptoSet(height uint64, block *types.Block) bool {
 			cryptoSet.PrevShuffledPKList = w.getPrevNBlockPKList(height-N, height-1)
 		}
 		// 如果验证失败，丢弃
-		if !shuffle.Verify(cryptoSet.LocalSRS, cryptoSet.PrevShuffledPKList, cryptoSet.PrevRCommitForShuffle, receivedBlock.ShuffleProof) {
+		err := shuffle.Verify(cryptoSet.LocalSRS, cryptoSet.PrevShuffledPKList, cryptoSet.PrevRCommitForShuffle, receivedBlock.ShuffleProof)
+		if err != nil {
+			fmt.Printf("[Node %v] Height %d: Verify Shuffle error\n", w.ID, height)
 			return false
 		}
 	}
@@ -455,7 +447,9 @@ func (w *Worker) VerifyCryptoSet(height uint64, block *types.Block) bool {
 	if inDrawStage(height, N, n) {
 		// 验证抽签
 		// 如果验证失败，丢弃
-		if !verifiable_draw.Verify(cryptoSet.LocalSRS, uint32(N), cryptoSet.PrevShuffledPKList, uint32(n), cryptoSet.PrevRCommitForDraw, receivedBlock.DrawProof) {
+		err := verifiable_draw.Verify(cryptoSet.LocalSRS, uint32(N), cryptoSet.PrevShuffledPKList, uint32(n), cryptoSet.PrevRCommitForDraw, receivedBlock.DrawProof)
+		if err != nil {
+			fmt.Printf("[Node %v] Height %d: Verify Draw error\n", w.ID, height)
 			return false
 		}
 	}
@@ -1012,14 +1006,6 @@ func (w *Worker) VerifyCryptoSetByBranch(height uint64, block *types.Block, bran
 	// 如果处于初始化阶段（参数生成阶段）
 	receivedBlock := block.GetHeader().CryptoElement
 	if inInitStage(height, N) {
-		// prevSRSG1FirstElem := group1.One()
-		// if cryptoSet.LocalSRS != nil {
-		// 	prevSRSG1FirstElem = cryptoSet.LocalSRS.G1PowerOf(1)
-		// }
-		if height == 1 {
-			fmt.Printf("[Node %v] reset Height %d, LocalSRS: SRS[0] = %v, SRS[1]= %v,SRS[2]= %v\n", w.ID, height, cryptoSet.LocalSRS.G1PowerOf(0), cryptoSet.LocalSRS.G1PowerOf(0), cryptoSet.LocalSRS.G1PowerOf(0))
-			fmt.Printf("[Node %v] reset Height %d, received: SRS[0] = %v, SRS[1]= %v,SRS[2]= %v\n", w.ID, height, receivedBlock.SRS.G1PowerOf(0), receivedBlock.SRS.G1PowerOf(0), receivedBlock.SRS.G1PowerOf(0))
-		}
 		// 检查srs的更新证明，如果验证失败，则丢弃
 		err := srs.Verify(receivedBlock.SRS, cryptoSet.LocalSRS.G1PowerOf(1), receivedBlock.SrsUpdateProof)
 		if err != nil {
@@ -1037,7 +1023,9 @@ func (w *Worker) VerifyCryptoSetByBranch(height uint64, block *types.Block, bran
 			cryptoSet.PrevShuffledPKList = w.getPrevNBlockPKListByBranch(height-N, height-1, branch)
 		}
 		// 如果验证失败，丢弃
-		if !shuffle.Verify(cryptoSet.LocalSRS, cryptoSet.PrevShuffledPKList, cryptoSet.PrevRCommitForShuffle, receivedBlock.ShuffleProof) {
+		err := shuffle.Verify(cryptoSet.LocalSRS, cryptoSet.PrevShuffledPKList, cryptoSet.PrevRCommitForShuffle, receivedBlock.ShuffleProof)
+		if err != nil {
+			fmt.Printf("[Height %d]: Verify Shuffle error when chain reset: %v\n", height, err)
 			return false
 		}
 	}
@@ -1045,7 +1033,9 @@ func (w *Worker) VerifyCryptoSetByBranch(height uint64, block *types.Block, bran
 	if inDrawStage(height, N, n) {
 		// 验证抽签
 		// 如果验证失败，丢弃
-		if !verifiable_draw.Verify(cryptoSet.LocalSRS, uint32(N), cryptoSet.PrevShuffledPKList, uint32(n), cryptoSet.PrevRCommitForDraw, receivedBlock.DrawProof) {
+		err := verifiable_draw.Verify(cryptoSet.LocalSRS, uint32(N), cryptoSet.PrevShuffledPKList, uint32(n), cryptoSet.PrevRCommitForDraw, receivedBlock.DrawProof)
+		if err != nil {
+			fmt.Printf("[Height %d]: Verify Draw error when chain reset: %v\n", height, err)
 			return false
 		}
 	}
@@ -1057,13 +1047,13 @@ func (w *Worker) VerifyCryptoSetByBranch(height uint64, block *types.Block, bran
 			// 如果不存在对应委员会，丢弃
 			mark := GetMarkByWorkHeight(cryptoSet.CommitteeMarkQueue, receivedBlock.CommitteeWorkHeightList[i])
 			if mark == nil {
-				fmt.Printf("[Height %d]:Verify DPVSS error: no corresponding committee, pvss index = %v \n", height, i)
+				fmt.Printf("[Height %d]:Verify DPVSS error when chain reset: no corresponding committee, pvss index = %v \n", height, i)
 				return false
 			}
 			// 如果成员公钥列表对不上，丢弃
 			for j := 0; j < len(mark.MemberPKList); j++ {
 				if !group1.Equal(mark.MemberPKList[j], receivedBlock.HolderPKLists[i][j]) {
-					fmt.Printf("[Height %d]:Verify DPVSS error: incorrect member pk list, pvss index = %v \n", height, i)
+					fmt.Printf("[Height %d]:Verify DPVSS error when chain reset: incorrect member pk list, pvss index = %v \n", height, i)
 					return false
 				}
 			}
