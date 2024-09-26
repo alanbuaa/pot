@@ -8,20 +8,13 @@ import (
 	"fmt"
 )
 
-func SimpleShuffle(s *srs.SRS, pubKeyList []*PointG1, prevRCommit *PointG1) *verifiable_draw.DrawProof {
+func SimpleShuffle(s *srs.SRS, pubKeyList []*PointG1, prevRCommit *PointG1) (*verifiable_draw.DrawProof, error) {
 	size := uint32(len(pubKeyList))
 	permutation, err := utils.GenRandomPermutation(size)
 	if err != nil {
-		fmt.Println("permutation is nil", err)
-		return nil
+		return nil, fmt.Errorf("permutation is nil: %v\n", err)
 	}
-	shuffleProof, err := verifiable_draw.Draw(s, size, pubKeyList, size, permutation, prevRCommit)
-	if err != nil {
-		fmt.Println("draw fail", err)
-		return nil
-	}
-
-	return shuffleProof
+	return verifiable_draw.Draw(s, size, pubKeyList, size, permutation, prevRCommit)
 }
 
 func Verify(s *srs.SRS, pubKeyList []*PointG1, prevRCommit *PointG1, shuffleProof *verifiable_draw.DrawProof) bool {
