@@ -836,6 +836,7 @@ func (w *Worker) GenerateCryptoSetFromLocal(height uint64) (types.CryptoElement,
 			committeeWorkHeightList[i] = height - pvssTimes + i + n
 			secret, _ := bls12381.NewFr().Rand(rand.Reader)
 			holderPKLists[i] = e.Value.(*CommitteeMark).MemberPKList
+			fmt.Printf("len of holderPKLists[%v] is %v\n", i, len(holderPKLists[i]))
 			shareCommitsList[i], coeffCommitsList[i], encSharesList[i], committeePKList[i], err = mrpvss.EncShares(cryptoSet.G, cryptoSet.H, holderPKLists[i], secret, cryptoSet.Threshold)
 			if err != nil {
 				return types.CryptoElement{}, err
@@ -914,7 +915,7 @@ func (w *Worker) getPrevNBlockPKList(minHeight, maxHeight uint64) []*bls12381.Po
 }
 
 func (w *Worker) getPrevNBlockPKListByBranch(minHeight, maxHeight uint64, branch []*types.Block) []*bls12381.PointG1 {
-
+	fmt.Printf("need pklist from %d to %d \n", minHeight, maxHeight)
 	n := len(branch)
 	k := 1
 	if n < 1 {

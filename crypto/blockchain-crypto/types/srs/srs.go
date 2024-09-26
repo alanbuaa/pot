@@ -125,7 +125,7 @@ func Verify(s *SRS, prevSRSG1FirstElem *PointG1, proof *schnorr_proof.SchnorrPro
 	// check 1: updated setup builds on the work of the preceding participants
 
 	if !schnorr_proof.Verify(prevSRSG1FirstElem, s.g1Powers[1], proof) {
-
+		fmt.Println(22)
 		return false
 	}
 	// /////////////////////////////////////////////////////////////////////////////////////////////////
