@@ -414,7 +414,7 @@ func (w *Worker) VerifyCryptoSet(height uint64, block *types.Block) bool {
 	if block.GetHeader().Height == 0 {
 		return true
 	}
-	//group1 := bls12381.NewG1()
+	// group1 := bls12381.NewG1()
 	cryptoSet := w.CryptoSet
 	N := cryptoSet.BigN
 	n := cryptoSet.SmallN
@@ -464,13 +464,13 @@ func (w *Worker) VerifyCryptoSet(height uint64, block *types.Block) bool {
 				fmt.Printf("[Height %d]: Verify DPVSS error: no corresponding committee, pvss index = %v \n", height, i)
 				return false
 			}
-			//// 如果成员公钥列表对不上，丢弃
-			//for j := 0; j < len(mark.MemberPKList); j++ {
+			// // 如果成员公钥列表对不上，丢弃
+			// for j := 0; j < len(mark.MemberPKList); j++ {
 			//	if !group1.Equal(mark.MemberPKList[j], receivedBlock.HolderPKLists[i][j]) {
 			//		fmt.Printf("[Height %d]: Verify DPVSS error: incorrect member pk list, pvss index = %v\n Expected: %v\n received: %v\n", height, i, mark.MemberPKList[j], receivedBlock.HolderPKLists[i])
 			//		// return false
 			//	}
-			//}
+			// }
 			// 如果验证失败，丢弃
 			if !mrpvss.VerifyEncShares(uint32(n), cryptoSet.Threshold, cryptoSet.G, cryptoSet.H, receivedBlock.HolderPKLists[i], receivedBlock.ShareCommitLists[i], receivedBlock.CoeffCommitLists[i], receivedBlock.EncShareLists[i]) {
 				return false
@@ -502,13 +502,12 @@ func (w *Worker) UpdateLocalCryptoSetByBlock(height uint64, receivedBlock *types
 			if err != nil {
 				return err
 			}
-
-			// Caulk+ GRPC error: exec: "caulk-plus-server": executable file not found in $PATH
-			err = utils.RunCaulkPlusGRPC()
-			if err != nil {
-				return fmt.Errorf("failed to start caulk-plus gRPC process: %v", err)
-			}
-			w.log.Printf("Node %v: caulk+ gRPC process strated\n", w.ID)
+			// 启动 caulk+ gRPC
+			// err = utils.RunCaulkPlusGRPC()
+			// if err != nil {
+			// 	return fmt.Errorf("failed to start caulk-plus gRPC process: %v", err)
+			// }
+			// w.log.Printf("Node %v: caulk+ gRPC process strated\n", w.ID)
 		}
 	}
 	// 置换阶段
@@ -1001,7 +1000,7 @@ func (w *Worker) VerifyCryptoSetByBranch(height uint64, block *types.Block, bran
 	if block.GetHeader().Height == 0 {
 		return true
 	}
-	//group1 := bls12381.NewG1()
+	// group1 := bls12381.NewG1()
 	cryptoSet := w.CryptoSet
 	N := cryptoSet.BigN
 	n := cryptoSet.SmallN
@@ -1052,13 +1051,13 @@ func (w *Worker) VerifyCryptoSetByBranch(height uint64, block *types.Block, bran
 				fmt.Printf("[Height %d]: Verify DPVSS error when chain reset: no corresponding committee, pvss index = %v \n", height, i)
 				return false
 			}
-			//// 如果成员公钥列表对不上，丢弃
-			//for j := 0; j < len(mark.MemberPKList); j++ {
+			// // 如果成员公钥列表对不上，丢弃
+			// for j := 0; j < len(mark.MemberPKList); j++ {
 			//	if !group1.Equal(mark.MemberPKList[j], receivedBlock.HolderPKLists[i][j]) {
 			//		fmt.Printf("[Height %d]: Verify DPVSS error when chain reset: incorrect member pk list, pvss index = %v \n", height, i)
 			//		return false
 			//	}
-			//}
+			// }
 			// 如果验证失败，丢弃
 			if !mrpvss.VerifyEncShares(uint32(n), cryptoSet.Threshold, cryptoSet.G, cryptoSet.H, receivedBlock.HolderPKLists[i], receivedBlock.ShareCommitLists[i], receivedBlock.CoeffCommitLists[i], receivedBlock.EncShareLists[i]) {
 				return false
@@ -1085,13 +1084,15 @@ func (w *Worker) UpdateLocalCryptoSetByBlockByBranch(height uint64, receivedBloc
 			cryptoSet.H = bls12381.NewG1().New().Set(cryptoSet.LocalSRS.G1PowerOf(1))
 			// 保存SRS至srs.binary文件
 			cryptoSet.LocalSRS.ToBinaryFile()
-			var err error
-			// Caulkplus GRPC error: exec: "caulk-plus-server": executable file not found in $PATH
-			err = utils.RunCaulkPlusGRPC()
-			if err != nil {
-				fmt.Printf("[Update]: Caulkplus GRPC error: %v\n", err)
-				return fmt.Errorf("failed to start caulk-plus gRPC process: %v", err)
-			}
+
+			// // 启动 caulk+ gRPC
+			// var err error
+			// // Caulkplus GRPC error: exec: "caulk-plus-server": executable file not found in $PATH
+			// err = utils.RunCaulkPlusGRPC()
+			// if err != nil {
+			// 	fmt.Printf("[Update]: Caulkplus GRPC error: %v\n", err)
+			// 	return fmt.Errorf("failed to start caulk-plus gRPC process: %v", err)
+			// }
 		}
 	}
 	// 置换阶段
