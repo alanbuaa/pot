@@ -155,7 +155,7 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 			//	w.log.Errorf("[PoT]\tthe nowBranch at height %d: %s", nowBranch[i].GetHeader().ExecHeight, hexutil.Encode(nowBranch[i].Hash()))
 			// }
 			for i := 0; i < len(forkBranch); i++ {
-				w.log.Errorf("[PoT]\tthe fork chain at height %d: %s", forkBranch[i].GetHeader().Height, hexutil.Encode(forkBranch[i].Hash()))
+				w.log.Warnf("[PoT]\tthe fork chain at height %d: %s", forkBranch[i].GetHeader().Height, hexutil.Encode(forkBranch[i].Hash()))
 			}
 
 			cryptoset, ok := w.CryptoSetMap[crypto.Convert(ances.Hash())]
@@ -172,11 +172,11 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 				w.log.Errorf("check block at height %d", forkBranch[i].GetHeader().Height)
 
 				forkblock := forkBranch[i]
-				if !w.VerifyCryptoSet(forkblock.Header.Height, forkblock) {
+				if !w.VerifyCryptoSetByBranch(forkblock.Header.Height, forkblock, forkBranch) {
 					flag = false
 					break
 				}
-				err := w.UpdateLocalCryptoSetByBlock(forkblock.Header.Height, forkblock)
+				err := w.UpdateLocalCryptoSetByBlockByBranch(forkblock.Header.Height, forkblock, forkBranch)
 				if err != nil {
 					flag = false
 					break
@@ -188,7 +188,7 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 				return fmt.Errorf("the fork chain fails the cryptoelement check")
 			}
 
-			if n <= 0 || !w.VerifyCryptoSet(forkBranch[0].GetHeader().Height, forkBranch[0]) {
+			if n <= 0 || !w.VerifyCryptoSetByBranch(forkBranch[0].GetHeader().Height, forkBranch[0], forkBranch) {
 				w.log.Errorf("check block at height %d", forkBranch[0].GetHeader().Height)
 				flag = false
 			}
@@ -312,11 +312,11 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 	for i := n - 1; i > 0; i-- {
 		w.log.Errorf("check block at height %d", branch[i].GetHeader().Height)
 		forkblock := branch[i]
-		if !w.VerifyCryptoSet(forkblock.Header.Height, forkblock) {
+		if !w.VerifyCryptoSetByBranch(forkblock.Header.Height, forkblock, branch) {
 			flag = false
 			break
 		}
-		err := w.UpdateLocalCryptoSetByBlock(forkblock.Header.Height, forkblock)
+		err := w.UpdateLocalCryptoSetByBlockByBranch(forkblock.Header.Height, forkblock, branch)
 		if err != nil {
 			flag = false
 			break
@@ -328,8 +328,8 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 		return fmt.Errorf("the fork chain fails the cryptoelement check")
 	}
 
-	if n <= 0 || !w.VerifyCryptoSet(branch[0].GetHeader().Height, branch[0]) {
-		w.log.Errorf("check block at height %d", branch[0].GetHeader().Height)
+	if n <= 0 || !w.VerifyCryptoSetByBranch(branch[0].GetHeader().Height, branch[0], branch) {
+		w.log.Errorf("check block at height %d fail", branch[0].GetHeader().Height)
 		flag = false
 	}
 	if !flag {

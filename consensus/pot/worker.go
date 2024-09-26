@@ -251,6 +251,10 @@ func (w *Worker) OnGetVdf0Response() {
 				w.log.Errorf("[PoT]\treceive vdf0 res is empty")
 			}
 
+			if w.chainresetflag {
+				go w.WaitandReset(res)
+				continue
+			}
 			// timestop := math.Floor(float64(timer) * float64(10-w.config.PoT.Slowrate) / float64(w.config.PoT.Slowrate))
 			// time.Sleep(time.Duration(timestop) * time.Millisecond)
 			//
