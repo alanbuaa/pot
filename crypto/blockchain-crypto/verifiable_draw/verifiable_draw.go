@@ -287,10 +287,10 @@ func Draw(s *srs.SRS, candidatesNum uint32, candidatesPubKey []*PointG1, quota u
 	}, nil
 }
 
-func Verify(s *srs.SRS, candidatesNum uint32, candidatesPubKey []*PointG1, quota uint32, prevRCommit *PointG1, drawProof *DrawProof) bool {
+func Verify(s *srs.SRS, candidatesNum uint32, candidatesPubKey []*PointG1, quota uint32, prevRCommit *PointG1, drawProof *DrawProof) error {
 	group1 := NewG1()
 	if quota != uint32(len(drawProof.SelectedPubKeys)) {
-		return false
+		return fmt.Errorf("wrong number of selected public keys")
 	}
 
 	var selectedPubKeyBytes []byte
@@ -314,7 +314,7 @@ func Verify(s *srs.SRS, candidatesNum uint32, candidatesPubKey []*PointG1, quota
 	domain := []byte("BLS12381G1_XMD:SHA-256_SSWU_RO_TESTGEN")
 	h, err := group1.HashToCurve(candidatesPubKeyBytes, domain)
 	if err != nil {
-		return false
+		return fmt.Errorf("hash to curve failed: %v", err)
 	}
 	// verify C'
 	C := group1.Zero()
@@ -327,20 +327,23 @@ func Verify(s *srs.SRS, candidatesNum uint32, candidatesPubKey []*PointG1, quota
 	// verify caulk plus
 	res, err := caulk_plus.VerifyMultiProof(drawProof.CaulkPlusProof)
 	if err != nil || !res {
-		return false
+		return fmt.Errorf("verify multi proof failed: %v", err)
 	}
 
 	// verify schnorr proof of C' = D' ^ r
 	if !schnorr_proof.Verify(drawProof.DBlind, CBlind, drawProof.SchnorrProof) {
-		return false
+		return fmt.Errorf("verify multi proof failed")
 	}
 
 	// verify DLEQ(prevRCommit RCommit, D' C')
 	if !dleq.Verify(0, prevRCommit, drawProof.RCommit, drawProof.DBlind, CBlind, drawProof.DLEQProof) {
-		return false
+		return fmt.Errorf("verify multi proof failed")
 	}
 
-	return kzg_ped_linkability.VerifyProof(s, candidatesPubKey, h, drawProof.LnkProof)
+	if !kzg_ped_linkability.VerifyProof(s, candidatesPubKey, h, drawProof.LnkProof) {
+		return fmt.Errorf("verify link proof failed")
+	}
+	return nil
 }
 
 // IsSelected check y'^(1/x) ?= g^r, y' = y^r
