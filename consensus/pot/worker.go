@@ -531,7 +531,7 @@ func (w *Worker) createBlock(epoch uint64, parentBlock *types.Block, uncleBlock 
 		TxHash:        txshash,
 		Hashes:        nil,
 		PublicKey:     publicKeyBytes,
-		CryptoElement: cryptoset,
+		CryptoElement: *cryptoset,
 	}
 
 	h.Hashes = h.Hash()

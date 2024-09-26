@@ -426,9 +426,14 @@ func (w *Worker) VerifyCryptoSet(height uint64, block *types.Block) bool {
 		// 	prevSRSG1FirstElem = cryptoSet.LocalSRS.G1PowerOf(1)
 		// }
 		// 检查srs的更新证明，如果验证失败，则丢弃
+		if height == 1 {
+			fmt.Printf("[Node %v] Height %d, LocalSRS: SRS[0] = %v, SRS[1]= %v,SRS[2]= %v\n", w.ID, height, cryptoSet.LocalSRS.G1PowerOf(0), cryptoSet.LocalSRS.G1PowerOf(0), cryptoSet.LocalSRS.G1PowerOf(0))
+			fmt.Printf("[Node %v] Height %d, received: SRS[0] = %v, SRS[1]= %v,SRS[2]= %v\n", w.ID, height, receivedBlock.SRS.G1PowerOf(0), receivedBlock.SRS.G1PowerOf(0), receivedBlock.SRS.G1PowerOf(0))
+		}
 		// if !srs.Verify(receivedBlock.SRS, prevSRSG1FirstElem, receivedBlock.SrsUpdateProof) {
-		if !srs.Verify(receivedBlock.SRS, cryptoSet.LocalSRS.G1PowerOf(1), receivedBlock.SrsUpdateProof) {
-			fmt.Printf("[Height %d]:Verify SRS error\n", height)
+		err := srs.Verify(receivedBlock.SRS, cryptoSet.LocalSRS.G1PowerOf(1), receivedBlock.SrsUpdateProof)
+		if err != nil {
+			fmt.Printf("[Node %v] Height %d: Verify SRS error\n", w.ID, height)
 			return false
 		}
 		return true
@@ -487,6 +492,7 @@ func (w *Worker) UpdateLocalCryptoSetByBlock(height uint64, receivedBlock *types
 	cryptoSet := w.CryptoSet
 	N := cryptoSet.BigN
 	n := cryptoSet.SmallN
+
 	// 初始化阶段
 	if inInitStage(height, N) {
 		fmt.Printf("[Update]: Init | Node %v, Block %v\n", w.ID, height)
@@ -495,16 +501,20 @@ func (w *Worker) UpdateLocalCryptoSetByBlock(height uint64, receivedBlock *types
 		// 如果处于最后一次初始化阶段，保存SRS为文件（用于Caulk+）,并启动Caulk+进程
 		if !inInitStage(height+1, N) {
 			// 更新 H
-			cryptoSet.H = bls12381.NewG1().New().Set(cryptoSet.LocalSRS.G1PowerOf(1))
+			cryptoSet.H = bls12381.NewG1().New().Set(cryptoSet.LocalSRS.G1PowerOf(123))
 			// 保存SRS至srs.binary文件
-			cryptoSet.LocalSRS.ToBinaryFile()
 			var err error
+			err = cryptoSet.LocalSRS.ToBinaryFile()
+			if err != nil {
+				return err
+			}
+
 			// Caulkplus GRPC error: exec: "caulk-plus-server": executable file not found in $PATH
 			err = utils.RunCaulkPlusGRPC()
 			if err != nil {
-				fmt.Printf("[Update]: Caulkplus GRPC error: %v\n", err)
 				return fmt.Errorf("failed to start caulk-plus gRPC process: %v", err)
 			}
+			w.log.Printf("Node %v: caulk+ gRPC process strated\n", w.ID)
 		}
 	}
 	// 置换阶段
@@ -580,8 +590,8 @@ func (w *Worker) UpdateLocalCryptoSetByBlock(height uint64, receivedBlock *types
 			// should checked in verify function
 			if mark == nil {
 				fmt.Printf("[Update]: DPVSS | Node %v, Block %v : cannot find committee to aggregate pvss, pvss index = %v\n", w.ID, height, i)
+				break
 			}
-
 			// 聚合对应委员会的公钥
 			mark.CommitteePK = mrpvss.AggregateCommitteePK(mark.CommitteePK, cryptoElems.CommitteePKList[i])
 			// 如果自己是委员会的领导者或成员，则聚合份额承诺
@@ -756,7 +766,7 @@ func IsContain(parent []string, son string) bool {
 	return false
 }
 
-func (w *Worker) GenerateCryptoSetFromLocal(height uint64) (types.CryptoElement, error) {
+func (w *Worker) GenerateCryptoSetFromLocal(height uint64) (*types.CryptoElement, error) {
 	// 如果处于初始化阶段（参数生成阶段）
 	cryptoSet := w.CryptoSet
 	N := cryptoSet.BigN
@@ -774,7 +784,7 @@ func (w *Worker) GenerateCryptoSetFromLocal(height uint64) (types.CryptoElement,
 		newSRS, newSrsUpdateProof = cryptoSet.LocalSRS.Update(r)
 		// }
 		// 更新后的SRS和更新证明写入区块
-		return types.CryptoElement{
+		return &types.CryptoElement{
 			SRS:            newSRS,
 			SrsUpdateProof: newSrsUpdateProof,
 		}, nil
@@ -796,7 +806,10 @@ func (w *Worker) GenerateCryptoSetFromLocal(height uint64) (types.CryptoElement,
 			cryptoSet.PrevShuffledPKList = w.getPrevNBlockPKList(height-N, height-1)
 			fmt.Println(len(cryptoSet.PrevShuffledPKList))
 		}
-		newShuffleProof = shuffle.SimpleShuffle(cryptoSet.LocalSRS, cryptoSet.PrevShuffledPKList, cryptoSet.PrevRCommitForShuffle)
+		newShuffleProof, err = shuffle.SimpleShuffle(cryptoSet.LocalSRS, cryptoSet.PrevShuffledPKList, cryptoSet.PrevRCommitForShuffle)
+		if err != nil {
+			return nil, err
+		}
 	}
 	// 如果处于抽签阶段，则进行抽签
 	if inDrawStage(height, N, n) {
@@ -805,12 +818,12 @@ func (w *Worker) GenerateCryptoSetFromLocal(height uint64) (types.CryptoElement,
 		// 生成秘密向量用于抽签，向量元素范围为 [1, BigN]
 		permutation, err := utils.GenRandomPermutation(uint32(N))
 		if err != nil {
-			return types.CryptoElement{}, err
+			return nil, err
 		}
 		secretVector := permutation[:n]
 		newDrawProof, err = verifiable_draw.Draw(cryptoSet.LocalSRS, uint32(N), cryptoSet.PrevShuffledPKList, uint32(n), secretVector, cryptoSet.PrevRCommitForDraw)
 		if err != nil {
-			return types.CryptoElement{}, err
+			return nil, err
 		}
 	}
 	// 如果处于PVSS阶段，则进行PVSS的分发份额
@@ -840,12 +853,12 @@ func (w *Worker) GenerateCryptoSetFromLocal(height uint64) (types.CryptoElement,
 			fmt.Printf("len of holderPKLists[%v] is %v\n", i, len(holderPKLists[i]))
 			shareCommitsList[i], coeffCommitsList[i], encSharesList[i], committeePKList[i], err = mrpvss.EncShares(cryptoSet.G, cryptoSet.H, holderPKLists[i], secret, cryptoSet.Threshold)
 			if err != nil {
-				return types.CryptoElement{}, err
+				return nil, err
 			}
 			i++
 		}
 	}
-	return types.CryptoElement{
+	return &types.CryptoElement{
 		SRS:                     nil,
 		SrsUpdateProof:          nil,
 		ShuffleProof:            newShuffleProof,
@@ -1002,9 +1015,14 @@ func (w *Worker) VerifyCryptoSetByBranch(height uint64, block *types.Block, bran
 		// if cryptoSet.LocalSRS != nil {
 		// 	prevSRSG1FirstElem = cryptoSet.LocalSRS.G1PowerOf(1)
 		// }
+		if height == 1 {
+			fmt.Printf("[Node %v] reset Height %d, LocalSRS: SRS[0] = %v, SRS[1]= %v,SRS[2]= %v\n", w.ID, height, cryptoSet.LocalSRS.G1PowerOf(0), cryptoSet.LocalSRS.G1PowerOf(0), cryptoSet.LocalSRS.G1PowerOf(0))
+			fmt.Printf("[Node %v] reset Height %d, received: SRS[0] = %v, SRS[1]= %v,SRS[2]= %v\n", w.ID, height, receivedBlock.SRS.G1PowerOf(0), receivedBlock.SRS.G1PowerOf(0), receivedBlock.SRS.G1PowerOf(0))
+		}
 		// 检查srs的更新证明，如果验证失败，则丢弃
-		if !srs.Verify(receivedBlock.SRS, cryptoSet.LocalSRS.G1PowerOf(1), receivedBlock.SrsUpdateProof) {
-			fmt.Printf("[Height %d]:Verify SRS error\n", height)
+		err := srs.Verify(receivedBlock.SRS, cryptoSet.LocalSRS.G1PowerOf(1), receivedBlock.SrsUpdateProof)
+		if err != nil {
+			fmt.Printf("[Height %d]: Verify SRS error when chain reset: %v\n", height, err)
 			return false
 		}
 		return true
