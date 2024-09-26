@@ -208,7 +208,7 @@ func (w *Worker) Init() {
 	w.vdf0.SetInput(crypto.Hash([]byte("aa")), w.config.PoT.Vdf0Iteration)
 	w.SetVdf0res(0, []byte("aa"))
 	w.blockStorage.Put(types.DefaultGenesisBlock())
-	w.CryptoSetMap[crypto.Convert(types.DefaultGenesisBlock().Hash())] = w.CryptoSet
+	w.CryptoSetMap[crypto.Convert(types.DefaultGenesisBlock().Hash())] = w.CryptoSet.Backup(types.DefaultGenesisBlock().Header.Height)
 	w.blockCounter = 0
 
 }

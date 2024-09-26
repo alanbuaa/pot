@@ -918,6 +918,7 @@ func (w *Worker) getPrevNBlockPKList(minHeight, maxHeight uint64) []*bls12381.Po
 		if err != nil {
 			return nil
 		}
+		fmt.Printf("use chain block %s at height: %d\n", hexutil.Encode(block.Hash()), block.GetHeader().Height)
 		pub := block.GetHeader().PublicKey
 		point, err := bls12381.NewG1().FromBytes(pub)
 		if err != nil {
@@ -942,7 +943,7 @@ func (w *Worker) getPrevNBlockPKListByBranch(minHeight, maxHeight uint64, branch
 		if i >= branchstartheight {
 
 			block := branch[n-k]
-			fmt.Println("use branch block at height: ", block.GetHeader().Height)
+			fmt.Printf("use branch block %s at height: %d\n", hexutil.Encode(block.Hash()), block.GetHeader().Height)
 			pub := block.GetHeader().PublicKey
 			point, err := bls12381.NewG1().FromBytes(pub)
 			if err != nil {
@@ -955,7 +956,7 @@ func (w *Worker) getPrevNBlockPKListByBranch(minHeight, maxHeight uint64, branch
 			if err != nil {
 				return nil
 			}
-			fmt.Println("use chain block at height: ", block.GetHeader().Height)
+			fmt.Printf("use chain block %s at height: %d\n", hexutil.Encode(block.Hash()), block.GetHeader().Height)
 			pub := block.GetHeader().PublicKey
 			point, err := bls12381.NewG1().FromBytes(pub)
 			if err != nil {
