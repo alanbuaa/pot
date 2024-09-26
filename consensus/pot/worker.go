@@ -2,6 +2,7 @@ package pot
 
 import (
 	"blockchain-crypto/types/curve/bls12381"
+	"blockchain-crypto/types/srs"
 	"blockchain-crypto/vdf"
 	"bytes"
 	"context"
@@ -150,7 +151,7 @@ func NewWorker(id int64, config *config.ConsensusConfig, logger *logrus.Entry, b
 		G:      bls12381.NewG1().One(),
 		// TODO edit H
 		H:                     bls12381.NewG1().MulScalar(bls12381.NewG1().New(), bls12381.NewG1().One(), bls12381.FrFromInt(5731132)),
-		LocalSRS:              nil,
+		LocalSRS:              srs.TrivialSRS(g1Degree, g2Degree),
 		PrevShuffledPKList:    nil,
 		PrevRCommitForShuffle: bls12381.NewG1().One(),
 		PrevRCommitForDraw:    bls12381.NewG1().One(),
