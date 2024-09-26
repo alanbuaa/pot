@@ -112,33 +112,30 @@ func (s *SRS) Update(r *Fr) (*SRS, *schnorr_proof.SchnorrProof) {
 	return newSRS, schnorr_proof.CreateWitness(s.g1Powers[1], newSRS.g1Powers[1], r)
 }
 
-func Verify(s *SRS, prevSRSG1FirstElem *PointG1, proof *schnorr_proof.SchnorrProof) bool {
+func Verify(s *SRS, prevSRSG1FirstElem *PointG1, proof *schnorr_proof.SchnorrProof) error {
 	group1 := NewG1()
 	group2 := NewG2()
-	if s == nil || proof == nil {
-		fmt.Println(00)
-		return false
+	if s == nil {
+		return fmt.Errorf("srs is nil")
+	}
+	if proof == nil {
+		return fmt.Errorf("proof is nil")
 	}
 	// /////////////////////////////////////////////////////////////////////////////////////////////////
 	// check 3: updated setup is non-degenerative
-	if group1.IsZero(s.g1Powers[0]) || group1.IsZero(s.g1Powers[1]) {
-		fmt.Println(11)
-		return false
+	if group1.IsZero(s.g1Powers[1]) || group1.IsZero(s.g1Powers[1]) {
+		return fmt.Errorf("pdated setup is degenerative")
 	}
 	// /////////////////////////////////////////////////////////////////////////////////////////////////
 	// check 1: updated setup builds on the work of the preceding participants
-
 	if !schnorr_proof.Verify(prevSRSG1FirstElem, s.g1Powers[1], proof) {
-		fmt.Println(22)
-		return false
+		return fmt.Errorf("updated setup is not build on the work of the preceding participants")
 	}
 	// /////////////////////////////////////////////////////////////////////////////////////////////////
 	// check 2: updated setup is well-formed
-
 	// challenge
 	rho1, _ := NewFr().Rand(rand.Reader)
 	rho2, _ := NewFr().Rand(rand.Reader)
-
 	// compute common term of g1
 	g1CommonTerm := group1.Zero()
 	rho1Power := NewFr().One()
@@ -158,7 +155,10 @@ func Verify(s *SRS, prevSRSG1FirstElem *PointG1, proof *schnorr_proof.SchnorrPro
 	leftG2Elem := group2.Add(group2.New(), s.g2Powers[0], group2.MulScalar(group2.New(), g2CommonTerm, rho2))
 	rightG2Elem := group2.Add(group2.New(), g2CommonTerm, group2.MulScalar(group2.New(), s.g2Powers[s.g2Degree], rho2Power))
 
-	return NewPairingEngine().AddPair(leftG1Elem, leftG2Elem).AddPairInv(rightG1Elem, rightG2Elem).Check()
+	if !NewPairingEngine().AddPair(leftG1Elem, leftG2Elem).AddPairInv(rightG1Elem, rightG2Elem).Check() {
+		return fmt.Errorf("pairing failed, updated setup is not well-formed")
+	}
+	return nil
 }
 
 // Trim srs_proof to desired degree (inclusive)
