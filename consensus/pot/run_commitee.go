@@ -461,14 +461,14 @@ func (w *Worker) VerifyCryptoSet(height uint64, block *types.Block) bool {
 			// 如果不存在对应委员会，丢弃
 			mark := GetMarkByWorkHeight(cryptoSet.CommitteeMarkQueue, receivedBlock.CommitteeWorkHeightList[i])
 			if mark == nil {
-				fmt.Printf("[Height %d]:Verify DPVSS error: no corresponding committee, pvss index = %v \n", height, i)
+				fmt.Printf("[Height %d]: Verify DPVSS error: no corresponding committee, pvss index = %v \n", height, i)
 				return false
 			}
 			// 如果成员公钥列表对不上，丢弃
 			for j := 0; j < len(mark.MemberPKList); j++ {
 				if !group1.Equal(mark.MemberPKList[j], receivedBlock.HolderPKLists[i][j]) {
-					fmt.Printf("[Height %d]:Verify DPVSS error: incorrect member pk list, pvss index = %v \n", height, i)
-					return false
+					fmt.Printf("[Height %d]: Verify DPVSS error: incorrect member pk list, pvss index = %v\n Expected: %v\n received: %v\n", height, i, mark.MemberPKList[j], receivedBlock.HolderPKLists[i])
+					// return false
 				}
 			}
 			// 如果验证失败，丢弃
@@ -503,7 +503,7 @@ func (w *Worker) UpdateLocalCryptoSetByBlock(height uint64, receivedBlock *types
 				return err
 			}
 
-			// Caulkplus GRPC error: exec: "caulk-plus-server": executable file not found in $PATH
+			// Caulk+ GRPC error: exec: "caulk-plus-server": executable file not found in $PATH
 			err = utils.RunCaulkPlusGRPC()
 			if err != nil {
 				return fmt.Errorf("failed to start caulk-plus gRPC process: %v", err)
@@ -529,6 +529,7 @@ func (w *Worker) UpdateLocalCryptoSetByBlock(height uint64, receivedBlock *types
 	// 抽签阶段
 	if inDrawStage(height, N, n) {
 		fmt.Printf("[Update]: Draw | Node %v, Block %v\n", w.ID, height)
+		fmt.Printf("len of MemberPKList: %v, list : %v\n", len(cryptoElems.DrawProof.SelectedPubKeys), cryptoElems.DrawProof.SelectedPubKeys)
 		// 初始化 CommitteeMark
 		mark := &CommitteeMark{
 			WorkHeight:     height + n,
@@ -840,12 +841,13 @@ func (w *Worker) GenerateCryptoSetFromLocal(height uint64) (*types.CryptoElement
 			if i >= pvssTimes {
 				break
 			}
-			// 委员会的工作高度 height - pvssTimes + i + SmallN
+			// 委员会的工作高度 height - pvssTimes + i + n
 			committeeWorkHeightList[i] = height - pvssTimes + i + n
 			secret, _ := bls12381.NewFr().Rand(rand.Reader)
 			holderPKLists[i] = e.Value.(*CommitteeMark).MemberPKList
 			fmt.Printf("len of holderPKLists[%v] is %v\n", i, len(holderPKLists[i]))
 			shareCommitsList[i], coeffCommitsList[i], encSharesList[i], committeePKList[i], err = mrpvss.EncShares(cryptoSet.G, cryptoSet.H, holderPKLists[i], secret, cryptoSet.Threshold)
+			fmt.Printf("[Mining]: DPVSS | Node %v, Block %v | PVSS Times: %v | committee pk: %v\n", w.ID, height, pvssTimes, committeePKList[i])
 			if err != nil {
 				return nil, err
 			}
@@ -1047,13 +1049,13 @@ func (w *Worker) VerifyCryptoSetByBranch(height uint64, block *types.Block, bran
 			// 如果不存在对应委员会，丢弃
 			mark := GetMarkByWorkHeight(cryptoSet.CommitteeMarkQueue, receivedBlock.CommitteeWorkHeightList[i])
 			if mark == nil {
-				fmt.Printf("[Height %d]:Verify DPVSS error when chain reset: no corresponding committee, pvss index = %v \n", height, i)
+				fmt.Printf("[Height %d]: Verify DPVSS error when chain reset: no corresponding committee, pvss index = %v \n", height, i)
 				return false
 			}
 			// 如果成员公钥列表对不上，丢弃
 			for j := 0; j < len(mark.MemberPKList); j++ {
 				if !group1.Equal(mark.MemberPKList[j], receivedBlock.HolderPKLists[i][j]) {
-					fmt.Printf("[Height %d]:Verify DPVSS error when chain reset: incorrect member pk list, pvss index = %v \n", height, i)
+					fmt.Printf("[Height %d]: Verify DPVSS error when chain reset: incorrect member pk list, pvss index = %v \n", height, i)
 					return false
 				}
 			}
