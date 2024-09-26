@@ -528,14 +528,13 @@ func (w *Worker) UpdateLocalCryptoSetByBlock(height uint64, receivedBlock *types
 		mark := &CommitteeMark{
 			WorkHeight:     height + SmallN,
 			CommitteePK:    group1.Zero(),
-			MemberPKList:   nil,
+			MemberPKList:   cryptoElems.DrawProof.SelectedPubKeys,
 			ShareCommits:   nil,
 			IsLeader:       false,
 			SelfMemberList: nil,
 		}
 
 		// 如果自己是出块人
-
 		if w.isSelfBlock(receivedBlock) {
 			mark.IsLeader = true
 		}
