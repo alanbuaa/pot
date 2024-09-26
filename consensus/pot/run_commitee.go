@@ -845,9 +845,7 @@ func (w *Worker) GenerateCryptoSetFromLocal(height uint64) (*types.CryptoElement
 			committeeWorkHeightList[i] = height - pvssTimes + i + n
 			secret, _ := bls12381.NewFr().Rand(rand.Reader)
 			holderPKLists[i] = e.Value.(*CommitteeMark).MemberPKList
-			fmt.Printf("len of holderPKLists[%v] is %v\n", i, len(holderPKLists[i]))
 			shareCommitsList[i], coeffCommitsList[i], encSharesList[i], committeePKList[i], err = mrpvss.EncShares(cryptoSet.G, cryptoSet.H, holderPKLists[i], secret, cryptoSet.Threshold)
-			fmt.Printf("[Mining]: DPVSS | Node %v, Block %v | PVSS Times: %v | committee pk: %v\n", w.ID, height, pvssTimes, committeePKList[i])
 			if err != nil {
 				return nil, err
 			}
@@ -914,7 +912,6 @@ func (w *Worker) getPrevNBlockPKList(minHeight, maxHeight uint64) []*bls12381.Po
 		if err != nil {
 			return nil
 		}
-		fmt.Printf("use chain block %s at height: %d\n", hexutil.Encode(block.Hash()), block.GetHeader().Height)
 		pub := block.GetHeader().PublicKey
 		point, err := bls12381.NewG1().FromBytes(pub)
 		if err != nil {
@@ -939,7 +936,6 @@ func (w *Worker) getPrevNBlockPKListByBranch(minHeight, maxHeight uint64, branch
 		if i >= branchstartheight {
 
 			block := branch[n-k]
-			fmt.Printf("use branch block %s at height: %d\n", hexutil.Encode(block.Hash()), block.GetHeader().Height)
 			pub := block.GetHeader().PublicKey
 			point, err := bls12381.NewG1().FromBytes(pub)
 			if err != nil {
@@ -952,7 +948,6 @@ func (w *Worker) getPrevNBlockPKListByBranch(minHeight, maxHeight uint64, branch
 			if err != nil {
 				return nil
 			}
-			fmt.Printf("use chain block %s at height: %d\n", hexutil.Encode(block.Hash()), block.GetHeader().Height)
 			pub := block.GetHeader().PublicKey
 			point, err := bls12381.NewG1().FromBytes(pub)
 			if err != nil {
@@ -973,7 +968,6 @@ func (w *Worker) getSelfPrivKeyListByBranch(minHeight, maxHeight uint64, branch 
 	for i := minHeight; i <= maxHeight; i++ {
 		if i >= branchheight {
 			block := branch[n-k]
-			fmt.Println("use branch block at height: ", block.GetHeader().Height)
 			flag, priv := w.TryFindKey(crypto.Convert(block.Hash()))
 			if flag {
 				fr := bls12381.NewFr().FromBytes(priv)
@@ -985,7 +979,6 @@ func (w *Worker) getSelfPrivKeyListByBranch(minHeight, maxHeight uint64, branch 
 			if err != nil {
 				return nil
 			}
-			fmt.Println("use chain block at height: ", block.GetHeader().Height)
 			flag, priv := w.TryFindKey(crypto.Convert(block.Hash()))
 			if flag {
 				fr := bls12381.NewFr().FromBytes(priv)
@@ -1116,7 +1109,7 @@ func (w *Worker) UpdateLocalCryptoSetByBlockByBranch(height uint64, receivedBloc
 		mark := &CommitteeMark{
 			WorkHeight:     height + n,
 			CommitteePK:    group1.Zero(),
-			MemberPKList:   nil,
+			MemberPKList:   cryptoElems.DrawProof.SelectedPubKeys,
 			ShareCommits:   nil,
 			IsLeader:       false,
 			SelfMemberList: nil,
