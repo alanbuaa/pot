@@ -25,7 +25,7 @@ type SRS struct {
 	g2Powers []*PointG2
 }
 
-func NewSRS(g1Degree, g2Degree uint32) (*SRS, *schnorr_proof.SchnorrProof) {
+func TrivialSRS(g1Degree, g2Degree uint32) *SRS {
 	group1 := NewG1()
 	group2 := NewG2()
 	// get generators
@@ -39,13 +39,17 @@ func NewSRS(g1Degree, g2Degree uint32) (*SRS, *schnorr_proof.SchnorrProof) {
 	for i := uint32(0); i < g2PowersSize; i++ {
 		g2Powers[i] = group2.New().Set(group2.One())
 	}
-	x, _ := NewFr().Rand(rand.Reader)
-	srs := &SRS{
+	return &SRS{
 		g1Degree: g1Degree,
 		g2Degree: g2Degree,
 		g1Powers: g1Powers,
 		g2Powers: g2Powers,
 	}
+}
+
+func NewSRS(g1Degree, g2Degree uint32) (*SRS, *schnorr_proof.SchnorrProof) {
+	x, _ := NewFr().Rand(rand.Reader)
+	srs := TrivialSRS(g1Degree, g2Degree)
 	return srs.Update(x)
 }
 
