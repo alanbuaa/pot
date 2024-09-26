@@ -421,12 +421,13 @@ func (w *Worker) VerifyCryptoSet(height uint64, block *types.Block) bool {
 	// 如果处于初始化阶段（参数生成阶段）
 	receivedBlock := block.GetHeader().CryptoElement
 	if inInitStage(height, N) {
-		prevSRSG1FirstElem := group1.One()
-		if cryptoSet.LocalSRS != nil {
-			prevSRSG1FirstElem = cryptoSet.LocalSRS.G1PowerOf(1)
-		}
+		// prevSRSG1FirstElem := group1.One()
+		// if cryptoSet.LocalSRS != nil {
+		// 	prevSRSG1FirstElem = cryptoSet.LocalSRS.G1PowerOf(1)
+		// }
 		// 检查srs的更新证明，如果验证失败，则丢弃
-		if !srs.Verify(receivedBlock.SRS, prevSRSG1FirstElem, receivedBlock.SrsUpdateProof) {
+		// if !srs.Verify(receivedBlock.SRS, prevSRSG1FirstElem, receivedBlock.SrsUpdateProof) {
+		if !srs.Verify(receivedBlock.SRS, cryptoSet.LocalSRS.G1PowerOf(1), receivedBlock.SrsUpdateProof) {
 			fmt.Printf("[Height %d]:Verify SRS error\n", height)
 			return false
 		}
@@ -765,13 +766,13 @@ func (w *Worker) GenerateCryptoSetFromLocal(height uint64) (types.CryptoElement,
 		// 更新 srs, 并生成证明
 		var newSRS *srs.SRS
 		var newSrsUpdateProof *schnorr_proof.SchnorrProof
-		// 如果之前未生成SRS，新生成一个SRS
-		if cryptoSet.LocalSRS == nil {
-			newSRS, newSrsUpdateProof = srs.NewSRS(g1Degree, g2Degree)
-		} else {
-			r, _ := bls12381.NewFr().Rand(rand.Reader)
-			newSRS, newSrsUpdateProof = cryptoSet.LocalSRS.Update(r)
-		}
+		// // 如果之前未生成SRS，新生成一个SRS
+		// if cryptoSet.LocalSRS == nil {
+		// 	newSRS, newSrsUpdateProof = srs.NewSRS(g1Degree, g2Degree)
+		// } else {
+		r, _ := bls12381.NewFr().Rand(rand.Reader)
+		newSRS, newSrsUpdateProof = cryptoSet.LocalSRS.Update(r)
+		// }
 		// 更新后的SRS和更新证明写入区块
 		return types.CryptoElement{
 			SRS:            newSRS,
@@ -996,12 +997,12 @@ func (w *Worker) VerifyCryptoSetByBranch(height uint64, block *types.Block, bran
 	// 如果处于初始化阶段（参数生成阶段）
 	receivedBlock := block.GetHeader().CryptoElement
 	if inInitStage(height, N) {
-		prevSRSG1FirstElem := group1.One()
-		if cryptoSet.LocalSRS != nil {
-			prevSRSG1FirstElem = cryptoSet.LocalSRS.G1PowerOf(1)
-		}
+		// prevSRSG1FirstElem := group1.One()
+		// if cryptoSet.LocalSRS != nil {
+		// 	prevSRSG1FirstElem = cryptoSet.LocalSRS.G1PowerOf(1)
+		// }
 		// 检查srs的更新证明，如果验证失败，则丢弃
-		if !srs.Verify(receivedBlock.SRS, prevSRSG1FirstElem, receivedBlock.SrsUpdateProof) {
+		if !srs.Verify(receivedBlock.SRS, cryptoSet.LocalSRS.G1PowerOf(1), receivedBlock.SrsUpdateProof) {
 			fmt.Printf("[Height %d]:Verify SRS error\n", height)
 			return false
 		}
