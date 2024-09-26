@@ -326,18 +326,20 @@ func Verify(s *srs.SRS, candidatesNum uint32, candidatesPubKey []*PointG1, quota
 
 	// verify caulk plus
 	res, err := caulk_plus.VerifyMultiProof(drawProof.CaulkPlusProof)
-	if err != nil || !res {
-		return fmt.Errorf("verify multi proof failed: %v", err)
+	if !res {
+		if err != nil {
+			return fmt.Errorf("verify multi proof failed: %v", err)
+		}
+		return fmt.Errorf("res is false")
 	}
-
 	// verify schnorr proof of C' = D' ^ r
 	if !schnorr_proof.Verify(drawProof.DBlind, CBlind, drawProof.SchnorrProof) {
-		return fmt.Errorf("verify multi proof failed")
+		return fmt.Errorf("verify schnorr proof failed")
 	}
 
 	// verify DLEQ(prevRCommit RCommit, D' C')
 	if !dleq.Verify(0, prevRCommit, drawProof.RCommit, drawProof.DBlind, CBlind, drawProof.DLEQProof) {
-		return fmt.Errorf("verify multi proof failed")
+		return fmt.Errorf("verify dleq proof failed")
 	}
 
 	if !kzg_ped_linkability.VerifyProof(s, candidatesPubKey, h, drawProof.LnkProof) {

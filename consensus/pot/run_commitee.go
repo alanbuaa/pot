@@ -414,7 +414,7 @@ func (w *Worker) VerifyCryptoSet(height uint64, block *types.Block) bool {
 	if block.GetHeader().Height == 0 {
 		return true
 	}
-	group1 := bls12381.NewG1()
+	//group1 := bls12381.NewG1()
 	cryptoSet := w.CryptoSet
 	N := cryptoSet.BigN
 	n := cryptoSet.SmallN
@@ -464,13 +464,13 @@ func (w *Worker) VerifyCryptoSet(height uint64, block *types.Block) bool {
 				fmt.Printf("[Height %d]: Verify DPVSS error: no corresponding committee, pvss index = %v \n", height, i)
 				return false
 			}
-			// 如果成员公钥列表对不上，丢弃
-			for j := 0; j < len(mark.MemberPKList); j++ {
-				if !group1.Equal(mark.MemberPKList[j], receivedBlock.HolderPKLists[i][j]) {
-					fmt.Printf("[Height %d]: Verify DPVSS error: incorrect member pk list, pvss index = %v\n Expected: %v\n received: %v\n", height, i, mark.MemberPKList[j], receivedBlock.HolderPKLists[i])
-					// return false
-				}
-			}
+			//// 如果成员公钥列表对不上，丢弃
+			//for j := 0; j < len(mark.MemberPKList); j++ {
+			//	if !group1.Equal(mark.MemberPKList[j], receivedBlock.HolderPKLists[i][j]) {
+			//		fmt.Printf("[Height %d]: Verify DPVSS error: incorrect member pk list, pvss index = %v\n Expected: %v\n received: %v\n", height, i, mark.MemberPKList[j], receivedBlock.HolderPKLists[i])
+			//		// return false
+			//	}
+			//}
 			// 如果验证失败，丢弃
 			if !mrpvss.VerifyEncShares(uint32(n), cryptoSet.Threshold, cryptoSet.G, cryptoSet.H, receivedBlock.HolderPKLists[i], receivedBlock.ShareCommitLists[i], receivedBlock.CoeffCommitLists[i], receivedBlock.EncShareLists[i]) {
 				return false
@@ -843,8 +843,15 @@ func (w *Worker) GenerateCryptoSetFromLocal(height uint64) (*types.CryptoElement
 			}
 			// 委员会的工作高度 height - pvssTimes + i + n
 			committeeWorkHeightList[i] = height - pvssTimes + i + n
-			secret, _ := bls12381.NewFr().Rand(rand.Reader)
+			secret := bls12381.NewFr()
+			for {
+				secret.Rand(rand.Reader)
+				if !secret.IsZero() {
+					break
+				}
+			}
 			holderPKLists[i] = e.Value.(*CommitteeMark).MemberPKList
+			fmt.Println(holderPKLists[i])
 			shareCommitsList[i], coeffCommitsList[i], encSharesList[i], committeePKList[i], err = mrpvss.EncShares(cryptoSet.G, cryptoSet.H, holderPKLists[i], secret, cryptoSet.Threshold)
 			if err != nil {
 				return nil, err
@@ -994,7 +1001,7 @@ func (w *Worker) VerifyCryptoSetByBranch(height uint64, block *types.Block, bran
 	if block.GetHeader().Height == 0 {
 		return true
 	}
-	group1 := bls12381.NewG1()
+	//group1 := bls12381.NewG1()
 	cryptoSet := w.CryptoSet
 	N := cryptoSet.BigN
 	n := cryptoSet.SmallN
@@ -1045,13 +1052,13 @@ func (w *Worker) VerifyCryptoSetByBranch(height uint64, block *types.Block, bran
 				fmt.Printf("[Height %d]: Verify DPVSS error when chain reset: no corresponding committee, pvss index = %v \n", height, i)
 				return false
 			}
-			// 如果成员公钥列表对不上，丢弃
-			for j := 0; j < len(mark.MemberPKList); j++ {
-				if !group1.Equal(mark.MemberPKList[j], receivedBlock.HolderPKLists[i][j]) {
-					fmt.Printf("[Height %d]: Verify DPVSS error when chain reset: incorrect member pk list, pvss index = %v \n", height, i)
-					return false
-				}
-			}
+			//// 如果成员公钥列表对不上，丢弃
+			//for j := 0; j < len(mark.MemberPKList); j++ {
+			//	if !group1.Equal(mark.MemberPKList[j], receivedBlock.HolderPKLists[i][j]) {
+			//		fmt.Printf("[Height %d]: Verify DPVSS error when chain reset: incorrect member pk list, pvss index = %v \n", height, i)
+			//		return false
+			//	}
+			//}
 			// 如果验证失败，丢弃
 			if !mrpvss.VerifyEncShares(uint32(n), cryptoSet.Threshold, cryptoSet.G, cryptoSet.H, receivedBlock.HolderPKLists[i], receivedBlock.ShareCommitLists[i], receivedBlock.CoeffCommitLists[i], receivedBlock.EncShareLists[i]) {
 				return false

@@ -120,6 +120,10 @@ func (s *CryptoElement) ToProto() *pb.CryptoElement {
 		}
 
 		committeePKList := make([]*pb.PointG1, 0)
+		fmt.Println(len(s.CommitteePKList))
+		for _, g1 := range s.CommitteePKList {
+			fmt.Println(g1)
+		}
 		for _, g1 := range s.CommitteePKList {
 			g1bytes := group1.ToCompressed(g1)
 			committeePKList = append(committeePKList, &pb.PointG1{
