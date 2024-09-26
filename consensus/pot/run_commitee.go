@@ -438,7 +438,7 @@ func (w *Worker) VerifyCryptoSet(height uint64, block *types.Block) bool {
 		// 第一次置换
 		if isTheFirstShuffle(height, N) {
 			// 获取前面BigN个区块的公钥
-			cryptoSet.PrevShuffledPKList = w.getPrevNBlockPKList(height-BigN, height-1)
+			cryptoSet.PrevShuffledPKList = w.getPrevNBlockPKList(height-N, height-1)
 		}
 		// 如果验证失败，丢弃
 		if !shuffle.Verify(cryptoSet.LocalSRS, cryptoSet.PrevShuffledPKList, cryptoSet.PrevRCommitForShuffle, receivedBlock.ShuffleProof) {
@@ -449,7 +449,7 @@ func (w *Worker) VerifyCryptoSet(height uint64, block *types.Block) bool {
 	if inDrawStage(height, N, n) {
 		// 验证抽签
 		// 如果验证失败，丢弃
-		if !verifiable_draw.Verify(cryptoSet.LocalSRS, uint32(BigN), cryptoSet.PrevShuffledPKList, uint32(cryptoSet.SmallN), cryptoSet.PrevRCommitForDraw, receivedBlock.DrawProof) {
+		if !verifiable_draw.Verify(cryptoSet.LocalSRS, uint32(N), cryptoSet.PrevShuffledPKList, uint32(n), cryptoSet.PrevRCommitForDraw, receivedBlock.DrawProof) {
 			return false
 		}
 	}
@@ -472,7 +472,7 @@ func (w *Worker) VerifyCryptoSet(height uint64, block *types.Block) bool {
 				}
 			}
 			// 如果验证失败，丢弃
-			if !mrpvss.VerifyEncShares(uint32(SmallN), cryptoSet.Threshold, cryptoSet.G, cryptoSet.H, receivedBlock.HolderPKLists[i], receivedBlock.ShareCommitLists[i], receivedBlock.CoeffCommitLists[i], receivedBlock.EncShareLists[i]) {
+			if !mrpvss.VerifyEncShares(uint32(n), cryptoSet.Threshold, cryptoSet.G, cryptoSet.H, receivedBlock.HolderPKLists[i], receivedBlock.ShareCommitLists[i], receivedBlock.CoeffCommitLists[i], receivedBlock.EncShareLists[i]) {
 				return false
 			}
 		}
@@ -487,7 +487,7 @@ func (w *Worker) UpdateLocalCryptoSetByBlock(height uint64, receivedBlock *types
 	N := cryptoSet.BigN
 	n := cryptoSet.SmallN
 	// 初始化阶段
-	if inInitStage(height, cryptoSet.BigN) {
+	if inInitStage(height, N) {
 		fmt.Printf("[Update]: Init | Node %v, Block %v\n", w.ID, height)
 		// 记录最新srs
 		cryptoSet.LocalSRS = cryptoElems.SRS
@@ -526,7 +526,7 @@ func (w *Worker) UpdateLocalCryptoSetByBlock(height uint64, receivedBlock *types
 		fmt.Printf("[Update]: Draw | Node %v, Block %v\n", w.ID, height)
 		// 初始化 CommitteeMark
 		mark := &CommitteeMark{
-			WorkHeight:     height + SmallN,
+			WorkHeight:     height + n,
 			CommitteePK:    group1.Zero(),
 			MemberPKList:   cryptoElems.DrawProof.SelectedPubKeys,
 			ShareCommits:   nil,
@@ -542,8 +542,8 @@ func (w *Worker) UpdateLocalCryptoSetByBlock(height uint64, receivedBlock *types
 		// 查找自己出的块是否被选为委员会成员
 		// 对于每个自己区块的公私钥对获取抽签结果，是否被选中，如果被选中则获取自己的公钥
 		// 获取自己的区块私钥(同一置换/抽签分组内的，即1~32，33~64...)
-		maxHeight := ((height - cryptoSet.SmallN) >> 5) << 5
-		minHeight := maxHeight - cryptoSet.SmallN + 1
+		maxHeight := ((height - n) >> 5) << 5
+		minHeight := maxHeight - n + 1
 		selfPrivKeyList := w.getSelfPrivKeyList(minHeight, maxHeight)
 		for _, sk := range selfPrivKeyList {
 			isSelected, index, pk := verifiable_draw.IsSelected(sk, cryptoElems.DrawProof.RCommit, cryptoElems.DrawProof.SelectedPubKeys)
@@ -606,7 +606,7 @@ func (w *Worker) UpdateLocalCryptoSetByBlock(height uint64, receivedBlock *types
 				// 如果当前是该委员会的最后一次PVSS，后续没有新的PVSS份额，则解密聚合份额
 				if mark.WorkHeight-height == 1 {
 					// 解密聚合加密份额
-					member.Share = mrpvss.DecryptAggregateShare(cryptoSet.G, member.SelfSK, member.AggrEncShare, uint32(SmallN-1))
+					member.Share = mrpvss.DecryptAggregateShare(cryptoSet.G, member.SelfSK, member.AggrEncShare, uint32(n-1))
 				}
 			}
 		}
@@ -792,7 +792,7 @@ func (w *Worker) GenerateCryptoSetFromLocal(height uint64) (types.CryptoElement,
 		fmt.Printf("[Mining]: Shuffle | Node %v, Block %v\n", w.ID, height)
 		if isTheFirstShuffle(height, N) {
 			// 获取前面BigN个区块的公钥
-			cryptoSet.PrevShuffledPKList = w.getPrevNBlockPKList(height-BigN, height-1)
+			cryptoSet.PrevShuffledPKList = w.getPrevNBlockPKList(height-N, height-1)
 			fmt.Println(len(cryptoSet.PrevShuffledPKList))
 		}
 		newShuffleProof = shuffle.SimpleShuffle(cryptoSet.LocalSRS, cryptoSet.PrevShuffledPKList, cryptoSet.PrevRCommitForShuffle)
@@ -802,12 +802,12 @@ func (w *Worker) GenerateCryptoSetFromLocal(height uint64) (types.CryptoElement,
 		// test
 		fmt.Printf("[Mining]: Draw | Node %v, Block %v\n", w.ID, height)
 		// 生成秘密向量用于抽签，向量元素范围为 [1, BigN]
-		permutation, err := utils.GenRandomPermutation(uint32(cryptoSet.BigN))
+		permutation, err := utils.GenRandomPermutation(uint32(N))
 		if err != nil {
 			return types.CryptoElement{}, err
 		}
-		secretVector := permutation[:cryptoSet.SmallN]
-		newDrawProof, err = verifiable_draw.Draw(cryptoSet.LocalSRS, uint32(cryptoSet.BigN), cryptoSet.PrevShuffledPKList, uint32(cryptoSet.SmallN), secretVector, cryptoSet.PrevRCommitForDraw)
+		secretVector := permutation[:n]
+		newDrawProof, err = verifiable_draw.Draw(cryptoSet.LocalSRS, uint32(N), cryptoSet.PrevShuffledPKList, uint32(n), secretVector, cryptoSet.PrevRCommitForDraw)
 		if err != nil {
 			return types.CryptoElement{}, err
 		}
@@ -815,10 +815,10 @@ func (w *Worker) GenerateCryptoSetFromLocal(height uint64) (types.CryptoElement,
 	// 如果处于PVSS阶段，则进行PVSS的分发份额
 	if inDPVSSStage(height, N, n) {
 		// 计算向哪些委员会进行pvss(委员会index从1开始)
-		pvssTimes := height - cryptoSet.BigN - cryptoSet.SmallN - 1
+		pvssTimes := height - N - n - 1
 		fmt.Printf("[Mining]: DPVSS | Node %v, Block %v | PVSS Times: %v\n", w.ID, height, pvssTimes)
-		if pvssTimes > cryptoSet.SmallN-1 {
-			pvssTimes = cryptoSet.SmallN - 1
+		if pvssTimes > n-1 {
+			pvssTimes = n - 1
 		}
 		// 要PVSS的委员会的工作高度
 		committeeWorkHeightList = make([]uint64, pvssTimes)
@@ -833,7 +833,7 @@ func (w *Worker) GenerateCryptoSetFromLocal(height uint64) (types.CryptoElement,
 				break
 			}
 			// 委员会的工作高度 height - pvssTimes + i + SmallN
-			committeeWorkHeightList[i] = height - pvssTimes + i + SmallN
+			committeeWorkHeightList[i] = height - pvssTimes + i + n
 			secret, _ := bls12381.NewFr().Rand(rand.Reader)
 			holderPKLists[i] = e.Value.(*CommitteeMark).MemberPKList
 			shareCommitsList[i], coeffCommitsList[i], encSharesList[i], committeePKList[i], err = mrpvss.EncShares(cryptoSet.G, cryptoSet.H, holderPKLists[i], secret, cryptoSet.Threshold)
@@ -1012,7 +1012,7 @@ func (w *Worker) VerifyCryptoSetByBranch(height uint64, block *types.Block, bran
 		// 第一次置换
 		if isTheFirstShuffle(height, N) {
 			// 获取前面BigN个区块的公钥
-			cryptoSet.PrevShuffledPKList = w.getPrevNBlockPKListByBranch(height-BigN, height-1, branch)
+			cryptoSet.PrevShuffledPKList = w.getPrevNBlockPKListByBranch(height-N, height-1, branch)
 		}
 		// 如果验证失败，丢弃
 		if !shuffle.Verify(cryptoSet.LocalSRS, cryptoSet.PrevShuffledPKList, cryptoSet.PrevRCommitForShuffle, receivedBlock.ShuffleProof) {
@@ -1023,7 +1023,7 @@ func (w *Worker) VerifyCryptoSetByBranch(height uint64, block *types.Block, bran
 	if inDrawStage(height, N, n) {
 		// 验证抽签
 		// 如果验证失败，丢弃
-		if !verifiable_draw.Verify(cryptoSet.LocalSRS, uint32(BigN), cryptoSet.PrevShuffledPKList, uint32(cryptoSet.SmallN), cryptoSet.PrevRCommitForDraw, receivedBlock.DrawProof) {
+		if !verifiable_draw.Verify(cryptoSet.LocalSRS, uint32(N), cryptoSet.PrevShuffledPKList, uint32(n), cryptoSet.PrevRCommitForDraw, receivedBlock.DrawProof) {
 			return false
 		}
 	}
@@ -1046,7 +1046,7 @@ func (w *Worker) VerifyCryptoSetByBranch(height uint64, block *types.Block, bran
 				}
 			}
 			// 如果验证失败，丢弃
-			if !mrpvss.VerifyEncShares(uint32(SmallN), cryptoSet.Threshold, cryptoSet.G, cryptoSet.H, receivedBlock.HolderPKLists[i], receivedBlock.ShareCommitLists[i], receivedBlock.CoeffCommitLists[i], receivedBlock.EncShareLists[i]) {
+			if !mrpvss.VerifyEncShares(uint32(n), cryptoSet.Threshold, cryptoSet.G, cryptoSet.H, receivedBlock.HolderPKLists[i], receivedBlock.ShareCommitLists[i], receivedBlock.CoeffCommitLists[i], receivedBlock.EncShareLists[i]) {
 				return false
 			}
 		}
@@ -1061,7 +1061,7 @@ func (w *Worker) UpdateLocalCryptoSetByBlockByBranch(height uint64, receivedBloc
 	N := cryptoSet.BigN
 	n := cryptoSet.SmallN
 	// 初始化阶段
-	if inInitStage(height, cryptoSet.BigN) {
+	if inInitStage(height, N) {
 		fmt.Printf("[Update]: Init | Node %v, Block %v\n", w.ID, height)
 		// 记录最新srs
 		cryptoSet.LocalSRS = cryptoElems.SRS
@@ -1100,7 +1100,7 @@ func (w *Worker) UpdateLocalCryptoSetByBlockByBranch(height uint64, receivedBloc
 		fmt.Printf("[Update]: Draw | Node %v, Block %v\n", w.ID, height)
 		// 初始化 CommitteeMark
 		mark := &CommitteeMark{
-			WorkHeight:     height + SmallN,
+			WorkHeight:     height + n,
 			CommitteePK:    group1.Zero(),
 			MemberPKList:   nil,
 			ShareCommits:   nil,
@@ -1117,8 +1117,8 @@ func (w *Worker) UpdateLocalCryptoSetByBlockByBranch(height uint64, receivedBloc
 		// 查找自己出的块是否被选为委员会成员
 		// 对于每个自己区块的公私钥对获取抽签结果，是否被选中，如果被选中则获取自己的公钥
 		// 获取自己的区块私钥(同一置换/抽签分组内的，即1~32，33~64...)
-		maxHeight := ((height - cryptoSet.SmallN) >> 5) << 5
-		minHeight := maxHeight - cryptoSet.SmallN + 1
+		maxHeight := ((height - n) >> 5) << 5
+		minHeight := maxHeight - n + 1
 		selfPrivKeyList := w.getSelfPrivKeyListByBranch(minHeight, maxHeight, branch)
 		for _, sk := range selfPrivKeyList {
 			isSelected, index, pk := verifiable_draw.IsSelected(sk, cryptoElems.DrawProof.RCommit, cryptoElems.DrawProof.SelectedPubKeys)
@@ -1181,7 +1181,7 @@ func (w *Worker) UpdateLocalCryptoSetByBlockByBranch(height uint64, receivedBloc
 				// 如果当前是该委员会的最后一次PVSS，后续没有新的PVSS份额，则解密聚合份额
 				if mark.WorkHeight-height == 1 {
 					// 解密聚合加密份额
-					member.Share = mrpvss.DecryptAggregateShare(cryptoSet.G, member.SelfSK, member.AggrEncShare, uint32(SmallN-1))
+					member.Share = mrpvss.DecryptAggregateShare(cryptoSet.G, member.SelfSK, member.AggrEncShare, uint32(n-1))
 				}
 			}
 		}
