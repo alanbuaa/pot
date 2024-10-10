@@ -913,7 +913,7 @@ func (w *Worker) GenerateCryptoSetFromLocal(height uint64) (*types.CryptoElement
 			}
 			mark := GetMarkByWorkHeight(cryptoSet.CommitteeMarkQueue, committeeWorkHeightList[i])
 			if mark == nil {
-				mevLogs[w.ID].Errorf("[Block %v | Node %v] Mining-DPVSS: cannot find committee workHeight = %v", height, w.ID, committeeWorkHeightList[i])
+				mevLogs[w.ID].Errorf("[Block %v | Node %v] Mining-DPVSS: cannot find committee workHeight = %v\n", height, w.ID, committeeWorkHeightList[i])
 				return nil, fmt.Errorf("[Block %v | Node %v] Mining-DPVSS: cannot find committee workHeight = %v", height, w.ID, committeeWorkHeightList[i])
 			}
 			holderPKLists[i] = mark.MemberPKList
