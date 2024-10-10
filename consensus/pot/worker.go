@@ -350,6 +350,11 @@ func (w *Worker) OnGetVdf0Response() {
 				}
 			}
 
+			cryptoset, err := w.GenerateCryptoSetFromLocal(epoch + 1)
+			if err != nil {
+				w.log.Errorf("[PoT]\tepoch %v: generate crypto set from local err: for %v", epoch+1, err)
+			}
+
 			// if epoch > 1 {
 			// 	w.simpleLeaderUpdate(parentblock)
 			// }
@@ -365,14 +370,14 @@ func (w *Worker) OnGetVdf0Response() {
 			copy(vdf0rescopy, res0)
 
 			for i := 0; i < cpuCounter; i++ {
-				go w.mine(epoch+1, vdf0rescopy, rand.Int63(), i, w.abort, difficulty, parentblock, uncleblock, w.wg)
+				go w.mine(epoch+1, vdf0rescopy, rand.Int63(), i, w.abort, difficulty, parentblock, uncleblock, w.wg, cryptoset)
 			}
 
 		}
 	}
 }
 
-func (w *Worker) mine(epoch uint64, vdf0res []byte, nonce int64, workerid int, abort *Abortcontrol, difficulty *big.Int, parentblock *types.Block, uncleblock []*types.Block, wg *sync.WaitGroup) *types.Block {
+func (w *Worker) mine(epoch uint64, vdf0res []byte, nonce int64, workerid int, abort *Abortcontrol, difficulty *big.Int, parentblock *types.Block, uncleblock []*types.Block, wg *sync.WaitGroup, set *types.CryptoElement) *types.Block {
 	defer wg.Done()
 	defer w.setWorkFlagFalse()
 
@@ -429,7 +434,7 @@ func (w *Worker) mine(epoch uint64, vdf0res []byte, nonce int64, workerid int, a
 				continue
 			}
 			// w.createBlock
-			block := w.createBlock(epoch, parentblock, uncleblock, difficulty, mixdigest, nonce, vdf0res, res1)
+			block := w.createBlock(epoch, parentblock, uncleblock, difficulty, mixdigest, nonce, vdf0res, res1, set)
 			w.blockCounter += 1
 			w.log.Infof("[PoT]\tepoch %d:get new block %d", epoch, w.blockCounter)
 
@@ -468,7 +473,7 @@ func (w *Worker) mine(epoch uint64, vdf0res []byte, nonce int64, workerid int, a
 	}
 }
 
-func (w *Worker) createBlock(epoch uint64, parentBlock *types.Block, uncleBlock []*types.Block, difficulty *big.Int, mixdigest []byte, nonce int64, vdf0res []byte, vdf1res []byte) *types.Block {
+func (w *Worker) createBlock(epoch uint64, parentBlock *types.Block, uncleBlock []*types.Block, difficulty *big.Int, mixdigest []byte, nonce int64, vdf0res []byte, vdf1res []byte, set *types.CryptoElement) *types.Block {
 	exeblocks := w.GetExecutedBlockFromMempool()
 	exeheader := make([]*types.ExecuteHeader, 0)
 	for _, exeblock := range exeblocks {
@@ -510,12 +515,12 @@ func (w *Worker) createBlock(epoch uint64, parentBlock *types.Block, uncleBlock 
 	id := w.ID
 	peerid := w.PeerId
 
-	cryptoset, err := w.GenerateCryptoSetFromLocal(epoch)
-
-	if err != nil {
-		fmt.Println(err)
-		return nil
-	}
+	//cryptoset, err := w.GenerateCryptoSetFromLocal(epoch)
+	//
+	//if err != nil {
+	//	fmt.Println(err)
+	//	return nil
+	//}
 
 	h := &types.Header{
 		Height:        epoch,
@@ -531,7 +536,7 @@ func (w *Worker) createBlock(epoch uint64, parentBlock *types.Block, uncleBlock 
 		TxHash:        txshash,
 		Hashes:        nil,
 		PublicKey:     publicKeyBytes,
-		CryptoElement: *cryptoset,
+		CryptoElement: *set,
 	}
 
 	h.Hashes = h.Hash()

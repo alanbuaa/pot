@@ -561,8 +561,14 @@ func (w *Worker) workReset(epoch uint64, block *types.Block) error {
 
 	vdf0rescopy := make([]byte, len(res0))
 	copy(vdf0rescopy, res0)
+
+	cryptoset, err := w.GenerateCryptoSetFromLocal(epoch)
+	if err != nil {
+		return err
+	}
+
 	for i := 0; i < cpuCounter; i++ {
-		go w.mine(epoch, vdf0rescopy, rand.Int63(), i, w.abort, difficulty, parentblock, uncleblock, w.wg)
+		go w.mine(epoch, vdf0rescopy, rand.Int63(), i, w.abort, difficulty, parentblock, uncleblock, w.wg, cryptoset)
 	}
 
 	return nil
