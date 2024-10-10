@@ -91,25 +91,31 @@ type DPVSSMember struct {
 func (c *CommitteeMark) DeepCopy() *CommitteeMark {
 	group1 := bls12381.NewG1()
 	ret := &CommitteeMark{
-		WorkHeight:     c.WorkHeight,
-		CommitteePK:    group1.New().Set(c.CommitteePK),
-		MemberPKList:   make([]*bls12381.PointG1, len(c.MemberPKList)),
-		ShareCommits:   make([]*bls12381.PointG1, len(c.ShareCommits)),
-		IsLeader:       c.IsLeader,
-		SelfMemberList: make([]*DPVSSMember, len(c.SelfMemberList)),
+		WorkHeight:  c.WorkHeight,
+		CommitteePK: group1.New().Set(c.CommitteePK),
+		IsLeader:    c.IsLeader,
 	}
-	for i := 0; i < len(c.MemberPKList); i++ {
-		if c.MemberPKList[i] != nil {
-			ret.MemberPKList[i] = group1.New().Set(c.MemberPKList[i])
+	if c.MemberPKList != nil {
+		ret.MemberPKList = make([]*bls12381.PointG1, len(c.MemberPKList))
+		for i := 0; i < len(c.MemberPKList); i++ {
+			if c.MemberPKList[i] != nil {
+				ret.MemberPKList[i] = group1.New().Set(c.MemberPKList[i])
+			}
 		}
 	}
-	for i := 0; i < len(c.ShareCommits); i++ {
-		if c.ShareCommits[i] != nil {
-			ret.ShareCommits[i] = group1.New().Set(c.ShareCommits[i])
+	if c.ShareCommits != nil {
+		ret.ShareCommits = make([]*bls12381.PointG1, len(c.ShareCommits))
+		for i := 0; i < len(c.ShareCommits); i++ {
+			if c.ShareCommits[i] != nil {
+				ret.ShareCommits[i] = group1.New().Set(c.ShareCommits[i])
+			}
 		}
 	}
-	for i := 0; i < len(c.SelfMemberList); i++ {
-		ret.SelfMemberList[i] = c.SelfMemberList[i].DeepCopy()
+	if c.SelfMemberList != nil {
+		ret.SelfMemberList = make([]*DPVSSMember, len(c.SelfMemberList))
+		for i := 0; i < len(c.SelfMemberList); i++ {
+			ret.SelfMemberList[i] = c.SelfMemberList[i].DeepCopy()
+		}
 	}
 	return ret
 }
