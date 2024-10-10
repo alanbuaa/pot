@@ -13,10 +13,12 @@ import (
 	"crypto/rand"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/sirupsen/logrus"
 	"github.com/zzz136454872/upgradeable-consensus/config"
 	"github.com/zzz136454872/upgradeable-consensus/consensus/whirly/nodeController"
 	"github.com/zzz136454872/upgradeable-consensus/crypto"
 	"github.com/zzz136454872/upgradeable-consensus/types"
+	"os"
 )
 
 var (
@@ -26,7 +28,36 @@ var (
 	g1Degree = uint32(1 << 7)
 	// test
 	g2Degree = uint32(1 << 7)
+	mevLog   = logrus.New()
+	mevLogs  = make(map[int64]*logrus.Logger)
+	ids      = []int64{0, 1, 2, 3}
 )
+
+type NoPrefixFormatter struct{}
+
+func (f *NoPrefixFormatter) Format(entry *logrus.Entry) ([]byte, error) {
+	return []byte(entry.Message), nil
+}
+
+func init() {
+	for _, id := range ids {
+		// 为每个 ID 创建一个日志文件
+		file, err := os.OpenFile(fmt.Sprintf("mev%v.log", id), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
+		if err != nil {
+			mevLog.Fatalf("Failed to open log file: %v", err)
+		}
+
+		// 创建一个新的 Logrus 日志器实例，并将输出设置为上面创建的文件
+		logger := &logrus.Logger{
+			Out:       file,
+			Formatter: new(logrus.TextFormatter),
+			Hooks:     make(logrus.LevelHooks),
+			Level:     logrus.InfoLevel,
+		}
+		logger.SetFormatter(&NoPrefixFormatter{})
+		mevLogs[id] = logger
+	}
+}
 
 type Queue = list.List
 
@@ -409,21 +440,43 @@ func (w *Worker) isSelfBlock(block *types.Block) bool {
 	return ok
 }
 
+func getStageList(height uint64, N uint64, n uint64) []string {
+	var stages []string
+	if inInitStage(height, N) {
+		stages = append(stages, "Init")
+	}
+	if inShuffleStage(height, N, n) {
+		stages = append(stages, "Shuffle")
+	}
+	if inDrawStage(height, N, n) {
+		stages = append(stages, "Draw")
+	}
+	if inDPVSSStage(height, N, n) {
+		stages = append(stages, "DPVSS")
+	}
+	if inWorkStage(height, N, n) {
+		stages = append(stages, "Work")
+	}
+	return stages
+}
+
 // VerifyCryptoSet 当收到区块，height 为该区块的高度, 返回该区块是否验证通过
 func (w *Worker) VerifyCryptoSet(height uint64, block *types.Block) bool {
-	if block.GetHeader().Height == 0 {
-		return true
-	}
-	// group1 := bls12381.NewG1()
 	cryptoSet := w.CryptoSet
 	N := cryptoSet.BigN
 	n := cryptoSet.SmallN
+	mevLogs[w.ID].Printf("[Block %v | Node %v] Verify, stages: %v\n", height, w.ID, getStageList(height, N, n))
+	fmt.Printf("[Block %v | Node %v] Verify, stages: %v\n", height, w.ID, getStageList(height, N, n))
+	if block.GetHeader().Height == 0 {
+		return true
+	}
 	// 如果处于初始化阶段（参数生成阶段）
 	receivedBlock := block.GetHeader().CryptoElement
 	if inInitStage(height, N) {
 		err := srs.Verify(receivedBlock.SRS, cryptoSet.LocalSRS.G1PowerOf(1), receivedBlock.SrsUpdateProof)
 		if err != nil {
-			fmt.Printf("[Node %v] Height %d: Verify SRS error\n", w.ID, height)
+			mevLogs[w.ID].Printf("[Block %v | Node %v] Verify SRS error\n", height, w.ID)
+			fmt.Printf("[Block %v | Node %v] Verify SRS error\n", height, w.ID)
 			return false
 		}
 		return true
@@ -439,7 +492,8 @@ func (w *Worker) VerifyCryptoSet(height uint64, block *types.Block) bool {
 		// 如果验证失败，丢弃
 		err := shuffle.Verify(cryptoSet.LocalSRS, cryptoSet.PrevShuffledPKList, cryptoSet.PrevRCommitForShuffle, receivedBlock.ShuffleProof)
 		if err != nil {
-			fmt.Printf("[Node %v] Height %d: Verify Shuffle error\n", w.ID, height)
+			mevLogs[w.ID].Printf("[Node %v] Height %d: Verify Shuffle error: %v\n", height, w.ID, err)
+			fmt.Printf("[Node %v] Height %d: Verify Shuffle error: %v\n", height, w.ID, err)
 			return false
 		}
 	}
@@ -449,7 +503,8 @@ func (w *Worker) VerifyCryptoSet(height uint64, block *types.Block) bool {
 		// 如果验证失败，丢弃
 		err := verifiable_draw.Verify(cryptoSet.LocalSRS, uint32(N), cryptoSet.PrevShuffledPKList, uint32(n), cryptoSet.PrevRCommitForDraw, receivedBlock.DrawProof)
 		if err != nil {
-			fmt.Printf("[Node %v] Height %d: Verify Draw error\n", w.ID, height)
+			mevLogs[w.ID].Printf("[Node %v] Height %d: Verify Draw error\n", height, w.ID)
+			fmt.Printf("[Node %v] Height %d: Verify Draw error\n", height, w.ID)
 			return false
 		}
 	}
@@ -461,16 +516,20 @@ func (w *Worker) VerifyCryptoSet(height uint64, block *types.Block) bool {
 			// 如果不存在对应委员会，丢弃
 			mark := GetMarkByWorkHeight(cryptoSet.CommitteeMarkQueue, receivedBlock.CommitteeWorkHeightList[i])
 			if mark == nil {
-				fmt.Printf("[Height %d]: Verify DPVSS error: no corresponding committee, pvss index = %v \n", height, i)
+				mevLogs[w.ID].Printf("[Height %d] Verify DPVSS error: no corresponding committee, pvss index = %v\n", height, i)
+				fmt.Printf("[Height %d] Verify DPVSS error: no corresponding committee, pvss index = %v\n", height, i)
 				return false
 			}
-			// // 如果成员公钥列表对不上，丢弃
-			// for j := 0; j < len(mark.MemberPKList); j++ {
-			//	if !group1.Equal(mark.MemberPKList[j], receivedBlock.HolderPKLists[i][j]) {
-			//		fmt.Printf("[Height %d]: Verify DPVSS error: incorrect member pk list, pvss index = %v\n Expected: %v\n received: %v\n", height, i, mark.MemberPKList[j], receivedBlock.HolderPKLists[i])
-			//		// return false
-			//	}
-			// }
+			// 如果成员公钥列表对不上，丢弃
+			group1 := bls12381.NewG1()
+			for j := 0; j < len(mark.MemberPKList); j++ {
+				if !group1.Equal(mark.MemberPKList[j], receivedBlock.HolderPKLists[i][j]) {
+					mevLogs[w.ID].Printf("[Height %d] Verify DPVSS error: incorrect member pk list, pvss index = %v\n Expected: %v\n received: %v\n", height, i, mark.MemberPKList[j], receivedBlock.HolderPKLists[i])
+					fmt.Printf("[Height %d] Verify DPVSS error: incorrect member pk list, pvss index = %v\n Expected: %v\n received: %v\n", height, i, mark.MemberPKList[j], receivedBlock.HolderPKLists[i])
+					// return false
+					break
+				}
+			}
 			// 如果验证失败，丢弃
 			if !mrpvss.VerifyEncShares(uint32(n), cryptoSet.Threshold, cryptoSet.G, cryptoSet.H, receivedBlock.HolderPKLists[i], receivedBlock.ShareCommitLists[i], receivedBlock.CoeffCommitLists[i], receivedBlock.EncShareLists[i]) {
 				return false
@@ -486,10 +545,10 @@ func (w *Worker) UpdateLocalCryptoSetByBlock(height uint64, receivedBlock *types
 	cryptoSet := w.CryptoSet
 	N := cryptoSet.BigN
 	n := cryptoSet.SmallN
-
+	mevLogs[w.ID].Printf("[Block %v | Node %v] Update, stage: %v\n", height, w.ID, getStageList(height, N, n))
+	fmt.Printf("[Block %v | Node %v] Update, stage: %v\n", height, w.ID, getStageList(height, N, n))
 	// 初始化阶段
 	if inInitStage(height, N) {
-		fmt.Printf("[Update]: Init | Node %v, Block %v\n", w.ID, height)
 		// 记录最新srs
 		cryptoSet.LocalSRS = cryptoElems.SRS
 		// 如果处于最后一次初始化阶段，保存SRS为文件（用于Caulk+）,并启动Caulk+进程
@@ -500,19 +559,19 @@ func (w *Worker) UpdateLocalCryptoSetByBlock(height uint64, receivedBlock *types
 			var err error
 			err = cryptoSet.LocalSRS.ToBinaryFile()
 			if err != nil {
-				return err
+				mevLogs[w.ID].Errorf("[Block %v | Node %v] Update-Init: failed to save srs%v\n", height, w.ID, err)
+				return fmt.Errorf("[Block %v | Node %v] Update-Init: failed to save srs%v\n", height, w.ID, err)
 			}
 			// 启动 caulk+ gRPC
 			// err = utils.RunCaulkPlusGRPC()
 			// if err != nil {
 			// 	return fmt.Errorf("failed to start caulk-plus gRPC process: %v", err)
 			// }
-			// w.log.Printf("Node %v: caulk+ gRPC process strated\n", w.ID)
+			// w.mevLogs[w.ID].Printf("Node %v: caulk+ gRPC process strated\n", w.ID)
 		}
 	}
 	// 置换阶段
 	if inShuffleStage(height, N, n) {
-		fmt.Printf("[Update]: Shuffle | Node %v, Block %v\n", w.ID, height)
 		// 记录该置换公钥列表为最新置换公钥列表
 		cryptoSet.PrevShuffledPKList = cryptoElems.ShuffleProof.SelectedPubKeys
 		// 记录该置换随机数承诺为最新置换随机数承诺 localStorage.PrevRCommitForShuffle
@@ -527,8 +586,8 @@ func (w *Worker) UpdateLocalCryptoSetByBlock(height uint64, receivedBlock *types
 	}
 	// 抽签阶段
 	if inDrawStage(height, N, n) {
-		fmt.Printf("[Update]: Draw | Node %v, Block %v\n", w.ID, height)
-		fmt.Printf("len of MemberPKList: %v, list : %v\n", len(cryptoElems.DrawProof.SelectedPubKeys), cryptoElems.DrawProof.SelectedPubKeys)
+		mevLogs[w.ID].Printf("[Block %v | Node %v] Update-Draw: len of MemberPKList: %v, list: %v\n", height, w.ID, len(cryptoElems.DrawProof.SelectedPubKeys), cryptoElems.DrawProof.SelectedPubKeys)
+		fmt.Printf("[Block %v | Node %v] Update-Draw: len of MemberPKList: %v, list: %v\n", height, w.ID, len(cryptoElems.DrawProof.SelectedPubKeys), cryptoElems.DrawProof.SelectedPubKeys)
 		// 初始化 CommitteeMark
 		mark := &CommitteeMark{
 			WorkHeight:     height + n,
@@ -576,23 +635,18 @@ func (w *Worker) UpdateLocalCryptoSetByBlock(height uint64, receivedBlock *types
 
 	// DPVSS阶段
 	if inDPVSSStage(height, N, n) {
-		fmt.Printf("[Update]: DPVSS | Node %v, Block %v\n", w.ID, height)
 		pvssTimes := len(cryptoElems.CommitteeWorkHeightList)
 		for i := 0; i < pvssTimes; i++ {
 			// 寻找对应委员会
 			mark := GetMarkByWorkHeight(cryptoSet.CommitteeMarkQueue, cryptoElems.CommitteeWorkHeightList[i])
-			// should checked in verify function
-			if mark == nil {
-				fmt.Printf("[Update]: DPVSS | Node %v, Block %v : cannot find committee to aggregate pvss, pvss index = %v\n", w.ID, height, i)
-				break
-			}
 			// 聚合对应委员会的公钥
 			mark.CommitteePK = mrpvss.AggregateCommitteePK(mark.CommitteePK, cryptoElems.CommitteePKList[i])
 			// 如果自己是委员会的领导者或成员，则聚合份额承诺
 			if mark.IsLeader || len(mark.SelfMemberList) > 0 {
 				shareCommitList, err := mrpvss.AggregateShareCommitList(mark.ShareCommits, cryptoElems.ShareCommitLists[i])
 				if err != nil {
-					return err
+					mevLogs[w.ID].Printf("[Block %v | Node %v] Update-DPVSS: failed to AggregateShareCommitList: %v\n", height, w.ID, err)
+					return fmt.Errorf("[Block %v | Node %v] Update-DPVSS: failed to AggregateShareCommitList: %v\n", height, w.ID, err)
 				}
 				mark.ShareCommits = shareCommitList
 			}
@@ -618,12 +672,12 @@ func (w *Worker) UpdateLocalCryptoSetByBlock(height uint64, receivedBlock *types
 	}
 	// 委员会更新阶段
 	if inWorkStage(height, N, n) {
-		fmt.Printf("[Update]: Update Committee | Node %v, Block %v\n", w.ID, height)
 		// 更新未工作的委员会队列，删除第一个元素(该元素对应委员会在这个epoch工作)
 		// 获取该委员会
 		e := cryptoSet.CommitteeMarkQueue.Front()
 		if e == nil {
-			return fmt.Errorf("no committee in queue")
+			mevLogs[w.ID].Errorf("[Block %v | Node %v] Update-Work | err: no committee in queue", height, w.ID)
+			return fmt.Errorf("[Block %v | Node %v] Update-Work | err: no committee in queue", height, w.ID)
 		}
 		committeeMark := e.Value.(*CommitteeMark)
 		// 删除该委员会
@@ -672,7 +726,7 @@ func (w *Worker) UpdateLocalCryptoSetByBlock(height uint64, receivedBlock *types
 				CommitteePK: group1.ToCompressed(committeeMark.CommitteePK),
 			}
 		}
-		sendConsensusNodeInputs(height, leaderInput, memberInputs, userInput)
+		sendConsensusNodeInputs(w.ID, height, leaderInput, memberInputs, userInput)
 	}
 	w.CryptoSetMap[crypto.Convert(receivedBlock.GetHeader().Hash())] = w.CryptoSet.Backup(receivedBlock.Header.Height)
 	return nil
@@ -765,8 +819,9 @@ func (w *Worker) GenerateCryptoSetFromLocal(height uint64) (*types.CryptoElement
 	cryptoSet := w.CryptoSet
 	N := cryptoSet.BigN
 	n := cryptoSet.SmallN
+	mevLogs[w.ID].Printf("[Block %v | Node %v] Mining, stage: %v\n", height, w.ID, getStageList(height, N, n))
+	fmt.Printf("[Block %v | Node %v] Mining, stage: %v\n", height, w.ID, getStageList(height, N, n))
 	if inInitStage(height, N) {
-		fmt.Printf("[Mining]: Init | Node %v, Block %v\n", w.ID, height)
 		// 更新 srs, 并生成证明
 		var newSRS *srs.SRS
 		var newSrsUpdateProof *schnorr_proof.SchnorrProof
@@ -794,54 +849,55 @@ func (w *Worker) GenerateCryptoSetFromLocal(height uint64) (*types.CryptoElement
 	var committeePKList []*bls12381.PointG1 = nil
 	// 如果处于置换阶段，则进行置换
 	if inShuffleStage(height, N, n) {
-		fmt.Printf("[Mining]: Shuffle | Node %v, Block %v\n", w.ID, height)
 		if isTheFirstShuffle(height, N) {
 			// 获取前面BigN个区块的公钥
 			cryptoSet.PrevShuffledPKList = w.getPrevNBlockPKList(height-N, height-1)
-			fmt.Println(len(cryptoSet.PrevShuffledPKList))
+			// mevLogs[w.ID].Printf("[Mining]: Shuffle | Node %v, Block %v | len of \n", w.ID, height,len(cryptoSet.PrevShuffledPKList))
 		}
 		newShuffleProof, err = shuffle.SimpleShuffle(cryptoSet.LocalSRS, cryptoSet.PrevShuffledPKList, cryptoSet.PrevRCommitForShuffle)
 		if err != nil {
-			return nil, err
+			mevLogs[w.ID].Errorf("[Block %v | Node %v] Mining-Shuffle: failed to shuffle: %v\n", height, w.ID, err)
+			return nil, fmt.Errorf("[Block %v | Node %v] Mining-Shuffle: failed to shuffle: %v\n", height, w.ID, err)
 		}
 	}
 	// 如果处于抽签阶段，则进行抽签
 	if inDrawStage(height, N, n) {
-		// test
-		fmt.Printf("[Mining]: Draw | Node %v, Block %v\n", w.ID, height)
 		// 生成秘密向量用于抽签，向量元素范围为 [1, BigN]
 		permutation, err := utils.GenRandomPermutation(uint32(N))
 		if err != nil {
-			return nil, err
+			mevLogs[w.ID].Errorf("[Block %v | Node %v] Mining-Draw: failed to generate permutation: %v\n", height, w.ID, err)
+			return nil, fmt.Errorf("[Block %v | Node %v] Mining-Draw: failed to generate permutation: %v\n", height, w.ID, err)
 		}
 		secretVector := permutation[:n]
 		newDrawProof, err = verifiable_draw.Draw(cryptoSet.LocalSRS, uint32(N), cryptoSet.PrevShuffledPKList, uint32(n), secretVector, cryptoSet.PrevRCommitForDraw)
 		if err != nil {
-			return nil, err
+			mevLogs[w.ID].Errorf("[Block %v | Node %v] Mining-Draw: failed to draw: %v\n", height, w.ID, err)
+			return nil, fmt.Errorf("[Block %v | Node %v] Mining-Draw: failed to draw: %v\n", height, w.ID, err)
 		}
 	}
 	// 如果处于PVSS阶段，则进行PVSS的分发份额
 	if inDPVSSStage(height, N, n) {
 		// 计算向哪些委员会进行pvss(委员会index从1开始)
-		pvssTimes := height - N - n - 1
-		fmt.Printf("[Mining]: DPVSS | Node %v, Block %v | PVSS Times: %v\n", w.ID, height, pvssTimes)
-		if pvssTimes > n-1 {
-			pvssTimes = n - 1
+		pvssTimes := n - 1
+		if height < N+2*n {
+			pvssTimes = height - N - n - 1
 		}
 		// 要PVSS的委员会的工作高度
 		committeeWorkHeightList = make([]uint64, pvssTimes)
+		for i := uint64(0); i < pvssTimes; i++ {
+			// 委员会的工作高度 height - pvssTimes + i + n
+			committeeWorkHeightList[i] = height - pvssTimes + i + n
+		}
+		mevLogs[w.ID].Printf("[Block %v | Node %v] Mining-DPVSS | PVSS Times: %v, committee work heights: %v\n", height, w.ID, pvssTimes, committeeWorkHeightList)
+		fmt.Printf("[Block %v | Node %v] Mining-DPVSS | PVSS Times: %v, committee work heights: %v\n", height, w.ID, pvssTimes, committeeWorkHeightList)
 		holderPKLists = make([][]*bls12381.PointG1, pvssTimes)
 		shareCommitsList = make([][]*bls12381.PointG1, pvssTimes)
 		coeffCommitsList = make([][]*bls12381.PointG1, pvssTimes)
 		encSharesList = make([][]*mrpvss.EncShare, pvssTimes)
 		committeePKList = make([]*bls12381.PointG1, pvssTimes)
-		i := uint64(0)
-		for e := cryptoSet.CommitteeMarkQueue.Front(); e != nil; e = e.Next() {
-			if i >= pvssTimes {
-				break
-			}
-			// 委员会的工作高度 height - pvssTimes + i + n
-			committeeWorkHeightList[i] = height - pvssTimes + i + n
+		// TODO
+		for i := uint64(0); i < pvssTimes; i++ {
+			// 创建秘密
 			secret := bls12381.NewFr()
 			for {
 				secret.Rand(rand.Reader)
@@ -849,13 +905,19 @@ func (w *Worker) GenerateCryptoSetFromLocal(height uint64) (*types.CryptoElement
 					break
 				}
 			}
-			holderPKLists[i] = e.Value.(*CommitteeMark).MemberPKList
-			fmt.Println(holderPKLists[i])
+			mark := GetMarkByWorkHeight(cryptoSet.CommitteeMarkQueue, committeeWorkHeightList[i])
+			if mark == nil {
+				mevLogs[w.ID].Errorf("[Block %v | Node %v] Mining-DPVSS: cannot find committee workHeight = %v", height, w.ID, committeeWorkHeightList[i])
+				return nil, fmt.Errorf("[Block %v | Node %v] Mining-DPVSS: cannot find committee workHeight = %v", height, w.ID, committeeWorkHeightList[i])
+			}
+			holderPKLists[i] = mark.MemberPKList
+			mevLogs[w.ID].Printf("[Block %v | Node %v] Mining-DPVSS: holderPKLists[%v]: %v\n", height, w.ID, i, holderPKLists[i])
+			fmt.Printf("[Block %v | Node %v] Mining-DPVSS: holderPKLists[%v]: %v\n", height, w.ID, i, holderPKLists[i])
 			shareCommitsList[i], coeffCommitsList[i], encSharesList[i], committeePKList[i], err = mrpvss.EncShares(cryptoSet.G, cryptoSet.H, holderPKLists[i], secret, cryptoSet.Threshold)
 			if err != nil {
-				return nil, err
+				mevLogs[w.ID].Errorf("[Block %v | Node %v] Mining-DPVSS: deal encShares failed: %v", height, w.ID, err)
+				return nil, fmt.Errorf("[Block %v | Node %v] Mining-DPVSS: deal encShares failed: %v", height, w.ID, err)
 			}
-			i++
 		}
 	}
 	return &types.CryptoElement{
@@ -874,24 +936,28 @@ func (w *Worker) GenerateCryptoSetFromLocal(height uint64) (*types.CryptoElement
 
 // TODO
 func sendConsensusNodeInputs(
+	id int64,
 	height uint64,
 	leaderInput *blockchain_api.CommitteeConfig,
 	memberInputs []*blockchain_api.CommitteeConfig,
 	userInput *blockchain_api.CommitteeConfig,
 ) {
+	mevLogs[id].Printf("[Block %v | Node %v] Send: Start send configs\n", height, id)
 	if leaderInput != nil {
-
+		mevLogs[id].Printf("[Block %v | Node %v] Send: Contain a leader\n", height, id)
+		// mevLogs[id].Printf("[Block %v] Send: Contain a leader: %v\n", height, leaderInput)
 	}
-	for _, _ = range memberInputs {
-
-	}
-	// TODO
+	mevLogs[id].Printf("[Block %v | Node %v] Send: Contain %v members:\n", height, id, len(memberInputs))
+	// for index, member := range memberInputs {
+	// 	mevLogs[id].Printf("[Block %v] Send: \tmember %v: %v\n", height, index, member)
+	// }
 	if leaderInput == nil && (memberInputs == nil || len(memberInputs) == 0) {
-
+		// mevLogs[id].Printf("[Block %v] Send: Only a user: %v\n", height, userInput)
+		mevLogs[id].Printf("[Block %v | Node %v] Send: Only a user\n", height, id)
 	}
 }
 
-// TODO getSelfPrivKeyList 获取高度位于 [minHeight, maxHeight] 内所有自己出块的区块私钥
+// getSelfPrivKeyList 获取高度位于 [minHeight, maxHeight] 内所有自己出块的区块私钥
 func (w *Worker) getSelfPrivKeyList(minHeight, maxHeight uint64) []*bls12381.Fr {
 	var ret []*bls12381.Fr
 
@@ -910,7 +976,7 @@ func (w *Worker) getSelfPrivKeyList(minHeight, maxHeight uint64) []*bls12381.Fr 
 	return ret
 }
 
-// TODO getPrevNBlockPKList 获取高度位于 [minHeight, maxHeight] 内所有区块的公钥
+// getPrevNBlockPKList 获取高度位于 [minHeight, maxHeight] 内所有区块的公钥
 func (w *Worker) getPrevNBlockPKList(minHeight, maxHeight uint64) []*bls12381.PointG1 {
 	ret := make([]*bls12381.PointG1, 0)
 	for i := minHeight; i <= maxHeight; i++ {
@@ -929,7 +995,7 @@ func (w *Worker) getPrevNBlockPKList(minHeight, maxHeight uint64) []*bls12381.Po
 }
 
 func (w *Worker) getPrevNBlockPKListByBranch(minHeight, maxHeight uint64, branch []*types.Block) []*bls12381.PointG1 {
-	fmt.Printf("need pklist from %d to %d \n", minHeight, maxHeight)
+	// fmt.Printf("need pklist from %d to %d \n", minHeight, maxHeight)
 	n := len(branch)
 	k := 1
 	if n < 1 {
@@ -965,7 +1031,7 @@ func (w *Worker) getPrevNBlockPKListByBranch(minHeight, maxHeight uint64, branch
 	return ret
 }
 
-// TODO getSelfPrivKeyList 获取高度位于 [minHeight, maxHeight] 内所有自己出块的区块私钥
+// getSelfPrivKeyList 获取高度位于 [minHeight, maxHeight] 内所有自己出块的区块私钥
 func (w *Worker) getSelfPrivKeyListByBranch(minHeight, maxHeight uint64, branch []*types.Block) []*bls12381.Fr {
 	var ret []*bls12381.Fr
 	n := len(branch)
@@ -995,22 +1061,24 @@ func (w *Worker) getSelfPrivKeyListByBranch(minHeight, maxHeight uint64, branch 
 	return ret
 }
 
-// VerifyCryptoSet 当收到区块，height 为该区块的高度, 返回该区块是否验证通过
+// VerifyCryptoSetByBranch 当收到区块，height 为该区块的高度, 返回该区块是否验证通过
 func (w *Worker) VerifyCryptoSetByBranch(height uint64, block *types.Block, branch []*types.Block) bool {
 	if block.GetHeader().Height == 0 {
 		return true
 	}
-	// group1 := bls12381.NewG1()
 	cryptoSet := w.CryptoSet
 	N := cryptoSet.BigN
 	n := cryptoSet.SmallN
 	// 如果处于初始化阶段（参数生成阶段）
 	receivedBlock := block.GetHeader().CryptoElement
+	mevLogs[w.ID].Printf("[Block %v | Node %v] Verify[CR], stage: %v\n", height, w.ID, getStageList(height, N, n))
+	fmt.Printf("[Block %v | Node %v] Verify[CR], stage: %v\n", height, w.ID, getStageList(height, N, n))
 	if inInitStage(height, N) {
 		// 检查srs的更新证明，如果验证失败，则丢弃
 		err := srs.Verify(receivedBlock.SRS, cryptoSet.LocalSRS.G1PowerOf(1), receivedBlock.SrsUpdateProof)
 		if err != nil {
-			fmt.Printf("[Height %d]: Verify SRS error when chain reset: %v\n", height, err)
+			mevLogs[w.ID].Printf("[Block %v | Node %v] Verify[CR]-Init: Verify SRS error: %v\n", height, w.ID, err)
+			fmt.Printf("[Block %v | Node %v] Verify[CR]-Init: Verify SRS error: %v\n", height, w.ID, err)
 			return false
 		}
 		return true
@@ -1026,7 +1094,8 @@ func (w *Worker) VerifyCryptoSetByBranch(height uint64, block *types.Block, bran
 		// 如果验证失败，丢弃
 		err := shuffle.Verify(cryptoSet.LocalSRS, cryptoSet.PrevShuffledPKList, cryptoSet.PrevRCommitForShuffle, receivedBlock.ShuffleProof)
 		if err != nil {
-			fmt.Printf("[Height %d]: Verify Shuffle error when chain reset: %v\n", height, err)
+			mevLogs[w.ID].Printf("[Block %v | Node %v] Verify[CR]-Shuffle: Verify Shuffle error: %v\n", height, w.ID, err)
+			fmt.Printf("[Block %v | Node %v] Verify[CR]-Shuffle: Verify Shuffle error: %v\n", height, w.ID, err)
 			return false
 		}
 	}
@@ -1036,7 +1105,8 @@ func (w *Worker) VerifyCryptoSetByBranch(height uint64, block *types.Block, bran
 		// 如果验证失败，丢弃
 		err := verifiable_draw.Verify(cryptoSet.LocalSRS, uint32(N), cryptoSet.PrevShuffledPKList, uint32(n), cryptoSet.PrevRCommitForDraw, receivedBlock.DrawProof)
 		if err != nil {
-			fmt.Printf("[Height %d]: Verify Draw error when chain reset: %v\n", height, err)
+			mevLogs[w.ID].Printf("[Block %v | Node %v] Verify[CR]-Draw: Verify Draw error: %v\n", height, w.ID, err)
+			fmt.Printf("[Block %v | Node %v] Verify[CR]-Draw: Verify Draw error: %v\n", height, w.ID, err)
 			return false
 		}
 	}
@@ -1048,18 +1118,24 @@ func (w *Worker) VerifyCryptoSetByBranch(height uint64, block *types.Block, bran
 			// 如果不存在对应委员会，丢弃
 			mark := GetMarkByWorkHeight(cryptoSet.CommitteeMarkQueue, receivedBlock.CommitteeWorkHeightList[i])
 			if mark == nil {
-				fmt.Printf("[Height %d]: Verify DPVSS error when chain reset: no corresponding committee, pvss index = %v \n", height, i)
+				mevLogs[w.ID].Printf("[Block %v | Node %v] Verify[CR]-DPVSS: no corresponding committee, pvss index = %v\n", height, w.ID, i)
+				fmt.Printf("[Block %v | Node %v] Verify[CR]-DPVSS: no corresponding committee, pvss index = %v\n", height, w.ID, i)
 				return false
 			}
-			// // 如果成员公钥列表对不上，丢弃
-			// for j := 0; j < len(mark.MemberPKList); j++ {
-			//	if !group1.Equal(mark.MemberPKList[j], receivedBlock.HolderPKLists[i][j]) {
-			//		fmt.Printf("[Height %d]: Verify DPVSS error when chain reset: incorrect member pk list, pvss index = %v \n", height, i)
-			//		return false
-			//	}
-			// }
+			// 如果成员公钥列表对不上，丢弃
+			group1 := bls12381.NewG1()
+			for j := 0; j < len(mark.MemberPKList); j++ {
+				if !group1.Equal(mark.MemberPKList[j], receivedBlock.HolderPKLists[i][j]) {
+					mevLogs[w.ID].Printf("[Block %v | Node %v] Verify[CR]-DPVSS: incorrect member pk list, pvss index = %v\n", height, w.ID, i)
+					fmt.Printf("[Block %v | Node %v] Verify[CR]-DPVSS: incorrect member pk list, pvss index = %v\n", height, w.ID, i)
+					// return false
+					break
+				}
+			}
 			// 如果验证失败，丢弃
 			if !mrpvss.VerifyEncShares(uint32(n), cryptoSet.Threshold, cryptoSet.G, cryptoSet.H, receivedBlock.HolderPKLists[i], receivedBlock.ShareCommitLists[i], receivedBlock.CoeffCommitLists[i], receivedBlock.EncShareLists[i]) {
+				mevLogs[w.ID].Printf("[Block %v | Node %v] Verify[CR]-DPVSS: failed to verify encShares, pvss index = %v\n", height, w.ID, i)
+				fmt.Printf("[Block %v | Node %v] Verify[CR]-DPVSS: failed to verify encShares, pvss index = %v\n", height, w.ID, i)
 				return false
 			}
 		}
@@ -1073,9 +1149,10 @@ func (w *Worker) UpdateLocalCryptoSetByBlockByBranch(height uint64, receivedBloc
 	cryptoSet := w.CryptoSet
 	N := cryptoSet.BigN
 	n := cryptoSet.SmallN
+	mevLogs[w.ID].Printf("[Block %v | Node %v] Update[CR], stage: %v\n", height, w.ID, getStageList(height, N, n))
+	fmt.Printf("[Block %v | Node %v] Update[CR], stage: %v\n", height, w.ID, getStageList(height, N, n))
 	// 初始化阶段
 	if inInitStage(height, N) {
-		fmt.Printf("[Update]: Init | Node %v, Block %v\n", w.ID, height)
 		// 记录最新srs
 		cryptoSet.LocalSRS = cryptoElems.SRS
 		// 如果处于最后一次初始化阶段，保存SRS为文件（用于Caulk+）,并启动Caulk+进程
@@ -1097,7 +1174,6 @@ func (w *Worker) UpdateLocalCryptoSetByBlockByBranch(height uint64, receivedBloc
 	}
 	// 置换阶段
 	if inShuffleStage(height, N, n) {
-		fmt.Printf("[Update]: Shuffle | Node %v, Block %v\n", w.ID, height)
 		// 记录该置换公钥列表为最新置换公钥列表
 		cryptoSet.PrevShuffledPKList = cryptoElems.ShuffleProof.SelectedPubKeys
 		// 记录该置换随机数承诺为最新置换随机数承诺 localStorage.PrevRCommitForShuffle
@@ -1112,7 +1188,6 @@ func (w *Worker) UpdateLocalCryptoSetByBlockByBranch(height uint64, receivedBloc
 	}
 	// 抽签阶段
 	if inDrawStage(height, N, n) {
-		fmt.Printf("[Update]: Draw | Node %v, Block %v\n", w.ID, height)
 		// 初始化 CommitteeMark
 		mark := &CommitteeMark{
 			WorkHeight:     height + n,
@@ -1124,7 +1199,6 @@ func (w *Worker) UpdateLocalCryptoSetByBlockByBranch(height uint64, receivedBloc
 		}
 
 		// 如果自己是出块人
-
 		if w.isSelfBlock(receivedBlock) {
 			mark.IsLeader = true
 		}
@@ -1161,54 +1235,56 @@ func (w *Worker) UpdateLocalCryptoSetByBlockByBranch(height uint64, receivedBloc
 
 	// DPVSS阶段
 	if inDPVSSStage(height, N, n) {
-		fmt.Printf("[Update]: DPVSS | Node %v, Block %v\n", w.ID, height)
 		pvssTimes := len(cryptoElems.CommitteeWorkHeightList)
 		for i := 0; i < pvssTimes; i++ {
 			// 寻找对应委员会
 			mark := GetMarkByWorkHeight(cryptoSet.CommitteeMarkQueue, cryptoElems.CommitteeWorkHeightList[i])
 			// should checked in verify function
 			if mark == nil {
-				fmt.Printf("[Update]: DPVSS | Node %v, Block %v : cannot find committee to aggregate pvss, pvss index = %v\n", w.ID, height, i)
-			}
-
-			// 聚合对应委员会的公钥
-			mark.CommitteePK = mrpvss.AggregateCommitteePK(mark.CommitteePK, cryptoElems.CommitteePKList[i])
-			// 如果自己是委员会的领导者或成员，则聚合份额承诺
-			if mark.IsLeader || len(mark.SelfMemberList) > 0 {
-				shareCommitList, err := mrpvss.AggregateShareCommitList(mark.ShareCommits, cryptoElems.ShareCommitLists[i])
-				if err != nil {
-					return err
-				}
-				mark.ShareCommits = shareCommitList
-			}
-			// 对于每个是委员会成员的自己的节点，聚合份额承诺
-			for j := 0; j < len(mark.SelfMemberList); j++ {
-				holderPKList := cryptoElems.HolderPKLists[i]
-				encShares := cryptoElems.EncShareLists[i]
-				holderNum := len(holderPKList)
-				member := mark.SelfMemberList[j]
-				for k := 0; k < holderNum; k++ {
-					if group1.Equal(member.SelfPK, holderPKList[k]) {
-						// 聚合加密份额
-						member.AggrEncShare = mrpvss.AggregateEncShares(member.AggrEncShare, encShares[j])
+				mevLogs[w.ID].Printf("[Block %v | Node %v] Update[CR]-DPVSS: cannot find committee to aggregate pvss, pvss index = %v\n", height, w.ID, i)
+				fmt.Printf("[Block %v | Node %v] Update[CR]-DPVSS: cannot find committee to aggregate pvss, pvss index = %v\n", height, w.ID, i)
+			} else {
+				// 聚合对应委员会的公钥
+				mark.CommitteePK = mrpvss.AggregateCommitteePK(mark.CommitteePK, cryptoElems.CommitteePKList[i])
+				// 如果自己是委员会的领导者或成员，则聚合份额承诺
+				if mark.IsLeader || len(mark.SelfMemberList) > 0 {
+					shareCommitList, err := mrpvss.AggregateShareCommitList(mark.ShareCommits, cryptoElems.ShareCommitLists[i])
+					if err != nil {
+						mevLogs[w.ID].Errorf("[Block %v | Node %v] Update[CR]-DPVSS: failed to AggregateShareCommitList: %v\n", height, w.ID, err)
+						return fmt.Errorf("[Block %v | Node %v] Update[CR]-DPVSS: failed to AggregateShareCommitList: %v\n", height, w.ID, err)
 					}
+					mark.ShareCommits = shareCommitList
 				}
-				// 如果当前是该委员会的最后一次PVSS，后续没有新的PVSS份额，则解密聚合份额
-				if mark.WorkHeight-height == 1 {
-					// 解密聚合加密份额
-					member.Share = mrpvss.DecryptAggregateShare(cryptoSet.G, member.SelfSK, member.AggrEncShare, uint32(n-1))
+				// 对于每个是委员会成员的自己的节点，聚合份额承诺
+				for j := 0; j < len(mark.SelfMemberList); j++ {
+					holderPKList := cryptoElems.HolderPKLists[i]
+					encShares := cryptoElems.EncShareLists[i]
+					holderNum := len(holderPKList)
+					member := mark.SelfMemberList[j]
+					for k := 0; k < holderNum; k++ {
+						if group1.Equal(member.SelfPK, holderPKList[k]) {
+							// 聚合加密份额
+							member.AggrEncShare = mrpvss.AggregateEncShares(member.AggrEncShare, encShares[j])
+						}
+					}
+					// 如果当前是该委员会的最后一次PVSS，后续没有新的PVSS份额，则解密聚合份额
+					if mark.WorkHeight-height == 1 {
+						// 解密聚合加密份额
+						member.Share = mrpvss.DecryptAggregateShare(cryptoSet.G, member.SelfSK, member.AggrEncShare, uint32(n-1))
+					}
 				}
 			}
 		}
 	}
 	// 委员会更新阶段
+	// TODO
 	if inWorkStage(height, N, n) {
-		fmt.Printf("[Update]: Update Committee | Node %v, Block %v\n", w.ID, height)
 		// 更新未工作的委员会队列，删除第一个元素(该元素对应委员会在这个epoch工作)
 		// 获取该委员会
 		e := cryptoSet.CommitteeMarkQueue.Front()
 		if e == nil {
-			return fmt.Errorf("no committee in queue")
+			mevLogs[w.ID].Errorf("[Block %v | Node %v] Update[CR]-Work| err: no committee in queue", height, w.ID)
+			return fmt.Errorf("[Block %v | Node %v] Update[CR]-Work| err: no committee in queue", height, w.ID)
 		}
 		committeeMark := e.Value.(*CommitteeMark)
 		// 删除该委员会
@@ -1257,7 +1333,7 @@ func (w *Worker) UpdateLocalCryptoSetByBlockByBranch(height uint64, receivedBloc
 				CommitteePK: group1.ToCompressed(committeeMark.CommitteePK),
 			}
 		}
-		sendConsensusNodeInputs(height, leaderInput, memberInputs, userInput)
+		sendConsensusNodeInputs(w.ID, height, leaderInput, memberInputs, userInput)
 	}
 	w.CryptoSetMap[crypto.Convert(receivedBlock.GetHeader().Hash())] = w.CryptoSet.Backup(receivedBlock.Header.Height)
 	return nil
