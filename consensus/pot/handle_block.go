@@ -3,6 +3,7 @@ package pot
 import (
 	"blockchain-crypto/vdf/wesolowski_rust"
 	"bytes"
+	"context"
 	"encoding/hex"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
@@ -13,6 +14,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"math/big"
 	"math/rand"
+	"sync"
 	"time"
 )
 
@@ -120,19 +122,39 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 			defer w.SetChainSelectFlagFalse()
 			w.mutex.Unlock()
 
+			done := make(chan struct{})
+			var doonce sync.Once
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			go func() {
+				select {
+				case <-ctx.Done():
+					doonce.Do(func() {
+						close(done)
+						w.log.Errorf("[PoT]\thandle fork timeout")
+						return
+					})
+					return
+				}
+			}()
 			current := w.chainReader.GetCurrentBlock()
 			currentset := w.CryptoSet.Backup(current.GetHeader().Height)
-
 			ances, err := w.GetSharedAncestor(block, current)
 
 			if err != nil {
 				w.log.Error(err)
+				doonce.Do(func() {
+					close(done)
+				})
 				return err
 			}
 
 			c, err := w.chainReader.GetByHeight(ances.GetHeader().Height)
 			if err != nil {
 				w.log.Error(err)
+				doonce.Do(func() {
+					close(done)
+				})
 				return err
 			}
 
@@ -141,6 +163,9 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 
 			forkBranch, _, err := w.GetBranch(ances, block)
 			if err != nil {
+				doonce.Do(func() {
+					close(done)
+				})
 				return fmt.Errorf("get Branch error for %s", err.Error())
 			}
 
@@ -148,6 +173,9 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 			if flag {
 				w.log.Debugf("[PoT]\tPass VDF Check")
 			} else {
+				doonce.Do(func() {
+					close(done)
+				})
 				return err
 			}
 
@@ -160,6 +188,9 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 
 			cryptoset, ok := w.CryptoSetMap[crypto.Convert(ances.Hash())]
 			if !ok {
+				doonce.Do(func() {
+					close(done)
+				})
 				return fmt.Errorf("can not find the crypto set for block %s", hexutil.Encode(c.Hash()))
 			}
 
@@ -185,6 +216,9 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 
 			if !flag {
 				w.CryptoSet.Restore(current.GetHeader().Height, currentset)
+				doonce.Do(func() {
+					close(done)
+				})
 				return fmt.Errorf("the fork chain fails the cryptoelement check")
 			}
 
@@ -194,6 +228,9 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 			}
 			if !flag {
 				w.CryptoSet.Restore(current.GetHeader().Height, currentset)
+				doonce.Do(func() {
+					close(done)
+				})
 				return fmt.Errorf("the fork chain fails the cryptoelement check")
 			}
 
@@ -216,7 +253,15 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 			}
 			// txs := block.GetExcutedTxs()
 			// w.mempool.MarkProposed(txs)
+			doonce.Do(func() {
+				w.log.Warn("[PoT]\tHandle fork done")
+				close(done)
+			})
+
+			<-done
+			return nil
 		}
+
 	} else {
 		flag, err = header.BasicVerify()
 		if !flag {
@@ -271,25 +316,52 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 	//	w.vdf0Chan <- res
 	//	w.log.Infof("[PoT]\tepoch %d:execset vdf complete. Start from epoch %d with res %s", epoch, block.GetHeader().Height-1, hexutil.Encode(crypto.Hash(res.Res)))
 	//	return nil
-	// }
+	//}
+	done := make(chan struct{})
+	var doonce sync.Once
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	go func() {
+		select {
+		case <-ctx.Done():
+			doonce.Do(func() {
+				close(done)
+				w.log.Errorf("[PoT]\thandle fork timeout")
+				return
+			})
+			return
+		}
+	}()
 
 	ances, err := w.GetSharedAncestor(block, current)
 	if err != nil {
+		doonce.Do(func() {
+			close(done)
+		})
 		return err
 	}
 
 	w.log.Infof("[PoT]\tGet shared ancestor of block %s is %s at height %d", hexutil.Encode(block.Hash()), hexutil.Encode(ances.Hash()), ances.GetHeader().Height)
 
 	branch, _, err := w.GetBranch(ances, block)
-	w.log.Errorf("get branch end")
+	//w.log.Errorf("get branch end")
 	if err != nil {
 		w.log.Errorf("[PoT]\tGet branch error for: %s", err)
+		doonce.Do(func() {
+			close(done)
+		})
 		return err
 	}
 
 	flag, err := w.CheckVDF0ForBranch(branch)
-	if !flag {
-		w.log.Infof("[PoT]\tFail  VDF Check")
+	if flag {
+		w.log.Infof("[PoT]\tPass VDF Check")
+	}
+	if err != nil {
+		w.log.Errorf("[PoT]\tCheck Branch VDF0 error for: %s", err)
+		doonce.Do(func() {
+			close(done)
+		})
 		return err
 	}
 
@@ -298,9 +370,12 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 	}
 
 	currentset := w.CryptoSet.Backup(current.GetHeader().Height)
-
 	cryptoset, ok := w.CryptoSetMap[crypto.Convert(ances.Hash())]
+
 	if !ok {
+		doonce.Do(func() {
+			close(done)
+		})
 		return fmt.Errorf("can not find the crypto set for block %s", hexutil.Encode(ances.Hash()))
 	}
 
@@ -325,6 +400,9 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 
 	if !flag {
 		w.CryptoSet.Restore(current.GetHeader().Height, currentset)
+		doonce.Do(func() {
+			close(done)
+		})
 		return fmt.Errorf("the fork chain fails the cryptoelement check")
 	}
 
@@ -334,12 +412,34 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 	}
 	if !flag {
 		w.CryptoSet.Restore(current.GetHeader().Height, currentset)
+		doonce.Do(func() {
+			close(done)
+		})
 		return fmt.Errorf("the fork chain fails the cryptoelement check")
 	}
 
+	weightnow := w.calculateChainWeight(ances, current)
+	weightadvanced := w.calculateChainWeight(ances, block)
+
+	if weightnow.Cmp(weightadvanced) > 0 {
+		w.log.Infof("[PoT]\tthe current chain weight %d is greater than the fork chain weight %d", weightnow.Int64(), weightadvanced.Int64())
+		doonce.Do(func() {
+			close(done)
+		})
+		return fmt.Errorf("the current chain weight %d is greater than the fork chain weight %d", weightnow.Int64(), weightadvanced.Int64())
+	}
+
+	w.log.Infof("[PoT]\tthe chain weight %d, the fork chain weight %d", weightnow, w.calculateChainWeight(ances, block).Int64())
+
+	//for i := 0; i < len(branch); i++ {
+	//	w.log.Infof("[PoT]\tthe nowbranch at height %d: %s", branch[i].GetHeader().ExecHeight, hexutil.Encode(branch[i].Hash()))
+	//}
 	err = w.chainResetAdvanced(branch)
 	if err != nil {
 		w.log.Errorf("[PoT]\tchain reset error for %s", err)
+		doonce.Do(func() {
+			close(done)
+		})
 		return err
 	}
 	finishflag := w.vdf0.Finished
@@ -358,14 +458,11 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 		_, err := w.getUncleBlock(block)
 		if err != nil {
 			w.log.Errorf("[PoT]\tGet uncle block err for %s", err)
+			doonce.Do(func() {
+				close(done)
+			})
 			return err
 		}
-	}
-
-	err = w.setVDF0epoch(block.GetHeader().Height - 1)
-	if err != nil {
-		w.log.Warnf("[PoT]\tepoch %d: execset vdf error for %s:", epoch, err)
-		return err
 	}
 	w.mutex.Lock()
 	// w.backupBlock = append(w.backupBlock, block)
@@ -374,6 +471,15 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 	// err = w.storage.Put(block)
 	err = w.blockStorage.Put(block)
 	w.mutex.Unlock()
+
+	err = w.setVDF0epoch(block.GetHeader().Height - 1)
+	if err != nil {
+		w.log.Warnf("[PoT]\tepoch %d: execset vdf error for %s:", epoch, err)
+		doonce.Do(func() {
+			close(done)
+		})
+		return err
+	}
 
 	res := &types.VDF0res{
 		Res:   block.GetHeader().PoTProof[0],
@@ -384,6 +490,14 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 	// w.mutex.Lock()
 	// w.log.Error(w.chainresetflag)
 	// w.mutex.Unlock()
+
+	doonce.Do(func() {
+		close(done)
+		w.log.Debug("[PoT]\tHandle fork done")
+	})
+
+	<-done
+
 	return nil
 
 }
@@ -438,13 +552,19 @@ func (w *Worker) CheckVDF0ForBranch(branch []*types.Block) (bool, error) {
 		storageheight := w.blockStorage.GetVDFHeight()
 		header := branch[i].GetHeader()
 		if header.Height <= storageheight {
+			//if header.Height == 0 {
+			//	return true, nil
+			//}
 			vdfres, err := w.blockStorage.GetVDFresbyEpoch(header.Height)
+
 			if err != nil {
 				return false, err
 			}
 			if !bytes.Equal(vdfres, header.PoTProof[0]) {
-				return false, fmt.Errorf("the vdf0 proof is wrong ")
+				fmt.Println(hexutil.Encode(vdfres), hexutil.Encode(header.PoTProof[0]))
+				return false, fmt.Errorf("the vdf0 proof is wrong of height %d", header.Height)
 			}
+
 		} else if header.Height == storageheight+1 {
 			vdfres, err := w.blockStorage.GetVDFresbyEpoch(storageheight)
 			if err != nil {
@@ -454,7 +574,7 @@ func (w *Worker) CheckVDF0ForBranch(branch []*types.Block) (bool, error) {
 			vdfoutput := header.PoTProof[0]
 			times := time.Now()
 			if !w.vdfChecker.CheckVDF(vdfinput, vdfoutput) {
-				return false, fmt.Errorf("the vdf0 proof is wrong ")
+				return false, fmt.Errorf("the vdf0 proof is wrong for height %d", header.Height)
 			}
 			w.log.Infof("[PoT]\tVDF Check need %d ms", time.Since(times)/time.Millisecond)
 			w.blockStorage.SetVDFres(header.Height, header.PoTProof[0])
@@ -572,4 +692,24 @@ func (w *Worker) workReset(epoch uint64, block *types.Block) error {
 	}
 
 	return nil
+}
+
+func (w *Worker) CheckBlockNumEnough(block *types.Block) bool {
+	if block.GetHeader().Height == 0 {
+		return true
+	}
+	cnt := 0
+	if block.GetHeader().ParentHash != nil {
+		cnt += 1
+	}
+	if block.GetHeader().UncleHash != nil {
+		cnt += len(block.GetHeader().UncleHash)
+	}
+
+	low := w.config.PoT.Snum / 2
+	if int64(cnt) < low {
+		return false
+	} else {
+		return true
+	}
 }

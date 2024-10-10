@@ -148,94 +148,13 @@ func GetMarkByWorkHeight(q *Queue, workHeight uint64) *CommitteeMark {
 	return nil
 }
 
-// func (w *Worker) simpleLeaderUpdate(parent *types.Header) {
-//	if parent != nil {
-//		// address := parent.Address
-//		address := parent.Address
-//		if !w.committeeCheck(address, parent) {
-//			return
-//		}
-//		if w.committeeSizeCheck() && w.whirly == nil {
-//
-//			whirlyConfig := &config.ConsensusConfig{
-//				Type:        "whirly",
-//				ConsensusID: 1009,
-//				Whirly: &config.WhirlyConfig{
-//					Type:      "simple",
-//					BatchSize: 10,
-//					Timeout:   2000,
-//				},
-//				Nodes: w.config.Nodes,
-//				Keys:  w.config.Keys,
-//				F:     w.config.F,
-//			}
-//			s := simpleWhirly.NewSimpleWhirly(w.ID, 1009, whirlyConfig, w.Engine.exec, w.Engine.Adaptor, w.log, "", nil)
-//			w.whirly = s
-//			//w.Engine.SetWhirly(s)
-//			// w.potSignalChan = w.whirly.GetPoTByteEntrance()
-//			w.log.Errorf("[PoT]\t Start committee consensus at epoch %d", parent.ExecHeight+1)
-//			return
-//		}
-//		potSignal := &simpleWhirly.PoTSignal{
-//			Epoch:               int64(parent.ExecHeight),
-//			Proof:               parent.PoTProof[0],
-//			ID:                  parent.Address,
-//			LeaderPublicAddress: parent.PeerId,
-//		}
-//		b, err := json.Marshal(potSignal)
-//		if err != nil {
-//			w.log.WithError(err)
-//			returnf
-//		}
-//		if w.potSignalChan != nil {
-//			w.potSignalChan <- b
-//		}
-//	}
-// }
-
-// func (w *Worker) committeeCheck(id int64, header *types.Header) bool {
-//	if _, exist := w.committee.Get(id); !exist {
-//		w.committee.Set(id, header)
-//		return false
-//	}
-//	return true
-// }
-//
-// func (w *Worker) committeeSizeCheck() bool {
-//	return w.committee.Len() == 4
-// }
-
 func (w *Worker) GetPeerQueue() chan *types.Block {
 	return w.peerMsgQueue
 }
 
 func (w *Worker) CommitteeUpdate(height uint64) {
-	// if epoch > 10 && w.ID == 1 {
-	//	block, err := w.chainReader.GetByHeight(epoch - 1)
-	//	if err != nil {
-	//		return
-	//	}
-	//	header := block.GetHeader()
-	//	fill, err := os.OpenFile("difficulty", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
-	//	if err != nil {
-	//		fmt.Println(err)
-	//	}
-	//	_, err = fill.WriteString(fmt.Sprintf("%d\Commitees", header.Difficulty.Int64()))
-	//	if err != nil {
-	//		fmt.Println(err)
-	//	}
-	//	fill.Close()
-	// }
-	// potsignal := &simpleWhirly.PoTSignal{
-	// 	Epoch:               int64(epoch),
-	// 	Proof:               nil,
-	// 	ID:                  0,
-	// 	LeaderPublicAddress: committee[0],
-	// 	Committee:           committee,
-	// 	SelfPublicAddress:   selfaddress,
-	// 	CryptoElement:      nil,
-	// }
-	// if height >= CommiteeDelay+Commiteelen {
+	//
+	//if height >= CommiteeDelay+Commiteelen {
 	//	committee := make([]string, Commiteelen)
 	//	selfaddress := make([]string, 0)
 	//	for i := uint64(0); i < Commiteelen; i++ {
@@ -252,7 +171,15 @@ func (w *Worker) CommitteeUpdate(height uint64) {
 	//			}
 	//		}
 	//	}
-	//
+	//	// potsignal := &simpleWhirly.PoTSignal{
+	//	// 	Epoch:               int64(epoch),
+	//	// 	Proof:               nil,
+	//	// 	ID:                  0,
+	//	// 	LeaderPublicAddress: committee[0],
+	//	// 	Committee:           committee,
+	//	// 	SelfPublicAddress:   selfaddress,
+	//	// 	CryptoElements:      nil,
+	//	// }
 	//	whilyConsensus := &config.WhirlyConfig{
 	//		Type:      "simple",
 	//		BatchSize: 2,
@@ -273,7 +200,7 @@ func (w *Worker) CommitteeUpdate(height uint64) {
 	//		ParentSharding:      nil,
 	//		LeaderPublicAddress: committee[0],
 	//		Committee:           committee,
-	//		CryptoElement:      bc_api.CommitteeConfig{},
+	//		CryptoElements:      bc_api.CommitteeConfig{},
 	//		SubConsensus:        consensus,
 	//	}
 	//
@@ -284,7 +211,7 @@ func (w *Worker) CommitteeUpdate(height uint64) {
 	//	//	ParentSharding:      nil,
 	//	//	LeaderPublicAddress: committee[0],
 	//	//	Committee:           committee,
-	//	//	CryptoElement:      nil,
+	//	//	CryptoElements:      nil,
 	//	//	SubConsensus:        consensus,
 	//	//}
 	//	//shardings := []simpleWhirly.PoTSharding{sharding1, sharding2}
@@ -305,8 +232,23 @@ func (w *Worker) CommitteeUpdate(height uint64) {
 	//	if w.potSignalChan != nil {
 	//		w.potSignalChan <- b
 	//	}
-	// }
-
+	//}
+	////if epoch > 10 && w.ID == 1 {
+	////	block, err := w.chainReader.GetByHeight(epoch - 1)
+	////	if err != nil {
+	////		return
+	////	}
+	////	header := block.GetHeader()
+	////	fill, err := os.OpenFile("difficulty", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
+	////	if err != nil {
+	////		fmt.Println(err)
+	////	}
+	////	_, err = fill.WriteString(fmt.Sprintf("%d\Commitees", header.Difficulty.Int64()))
+	////	if err != nil {
+	////		fmt.Println(err)
+	////	}
+	////	fill.Close()
+	////}
 }
 
 type CryptoSet struct {
@@ -1160,7 +1102,9 @@ func (w *Worker) UpdateLocalCryptoSetByBlockByBranch(height uint64, receivedBloc
 	// 初始化阶段
 	if inInitStage(height, N) {
 		// 记录最新srs
-		cryptoSet.LocalSRS = cryptoElems.SRS
+		if height != 0 {
+			cryptoSet.LocalSRS = cryptoElems.SRS
+		}
 		// 如果处于最后一次初始化阶段，保存SRS为文件（用于Caulk+）,并启动Caulk+进程
 		if !inInitStage(height+1, N) {
 			// 更新 H

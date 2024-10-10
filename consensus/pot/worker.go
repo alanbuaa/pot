@@ -48,18 +48,6 @@ const (
 	Commitees          = 4 // 委员会大小
 )
 
-type Abortcontrol struct {
-	abortchannel chan struct{}
-	once         *sync.Once
-}
-
-func NewAbortcontrol() *Abortcontrol {
-	return &Abortcontrol{
-		abortchannel: make(chan struct{}),
-		once:         new(sync.Once),
-	}
-}
-
 type Worker struct {
 	// basic info
 	ID     int64
@@ -118,6 +106,7 @@ func NewWorker(id int64, config *config.ConsensusConfig, logger *logrus.Entry, b
 	ch0 := make(chan *types.VDF0res, 2048)
 	ch1 := make(chan *types.VDF0res, 2048)
 	potconfig := config.PoT
+
 	seed, err := crand.Int(crand.Reader, big.NewInt(math.MaxInt64))
 	if err != nil {
 		return nil
@@ -206,7 +195,7 @@ func (w *Worker) Init() {
 	// catchup
 	// w.log.Infof("%d %d", w.config.PoT.Snum, w.config.PoT.Vdf1Iteration)
 	w.vdf0.SetInput(crypto.Hash([]byte("aa")), w.config.PoT.Vdf0Iteration)
-	w.SetVdf0res(0, []byte("aa"))
+	w.SetVdf0res(0, ([]byte("aa")))
 	w.blockStorage.Put(types.DefaultGenesisBlock())
 	w.CryptoSetMap[crypto.Convert(types.DefaultGenesisBlock().Hash())] = w.CryptoSet.Backup(types.DefaultGenesisBlock().Header.Height)
 	w.blockCounter = 0
@@ -679,10 +668,10 @@ func (w *Worker) TryFindKey(blockhash [crypto.PrivateKeyLen]byte) (bool, []byte)
 	}
 }
 
-func (w *Worker) SetVdf0res(epocch uint64, vdf0 []byte) {
+func (w *Worker) SetVdf0res(epoch uint64, vdf0 []byte) {
 	w.mutex.Lock()
 	defer w.mutex.Unlock()
-	w.blockStorage.SetVDFres(epocch, vdf0)
+	w.blockStorage.SetVDFres(epoch, vdf0)
 
 }
 
