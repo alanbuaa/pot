@@ -408,6 +408,18 @@ func getStageList(height uint64, N uint64, n uint64) []string {
 	return stages
 }
 
+// getBlockRange 返回h所在的区间, h ∈ [kN+n+1, (k+1)N+n] 则返回 ((k-1)N+1, kN)
+func getBlockRange(h, N, n uint64) (uint64, uint64) {
+	// 计算k的值
+	k := (h - n - 1) / N
+	if k < 1 {
+		return 0, 0
+	}
+	start := (k-1)*N + 1
+	end := k * N
+	return start, end
+}
+
 // VerifyCryptoSet 当收到区块，height 为该区块的高度, 返回该区块是否验证通过
 func (w *Worker) VerifyCryptoSet(height uint64, block *types.Block) bool {
 	cryptoSet := w.CryptoSet
@@ -557,12 +569,8 @@ func (w *Worker) UpdateLocalCryptoSetByBlock(height uint64, receivedBlock *types
 		// 查找自己出的块是否被选为委员会成员
 		// 对于每个自己区块的公私钥对获取抽签结果，是否被选中，如果被选中则获取自己的公钥
 		// 获取自己的区块私钥(同一置换/抽签分组内的，即1~32，33~64...)
-
-		k := (height - n - 1) / N
-		maxHeight := (k + 1) * N
-		minHeight := k*N + 1
-
-		selfPrivKeyList := w.getSelfPrivKeyList(minHeight, maxHeight)
+		startHeight, endHeight := getBlockRange(height, N, n)
+		selfPrivKeyList := w.getSelfPrivKeyList(startHeight, endHeight)
 		for _, sk := range selfPrivKeyList {
 			isSelected, index, pk := verifiable_draw.IsSelected(sk, cryptoElems.DrawProof.RCommit, cryptoElems.DrawProof.SelectedPubKeys)
 			// 如果抽中，在自己所在的委员会队列创建新条目记录
@@ -986,7 +994,7 @@ func (w *Worker) getPrevNBlockPKListByBranch(minHeight, maxHeight uint64, branch
 	return ret
 }
 
-// getSelfPrivKeyList 获取高度位于 [minHeight, maxHeight] 内所有自己出块的区块私钥
+// getSelfPrivKeyListByBranch 获取高度位于 [minHeight, maxHeight] 内所有自己出块的区块私钥
 func (w *Worker) getSelfPrivKeyListByBranch(minHeight, maxHeight uint64, branch []*types.Block) []*bls12381.Fr {
 	fmt.Printf("need pklist from %d to %d \n", minHeight, maxHeight)
 	var ret []*bls12381.Fr
@@ -1167,10 +1175,8 @@ func (w *Worker) UpdateLocalCryptoSetByBlockByBranch(height uint64, receivedBloc
 		// 查找自己出的块是否被选为委员会成员
 		// 对于每个自己区块的公私钥对获取抽签结果，是否被选中，如果被选中则获取自己的公钥
 		// 获取自己的区块私钥(同一置换/抽签分组内的，即1~32，33~64...)
-		k := (height - n - 1) / N
-		maxHeight := (k + 1) * N
-		minHeight := k*N + 1
-		selfPrivKeyList := w.getSelfPrivKeyListByBranch(minHeight, maxHeight, branch)
+		startHeight, endHeight := getBlockRange(height, N, n)
+		selfPrivKeyList := w.getSelfPrivKeyListByBranch(startHeight, endHeight, branch)
 		for _, sk := range selfPrivKeyList {
 			isSelected, index, pk := verifiable_draw.IsSelected(sk, cryptoElems.DrawProof.RCommit, cryptoElems.DrawProof.SelectedPubKeys)
 			// 如果抽中，在自己所在的委员会队列创建新条目记录
