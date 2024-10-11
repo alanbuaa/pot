@@ -953,10 +953,12 @@ func (w *Worker) getPrevNBlockPKListByBranch(minHeight, maxHeight uint64, branch
 		return nil
 	}
 	branchstartheight := branch[n-k].GetHeader().Height
+	branchendheight := branch[0].GetHeader().Height
+
 	ret := make([]*bls12381.PointG1, 0)
 	for i := minHeight; i <= maxHeight; i++ {
-		if i >= branchstartheight {
-			block := branch[n-k]
+		if i >= branchstartheight && i < branchendheight {
+			block := branch[branchendheight-i]
 			fmt.Printf("get height %d pk from branch at branch block height %d\n", i, block.GetHeader().Height)
 			pub := block.GetHeader().PublicKey
 			point, err := bls12381.NewG1().FromBytes(pub)
