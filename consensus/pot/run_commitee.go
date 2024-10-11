@@ -440,8 +440,8 @@ func (w *Worker) VerifyCryptoSet(height uint64, block *types.Block) bool {
 		// 如果验证失败，丢弃
 		err := shuffle.Verify(cryptoSet.LocalSRS, cryptoSet.PrevShuffledPKList, cryptoSet.PrevRCommitForShuffle, receivedBlock.ShuffleProof)
 		if err != nil {
-			mevLogs[w.ID].Printf("[Node %v] Height %d: Verify Shuffle error: %v\n", height, w.ID, err)
-			fmt.Printf("[Node %v] Height %d: Verify Shuffle error: %v\n", height, w.ID, err)
+			mevLogs[w.ID].Printf("[Node %v] Height %d: Verify Shuffle error: %v\n", w.ID, height, err)
+			fmt.Printf("[Node %v] Height %d: Verify Shuffle error: %v\n", w.ID, height, err)
 			return false
 		}
 	}
@@ -956,6 +956,7 @@ func (w *Worker) getPrevNBlockPKListByBranch(minHeight, maxHeight uint64, branch
 		if i >= branchstartheight {
 
 			block := branch[n-k]
+			fmt.Printf("get height %d pk from branch at branch block height %d\n", i, block.GetHeader().Height)
 			pub := block.GetHeader().PublicKey
 			point, err := bls12381.NewG1().FromBytes(pub)
 			if err != nil {
@@ -988,6 +989,7 @@ func (w *Worker) getSelfPrivKeyListByBranch(minHeight, maxHeight uint64, branch 
 	for i := minHeight; i <= maxHeight; i++ {
 		if i >= branchheight {
 			block := branch[n-k]
+			fmt.Printf("get height %d pk from branch at branch block height %d\n", i, block.GetHeader().Height)
 			flag, priv := w.TryFindKey(crypto.Convert(block.Hash()))
 			if flag {
 				fr := bls12381.NewFr().FromBytes(priv)
@@ -1042,8 +1044,8 @@ func (w *Worker) VerifyCryptoSetByBranch(height uint64, block *types.Block, bran
 		// 如果验证失败，丢弃
 		err := shuffle.Verify(cryptoSet.LocalSRS, cryptoSet.PrevShuffledPKList, cryptoSet.PrevRCommitForShuffle, receivedBlock.ShuffleProof)
 		if err != nil {
-			mevLogs[w.ID].Printf("[Block %v | Node %v] Verify[CR]-Shuffle: Verify Shuffle error: %v\n", height, w.ID, err)
-			fmt.Printf("[Block %v | Node %v] Verify[CR]-Shuffle: Verify Shuffle error: %v\n", height, w.ID, err)
+			mevLogs[w.ID].Printf("[Block %v | Node %v] Verify[CR]-Shuffle: Verify Shuffle error: %v\n", w.ID, height, err)
+			fmt.Printf("[Block %v | Node %v] Verify[CR]-Shuffle: Verify Shuffle error: %v\n", w.ID, height, err)
 			return false
 		}
 	}

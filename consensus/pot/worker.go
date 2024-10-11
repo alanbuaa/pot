@@ -510,6 +510,23 @@ func (w *Worker) createBlock(epoch uint64, parentBlock *types.Block, uncleBlock 
 	//	fmt.Println(err)
 	//	return nil
 	//}
+	var cryptoelement types.CryptoElement
+	if set != nil {
+		cryptoelement = types.CryptoElement{
+			SRS:                     set.SRS,
+			SrsUpdateProof:          set.SrsUpdateProof,
+			ShuffleProof:            set.ShuffleProof,
+			DrawProof:               set.DrawProof,
+			HolderPKLists:           set.HolderPKLists,
+			ShareCommitLists:        set.ShareCommitLists,
+			CoeffCommitLists:        set.CoeffCommitLists,
+			EncShareLists:           set.EncShareLists,
+			CommitteePKList:         set.CommitteePKList,
+			CommitteeWorkHeightList: set.CommitteeWorkHeightList,
+		}
+	} else {
+		return nil
+	}
 
 	h := &types.Header{
 		Height:        epoch,
@@ -525,7 +542,7 @@ func (w *Worker) createBlock(epoch uint64, parentBlock *types.Block, uncleBlock 
 		TxHash:        txshash,
 		Hashes:        nil,
 		PublicKey:     publicKeyBytes,
-		CryptoElement: *set,
+		CryptoElement: cryptoelement,
 	}
 
 	h.Hashes = h.Hash()
