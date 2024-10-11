@@ -172,12 +172,15 @@ func (s *SRS) Trim(g1Degree, g2Degree uint32) {
 	s.g2Powers = s.g2Powers[:g2Degree+1]
 }
 
-func (s *SRS) ToBinaryFile() error {
+func (s *SRS) ToBinaryFile(id int64) error {
 	compressedBytes, err := s.ToCompressedBytes()
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(BinFileName, compressedBytes, 0644)
+	if id != 1 {
+		return os.WriteFile(fmt.Sprintf("srs-%v.binary", id), compressedBytes, 0644)
+	}
+	return os.WriteFile(fmt.Sprintf("srs.binary"), compressedBytes, 0644)
 }
 
 func FromBinaryFile() (*SRS, error) {

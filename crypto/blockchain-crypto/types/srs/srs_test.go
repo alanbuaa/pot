@@ -14,11 +14,11 @@ import (
 func TestVerifyTrue1(t *testing.T) {
 	group1 := NewG1()
 	s, initProof := NewSRS(128, 16)
-	assert.True(t, Verify(s, group1.One(), initProof))
+	assert.Nil(t, Verify(s, group1.One(), initProof))
 	prevSRSG1FirstElem := s.G1PowerOf(1)
 	x, _ := NewFr().Rand(rand.Reader)
 	newSrs, proof := s.Update(x)
-	assert.True(t, Verify(newSrs, prevSRSG1FirstElem, proof))
+	assert.Nil(t, Verify(newSrs, prevSRSG1FirstElem, proof))
 }
 
 func TestVerifyTrue2(t *testing.T) {
@@ -26,7 +26,7 @@ func TestVerifyTrue2(t *testing.T) {
 	N := 10
 	startTime := time.Now()
 	s, initProof := NewSRS(2<<12, 2<<12)
-	assert.True(t, Verify(s, group1.One(), initProof))
+	assert.Nil(t, Verify(s, group1.One(), initProof))
 	fmt.Println("init time:", time.Since(startTime))
 	for i := 0; i < N; i++ {
 		x, _ := NewFr().Rand(rand.Reader)

@@ -154,7 +154,7 @@ func (w *Worker) GetPeerQueue() chan *types.Block {
 
 func (w *Worker) CommitteeUpdate(height uint64) {
 	//
-	//if height >= CommiteeDelay+Commiteelen {
+	// if height >= CommiteeDelay+Commiteelen {
 	//	committee := make([]string, Commiteelen)
 	//	selfaddress := make([]string, 0)
 	//	for i := uint64(0); i < Commiteelen; i++ {
@@ -232,23 +232,23 @@ func (w *Worker) CommitteeUpdate(height uint64) {
 	//	if w.potSignalChan != nil {
 	//		w.potSignalChan <- b
 	//	}
-	//}
-	////if epoch > 10 && w.ID == 1 {
-	////	block, err := w.chainReader.GetByHeight(epoch - 1)
-	////	if err != nil {
-	////		return
-	////	}
-	////	header := block.GetHeader()
-	////	fill, err := os.OpenFile("difficulty", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
-	////	if err != nil {
-	////		fmt.Println(err)
-	////	}
-	////	_, err = fill.WriteString(fmt.Sprintf("%d\Commitees", header.Difficulty.Int64()))
-	////	if err != nil {
-	////		fmt.Println(err)
-	////	}
-	////	fill.Close()
-	////}
+	// }
+	// //if epoch > 10 && w.ID == 1 {
+	// //	block, err := w.chainReader.GetByHeight(epoch - 1)
+	// //	if err != nil {
+	// //		return
+	// //	}
+	// //	header := block.GetHeader()
+	// //	fill, err := os.OpenFile("difficulty", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
+	// //	if err != nil {
+	// //		fmt.Println(err)
+	// //	}
+	// //	_, err = fill.WriteString(fmt.Sprintf("%d\Commitees", header.Difficulty.Int64()))
+	// //	if err != nil {
+	// //		fmt.Println(err)
+	// //	}
+	// //	fill.Close()
+	// //}
 }
 
 type CryptoSet struct {
@@ -505,7 +505,7 @@ func (w *Worker) UpdateLocalCryptoSetByBlock(height uint64, receivedBlock *types
 			cryptoSet.H = bls12381.NewG1().New().Set(cryptoSet.LocalSRS.G1PowerOf(123))
 			// 保存SRS至srs.binary文件
 			var err error
-			err = cryptoSet.LocalSRS.ToBinaryFile()
+			err = cryptoSet.LocalSRS.ToBinaryFile(w.ID)
 			if err != nil {
 				mevLogs[w.ID].Errorf("[Block %v | Node %v] Update-Init: failed to save srs%v\n", height, w.ID, err)
 				return fmt.Errorf("[Block %v | Node %v] Update-Init: failed to save srs%v\n", height, w.ID, err)
