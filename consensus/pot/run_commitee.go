@@ -480,6 +480,9 @@ func (w *Worker) VerifyCryptoSet(height uint64, block *types.Block) bool {
 			}
 			// 如果验证失败，丢弃
 			if !mrpvss.VerifyEncShares(uint32(n), cryptoSet.Threshold, cryptoSet.G, cryptoSet.H, receivedBlock.HolderPKLists[i], receivedBlock.ShareCommitLists[i], receivedBlock.CoeffCommitLists[i], receivedBlock.EncShareLists[i]) {
+				mevLogs[w.ID].Printf("[Block %v | Node %v] Verify-DPVSS: failed to verify encShares, pvss index = %v\n", height, w.ID, i)
+				fmt.Printf("[Block %v | Node %v] Verify-DPVSS: failed to verify encShares, pvss index = %v\n", height, w.ID, i)
+
 				return false
 			}
 		}
