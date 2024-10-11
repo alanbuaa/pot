@@ -946,18 +946,16 @@ func (w *Worker) getPrevNBlockPKList(minHeight, maxHeight uint64) []*bls12381.Po
 }
 
 func (w *Worker) getPrevNBlockPKListByBranch(minHeight, maxHeight uint64, branch []*types.Block) []*bls12381.PointG1 {
-	// fmt.Printf("need pklist from %d to %d \n", minHeight, maxHeight)
+	fmt.Printf("need pklist from %d to %d \n", minHeight, maxHeight)
 	n := len(branch)
 	k := 1
 	if n < 1 {
 		return nil
 	}
 	branchstartheight := branch[n-k].GetHeader().Height
-
 	ret := make([]*bls12381.PointG1, 0)
 	for i := minHeight; i <= maxHeight; i++ {
 		if i >= branchstartheight {
-
 			block := branch[n-k]
 			fmt.Printf("get height %d pk from branch at branch block height %d\n", i, block.GetHeader().Height)
 			pub := block.GetHeader().PublicKey
@@ -989,9 +987,11 @@ func (w *Worker) getSelfPrivKeyListByBranch(minHeight, maxHeight uint64, branch 
 	n := len(branch)
 	k := 1
 	branchheight := branch[n-k].GetHeader().Height
+	branchendheight := branch[0].GetHeader().Height
+
 	for i := minHeight; i <= maxHeight; i++ {
-		if i >= branchheight {
-			block := branch[n-k]
+		if i >= branchheight && i <= branchendheight {
+			block := branch[branchendheight-i]
 			fmt.Printf("get height %d pk from branch at branch block height %d\n", i, block.GetHeader().Height)
 			flag, priv := w.TryFindKey(crypto.Convert(block.Hash()))
 			if flag {

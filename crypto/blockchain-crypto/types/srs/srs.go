@@ -177,10 +177,8 @@ func (s *SRS) ToBinaryFile(id int64) error {
 	if err != nil {
 		return err
 	}
-	if id != 1 {
-		return os.WriteFile(fmt.Sprintf("srs-%v.binary", id), compressedBytes, 0644)
-	}
-	return os.WriteFile(fmt.Sprintf("srs.binary"), compressedBytes, 0644)
+
+	return os.WriteFile(fmt.Sprintf("srs-node-%v.binary", id), compressedBytes, 0644)
 }
 
 func FromBinaryFile() (*SRS, error) {
