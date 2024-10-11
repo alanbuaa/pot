@@ -237,15 +237,20 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 			w1 := w.calculateChainWeight(ances, current)
 			w2 := w.calculateChainWeight(ances, block)
 			w.log.Infof("[PoT]\tthe chain weight %d, the fork chain weight %d", w1.Int64(), w2.Int64())
+			_ = w.blockStorage.Put(block)
 
 			if w1.Int64() < w2.Int64() {
 				err := w.chainreset(forkBranch)
 				if err != nil {
 					w.log.Errorf("[PoT]\tchain reset error for %s", err)
 				}
+			} else {
+				w.CryptoSet.Restore(current.GetHeader().Height, currentset)
+				doonce.Do(func() {
+					close(done)
+				})
+				return fmt.Errorf("the fork chain weight is smaller than current chain")
 			}
-
-			_ = w.blockStorage.Put(block)
 
 			err = w.workReset(block.GetHeader().Height, block)
 			if err != nil {
@@ -423,6 +428,7 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 
 	if weightnow.Cmp(weightadvanced) > 0 {
 		w.log.Infof("[PoT]\tthe current chain weight %d is greater than the fork chain weight %d", weightnow.Int64(), weightadvanced.Int64())
+		w.CryptoSet.Restore(current.GetHeader().Height, currentset)
 		doonce.Do(func() {
 			close(done)
 		})
