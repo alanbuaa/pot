@@ -14,7 +14,7 @@ var (
 	serviceHost = "127.0.0.1:50051"
 )
 
-func CreateMultiProof(parentVectorSize uint32, parentVector []*Fr, subVectorSize uint32, subVector []*Fr) (*pb.MultiProof, error) {
+func CreateMultiProof(parentVectorSize uint32, parentVector []*Fr, subVectorSize uint32, subVector []*Fr, nodeId uint64) (*pb.MultiProof, error) {
 	parentVectorPb := make([]*pb.Fr, parentVectorSize)
 	for i := uint32(0); i < parentVectorSize; i++ {
 		parentVectorPb[i] = ConvertFrToProtoFr(parentVector[i])
@@ -36,6 +36,7 @@ func CreateMultiProof(parentVectorSize uint32, parentVector []*Fr, subVectorSize
 		ParentVector:     parentVectorPb,
 		SubVectorSize:    subVectorSize,
 		SubVector:        subVectorPb,
+		NodeId:           nodeId,
 	})
 	if err != nil {
 		return nil, err
@@ -43,7 +44,7 @@ func CreateMultiProof(parentVectorSize uint32, parentVector []*Fr, subVectorSize
 	return proof, nil
 }
 
-func VerifyMultiProof(proof *pb.MultiProof) (bool, error) {
+func VerifyMultiProof(proof *pb.MultiProof, nodeId uint64) (bool, error) {
 
 	conn, err := grpc.NewClient(serviceHost, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
@@ -52,14 +53,17 @@ func VerifyMultiProof(proof *pb.MultiProof) (bool, error) {
 	defer conn.Close()
 
 	client := pb.NewCpServiceClient(conn)
-	res, err := client.VerifyMultiProof(context.TODO(), proof)
+	res, err := client.VerifyMultiProof(context.TODO(), &pb.VerifyMultiProofRequest{
+		MultiProof: proof,
+		NodeId:     nodeId,
+	})
 	if err != nil {
 		return false, err
 	}
 	return res.Res, nil
 }
 
-func CreateSingleProof(hGenerator *PointG1, parentVectorSize uint32, parentVector []*Fr, chosenElement *Fr) (*pb.SingleProof, error) {
+func CreateSingleProof(hGenerator *PointG1, parentVectorSize uint32, parentVector []*Fr, chosenElement *Fr, nodeId uint64) (*pb.SingleProof, error) {
 
 	parentVectorPb := make([]*pb.Fr, parentVectorSize)
 	for i := uint32(0); i < parentVectorSize; i++ {
@@ -78,6 +82,7 @@ func CreateSingleProof(hGenerator *PointG1, parentVectorSize uint32, parentVecto
 		ParentVectorSize: parentVectorSize,
 		ParentVector:     parentVectorPb,
 		ChosenElement:    ConvertFrToProtoFr(chosenElement),
+		NodeId:           nodeId,
 	})
 	if err != nil {
 		return nil, err
@@ -85,7 +90,7 @@ func CreateSingleProof(hGenerator *PointG1, parentVectorSize uint32, parentVecto
 	return proof, nil
 }
 
-func VerifySingleProof(hGenerator *PointG1, proof *pb.SingleProof) (bool, error) {
+func VerifySingleProof(hGenerator *PointG1, proof *pb.SingleProof, nodeId uint64) (bool, error) {
 	conn, err := grpc.NewClient(serviceHost, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		fmt.Println(err)
@@ -96,6 +101,7 @@ func VerifySingleProof(hGenerator *PointG1, proof *pb.SingleProof) (bool, error)
 	res, err := client.VerifySingleProof(context.TODO(), &pb.VerifySingleProofRequest{
 		HGenerator:  ConvertPointG1ToProtoG1Affine(hGenerator),
 		SingleProof: proof,
+		NodeId:      nodeId,
 	})
 	if err != nil {
 		return false, err

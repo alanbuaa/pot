@@ -438,7 +438,7 @@ func (w *Worker) VerifyCryptoSet(height uint64, block *types.Block) bool {
 			cryptoSet.PrevShuffledPKList = w.getPrevNBlockPKList(height-N, height-1)
 		}
 		// 如果验证失败，丢弃
-		err := shuffle.Verify(cryptoSet.LocalSRS, cryptoSet.PrevShuffledPKList, cryptoSet.PrevRCommitForShuffle, receivedBlock.ShuffleProof)
+		err := shuffle.Verify(cryptoSet.LocalSRS, cryptoSet.PrevShuffledPKList, cryptoSet.PrevRCommitForShuffle, receivedBlock.ShuffleProof, uint64(w.ID))
 		if err != nil {
 			mevLogs[w.ID].Printf("[Node %v] Height %d: Verify Shuffle error: %v\n", w.ID, height, err)
 			fmt.Printf("[Node %v] Height %d: Verify Shuffle error: %v\n", w.ID, height, err)
@@ -449,7 +449,7 @@ func (w *Worker) VerifyCryptoSet(height uint64, block *types.Block) bool {
 	if inDrawStage(height, N, n) {
 		// 验证抽签
 		// 如果验证失败，丢弃
-		err := verifiable_draw.Verify(cryptoSet.LocalSRS, uint32(N), cryptoSet.PrevShuffledPKList, uint32(n), cryptoSet.PrevRCommitForDraw, receivedBlock.DrawProof)
+		err := verifiable_draw.Verify(cryptoSet.LocalSRS, uint32(N), cryptoSet.PrevShuffledPKList, uint32(n), cryptoSet.PrevRCommitForDraw, receivedBlock.DrawProof, uint64(w.ID))
 		if err != nil {
 			mevLogs[w.ID].Printf("[Node %v] Height %d: Verify Draw error\n", height, w.ID)
 			fmt.Printf("[Node %v] Height %d: Verify Draw error\n", height, w.ID)
@@ -802,7 +802,7 @@ func (w *Worker) GenerateCryptoSetFromLocal(height uint64) (*types.CryptoElement
 			cryptoSet.PrevShuffledPKList = w.getPrevNBlockPKList(height-N, height-1)
 			// mevLogs[w.ID].Printf("[Mining]: Shuffle | Node %v, Block %v | len of \n", w.ID, height,len(cryptoSet.PrevShuffledPKList))
 		}
-		newShuffleProof, err = shuffle.SimpleShuffle(cryptoSet.LocalSRS, cryptoSet.PrevShuffledPKList, cryptoSet.PrevRCommitForShuffle)
+		newShuffleProof, err = shuffle.SimpleShuffle(cryptoSet.LocalSRS, cryptoSet.PrevShuffledPKList, cryptoSet.PrevRCommitForShuffle, uint64(w.ID))
 		if err != nil {
 			mevLogs[w.ID].Errorf("[Block %v | Node %v] Mining-Shuffle: failed to shuffle: %v\n", height, w.ID, err)
 			return nil, fmt.Errorf("[Block %v | Node %v] Mining-Shuffle: failed to shuffle: %v\n", height, w.ID, err)
@@ -817,7 +817,7 @@ func (w *Worker) GenerateCryptoSetFromLocal(height uint64) (*types.CryptoElement
 			return nil, fmt.Errorf("[Block %v | Node %v] Mining-Draw: failed to generate permutation: %v\n", height, w.ID, err)
 		}
 		secretVector := permutation[:n]
-		newDrawProof, err = verifiable_draw.Draw(cryptoSet.LocalSRS, uint32(N), cryptoSet.PrevShuffledPKList, uint32(n), secretVector, cryptoSet.PrevRCommitForDraw)
+		newDrawProof, err = verifiable_draw.Draw(cryptoSet.LocalSRS, uint32(N), cryptoSet.PrevShuffledPKList, uint32(n), secretVector, cryptoSet.PrevRCommitForDraw, uint64(w.ID))
 		if err != nil {
 			mevLogs[w.ID].Errorf("[Block %v | Node %v] Mining-Draw: failed to draw: %v\n", height, w.ID, err)
 			return nil, fmt.Errorf("[Block %v | Node %v] Mining-Draw: failed to draw: %v\n", height, w.ID, err)
@@ -1042,7 +1042,7 @@ func (w *Worker) VerifyCryptoSetByBranch(height uint64, block *types.Block, bran
 			cryptoSet.PrevShuffledPKList = w.getPrevNBlockPKListByBranch(height-N, height-1, branch)
 		}
 		// 如果验证失败，丢弃
-		err := shuffle.Verify(cryptoSet.LocalSRS, cryptoSet.PrevShuffledPKList, cryptoSet.PrevRCommitForShuffle, receivedBlock.ShuffleProof)
+		err := shuffle.Verify(cryptoSet.LocalSRS, cryptoSet.PrevShuffledPKList, cryptoSet.PrevRCommitForShuffle, receivedBlock.ShuffleProof, uint64(w.ID))
 		if err != nil {
 			mevLogs[w.ID].Printf("[Block %v | Node %v] Verify[CR]-Shuffle: Verify Shuffle error: %v\n", w.ID, height, err)
 			fmt.Printf("[Block %v | Node %v] Verify[CR]-Shuffle: Verify Shuffle error: %v\n", w.ID, height, err)
@@ -1053,7 +1053,7 @@ func (w *Worker) VerifyCryptoSetByBranch(height uint64, block *types.Block, bran
 	if inDrawStage(height, N, n) {
 		// 验证抽签
 		// 如果验证失败，丢弃
-		err := verifiable_draw.Verify(cryptoSet.LocalSRS, uint32(N), cryptoSet.PrevShuffledPKList, uint32(n), cryptoSet.PrevRCommitForDraw, receivedBlock.DrawProof)
+		err := verifiable_draw.Verify(cryptoSet.LocalSRS, uint32(N), cryptoSet.PrevShuffledPKList, uint32(n), cryptoSet.PrevRCommitForDraw, receivedBlock.DrawProof, uint64(w.ID))
 		if err != nil {
 			mevLogs[w.ID].Printf("[Block %v | Node %v] Verify[CR]-Draw: Verify Draw error: %v\n", height, w.ID, err)
 			fmt.Printf("[Block %v | Node %v] Verify[CR]-Draw: Verify Draw error: %v\n", height, w.ID, err)
@@ -1112,7 +1112,7 @@ func (w *Worker) UpdateLocalCryptoSetByBlockByBranch(height uint64, receivedBloc
 			// 更新 H
 			cryptoSet.H = bls12381.NewG1().New().Set(cryptoSet.LocalSRS.G1PowerOf(1))
 			// 保存SRS至srs.binary文件
-			cryptoSet.LocalSRS.ToBinaryFile()
+			cryptoSet.LocalSRS.ToBinaryFile(w.ID)
 
 			// // 启动 caulk+ gRPC
 			// var err error

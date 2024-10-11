@@ -179,7 +179,7 @@ func (d *DrawProof) FromBytes(data []byte) (*DrawProof, error) {
 	return d, nil
 }
 
-func Draw(s *srs.SRS, candidatesNum uint32, candidatesPubKey []*PointG1, quota uint32, secretVector []uint32, prevRCommit *PointG1) (*DrawProof, error) {
+func Draw(s *srs.SRS, candidatesNum uint32, candidatesPubKey []*PointG1, quota uint32, secretVector []uint32, prevRCommit *PointG1, nodeId uint64) (*DrawProof, error) {
 	// blind factor
 	r, _ := NewFr().Rand(rand.Reader)
 	group1 := NewG1()
@@ -212,7 +212,7 @@ func Draw(s *srs.SRS, candidatesNum uint32, candidatesPubKey []*PointG1, quota u
 		vVector[secretVector[i]-1] = NewFr().Set(aVector[i])
 	}
 	// construct caulk plus proof of vector a and vector v
-	caulkPlusProof, err := caulk_plus.CreateMultiProof(candidatesNum, vVector, quota, aVector)
+	caulkPlusProof, err := caulk_plus.CreateMultiProof(candidatesNum, vVector, quota, aVector, nodeId)
 	if err != nil {
 		return nil, err
 	}
@@ -287,7 +287,7 @@ func Draw(s *srs.SRS, candidatesNum uint32, candidatesPubKey []*PointG1, quota u
 	}, nil
 }
 
-func Verify(s *srs.SRS, candidatesNum uint32, candidatesPubKey []*PointG1, quota uint32, prevRCommit *PointG1, drawProof *DrawProof) error {
+func Verify(s *srs.SRS, candidatesNum uint32, candidatesPubKey []*PointG1, quota uint32, prevRCommit *PointG1, drawProof *DrawProof, nodeId uint64) error {
 	group1 := NewG1()
 	if quota != uint32(len(drawProof.SelectedPubKeys)) {
 		return fmt.Errorf("wrong number of selected public keys")
@@ -325,7 +325,7 @@ func Verify(s *srs.SRS, candidatesNum uint32, candidatesPubKey []*PointG1, quota
 	CBlind := group1.Add(group1.New(), C, group1.MulScalar(group1.New(), h, drawProof.B))
 
 	// verify caulk plus
-	res, err := caulk_plus.VerifyMultiProof(drawProof.CaulkPlusProof)
+	res, err := caulk_plus.VerifyMultiProof(drawProof.CaulkPlusProof, nodeId)
 	if !res {
 		if err != nil {
 			return fmt.Errorf("verify multi proof failed: %v", err)

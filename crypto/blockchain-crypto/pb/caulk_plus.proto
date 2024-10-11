@@ -8,7 +8,7 @@ import "pb/bls12_381.proto";
 
 service CpService {
   rpc CreateMultiProof (CreateMultiProofRequest) returns (MultiProof) {}
-  rpc VerifyMultiProof (MultiProof) returns (VerifyReply) {}
+  rpc VerifyMultiProof (VerifyMultiProofRequest) returns (VerifyReply) {}
   rpc CreateSingleProof (CreateSingleProofRequest) returns (SingleProof) {}
   rpc VerifySingleProof (VerifySingleProofRequest) returns (VerifyReply) {}
   rpc CalcRootsOfUnity (DomainSize) returns (RootsOfUnity) {}
@@ -21,6 +21,12 @@ message CreateMultiProofRequest {
   repeated bls12_381.Fr parent_vector = 2;
   uint32 sub_vector_size = 3;
   repeated bls12_381.Fr sub_vector = 4;
+  uint64 node_id = 5;
+}
+
+message VerifyMultiProofRequest {
+  MultiProof multi_proof = 1;
+  uint64 node_id = 2;
 }
 
 message MultiProof {
@@ -56,6 +62,7 @@ message CreateSingleProofRequest {
   repeated bls12_381.Fr parent_vector = 3;
   // sub-vector in u32
   bls12_381.Fr chosen_element = 4;
+  uint64 node_id = 5;
 }
 
 message SingleProof {
@@ -87,6 +94,7 @@ message SingleProof {
 message VerifySingleProofRequest{
   bls12_381.G1Affine h_generator = 1;
   SingleProof single_proof = 2;
+  uint64 node_id = 3;
 }
 
 message VerifyReply{

@@ -31,7 +31,7 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type CpServiceClient interface {
 	CreateMultiProof(ctx context.Context, in *CreateMultiProofRequest, opts ...grpc.CallOption) (*MultiProof, error)
-	VerifyMultiProof(ctx context.Context, in *MultiProof, opts ...grpc.CallOption) (*VerifyReply, error)
+	VerifyMultiProof(ctx context.Context, in *VerifyMultiProofRequest, opts ...grpc.CallOption) (*VerifyReply, error)
 	CreateSingleProof(ctx context.Context, in *CreateSingleProofRequest, opts ...grpc.CallOption) (*SingleProof, error)
 	VerifySingleProof(ctx context.Context, in *VerifySingleProofRequest, opts ...grpc.CallOption) (*VerifyReply, error)
 	CalcRootsOfUnity(ctx context.Context, in *DomainSize, opts ...grpc.CallOption) (*RootsOfUnity, error)
@@ -55,7 +55,7 @@ func (c *cpServiceClient) CreateMultiProof(ctx context.Context, in *CreateMultiP
 	return out, nil
 }
 
-func (c *cpServiceClient) VerifyMultiProof(ctx context.Context, in *MultiProof, opts ...grpc.CallOption) (*VerifyReply, error) {
+func (c *cpServiceClient) VerifyMultiProof(ctx context.Context, in *VerifyMultiProofRequest, opts ...grpc.CallOption) (*VerifyReply, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(VerifyReply)
 	err := c.cc.Invoke(ctx, CpService_VerifyMultiProof_FullMethodName, in, out, cOpts...)
@@ -100,7 +100,7 @@ func (c *cpServiceClient) CalcRootsOfUnity(ctx context.Context, in *DomainSize, 
 // for forward compatibility
 type CpServiceServer interface {
 	CreateMultiProof(context.Context, *CreateMultiProofRequest) (*MultiProof, error)
-	VerifyMultiProof(context.Context, *MultiProof) (*VerifyReply, error)
+	VerifyMultiProof(context.Context, *VerifyMultiProofRequest) (*VerifyReply, error)
 	CreateSingleProof(context.Context, *CreateSingleProofRequest) (*SingleProof, error)
 	VerifySingleProof(context.Context, *VerifySingleProofRequest) (*VerifyReply, error)
 	CalcRootsOfUnity(context.Context, *DomainSize) (*RootsOfUnity, error)
@@ -114,7 +114,7 @@ type UnimplementedCpServiceServer struct {
 func (UnimplementedCpServiceServer) CreateMultiProof(context.Context, *CreateMultiProofRequest) (*MultiProof, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateMultiProof not implemented")
 }
-func (UnimplementedCpServiceServer) VerifyMultiProof(context.Context, *MultiProof) (*VerifyReply, error) {
+func (UnimplementedCpServiceServer) VerifyMultiProof(context.Context, *VerifyMultiProofRequest) (*VerifyReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method VerifyMultiProof not implemented")
 }
 func (UnimplementedCpServiceServer) CreateSingleProof(context.Context, *CreateSingleProofRequest) (*SingleProof, error) {
@@ -158,7 +158,7 @@ func _CpService_CreateMultiProof_Handler(srv interface{}, ctx context.Context, d
 }
 
 func _CpService_VerifyMultiProof_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MultiProof)
+	in := new(VerifyMultiProofRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -170,7 +170,7 @@ func _CpService_VerifyMultiProof_Handler(srv interface{}, ctx context.Context, d
 		FullMethod: CpService_VerifyMultiProof_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(CpServiceServer).VerifyMultiProof(ctx, req.(*MultiProof))
+		return srv.(CpServiceServer).VerifyMultiProof(ctx, req.(*VerifyMultiProofRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
