@@ -16,17 +16,26 @@ type EncShare struct {
 
 func (e *EncShare) DeepCopy() *EncShare {
 	group1 := NewG1()
-	bList := make([]*PointG1, 32)
-	for i := 0; i < 32; i++ {
-		if e.BList[i] != nil {
-			bList[i] = group1.New().Set(e.BList[i])
+	ret := &EncShare{
+		A:         nil,
+		BList:     nil,
+		DealProof: nil,
+	}
+	if e.A != nil {
+		ret.A = e.A
+	}
+	if e.BList != nil {
+		ret.BList = make([]*PointG1, 32)
+		for i := 0; i < 32; i++ {
+			if e.BList[i] != nil {
+				ret.BList[i] = group1.New().Set(e.BList[i])
+			}
 		}
 	}
-	return &EncShare{
-		A:         group1.New().Set(e.A),
-		BList:     bList,
-		DealProof: e.DealProof.DeepCopy(),
+	if e.DealProof != nil {
+		ret.DealProof = e.DealProof.DeepCopy()
 	}
+	return ret
 }
 
 func NewEmptyEncShare() *EncShare {

@@ -35,10 +35,6 @@ var (
 
 type NoPrefixFormatter struct{}
 
-func (f *NoPrefixFormatter) Format(entry *logrus.Entry) ([]byte, error) {
-	return []byte(entry.Message), nil
-}
-
 func init() {
 	for _, id := range ids {
 		// 为每个 ID 创建一个日志文件
@@ -54,7 +50,12 @@ func init() {
 			Hooks:     make(logrus.LevelHooks),
 			Level:     logrus.InfoLevel,
 		}
-		logger.SetFormatter(&NoPrefixFormatter{})
+		logger.SetFormatter(&logrus.TextFormatter{
+			FullTimestamp:   true,
+			TimestampFormat: "[2006-01-02 15:04:05]", // 自定义时间戳格式
+			DisableColors:   true,
+			DisableSorting:  true,
+		})
 		mevLogs[id] = logger
 	}
 }
@@ -91,9 +92,11 @@ type DPVSSMember struct {
 func (c *CommitteeMark) DeepCopy() *CommitteeMark {
 	group1 := bls12381.NewG1()
 	ret := &CommitteeMark{
-		WorkHeight:  c.WorkHeight,
-		CommitteePK: group1.New().Set(c.CommitteePK),
-		IsLeader:    c.IsLeader,
+		WorkHeight: c.WorkHeight,
+		IsLeader:   c.IsLeader,
+	}
+	if c.CommitteePK != nil {
+		ret.CommitteePK = group1.New().Set(c.CommitteePK)
 	}
 	if c.MemberPKList != nil {
 		ret.MemberPKList = make([]*bls12381.PointG1, len(c.MemberPKList))
@@ -122,13 +125,22 @@ func (c *CommitteeMark) DeepCopy() *CommitteeMark {
 
 func (d *DPVSSMember) DeepCopy() *DPVSSMember {
 	group1 := bls12381.NewG1()
-	return &DPVSSMember{
-		Index:        d.Index,
-		SelfPK:       group1.New().Set(d.SelfPK),
-		SelfSK:       bls12381.NewFr().Set(d.SelfSK),
-		AggrEncShare: d.AggrEncShare.DeepCopy(),
-		Share:        bls12381.NewFr().Set(d.Share),
+	ret := &DPVSSMember{
+		Index: d.Index,
 	}
+	if d.SelfPK != nil {
+		ret.SelfPK = group1.New().Set(d.SelfPK)
+	}
+	if d.SelfSK != nil {
+		ret.SelfSK = bls12381.NewFr().Set(d.SelfSK)
+	}
+	if d.AggrEncShare != nil {
+		ret.AggrEncShare = d.AggrEncShare.DeepCopy()
+	}
+	if d.Share != nil {
+		ret.Share = bls12381.NewFr().Set(d.Share)
+	}
+	return ret
 }
 
 func BackUpCommitteeQueue(q *Queue) *Queue {

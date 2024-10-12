@@ -23,11 +23,17 @@ type Proof struct {
 
 func (p *Proof) DeepCopy() *Proof {
 	group1 := NewG1()
-	return &Proof{
-		A1: group1.New().Set(p.A1),
-		A2: group1.New().Set(p.A2),
-		R:  NewFr().Set(p.R),
+	ret := &Proof{}
+	if p.A1 != nil {
+		ret.A1 = group1.New().Set(p.A1)
 	}
+	if p.A2 != nil {
+		ret.A2 = group1.New().Set(p.A2)
+	}
+	if p.R != nil {
+		ret.R = NewFr().Set(p.R)
+	}
+	return ret
 }
 
 func (p *Proof) ToBytes() []byte {
