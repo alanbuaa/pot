@@ -23,7 +23,7 @@ func EncShares(g *PointG1, h *PointG1, holderPKList []*PointG1, secret *Fr, thre
 	y = group1.MulScalar(group1.New(), g, secret)
 
 	// 生成秘密共享多项式 p, p(0) = secret
-	secretPoly := poly.NewSimplePolynomial(threshold, secret)
+	secretPoly := poly.NewSecretPolynomial(threshold, secret)
 	// 计算系数承诺 C_i = h^(a_i)
 	coeffCommits = make([]*PointG1, threshold)
 	for i, coeff := range secretPoly.Coeffs {
@@ -78,6 +78,35 @@ func EncShares(g *PointG1, h *PointG1, holderPKList []*PointG1, secret *Fr, thre
 		}
 	}
 	return shareCommitments, coeffCommits, encShares, y, nil
+}
+
+func AggregateEncShareList(encShares []*EncShare) *EncShare {
+	group1 := NewG1()
+	n := len(encShares)
+	aggrEncShare := &EncShare{
+		A:         group1.Zero(),
+		BList:     make([]*PointG1, 32),
+		DealProof: nil,
+	}
+	for j := 0; j < 32; j++ {
+		aggrEncShare.BList[j] = group1.Zero()
+	}
+	for i := 0; i < n; i++ {
+		group1.Add(aggrEncShare.A, aggrEncShare.A, encShares[i].A)
+		for j := 0; j < 32; j++ {
+			group1.Add(aggrEncShare.BList[j], aggrEncShare.BList[j], encShares[i].BList[j])
+		}
+	}
+	return aggrEncShare
+}
+
+func AggregateEncShares(prevAggrEncShares, encShares *EncShare) *EncShare {
+	group1 := NewG1()
+	group1.Add(prevAggrEncShares.A, prevAggrEncShares.A, encShares.A)
+	for j := 0; j < 32; j++ {
+		group1.Add(prevAggrEncShares.BList[j], prevAggrEncShares.BList[j], encShares.BList[j])
+	}
+	return prevAggrEncShares
 }
 
 func VerifyEncShares(n uint32, t uint32, g, h *PointG1, pubKeyList []*PointG1, shareCommits []*PointG1, coeffCommits []*PointG1, encShares []*EncShare) bool {
@@ -153,35 +182,6 @@ func AggregateShareCommitList(list1 []*PointG1, list2 []*PointG1) ([]*PointG1, e
 	return list1, nil
 }
 
-func AggregateEncShareList(encShares []*EncShare) *EncShare {
-	group1 := NewG1()
-	n := len(encShares)
-	aggrEncShare := &EncShare{
-		A:         group1.Zero(),
-		BList:     make([]*PointG1, 32),
-		DealProof: nil,
-	}
-	for j := 0; j < 32; j++ {
-		aggrEncShare.BList[j] = group1.Zero()
-	}
-	for i := 0; i < n; i++ {
-		group1.Add(aggrEncShare.A, aggrEncShare.A, encShares[i].A)
-		for j := 0; j < 32; j++ {
-			group1.Add(aggrEncShare.BList[j], aggrEncShare.BList[j], encShares[i].BList[j])
-		}
-	}
-	return aggrEncShare
-}
-
-func AggregateEncShares(prevAggrEncShares, encShares *EncShare) *EncShare {
-	group1 := NewG1()
-	group1.Add(prevAggrEncShares.A, prevAggrEncShares.A, encShares.A)
-	for j := 0; j < 32; j++ {
-		group1.Add(prevAggrEncShares.BList[j], prevAggrEncShares.BList[j], encShares.BList[j])
-	}
-	return prevAggrEncShares
-}
-
 func DecryptShare(g *PointG1, privKey *Fr, encShare *EncShare) *Fr {
 	group1 := NewG1()
 	// A_i^sk_i
@@ -214,6 +214,7 @@ func DecryptAggregateShare(g *PointG1, privKey *Fr, encShare *EncShare, m uint32
 		point := group1.Sub(group1.New(), encShare.BList[i], denominator)
 		exponent, err := bruteForceFindExp(g, point, step, 256*m)
 		if err != nil {
+			fmt.Println("DecryptAggregateShare: cannot find exponent")
 			return nil
 		}
 		share.Add(share, exponent)

@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/binary"
+	"fmt"
 )
 
 type DLEQ struct {
@@ -19,6 +20,10 @@ type Proof struct {
 	A1 *PointG1
 	A2 *PointG1
 	R  *Fr
+}
+
+func (p *Proof) String() string {
+	return fmt.Sprintf("DLEQProof{A1: %v, A2: %v, R:%v}", p.A1[0][0], p.A2[0][0], p.R[0])
 }
 
 func (p *Proof) DeepCopy() *Proof {
@@ -130,6 +135,26 @@ func (d *DLEQ) Verify(proof *Proof) bool {
 }
 
 func Verify(Index uint32, G1 *PointG1, H1 *PointG1, G2 *PointG1, H2 *PointG1, proof *Proof) bool {
+	if G1 == nil {
+		fmt.Println("G1 is nil")
+		return false
+	}
+	if H1 == nil {
+		fmt.Println("H1 is nil")
+		return false
+	}
+	if G2 == nil {
+		fmt.Println("G2 is nil")
+		return false
+	}
+	if H2 == nil {
+		fmt.Println("H2 is nil")
+		return false
+	}
+	if proof == nil {
+		fmt.Println("proof is nil")
+		return false
+	}
 	group1 := NewG1()
 	// g1, h_1, g2, h_2, a_1, a_2
 	challenge := group1.ToBytes(G1)

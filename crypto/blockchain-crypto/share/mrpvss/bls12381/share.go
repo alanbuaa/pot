@@ -4,6 +4,8 @@ import (
 	dleq "blockchain-crypto/proof/dleq/bls12381"
 	. "blockchain-crypto/types/curve/bls12381"
 	"bytes"
+	"fmt"
+	"strings"
 )
 
 type EncShare struct {
@@ -12,6 +14,22 @@ type EncShare struct {
 	BList []*PointG1
 	// 分发份额证明
 	DealProof *dleq.Proof
+}
+
+func (e *EncShare) String() string {
+	var sb strings.Builder
+
+	sb.WriteString(fmt.Sprintf("EncShare{A: %v, ", e.A[0][0]))
+	sb.WriteString("BList: [")
+	// 写入 BList 字段的字符串表示
+	for i, b := range e.BList {
+		sb.WriteString(fmt.Sprintf("%v", b[0][0]))
+		if i < len(e.BList)-1 {
+			sb.WriteString(", ")
+		}
+	}
+	sb.WriteString(fmt.Sprintf("], DealProof: %v}", e.DealProof))
+	return sb.String()
 }
 
 func (e *EncShare) DeepCopy() *EncShare {

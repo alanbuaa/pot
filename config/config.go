@@ -116,22 +116,22 @@ func NewConfig(path string, id int64) (*Config, error) {
 	if err := yaml.Unmarshal(data, cfg); err != nil {
 		return nil, err
 	}
-	//keys := new(KeySet)
-	//keys.PublicKey, err = crypto.ReadThresholdPublicKeyFromFile(cfg.PublicKeyPath)
-	//if err != nil {
+	// keys := new(KeySet)
+	// keys.PublicKey, err = crypto.ReadThresholdPublicKeyFromFile(cfg.PublicKeyPath)
+	// if err != nil {
 	//	return nil, err
-	//}
-	//keys.PrivateKey, err = crypto.ReadThresholdPrivateKeyFromFile(cfg.GetNodeInfo(id).PrivateKeyPath)
-	//if err != nil {
+	// }
+	// keys.PrivateKey, err = crypto.ReadThresholdPrivateKeyFromFile(cfg.GetNodeInfo(id).PrivateKeyPath)
+	// if err != nil {
 	//	return nil, err
-	//}
-	//cfg.Keys = keys
+	// }
+	// cfg.Keys = keys
 	cfg.Consensus.Nodes = make([]*ReplicaInfo, (cfg.Total))
-	for i := 0; i < len(cfg.Nodes); i++ {
+	for i := 0; i < cfg.Total; i++ {
 		cfg.Consensus.Nodes[cfg.Nodes[i].ID] = cfg.Nodes[i]
 	}
 	cfg.Nodes = cfg.Consensus.Nodes
-	//cfg.Consensus.Keys = keys
+	// cfg.Consensus.Keys = keys
 	// cfg.Consensus.F = (len(cfg.Nodes) - 1) / 3
 	cfg.Consensus.F = (cfg.Total - 1) / 3
 	// cfg.Consensus.F = 1

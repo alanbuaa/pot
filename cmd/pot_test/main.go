@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 )
 
 var (
@@ -56,8 +57,8 @@ func main() {
 	signal.Notify(sigChan, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM,
 		syscall.SIGQUIT)
 	cfg, _ := config.NewConfig("config/configpot.yaml", 0)
-	total := len(cfg.Nodes)
-	fmt.Println(len(cfg.Nodes))
+	total := cfg.Total
+	fmt.Println(total)
 	nodes := make([]*node.Node, total)
 
 	defer func() {
@@ -75,6 +76,9 @@ func main() {
 	// Your code that may cause panic
 	for i := int64(0); i < int64(len(cfg.Nodes)); i++ {
 		go func(index int64) {
+			if index == 3 {
+				time.Sleep(60 * time.Second)
+			}
 			if cfg.Nodes[index] != nil {
 				nodes[index] = node.NewNode(cfg.Nodes[index].ID)
 			}
