@@ -20,7 +20,7 @@ func EncShares(g *PointG1, h *PointG1, holderPKList []*PointG1, secret *Fr, thre
 	}
 
 	// 计算委员会公钥 y = g^s
-	y = group1.MulScalar(group1.New(), g, secret)
+	y = group1.Affine(group1.MulScalar(group1.New(), g, secret))
 
 	// 生成秘密共享多项式 p, p(0) = secret
 	secretPoly := poly.NewSecretPolynomial(threshold, secret)
@@ -41,12 +41,12 @@ func EncShares(g *PointG1, h *PointG1, holderPKList []*PointG1, secret *Fr, thre
 	for i := uint32(0); i < n; i++ {
 		index := i + 1
 		// share commitment S_i = h^(s_i)
-		shareCommitments[i] = group1.MulScalar(group1.New(), h, shares[i])
+		shareCommitments[i] = group1.Affine(group1.MulScalar(group1.New(), h, shares[i]))
 
 		// 计算加密份额 (A_i, {B_ij})
 		// TODO proof of ciphertext form
-		A := group1.MulScalar(group1.New(), g, shares[i])
-		// (pk_i)^(s_i）
+		A := group1.Affine(group1.MulScalar(group1.New(), g, shares[i]))
+		// (pk_i)^(s_i)
 		cipherTerm := group1.MulScalar(group1.New(), holderPKList[i], shares[i])
 		BList := make([]*PointG1, 32)
 		// product of B_ij, for verification
@@ -55,21 +55,25 @@ func EncShares(g *PointG1, h *PointG1, holderPKList []*PointG1, secret *Fr, thre
 		shareBytes := shares[i].ToBytes()
 		fr256 := FrFromInt(256)
 		step := NewFr().One()
+		fmt.Println("===============================================================")
+		fmt.Printf("i = %v, s_i = %v, (pk_i)^(s_i) = %v\n", i, shares[i], group1.Affine(cipherTerm))
 		for j := 0; j < 32; j++ {
 			// calc share pieces s_ij slice * 2^8^(k-j)
 			sharePiece := NewFr().Mul(FrFromInt(int(shareBytes[31-j])), step)
 			step.Mul(step, fr256)
-			// 	B_ij = g^(s_ij) (pk_i)^(s_i）
-			BList[j] = group1.Add(group1.New(), group1.MulScalar(group1.New(), g, sharePiece), cipherTerm)
+			// 	B_ij = g^(s_ij) (pk_i)^(s_i)
+			fmt.Printf("j = %v, s_ij = %v, g^(s_ij) = %v\n", j, shareBytes[31-j], group1.Affine(group1.MulScalar(group1.New(), g, sharePiece)))
+			BList[j] = group1.Affine(group1.Add(group1.New(), group1.MulScalar(group1.New(), g, sharePiece), cipherTerm))
 			group1.Add(BProd, BProd, BList[j])
 		}
+		fmt.Println("===============================================================")
 		// 分发证明 log_(pk_i) Y_i = log_(h) S_i 证明分发的是 s_i
 		dleqParams := dleq.DLEQ{
 			Index: index,
 			G1:    h,
 			H1:    shareCommitments[i],
 			G2:    group1.Add(group1.New(), g, group1.MulScalar(group1.New(), holderPKList[i], FrFromInt(32))),
-			H2:    BProd,
+			H2:    group1.Affine(BProd),
 		}
 		encShares[i] = &EncShare{
 			A:         A,
@@ -214,8 +218,9 @@ func DecryptAggregateShare(g *PointG1, privKey *Fr, encShare *EncShare, m uint32
 		point := group1.Sub(group1.New(), encShare.BList[i], denominator)
 		exponent, err := bruteForceFindExp(g, point, step, 256*m)
 		if err != nil {
-			fmt.Println("DecryptAggregateShare: cannot find exponent")
+			fmt.Printf("cannot find exponent[%v], exp= %v\n", i, exponent)
 			return nil
+			// exponent = NewFr().Zero()
 		}
 		share.Add(share, exponent)
 		step.Mul(step, fr256)

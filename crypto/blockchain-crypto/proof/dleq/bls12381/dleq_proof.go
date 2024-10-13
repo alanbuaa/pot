@@ -85,8 +85,8 @@ func (p *Proof) FromBytes(data []byte) (*Proof, error) {
 func (d *DLEQ) Prove(alpha *Fr) *Proof {
 	group1 := NewG1()
 	w, _ := NewFr().Rand(rand.Reader)
-	a1 := group1.MulScalar(group1.New(), d.G1, w)
-	a2 := group1.MulScalar(group1.New(), d.G2, w)
+	a1 := group1.Affine(group1.MulScalar(group1.New(), d.G1, w))
+	a2 := group1.Affine(group1.MulScalar(group1.New(), d.G2, w))
 	// g1, h_1, g2, h_2, a_1, a_2; i
 	challenge := group1.ToBytes(d.G1)
 	challenge = append(challenge, group1.ToBytes(d.H1)...)
@@ -98,18 +98,34 @@ func (d *DLEQ) Prove(alpha *Fr) *Proof {
 	binary.BigEndian.PutUint32(indexBytes, d.Index)
 	challenge = append(challenge, indexBytes...)
 	c := HashToFr(challenge)
-	r := NewFr()
-	tmp := NewFr()
-	tmp.Mul(alpha, c)
-	r.Sub(w, tmp)
 	return &Proof{
 		A1: a1,
 		A2: a2,
-		R:  r,
+		R:  NewFr().Sub(w, NewFr().Mul(alpha, c)),
 	}
 }
 
 func (d *DLEQ) Verify(proof *Proof) bool {
+	if d.G1 == nil {
+		fmt.Println("G1 is nil")
+		return false
+	}
+	if d.H1 == nil {
+		fmt.Println("H1 is nil")
+		return false
+	}
+	if d.G2 == nil {
+		fmt.Println("G2 is nil")
+		return false
+	}
+	if d.H2 == nil {
+		fmt.Println("H2 is nil")
+		return false
+	}
+	if proof == nil {
+		fmt.Println("proof is nil")
+		return false
+	}
 	group1 := NewG1()
 	// g1, h_1, g2, h_2, a_1, a_2
 	challenge := group1.ToBytes(d.G1)
@@ -126,12 +142,8 @@ func (d *DLEQ) Verify(proof *Proof) bool {
 		group1.MulScalar(group1.New(), d.H1, c))
 	a2 := group1.Add(group1.New(), group1.MulScalar(group1.New(), d.G2, proof.R),
 		group1.MulScalar(group1.New(), d.H2, c))
-	if !group1.Equal(a1, proof.A1) {
-		return false
-	} else if !group1.Equal(a2, proof.A2) {
-		return false
-	}
-	return true
+	return group1.Equal(a1, proof.A1) && group1.Equal(a2, proof.A2)
+
 }
 
 func Verify(Index uint32, G1 *PointG1, H1 *PointG1, G2 *PointG1, H2 *PointG1, proof *Proof) bool {
@@ -171,10 +183,5 @@ func Verify(Index uint32, G1 *PointG1, H1 *PointG1, G2 *PointG1, H2 *PointG1, pr
 		group1.MulScalar(group1.New(), H1, c))
 	a2 := group1.Add(group1.New(), group1.MulScalar(group1.New(), G2, proof.R),
 		group1.MulScalar(group1.New(), H2, c))
-	if !group1.Equal(a1, proof.A1) {
-		return false
-	} else if !group1.Equal(a2, proof.A2) {
-		return false
-	}
-	return true
+	return group1.Equal(a1, proof.A1) && group1.Equal(a2, proof.A2)
 }
