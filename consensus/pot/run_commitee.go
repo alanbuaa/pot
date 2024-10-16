@@ -118,8 +118,10 @@ func (c *CommitteeMark) String() string {
 	builder.WriteString("], ")
 
 	builder.WriteString("SelfMemberList: [")
-	for _, member := range c.SelfMemberList {
-		builder.WriteString(fmt.Sprintf("%v, ", member))
+	if c.SelfMemberList != nil {
+		for _, member := range c.SelfMemberList {
+			builder.WriteString(fmt.Sprintf("%v, ", member))
+		}
 	}
 	builder.WriteString("]}")
 
@@ -344,6 +346,7 @@ func (c *CryptoSet) String() string {
 		mark := e.Value.(*CommitteeMark)
 		sb.WriteString(fmt.Sprintf("%v, ", mark))
 	}
+	sb.WriteString("]}")
 	return sb.String()
 }
 
@@ -534,7 +537,7 @@ func (w *Worker) VerifyCryptoSet(height uint64, block *types.Block) bool {
 	N := cryptoSet.BigN
 	n := cryptoSet.SmallN
 	cryptoElement := block.GetHeader().CryptoElement
-	mevLogs[w.ID].Printf("[Block %2v|Node %v] Verify, stages: %v\n", height, w.ID, getStageList(height, N, n))
+	mevLogs[w.ID].Printf("[Block %2v|Node %v] Verify, stage: %v\n", height, w.ID, getStageList(height, N, n))
 	mevLogs[w.ID].Printf("\t\tlocal crypto set: %v\n", cryptoSet)
 	mevLogs[w.ID].Printf("\t\treceived block: %x\n", block.Header.Hashes[:4])
 
@@ -1070,7 +1073,7 @@ func (w *Worker) getSelfPrivKeyList(minHeight, maxHeight uint64) []*bls12381.Fr 
 		if flag {
 			fr := bls12381.NewFr().FromBytes(priv)
 			ret = append(ret, fr)
-			mevLogs[w.ID].Printf("\t\tget sk from branch at height %v, block hash: %v, sk: %v\n", i, block.Header.Hashes, fr)
+			mevLogs[w.ID].Printf("\t\tget sk from branch at height %v, block hash: %x, sk: %v\n", i, block.Header.Hashes[:4], fr)
 		}
 	}
 	return ret
@@ -1180,7 +1183,6 @@ func (w *Worker) VerifyCryptoSetByBranch(height uint64, block *types.Block, bran
 	cryptoElement := block.GetHeader().CryptoElement
 
 	mevLogs[w.ID].Printf("[Block %2v|Node %v] Verify[CR] | stage: %v\n", height, w.ID, getStageList(height, N, n))
-	mevLogs[w.ID].Printf("[Block %2v|Node %v] Verify[CR] | stages: %v\n", height, w.ID, getStageList(height, N, n))
 	mevLogs[w.ID].Printf("\t\tlocal crypto set: %v\n", cryptoSet)
 	mevLogs[w.ID].Printf("\t\treceived block: %x\n", block.Header.Hashes[:4])
 
