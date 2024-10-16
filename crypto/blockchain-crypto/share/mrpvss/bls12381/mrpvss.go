@@ -55,18 +55,18 @@ func EncShares(g *PointG1, h *PointG1, holderPKList []*PointG1, secret *Fr, thre
 		shareBytes := shares[i].ToBytes()
 		fr256 := FrFromInt(256)
 		step := NewFr().One()
-		fmt.Println("===============================================================")
-		fmt.Printf("i = %v, s_i = %v, (pk_i)^(s_i) = %v\n", i, shares[i], group1.Affine(cipherTerm))
+		// fmt.Println("===============================================================")
+		// fmt.Printf("i = %v, s_i = %v, (pk_i)^(s_i) = %v\n", i, shares[i], group1.Affine(cipherTerm))
 		for j := 0; j < 32; j++ {
 			// calc share pieces s_ij slice * 2^8^(k-j)
 			sharePiece := NewFr().Mul(FrFromInt(int(shareBytes[31-j])), step)
 			step.Mul(step, fr256)
 			// 	B_ij = g^(s_ij) (pk_i)^(s_i)
-			fmt.Printf("j = %v, s_ij = %v, g^(s_ij) = %v\n", j, shareBytes[31-j], group1.Affine(group1.MulScalar(group1.New(), g, sharePiece)))
+			// fmt.Printf("j = %v, s_ij = %v, g^(s_ij) = %v\n", j, shareBytes[31-j], group1.Affine(group1.MulScalar(group1.New(), g, sharePiece)))
 			BList[j] = group1.Affine(group1.Add(group1.New(), group1.MulScalar(group1.New(), g, sharePiece), cipherTerm))
 			group1.Add(BProd, BProd, BList[j])
 		}
-		fmt.Println("===============================================================")
+		// fmt.Println("===============================================================")
 		// 分发证明 log_(pk_i) Y_i = log_(h) S_i 证明分发的是 s_i
 		dleqParams := dleq.DLEQ{
 			Index: index,

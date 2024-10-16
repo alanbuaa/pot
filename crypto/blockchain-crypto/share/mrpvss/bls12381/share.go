@@ -22,11 +22,8 @@ func (e *EncShare) String() string {
 	sb.WriteString(fmt.Sprintf("EncShare{A: %v, ", e.A[0][0]))
 	sb.WriteString("BList: [")
 	// 写入 BList 字段的字符串表示
-	for i, b := range e.BList {
-		sb.WriteString(fmt.Sprintf("%v", b[0][0]))
-		if i < len(e.BList)-1 {
-			sb.WriteString(", ")
-		}
+	for i := 0; i < 2; i++ {
+		sb.WriteString(fmt.Sprintf("%v, ", e.BList[i][0][0]))
 	}
 	sb.WriteString(fmt.Sprintf("], DealProof: %v}", e.DealProof))
 	return sb.String()

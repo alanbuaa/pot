@@ -207,7 +207,7 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 					flag = false
 					break
 				}
-				err := w.UpdateLocalCryptoSetByBlockByBranch(forkblock.Header.Height, forkblock, forkBranch)
+				err := w.UpdateLocalCryptoSetByBranch(forkblock.Header.Height, forkblock, forkBranch)
 				if err != nil {
 					flag = false
 					break
@@ -321,7 +321,7 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 	//	w.vdf0Chan <- res
 	//	w.log.Infof("[PoT]\tepoch %d:execset vdf complete. Start from epoch %d with res %s", epoch, block.GetHeader().Height-1, hexutil.Encode(crypto.Hash(res.Res)))
 	//	return nil
-	//}
+	// }
 	done := make(chan struct{})
 	var doonce sync.Once
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -349,7 +349,7 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 	w.log.Infof("[PoT]\tGet shared ancestor of block %s is %s at height %d", hexutil.Encode(block.Hash()), hexutil.Encode(ances.Hash()), ances.GetHeader().Height)
 
 	branch, _, err := w.GetBranch(ances, block)
-	//w.log.Errorf("get branch end")
+	// w.log.Errorf("get branch end")
 	if err != nil {
 		w.log.Errorf("[PoT]\tGet branch error for: %s", err)
 		doonce.Do(func() {
@@ -396,7 +396,7 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 			flag = false
 			break
 		}
-		err := w.UpdateLocalCryptoSetByBlockByBranch(forkblock.Header.Height, forkblock, branch)
+		err := w.UpdateLocalCryptoSetByBranch(forkblock.Header.Height, forkblock, branch)
 		if err != nil {
 			flag = false
 			break
@@ -437,9 +437,9 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 
 	w.log.Infof("[PoT]\tthe chain weight %d, the fork chain weight %d", weightnow, w.calculateChainWeight(ances, block).Int64())
 
-	//for i := 0; i < len(branch); i++ {
+	// for i := 0; i < len(branch); i++ {
 	//	w.log.Infof("[PoT]\tthe nowbranch at height %d: %s", branch[i].GetHeader().ExecHeight, hexutil.Encode(branch[i].Hash()))
-	//}
+	// }
 	err = w.chainResetAdvanced(branch)
 	if err != nil {
 		w.log.Errorf("[PoT]\tchain reset error for %s", err)
@@ -558,9 +558,9 @@ func (w *Worker) CheckVDF0ForBranch(branch []*types.Block) (bool, error) {
 		storageheight := w.blockStorage.GetVDFHeight()
 		header := branch[i].GetHeader()
 		if header.Height <= storageheight {
-			//if header.Height == 0 {
+			// if header.Height == 0 {
 			//	return true, nil
-			//}
+			// }
 			vdfres, err := w.blockStorage.GetVDFresbyEpoch(header.Height)
 
 			if err != nil {
