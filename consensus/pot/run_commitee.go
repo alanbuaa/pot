@@ -536,7 +536,7 @@ func (w *Worker) VerifyCryptoSet(height uint64, block *types.Block) bool {
 	cryptoElement := block.GetHeader().CryptoElement
 	mevLogs[w.ID].Printf("[Block %2v|Node %v] Verify, stages: %v\n", height, w.ID, getStageList(height, N, n))
 	mevLogs[w.ID].Printf("\t\tlocal crypto set: %v\n", cryptoSet)
-	mevLogs[w.ID].Printf("\t\treceived block: %x, srs.g1[1]: %v\n", block.Header.Hashes[:4], cryptoElement.SRS.G1PowerOf(1)[0][0])
+	mevLogs[w.ID].Printf("\t\treceived block: %x\n", block.Header.Hashes[:4])
 
 	// 如果处于初始化阶段（参数生成阶段）
 	if inInitStage(height, N) {
@@ -615,7 +615,7 @@ func (w *Worker) UpdateLocalCryptoSetByBlock(height uint64, block *types.Block) 
 	n := cryptoSet.SmallN
 	mevLogs[w.ID].Printf("[Block %2v|Node %v] Update | bolck hash: %x parent hash: %x, stage: %v\n", height, w.ID, block.Header.Hashes[:4], block.Header.ParentHash[:4], getStageList(height, N, n))
 	mevLogs[w.ID].Printf("\t\tlocal crypto set: %v\n", cryptoSet)
-	mevLogs[w.ID].Printf("\t\treceived block: %x, srs.g1[1]: %v\n", block.Header.Hashes[:4], cryptoElement.SRS.G1PowerOf(1)[0][0])
+	mevLogs[w.ID].Printf("\t\treceived block: %x\n", block.Header.Hashes[:4])
 	// 初始化阶段
 	if inInitStage(height, N) {
 		// 记录最新srs
@@ -1182,7 +1182,7 @@ func (w *Worker) VerifyCryptoSetByBranch(height uint64, block *types.Block, bran
 	mevLogs[w.ID].Printf("[Block %2v|Node %v] Verify[CR] | stage: %v\n", height, w.ID, getStageList(height, N, n))
 	mevLogs[w.ID].Printf("[Block %2v|Node %v] Verify[CR] | stages: %v\n", height, w.ID, getStageList(height, N, n))
 	mevLogs[w.ID].Printf("\t\tlocal crypto set: %v\n", cryptoSet)
-	mevLogs[w.ID].Printf("\t\treceived block: %x, srs.g1[1]: %v\n", block.Header.Hashes[:4], cryptoElement.SRS.G1PowerOf(1)[0][0])
+	mevLogs[w.ID].Printf("\t\treceived block: %x\n", block.Header.Hashes[:4])
 
 	// 如果处于初始化阶段（参数生成阶段）
 	if inInitStage(height, N) {
@@ -1264,7 +1264,7 @@ func (w *Worker) UpdateLocalCryptoSetByBranch(height uint64, receivedBlock *type
 	n := cryptoSet.SmallN
 	mevLogs[w.ID].Printf("[Block %2v|Node %v] Update[CR] | bolck hash: %x parent hash: %x, stage: %v\n", height, w.ID, receivedBlock.Header.Hashes[:4], receivedBlock.Header.ParentHash[:4], getStageList(height, N, n))
 	mevLogs[w.ID].Printf("\t\tlocal crypto set: %v\n", cryptoSet)
-	mevLogs[w.ID].Printf("\t\treceived block: %x, srs.g1[1]: %v\n", receivedBlock.Header.Hashes[:4], cryptoElement.SRS.G1PowerOf(1)[0][0])
+	mevLogs[w.ID].Printf("\t\treceived block: %x\n", receivedBlock.Header.Hashes[:4])
 	// 初始化阶段
 	if inInitStage(height, N) {
 		// 记录最新srs
