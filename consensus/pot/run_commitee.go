@@ -334,6 +334,22 @@ type CryptoSet struct {
 	Threshold uint32 // DPVSS恢复门限
 }
 
+func NewDefaultCryptoSet() *CryptoSet {
+	return &CryptoSet{
+		BigN:   8,
+		SmallN: 4,
+		G:      bls12381.NewG1().One(),
+		// TODO edit H
+		H:                     bls12381.NewG1().MulScalar(bls12381.NewG1().New(), bls12381.NewG1().One(), bls12381.FrFromInt(5731132)),
+		LocalSRS:              srs.TrivialSRS(g1Degree, g2Degree),
+		PrevShuffledPKList:    nil,
+		PrevRCommitForShuffle: bls12381.NewG1().One(),
+		PrevRCommitForDraw:    bls12381.NewG1().One(),
+		CommitteeMarkQueue:    new(Queue),
+		Threshold:             3,
+	}
+}
+
 func (c *CryptoSet) String() string {
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("CryptoSet {H: %v, ", c.H[0][0]))
@@ -389,6 +405,7 @@ func (c *CryptoSet) Backup(height uint64) *CryptoSet {
 
 // Restore the CryptoSet using `backup` at height `height`, `c` should be an existing CryptoSet, can not be nil or new
 func (c *CryptoSet) Restore(height uint64, backup *CryptoSet) *CryptoSet {
+	fmt.Println("Restore CryptoSet at height: ", height)
 	group1 := bls12381.NewG1()
 
 	c.BigN = backup.BigN
@@ -567,6 +584,7 @@ func (w *Worker) VerifyCryptoSet(height uint64, block *types.Block) bool {
 		}
 	}
 	// 如果处于抽签阶段，则验证抽签
+
 	if inDrawStage(height, N, n) {
 		// 验证抽签
 		// 如果验证失败，丢弃
@@ -1177,7 +1195,13 @@ func (w *Worker) VerifyCryptoSetByBranch(height uint64, block *types.Block, bran
 	if block.GetHeader().Height == 0 {
 		return true
 	}
-	cryptoSet := w.CryptoSet
+	parenthash := block.GetHeader().ParentHash
+	cryptoset, ok := w.CryptoSetMap[crypto.Convert(parenthash)]
+	if !ok {
+		return false
+	}
+	w.log.Errorf("restore at height %d,check height %d block %x", block.GetHeader().Height-1, block.GetHeader().Height, hexutil.Encode(block.Hash()))
+	cryptoSet := cryptoset.Backup(block.GetHeader().Height - 1)
 	N := cryptoSet.BigN
 	n := cryptoSet.SmallN
 	cryptoElement := block.GetHeader().CryptoElement
@@ -1203,7 +1227,6 @@ func (w *Worker) VerifyCryptoSetByBranch(height uint64, block *types.Block, bran
 		// 第一次置换
 		if isTheFirstShuffle(height, N) {
 			// 获取前面BigN个区块的公钥
-
 			cryptoSet.PrevShuffledPKList = w.getPrevNBlockPKListByBranch(height-N, height-1, branch)
 		}
 		// 如果验证失败，丢弃
@@ -1261,7 +1284,12 @@ func (w *Worker) VerifyCryptoSetByBranch(height uint64, block *types.Block, bran
 func (w *Worker) UpdateLocalCryptoSetByBranch(height uint64, receivedBlock *types.Block, branch []*types.Block) error {
 	group1 := bls12381.NewG1()
 	cryptoElement := receivedBlock.GetHeader().CryptoElement
-	cryptoSet := w.CryptoSet
+	parenthash := receivedBlock.GetHeader().ParentHash
+	cryptoset, ok := w.CryptoSetMap[crypto.Convert(parenthash)]
+	if !ok {
+		return fmt.Errorf("get cryptoSet of parent block failed")
+	}
+	cryptoSet := cryptoset.Backup(receivedBlock.GetHeader().Height - 1)
 	N := cryptoSet.BigN
 	n := cryptoSet.SmallN
 	mevLogs[w.ID].Printf("[Block %2v|Node %v] Update[CR] | bolck hash: %x parent hash: %x, stage: %v\n", height, w.ID, receivedBlock.Header.Hashes[:4], receivedBlock.Header.ParentHash[:4], getStageList(height, N, n))
@@ -1471,6 +1499,6 @@ func (w *Worker) UpdateLocalCryptoSetByBranch(height uint64, receivedBlock *type
 		}
 		sendConsensusNodeInputs(w.ID, height, leaderInput, memberInputs, userInput)
 	}
-	w.CryptoSetMap[crypto.Convert(receivedBlock.GetHeader().Hash())] = w.CryptoSet.Backup(receivedBlock.Header.Height)
+	w.CryptoSetMap[crypto.Convert(receivedBlock.GetHeader().Hash())] = cryptoSet.Backup(receivedBlock.Header.Height)
 	return nil
 }
