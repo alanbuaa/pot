@@ -6,7 +6,6 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -172,19 +171,18 @@ func (s *SRS) Trim(g1Degree, g2Degree uint32) {
 	s.g2Powers = s.g2Powers[:g2Degree+1]
 }
 
-func (s *SRS) ToBinaryFile(id int64) error {
+func (s *SRS) ToBinaryFile(filename string) error {
 	compressedBytes, err := s.ToCompressedBytes()
 	if err != nil {
 		return err
 	}
-
-	return os.WriteFile(fmt.Sprintf("srs-node-%v.binary", id), compressedBytes, 0644)
+	return os.WriteFile(filename, compressedBytes, 0644)
 }
 
-func FromBinaryFile() (*SRS, error) {
+func FromBinaryFile(filename string) (*SRS, error) {
 	group1 := NewG1()
 	group2 := NewG2()
-	f, err := os.Open(BinFileName)
+	f, err := os.Open(filename)
 	if err != nil {
 		return nil, err
 	}
@@ -226,6 +224,84 @@ func FromBinaryFile() (*SRS, error) {
 		}
 		g2Powers[i], err = group2.FromCompressed(g2PowerBuf)
 		if err != nil {
+			return nil, err
+		}
+	}
+	return &SRS{
+		g1Powers: g1Powers,
+		g2Powers: g2Powers,
+		g1Degree: g1Degree,
+		g2Degree: g2Degree,
+	}, nil
+}
+
+func FromBinaryFileWithDegree(neededG1Degree uint32, neededG2Degree uint32, filename string) (*SRS, error) {
+	group1 := NewG1()
+	group2 := NewG2()
+	f, err := os.Open(filename)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	// for degree
+	degreeBuf := make([]byte, 4)
+	// for g1 power
+	g1PowerBuf := make([]byte, 48)
+	// for g2 power
+	g2PowerBuf := make([]byte, 96)
+
+	_, err = f.Read(degreeBuf)
+	if err != nil && err != io.EOF {
+		return nil, err
+	}
+	g1Degree := binary.BigEndian.Uint32(degreeBuf)
+	if neededG1Degree > g1Degree {
+		return nil, fmt.Errorf("degree of g1 is low")
+	}
+
+	_, err = f.Read(degreeBuf)
+	if err != nil && err != io.EOF {
+		return nil, err
+	}
+	g2Degree := binary.BigEndian.Uint32(degreeBuf)
+	if neededG2Degree > g2Degree {
+		return nil, fmt.Errorf("degree of g2 is low")
+	}
+
+	g1PowersSize := neededG1Degree + 1
+	g2PowersSize := neededG2Degree + 1
+
+	g1Powers := make([]*PointG1, g1PowersSize)
+	for i := uint32(0); i < g1PowersSize; i++ {
+		if _, err = f.Read(g1PowerBuf); err != nil && err != io.EOF {
+			return nil, err
+		}
+		g1Powers[i], err = group1.FromCompressed(g1PowerBuf)
+		if err != nil {
+			fmt.Println("g1", i)
+			return nil, err
+		}
+	}
+	for i := neededG1Degree; i < g1Degree; i++ {
+		if _, err = f.Read(g1PowerBuf); err != nil && err != io.EOF {
+			return nil, err
+		}
+	}
+
+	g2Powers := make([]*PointG2, g2PowersSize)
+	for i := uint32(0); i < g2PowersSize; i++ {
+		if _, err = f.Read(g2PowerBuf); err != nil && err != io.EOF {
+			return nil, err
+		}
+		g2Powers[i], err = group2.FromCompressed(g2PowerBuf)
+		if err != nil {
+			fmt.Println("g2", i)
+			return nil, err
+		}
+	}
+	for i := neededG2Degree; i < g2Degree; i++ {
+		if _, err = f.Read(g2PowerBuf); err != nil && err != io.EOF {
 			return nil, err
 		}
 	}
@@ -346,84 +422,6 @@ func (s *SRS) ToCompressedBytes() ([]byte, error) {
 		buf.Write(pointBytes)
 	}
 	return buf.Bytes(), nil
-}
-
-func FromBinaryFileWithDegree(neededG1Degree uint32, neededG2Degree uint32) (*SRS, error) {
-	group1 := NewG1()
-	group2 := NewG2()
-	f, err := os.Open(BinFileName)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-
-	// for degree
-	degreeBuf := make([]byte, 4)
-	// for g1 power
-	g1PowerBuf := make([]byte, 48)
-	// for g2 power
-	g2PowerBuf := make([]byte, 96)
-
-	_, err = f.Read(degreeBuf)
-	if err != nil && err != io.EOF {
-		return nil, err
-	}
-	g1Degree := binary.BigEndian.Uint32(degreeBuf)
-	if neededG1Degree > g1Degree {
-		return nil, errors.New("degree of g1 is low")
-	}
-
-	_, err = f.Read(degreeBuf)
-	if err != nil && err != io.EOF {
-		return nil, err
-	}
-	g2Degree := binary.BigEndian.Uint32(degreeBuf)
-	if neededG2Degree > g2Degree {
-		return nil, errors.New("degree of g2 is low")
-	}
-
-	g1PowersSize := neededG1Degree + 1
-	g2PowersSize := neededG2Degree + 1
-
-	g1Powers := make([]*PointG1, g1PowersSize)
-	for i := uint32(0); i < g1PowersSize; i++ {
-		if _, err = f.Read(g1PowerBuf); err != nil && err != io.EOF {
-			return nil, err
-		}
-		g1Powers[i], err = group1.FromCompressed(g1PowerBuf)
-		if err != nil {
-			fmt.Println("g1", i)
-			return nil, err
-		}
-	}
-	for i := neededG1Degree; i < g1Degree; i++ {
-		if _, err = f.Read(g1PowerBuf); err != nil && err != io.EOF {
-			return nil, err
-		}
-	}
-
-	g2Powers := make([]*PointG2, g2PowersSize)
-	for i := uint32(0); i < g2PowersSize; i++ {
-		if _, err = f.Read(g2PowerBuf); err != nil && err != io.EOF {
-			return nil, err
-		}
-		g2Powers[i], err = group2.FromCompressed(g2PowerBuf)
-		if err != nil {
-			fmt.Println("g2", i)
-			return nil, err
-		}
-	}
-	for i := neededG2Degree; i < g2Degree; i++ {
-		if _, err = f.Read(g2PowerBuf); err != nil && err != io.EOF {
-			return nil, err
-		}
-	}
-	return &SRS{
-		g1Powers: g1Powers,
-		g2Powers: g2Powers,
-		g1Degree: g1Degree,
-		g2Degree: g2Degree,
-	}, nil
 }
 
 func (s *SRS) Degrees() (uint32, uint32) {

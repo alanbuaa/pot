@@ -504,12 +504,12 @@ func (w *Worker) createBlock(epoch uint64, parentBlock *types.Block, uncleBlock 
 	id := w.ID
 	peerid := w.PeerId
 
-	//cryptoset, err := w.GenerateCryptoSetFromLocal(epoch)
+	// cryptoset, err := w.GenerateCryptoSetFromLocal(epoch)
 	//
-	//if err != nil {
+	// if err != nil {
 	//	fmt.Println(err)
 	//	return nil
-	//}
+	// }
 	var cryptoelement types.CryptoElement
 	if set != nil {
 		cryptoelement = types.CryptoElement{
@@ -861,7 +861,7 @@ func (w *Worker) CheckParentBlockEnough(height uint64) (bool, error) {
 			count += 1
 		}
 	}
-	if count < w.config.PoT.Snum/2 {
+	if count < w.config.PoT.Snum {
 		return false, fmt.Errorf("not enough parent block for height %d", height)
 	}
 

@@ -352,11 +352,31 @@ func NewDefaultCryptoSet() *CryptoSet {
 
 func (c *CryptoSet) String() string {
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("CryptoSet {H: %v, ", c.H[0][0]))
-	sb.WriteString(fmt.Sprintf("SRS.g1[1]: %v, ", c.LocalSRS.G1PowerOf(1)[0][0]))
-	sb.WriteString(fmt.Sprintf("PrevShuffledPKList: %v, ", PrintPointG1List(c.PrevShuffledPKList)))
-	sb.WriteString(fmt.Sprintf("PrevRCommitForShuffle: %v, ", c.PrevRCommitForShuffle[0][0]))
-	sb.WriteString(fmt.Sprintf("PrevRCommitForDraw: %v, ", c.PrevRCommitForDraw[0][0]))
+	if c.H != nil {
+		sb.WriteString(fmt.Sprintf("CryptoSet {H: %v, ", c.H[0][0]))
+	} else {
+		sb.WriteString(fmt.Sprintf("CryptoSet {H: nil, "))
+	}
+	if c.LocalSRS != nil {
+		sb.WriteString(fmt.Sprintf("SRS.g1[1]: %v, ", c.LocalSRS.G1PowerOf(1)[0][0]))
+	} else {
+		sb.WriteString(fmt.Sprintf("SRS: nil, "))
+	}
+	if c.PrevShuffledPKList != nil {
+		sb.WriteString(fmt.Sprintf("PrevShuffledPKList: %v, ", PrintPointG1List(c.PrevShuffledPKList)))
+	} else {
+		sb.WriteString(fmt.Sprintf("PrevShuffledPKList: nil, "))
+	}
+	if c.PrevRCommitForShuffle != nil {
+		sb.WriteString(fmt.Sprintf("PrevRCommitForShuffle: %v, ", c.PrevRCommitForShuffle[0][0]))
+	} else {
+		sb.WriteString(fmt.Sprintf("PrevRCommitForShuffle: nil, "))
+	}
+	if c.PrevRCommitForDraw != nil {
+		sb.WriteString(fmt.Sprintf("PrevRCommitForDraw: %v, ", c.PrevRCommitForDraw[0][0]))
+	} else {
+		sb.WriteString(fmt.Sprintf("PrevRCommitForDraw: nil, "))
+	}
 	sb.WriteString("CommitteeMarkQueue: [")
 	for e := c.CommitteeMarkQueue.Front(); e != nil; e = e.Next() {
 		mark := e.Value.(*CommitteeMark)
@@ -404,8 +424,9 @@ func (c *CryptoSet) Backup(height uint64) *CryptoSet {
 }
 
 // Restore the CryptoSet using `backup` at height `height`, `c` should be an existing CryptoSet, can not be nil or new
-func (c *CryptoSet) Restore(height uint64, backup *CryptoSet) *CryptoSet {
-	fmt.Println("Restore CryptoSet at height: ", height)
+func (c *CryptoSet) Restore(id int64, height uint64, backup *CryptoSet) *CryptoSet {
+	mevLogs[id].Printf("Restore CryptoSet at height: %v, id : %v\n", height, id)
+	fmt.Printf("Restore CryptoSet at height: %v, id: %v\n", height, id)
 	group1 := bls12381.NewG1()
 
 	c.BigN = backup.BigN
@@ -424,8 +445,18 @@ func (c *CryptoSet) Restore(height uint64, backup *CryptoSet) *CryptoSet {
 	if backup.PrevRCommitForDraw != nil {
 		c.PrevRCommitForDraw = group1.New().Set(backup.PrevRCommitForDraw)
 	}
-	if inInitStage(height, backup.BigN) && backup.LocalSRS != nil {
-		c.LocalSRS = new(srs.SRS).Set(backup.LocalSRS)
+	if inInitStage(height, backup.BigN) {
+		if backup.LocalSRS != nil {
+			c.LocalSRS = new(srs.SRS).Set(backup.LocalSRS)
+		}
+	} else {
+		var err error
+		c.LocalSRS, err = srs.FromBinaryFile(fmt.Sprintf("srs-node-%v.binary", id))
+		if err != nil {
+			mevLogs[id].Printf("restore srs error: %v\n", err)
+			fmt.Printf("restore srs error: %v\n", err)
+		}
+		mevLogs[id].Printf("Restore SRS from file: %v, id : %v, srs.g1[1]: %v\n", height, id, c.LocalSRS.G1PowerOf(1))
 	}
 	if backup.PrevShuffledPKList != nil {
 		c.PrevShuffledPKList = make([]*bls12381.PointG1, len(backup.PrevShuffledPKList))
@@ -634,7 +665,7 @@ func (w *Worker) UpdateLocalCryptoSetByBlock(height uint64, block *types.Block) 
 	cryptoSet := w.CryptoSet
 	N := cryptoSet.BigN
 	n := cryptoSet.SmallN
-	mevLogs[w.ID].Printf("[Block %2v|Node %v] Update | bolck hash: %x parent hash: %x, stage: %v\n", height, w.ID, block.Header.Hashes[:4], block.Header.ParentHash[:4], getStageList(height, N, n))
+	mevLogs[w.ID].Printf("[Block %2v|Node %v] Update | block hash: %x parent hash: %x, stage: %v\n", height, w.ID, block.Header.Hashes[:4], block.Header.ParentHash[:4], getStageList(height, N, n))
 	mevLogs[w.ID].Printf("\t\tlocal crypto set: %v\n", cryptoSet)
 	mevLogs[w.ID].Printf("\t\treceived block: %x\n", block.Header.Hashes[:4])
 	// 初始化阶段
@@ -647,7 +678,7 @@ func (w *Worker) UpdateLocalCryptoSetByBlock(height uint64, block *types.Block) 
 			cryptoSet.H = group1.New().Set(cryptoSet.LocalSRS.G1PowerOf(123))
 			// 保存SRS至srs.binary文件
 			var err error
-			err = cryptoSet.LocalSRS.ToBinaryFile(w.ID)
+			err = cryptoSet.LocalSRS.ToBinaryFile(fmt.Sprintf("srs-node-%v.binary", w.ID))
 			if err != nil {
 				mevLogs[w.ID].Printf("[Block %2v|Node %v] Update-Init: failed to save srs%v\n", height, w.ID, err)
 				return fmt.Errorf("[Block %2v|Node %v] Update-Init: failed to save srs%v\n", height, w.ID, err)
@@ -1091,7 +1122,7 @@ func (w *Worker) getSelfPrivKeyList(minHeight, maxHeight uint64) []*bls12381.Fr 
 		if flag {
 			fr := bls12381.NewFr().FromBytes(priv)
 			ret = append(ret, fr)
-			mevLogs[w.ID].Printf("\t\tget sk from branch at height %v, block hash: %x, sk: %v\n", i, block.Header.Hashes[:4], fr)
+			mevLogs[w.ID].Printf("\t\tget sk from branch at height %v, block hash: %x, sk: %v\n", i, block.Header.Hashes[:4], fr[0])
 		}
 	}
 	return ret
@@ -1195,13 +1226,12 @@ func (w *Worker) VerifyCryptoSetByBranch(height uint64, block *types.Block, bran
 	if block.GetHeader().Height == 0 {
 		return true
 	}
-	parenthash := block.GetHeader().ParentHash
-	cryptoset, ok := w.CryptoSetMap[crypto.Convert(parenthash)]
+	cryptoSetWithoutSRS, ok := w.CryptoSetMap[crypto.Convert(block.GetHeader().ParentHash)]
 	if !ok {
 		return false
 	}
 	w.log.Errorf("restore at height %d,check height %d block %x", block.GetHeader().Height-1, block.GetHeader().Height, hexutil.Encode(block.Hash()))
-	cryptoSet := cryptoset.Backup(block.GetHeader().Height - 1)
+	cryptoSet := NewDefaultCryptoSet().Restore(w.ID, block.GetHeader().Height-1, cryptoSetWithoutSRS)
 	N := cryptoSet.BigN
 	n := cryptoSet.SmallN
 	cryptoElement := block.GetHeader().CryptoElement
@@ -1284,15 +1314,14 @@ func (w *Worker) VerifyCryptoSetByBranch(height uint64, block *types.Block, bran
 func (w *Worker) UpdateLocalCryptoSetByBranch(height uint64, receivedBlock *types.Block, branch []*types.Block) error {
 	group1 := bls12381.NewG1()
 	cryptoElement := receivedBlock.GetHeader().CryptoElement
-	parenthash := receivedBlock.GetHeader().ParentHash
-	cryptoset, ok := w.CryptoSetMap[crypto.Convert(parenthash)]
+	cryptoSetWithoutSRS, ok := w.CryptoSetMap[crypto.Convert(receivedBlock.GetHeader().ParentHash)]
 	if !ok {
 		return fmt.Errorf("get cryptoSet of parent block failed")
 	}
-	cryptoSet := cryptoset.Backup(receivedBlock.GetHeader().Height - 1)
+	cryptoSet := NewDefaultCryptoSet().Restore(w.ID, receivedBlock.GetHeader().Height-1, cryptoSetWithoutSRS)
 	N := cryptoSet.BigN
 	n := cryptoSet.SmallN
-	mevLogs[w.ID].Printf("[Block %2v|Node %v] Update[CR] | bolck hash: %x parent hash: %x, stage: %v\n", height, w.ID, receivedBlock.Header.Hashes[:4], receivedBlock.Header.ParentHash[:4], getStageList(height, N, n))
+	mevLogs[w.ID].Printf("[Block %2v|Node %v] Update[CR] | block hash: %x parent hash: %x, stage: %v\n", height, w.ID, receivedBlock.Header.Hashes[:4], receivedBlock.Header.ParentHash[:4], getStageList(height, N, n))
 	mevLogs[w.ID].Printf("\t\tlocal crypto set: %v\n", cryptoSet)
 	mevLogs[w.ID].Printf("\t\treceived block: %x\n", receivedBlock.Header.Hashes[:4])
 	// 初始化阶段
@@ -1307,7 +1336,7 @@ func (w *Worker) UpdateLocalCryptoSetByBranch(height uint64, receivedBlock *type
 			cryptoSet.H = group1.New().Set(cryptoSet.LocalSRS.G1PowerOf(1))
 			// 保存SRS至srs.binary文件
 			var err error
-			err = cryptoSet.LocalSRS.ToBinaryFile(w.ID)
+			err = cryptoSet.LocalSRS.ToBinaryFile(fmt.Sprintf("srs-node-%v.binary", w.ID))
 			if err != nil {
 				mevLogs[w.ID].Printf("[Block %2v|Node %v] Update[CR]-Init | failed to save srs%v\n", height, w.ID, err)
 				return fmt.Errorf("[Block %2v|Node %v] Update[CR]-Init | failed to save srs%v\n", height, w.ID, err)

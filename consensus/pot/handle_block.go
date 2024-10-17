@@ -194,7 +194,7 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 				return fmt.Errorf("can not find the crypto set for block %s", hexutil.Encode(c.Hash()))
 			}
 
-			w.CryptoSet.Restore(ances.GetHeader().Height, cryptoset)
+			w.CryptoSet.Restore(w.ID, ances.GetHeader().Height, cryptoset)
 			w.log.Errorf("restore at height %d,current is %d", ances.GetHeader().Height, current.GetHeader().Height)
 
 			flag = true
@@ -215,7 +215,7 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 			}
 
 			if !flag {
-				w.CryptoSet.Restore(current.GetHeader().Height, currentset)
+				w.CryptoSet.Restore(w.ID, current.GetHeader().Height, currentset)
 				doonce.Do(func() {
 					close(done)
 				})
@@ -227,7 +227,7 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 				flag = false
 			}
 			if !flag {
-				w.CryptoSet.Restore(current.GetHeader().Height, currentset)
+				w.CryptoSet.Restore(w.ID, current.GetHeader().Height, currentset)
 				doonce.Do(func() {
 					close(done)
 				})
@@ -245,7 +245,7 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 					w.log.Errorf("[PoT]\tchain reset error for %s", err)
 				}
 			} else {
-				//w.CryptoSet.Restore(current.GetHeader().Height, currentset)
+				// w.CryptoSet.Restore(current.GetHeader().Height, currentset)
 				doonce.Do(func() {
 					close(done)
 				})
@@ -260,7 +260,7 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 				return fmt.Errorf("could not find cryptoset for block parent")
 			}
 
-			w.CryptoSet.Restore(block.GetHeader().Height-1, readycryptoset)
+			w.CryptoSet.Restore(w.ID, block.GetHeader().Height-1, readycryptoset)
 
 			err = w.workReset(block.GetHeader().Height, block)
 			if err != nil {
@@ -385,7 +385,7 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 	}
 
 	currentset := w.CryptoSet.Backup(current.GetHeader().Height)
-	cryptoset, ok := w.CryptoSetMap[crypto.Convert(ances.Hash())]
+	_, ok := w.CryptoSetMap[crypto.Convert(ances.Hash())]
 
 	if !ok {
 		doonce.Do(func() {
@@ -394,16 +394,13 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 		return fmt.Errorf("can not find the crypto set for block %s", hexutil.Encode(ances.Hash()))
 	}
 
-	//w.CryptoSet.Restore(ances.GetHeader().Height, cryptoset)
-	testset := NewDefaultCryptoSet()
-	testset.Restore(ances.GetHeader().Height, cryptoset)
-
-	//w.log.Errorf("restore at height %d,current is %d", ances.GetHeader().Height, current.GetHeader().Height)
+	// w.CryptoSet.Restore(ances.GetHeader().Height, cryptoset)
+	// w.log.Errorf("restore at height %d,current is %d", ances.GetHeader().Height, current.GetHeader().Height)
 
 	flag = true
 	n := len(branch)
 	for i := n - 1; i > 0; i-- {
-		//w.log.Errorf("check block at height %d", branch[i].GetHeader().Height)
+		// w.log.Errorf("check block at height %d", branch[i].GetHeader().Height)
 		forkblock := branch[i]
 		if !w.VerifyCryptoSetByBranch(forkblock.Header.Height, forkblock, branch) {
 			flag = false
@@ -417,7 +414,7 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 	}
 
 	if !flag {
-		//w.CryptoSet.Restore(current.GetHeader().Height, currentset)
+		// w.CryptoSet.Restore(current.GetHeader().Height, currentset)
 		doonce.Do(func() {
 			close(done)
 		})
@@ -429,7 +426,7 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 		flag = false
 	}
 	if !flag {
-		w.CryptoSet.Restore(current.GetHeader().Height, currentset)
+		// w.CryptoSet.Restore(w.ID, current.GetHeader().Height, currentset)
 		doonce.Do(func() {
 			close(done)
 		})
@@ -441,7 +438,7 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 
 	if weightnow.Cmp(weightadvanced) > 0 {
 		w.log.Infof("[PoT]\tthe current chain weight %d is greater than the fork chain weight %d", weightnow.Int64(), weightadvanced.Int64())
-		w.CryptoSet.Restore(current.GetHeader().Height, currentset)
+		w.CryptoSet.Restore(w.ID, current.GetHeader().Height, currentset)
 		doonce.Do(func() {
 			close(done)
 		})
@@ -499,7 +496,7 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 		return fmt.Errorf("could not find cryptoset for block parent")
 	}
 
-	w.CryptoSet.Restore(block.GetHeader().Height-1, readycryptoset)
+	w.CryptoSet.Restore(w.ID, block.GetHeader().Height-1, readycryptoset)
 
 	err = w.setVDF0epoch(block.GetHeader().Height - 1)
 	if err != nil {
