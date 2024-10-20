@@ -1,7 +1,7 @@
 package roots_of_unity
 
 import (
-	pb2 "blockchain-crypto/pb"
+	"blockchain-crypto/pb"
 	"blockchain-crypto/proof/caulk_plus"
 	. "blockchain-crypto/types/curve/bls12381"
 	"context"
@@ -24,8 +24,8 @@ func CalcRootsOfUnity(size uint32) ([]*Fr, error) {
 	}
 	defer conn.Close()
 
-	client := pb2.NewCpServiceClient(conn)
-	res, err := client.CalcRootsOfUnity(context.TODO(), &pb2.DomainSize{Size: size})
+	client := pb.NewCpServiceClient(conn)
+	res, err := client.CalcRootsOfUnity(context.TODO(), &pb.DomainSize{Size: size})
 	if err != nil {
 		return nil, err
 	}

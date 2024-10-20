@@ -18,7 +18,7 @@ func TestDraw(t *testing.T) {
 	g1Degree, g2Degree := utils.CalcMinLimitedDegree(candidatesNum, quota)
 	fmt.Println("start gen srs")
 	start := time.Now()
-	s, err := srs.FromBinaryFileWithDegree(g1Degree, g2Degree)
+	s, err := srs.FromBinaryFileWithDegree(g1Degree, g2Degree, srs.BinFileName)
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -67,7 +67,7 @@ func TestDraw(t *testing.T) {
 
 	fmt.Println("start create draw proof")
 	start = time.Now()
-	drawProof, err := Draw(s, candidatesNum, publicKeys, quota, indices, group1.One())
+	drawProof, err := Draw(s, candidatesNum, publicKeys, quota, indices, group1.One(), srs.BinFileName)
 	if err != nil {
 		fmt.Println("gen draw proof error:", err)
 		return
@@ -76,7 +76,7 @@ func TestDraw(t *testing.T) {
 
 	fmt.Println("start verify draw proof")
 	start = time.Now()
-	res := Verify(s, candidatesNum, publicKeys, quota, group1.One(), drawProof)
+	res := Verify(s, candidatesNum, publicKeys, quota, group1.One(), drawProof, srs.BinFileName)
 	fmt.Println("verify draw proof:", res)
 	fmt.Println("verify draw proof time:", time.Since(start))
 
@@ -114,6 +114,11 @@ func TestDrawProof_ToBytes_FromBytes(t *testing.T) {
 	start := time.Now()
 	s, _ := srs.NewSRS(g1Degree, g2Degree)
 	fmt.Println("gen srs time:", time.Since(start))
+	err := s.ToBinaryFile(srs.BinFileName)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
 
 	generator := s.G1PowerOf(0)
 
@@ -158,7 +163,7 @@ func TestDrawProof_ToBytes_FromBytes(t *testing.T) {
 
 	fmt.Println("start create draw proof")
 	start = time.Now()
-	drawProof, err := Draw(s, candidatesNum, publicKeys, quota, indices, group1.One())
+	drawProof, err := Draw(s, candidatesNum, publicKeys, quota, indices, group1.One(), srs.BinFileName)
 	if err != nil {
 		fmt.Println("gen draw proof error:", err)
 		return
@@ -179,7 +184,7 @@ func TestDrawProof_ToBytes_FromBytes(t *testing.T) {
 	}
 	fmt.Println("start verify draw proof")
 	start = time.Now()
-	res := Verify(s, candidatesNum, publicKeys, quota, group1.One(), decodedDrawProof)
+	res := Verify(s, candidatesNum, publicKeys, quota, group1.One(), decodedDrawProof, srs.BinFileName)
 	fmt.Println("verify draw proof time:", time.Since(start))
 	fmt.Println("verify draw proof:", res)
 

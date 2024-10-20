@@ -3,6 +3,7 @@ package caulk_plus
 import (
 	"blockchain-crypto/pb"
 	. "blockchain-crypto/types/curve/bls12381"
+	"blockchain-crypto/types/srs"
 	"context"
 	"fmt"
 	"google.golang.org/grpc"
@@ -14,7 +15,7 @@ var (
 	serviceHost = "127.0.0.1:50051"
 )
 
-func CreateMultiProof(parentVectorSize uint32, parentVector []*Fr, subVectorSize uint32, subVector []*Fr, nodeId uint64) (*pb.MultiProof, error) {
+func CreateMultiProof(s *srs.SRS, parentVectorSize uint32, parentVector []*Fr, subVectorSize uint32, subVector []*Fr) (*pb.MultiProof, error) {
 	parentVectorPb := make([]*pb.Fr, parentVectorSize)
 	for i := uint32(0); i < parentVectorSize; i++ {
 		parentVectorPb[i] = ConvertFrToProtoFr(parentVector[i])
@@ -36,7 +37,7 @@ func CreateMultiProof(parentVectorSize uint32, parentVector []*Fr, subVectorSize
 		ParentVector:     parentVectorPb,
 		SubVectorSize:    subVectorSize,
 		SubVector:        subVectorPb,
-		NodeId:           nodeId,
+		Srs:              ConvertSRSToProtoSRS(s),
 	})
 	if err != nil {
 		return nil, err
@@ -44,7 +45,7 @@ func CreateMultiProof(parentVectorSize uint32, parentVector []*Fr, subVectorSize
 	return proof, nil
 }
 
-func VerifyMultiProof(proof *pb.MultiProof, nodeId uint64) (bool, error) {
+func VerifyMultiProof(s *srs.SRS, proof *pb.MultiProof) (bool, error) {
 
 	conn, err := grpc.NewClient(serviceHost, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
@@ -52,10 +53,9 @@ func VerifyMultiProof(proof *pb.MultiProof, nodeId uint64) (bool, error) {
 	}
 	defer conn.Close()
 
-	client := pb.NewCpServiceClient(conn)
-	res, err := client.VerifyMultiProof(context.TODO(), &pb.VerifyMultiProofRequest{
+	res, err := pb.NewCpServiceClient(conn).VerifyMultiProof(context.TODO(), &pb.VerifyMultiProofRequest{
 		MultiProof: proof,
-		NodeId:     nodeId,
+		Srs:        ConvertSRSToProtoSRS(s),
 	})
 	if err != nil {
 		return false, err
@@ -63,7 +63,7 @@ func VerifyMultiProof(proof *pb.MultiProof, nodeId uint64) (bool, error) {
 	return res.Res, nil
 }
 
-func CreateSingleProof(hGenerator *PointG1, parentVectorSize uint32, parentVector []*Fr, chosenElement *Fr, nodeId uint64) (*pb.SingleProof, error) {
+func CreateSingleProof(s *srs.SRS, hGenerator *PointG1, parentVectorSize uint32, parentVector []*Fr, chosenElement *Fr) (*pb.SingleProof, error) {
 
 	parentVectorPb := make([]*pb.Fr, parentVectorSize)
 	for i := uint32(0); i < parentVectorSize; i++ {
@@ -82,7 +82,7 @@ func CreateSingleProof(hGenerator *PointG1, parentVectorSize uint32, parentVecto
 		ParentVectorSize: parentVectorSize,
 		ParentVector:     parentVectorPb,
 		ChosenElement:    ConvertFrToProtoFr(chosenElement),
-		NodeId:           nodeId,
+		Srs:              ConvertSRSToProtoSRS(s),
 	})
 	if err != nil {
 		return nil, err
@@ -90,18 +90,17 @@ func CreateSingleProof(hGenerator *PointG1, parentVectorSize uint32, parentVecto
 	return proof, nil
 }
 
-func VerifySingleProof(hGenerator *PointG1, proof *pb.SingleProof, nodeId uint64) (bool, error) {
+func VerifySingleProof(s *srs.SRS, hGenerator *PointG1, proof *pb.SingleProof) (bool, error) {
 	conn, err := grpc.NewClient(serviceHost, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		fmt.Println(err)
 	}
 	defer conn.Close()
 
-	client := pb.NewCpServiceClient(conn)
-	res, err := client.VerifySingleProof(context.TODO(), &pb.VerifySingleProofRequest{
+	res, err := pb.NewCpServiceClient(conn).VerifySingleProof(context.TODO(), &pb.VerifySingleProofRequest{
 		HGenerator:  ConvertPointG1ToProtoG1Affine(hGenerator),
 		SingleProof: proof,
-		NodeId:      nodeId,
+		Srs:         ConvertSRSToProtoSRS(s),
 	})
 	if err != nil {
 		return false, err

@@ -1,8 +1,7 @@
 syntax = "proto3";
 package caulk_plus;
 
-option go_package="/pb";
-
+option go_package = "./;pb";
 
 import "pb/bls12_381.proto";
 
@@ -14,6 +13,13 @@ service CpService {
   rpc CalcRootsOfUnity (DomainSize) returns (RootsOfUnity) {}
 }
 
+message SRS {
+  uint32 g1_degree = 1;
+  uint32 g2_degree = 2;
+  repeated bls12_381.G1Affine g1_powers = 3;
+  repeated bls12_381.G2Affine g2_powers = 4;
+}
+
 
 // The request message
 message CreateMultiProofRequest {
@@ -21,12 +27,14 @@ message CreateMultiProofRequest {
   repeated bls12_381.Fr parent_vector = 2;
   uint32 sub_vector_size = 3;
   repeated bls12_381.Fr sub_vector = 4;
-  uint64 node_id = 5;
+  //  string srs_file = 5;
+  SRS srs = 5;
 }
 
 message VerifyMultiProofRequest {
   MultiProof multi_proof = 1;
-  uint64 node_id = 2;
+//  string srs_file = 2;
+  SRS srs = 2;
 }
 
 message MultiProof {
@@ -62,7 +70,8 @@ message CreateSingleProofRequest {
   repeated bls12_381.Fr parent_vector = 3;
   // sub-vector in u32
   bls12_381.Fr chosen_element = 4;
-  uint64 node_id = 5;
+//  string srs_file = 5;
+  SRS srs = 5;
 }
 
 message SingleProof {
@@ -94,7 +103,8 @@ message SingleProof {
 message VerifySingleProofRequest{
   bls12_381.G1Affine h_generator = 1;
   SingleProof single_proof = 2;
-  uint64 node_id = 3;
+//  string srs_file = 3;
+  SRS srs = 3;
 }
 
 message VerifyReply{

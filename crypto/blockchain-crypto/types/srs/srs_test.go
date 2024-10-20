@@ -37,7 +37,7 @@ func TestVerifyTrue2(t *testing.T) {
 		fmt.Println("update time:", time.Since(startTime))
 
 		startTime = time.Now()
-		assert.True(t, Verify(newSrs, prevSRSG1FirstElem, proof))
+		assert.Nil(t, Verify(newSrs, prevSRSG1FirstElem, proof))
 		fmt.Println("verify time:", time.Since(startTime))
 	}
 }
@@ -139,7 +139,7 @@ func TestSRS_ToBinaryFile(t *testing.T) {
 	fmt.Println(time.Since(startTime))
 
 	startTime = time.Now()
-	if err := s.ToBinaryFile(); err != nil {
+	if err := s.ToBinaryFile(BinFileName); err != nil {
 		fmt.Println(err)
 	}
 	fmt.Println(time.Since(startTime))
@@ -153,7 +153,7 @@ func TestSRS_FromBinaryFile(t *testing.T) {
 	s := &SRS{}
 
 	startTime := time.Now()
-	s, err := FromBinaryFile()
+	s, err := FromBinaryFile(BinFileName)
 	if err != nil {
 		fmt.Println(err)
 	}

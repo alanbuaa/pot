@@ -13,12 +13,7 @@ func TestSimpleShuffle(t *testing.T) {
 	group1 := bls12381.NewG1()
 	candidatesNum := uint32(16)
 	quota := uint32(16)
-	nodeId := uint64(5)
-	s, err := srs.FromBinaryFileWithDegree(utils.CalcMinLimitedDegree(candidatesNum, quota))
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
+	s, _ := srs.NewSRS(utils.CalcMinLimitedDegree(candidatesNum, quota))
 	fmt.Println(1)
 	generator := s.G1PowerOf(0)
 
@@ -29,7 +24,7 @@ func TestSimpleShuffle(t *testing.T) {
 		publicKeys[i] = group1.Affine(group1.MulScalar(group1.New(), generator, secretKeys[i]))
 	}
 	fmt.Println(2)
-	shuffleProof, err := SimpleShuffle(s, publicKeys, generator, nodeId)
+	shuffleProof, err := SimpleShuffle(s, publicKeys, generator)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -37,7 +32,7 @@ func TestSimpleShuffle(t *testing.T) {
 	fmt.Println(3)
 	for i := 0; i < 10; i++ {
 		go func() {
-			err := Verify(s, publicKeys, generator, shuffleProof, uint64(i%6))
+			err := Verify(s, publicKeys, generator, shuffleProof)
 			if err != nil {
 				fmt.Println(err)
 			} else {

@@ -3,6 +3,7 @@ package caulk_plus
 import (
 	"blockchain-crypto/pb"
 	. "blockchain-crypto/types/curve/bls12381"
+	"blockchain-crypto/types/srs"
 	"fmt"
 )
 
@@ -115,6 +116,26 @@ func ConvertPointG2ToProtoG2Affine(p *PointG2) *pb.G2Affine {
 
 func ConvertG2AffineToPointG2(p *pb.G2Affine) *PointG2 {
 	return &PointG2{*ConvertProtoFq2ToFe2(p.X), *ConvertProtoFq2ToFe2(p.Y), *NewFe2().One()}
+}
+
+func ConvertSRSToProtoSRS(s *srs.SRS) *pb.SRS {
+	g1PowersLen := s.G1Degree() + 1
+
+	g1Powers := make([]*pb.G1Affine, g1PowersLen)
+	for i := uint32(0); i < g1PowersLen; i++ {
+		g1Powers[i] = ConvertPointG1ToProtoG1Affine(s.G1PowerOf(i))
+	}
+	g2PowersLen := s.G2Degree() + 1
+	g2Powers := make([]*pb.G2Affine, g2PowersLen)
+	for i := uint32(0); i < g2PowersLen; i++ {
+		g2Powers[i] = ConvertPointG2ToProtoG2Affine(s.G2PowerOf(i))
+	}
+	return &pb.SRS{
+		G1Degree: s.G1Degree(),
+		G2Degree: s.G2Degree(),
+		G1Powers: g1Powers,
+		G2Powers: g2Powers,
+	}
 }
 
 func ConvertProtoMultiProofToMultiProof(p *pb.MultiProof) *MultiProof {

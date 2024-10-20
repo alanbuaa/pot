@@ -186,7 +186,7 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 				w.log.Warnf("[PoT]\tthe fork chain at height %d: %s", forkBranch[i].GetHeader().Height, hexutil.Encode(forkBranch[i].Hash()))
 			}
 
-			cryptoset, ok := w.CryptoSetMap[crypto.Convert(ances.Hash())]
+			_, ok := w.CryptoSetMap[crypto.Convert(ances.Hash())]
 			if !ok {
 				doonce.Do(func() {
 					close(done)
@@ -194,7 +194,6 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 				return fmt.Errorf("can not find the crypto set for block %s", hexutil.Encode(c.Hash()))
 			}
 
-			w.CryptoSet.Restore(w.ID, ances.GetHeader().Height, cryptoset)
 			w.log.Errorf("restore at height %d,current is %d", ances.GetHeader().Height, current.GetHeader().Height)
 
 			flag = true
@@ -215,7 +214,6 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 			}
 
 			if !flag {
-				w.CryptoSet.Restore(w.ID, current.GetHeader().Height, currentset)
 				doonce.Do(func() {
 					close(done)
 				})
@@ -227,7 +225,6 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 				flag = false
 			}
 			if !flag {
-				w.CryptoSet.Restore(w.ID, current.GetHeader().Height, currentset)
 				doonce.Do(func() {
 					close(done)
 				})
@@ -245,7 +242,6 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 					w.log.Errorf("[PoT]\tchain reset error for %s", err)
 				}
 			} else {
-				// w.CryptoSet.Restore(current.GetHeader().Height, currentset)
 				doonce.Do(func() {
 					close(done)
 				})
@@ -261,13 +257,34 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 			}
 
 			w.CryptoSet.Restore(w.ID, block.GetHeader().Height-1, readycryptoset)
+			mevLogs[w.ID].Printf("restore at height %v\n", block.GetHeader().Height-1)
 
 			err = w.workReset(block.GetHeader().Height, block)
 			if err != nil {
-				w.log.Errorf("[PoT]\twork reset error for %s", err)
+				w.log.Errorf(
+					"[PoT]\twork reset error for %s", err)
+				w.CryptoSet.Restore(w.ID, current.GetHeader().Height, currentset)
+				return err
 			}
+
+			// crSRSFile := fmt.Sprintf("srs-node-%v[CR].binary", w.ID)
+			// srsFile := fmt.Sprintf("srs-node-%v.binary", w.ID)
+			// if _, err := os.Stat(crSRSFile); !os.IsNotExist(err) {
+			// 	if _, err = os.Stat(srsFile); !os.IsNotExist(err) {
+			// 		if err = os.Remove(srsFile); err != nil {
+			// 			mevLogs[w.ID].Printf("error: cover %v failed, err: %v\n", srsFile, err)
+			// 			return fmt.Errorf("error: cover %v failed, err: %v\n", srsFile, err)
+			// 		}
+			// 	}
+			// 	if err := os.Rename(crSRSFile, srsFile); err != nil {
+			// 		mevLogs[w.ID].Printf("error: rename %v failed, err: %v\n", crSRSFile, err)
+			// 		return fmt.Errorf("error: rename %v failed, err: %v\n", crSRSFile, err)
+			// 	}
+			// }
+
 			// txs := block.GetExcutedTxs()
 			// w.mempool.MarkProposed(txs)
+
 			doonce.Do(func() {
 				w.log.Warn("[PoT]\tHandle fork done")
 				close(done)
@@ -488,7 +505,16 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 	err = w.blockStorage.Put(block)
 	w.mutex.Unlock()
 
+	// parentblock, err := w.getParentBlock(block)
+	// if err != nil {
+	// 	doonce.Do(func() {
+	// 		close(done)
+	// 	})
+	// 	return err
+	// }
+
 	readycryptoset, ok := w.CryptoSetMap[crypto.Convert(block.GetHeader().ParentHash)]
+	fmt.Println("restore block hash :", hexutil.Encode(block.GetHeader().ParentHash))
 	if !ok {
 		doonce.Do(func() {
 			close(done)
@@ -496,7 +522,23 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 		return fmt.Errorf("could not find cryptoset for block parent")
 	}
 
+	// fmt.Println("restore at block height ", block.GetHeader().Height-1)
 	w.CryptoSet.Restore(w.ID, block.GetHeader().Height-1, readycryptoset)
+
+	// crSRSFile := fmt.Sprintf("srs-node-%v[CR].binary", w.ID)
+	// srsFile := fmt.Sprintf("srs-node-%v.binary", w.ID)
+	// if _, err := os.Stat(crSRSFile); !os.IsNotExist(err) {
+	// 	if _, err = os.Stat(srsFile); !os.IsNotExist(err) {
+	// 		if err = os.Remove(srsFile); err != nil {
+	// 			mevLogs[w.ID].Printf("error: cover %v failed, err: %v\n", srsFile, err)
+	// 			return fmt.Errorf("error: cover %v failed, err: %v\n", srsFile, err)
+	// 		}
+	// 	}
+	// 	if err := os.Rename(crSRSFile, srsFile); err != nil {
+	// 		mevLogs[w.ID].Printf("error: rename %v failed, err: %v\n", crSRSFile, err)
+	// 		return fmt.Errorf("error: rename %v failed, err: %v\n", crSRSFile, err)
+	// 	}
+	// }
 
 	err = w.setVDF0epoch(block.GetHeader().Height - 1)
 	if err != nil {
@@ -709,6 +751,8 @@ func (w *Worker) workReset(epoch uint64, block *types.Block) error {
 	copy(vdf0rescopy, res0)
 
 	cryptoset, err := w.GenerateCryptoSetFromLocal(epoch)
+	mevLogs[w.ID].Printf("generate for height %v\n", epoch)
+
 	if err != nil {
 		return err
 	}
