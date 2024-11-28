@@ -1,0 +1,26 @@
+/.idea
+/boltdbfile
+/dbfile
+/store
+/*.exe
+
+# Linux
+client
+genkey
+upgradeable-consensus
+test
+
+/.vscode
+/*.log
+/*.txt
+/.VSCodeCounter
+
+remote
+vdftest
+difficulty
+transfertime
+__debug_bin*
+remote2
+senddci
+getbalance
+/localremote

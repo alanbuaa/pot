@@ -1,0 +1,48 @@
+syntax = "proto3";
+package pb;
+
+option go_package="./pb";
+
+message Empty {}
+
+message WhirlyBlock {
+  bytes ParentHash = 1;
+  bytes Hash = 2;
+  uint64 height = 3;
+  repeated bytes txs = 4;
+  QuorumCert Justify = 5;
+  bool committed = 6;
+  bytes shardingName = 7;
+}
+
+enum MsgType {
+  PREPARE = 0;
+  PREPARE_VOTE = 1;
+  PRECOMMIT = 2;
+  PRECOMMIT_VOTE = 3;
+  COMMIT = 4;
+  COMMIT_VOTE = 5;
+  NEWVIEW = 6;
+  DECIDE = 7;
+}
+
+message QuorumCert {
+  bytes BlockHash = 1;
+  MsgType type = 2;
+  uint64 viewNum = 3;
+  bytes signature = 4;
+}
+
+message Request {
+  bytes tx = 1;
+  int32 chainID = 2;
+  bytes sharding = 3;
+  bytes command = 4;
+}
+
+message Reply {
+  bytes tx = 1;
+  bytes receipt = 2;
+  int32 chainID = 3;
+  bytes sharding = 4;
+}
