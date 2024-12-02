@@ -106,9 +106,9 @@ message TxData {
 
 message DciTx{
   bytes    TxID                  = 1;
-  repeated TxInput TxInput    = 2;
-  repeated TxOutput TxOutput  = 3;
-  repeated CoinbaseProof Proof              = 4;
+  repeated TxInput TxInput       = 2;
+  repeated TxOutput TxOutput     = 3;
+  repeated CoinbaseProof Proof   = 4;
 }
 
 message TxInput{
@@ -118,15 +118,15 @@ message TxInput{
   bytes Scriptsig   = 4;
   int64 Value       = 5;
   bytes Address     = 6;
-  int32 ChainID     = 7;
+  int32 BciType     = 7;
 }
 
 message TxOutput{
   bytes   Address    = 1;
   int64   Value      = 2;
-  bool    IsSpent    = 3;
+  int64   Interest   = 3;
   bytes   ScriptPk   = 4;
-  int32   ChainID    = 5;
+  int32   BciType    = 5;
   uint64  LockTime   = 6;
 }
 
@@ -191,7 +191,7 @@ service DciExector{
 message DciReward{
   bytes Address = 1;
   int64 Amount = 2;
-  int64 ChainID = 3;
+  int32 ChainID = 3;
   DciProof DciProof = 4;
 }
 

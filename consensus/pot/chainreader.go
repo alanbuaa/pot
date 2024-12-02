@@ -360,8 +360,11 @@ func (c *ChainReader) ResetTxForBlock(block *types.Block) error {
 			//		}
 			//	}
 			//}
+
+			// delete txoutput of the rawtx
 			for i, output := range rawTx.TxOutput {
 				utxokey := fmt.Sprintf("%s:%d", rawTx.Txid, i)
+				// delete the lockutxo in map
 				lockheight := block.GetHeader().Height + output.LockTime
 				if _, exist := c.unlockUtxo[lockheight][utxokey]; exist {
 					delete(c.unlockUtxo[lockheight], utxokey)
@@ -370,7 +373,7 @@ func (c *ChainReader) ResetTxForBlock(block *types.Block) error {
 					}
 					continue
 				}
-
+				// delete the utxo
 				outputbyte := b.Get([]byte(utxokey))
 				if outputbyte != nil {
 					err := b.Delete([]byte(utxokey))
@@ -379,6 +382,8 @@ func (c *ChainReader) ResetTxForBlock(block *types.Block) error {
 					}
 				}
 			}
+
+			// add txinput back to database
 			if rawTx.IsCoinBase() == false {
 				for _, input := range rawTx.TxInput {
 					txid := input.Txid
@@ -492,7 +497,7 @@ type LockProof struct {
 	Amount         int64
 	Locktime       uint64
 	RemainLockTime uint64
-	DciType        int8
+	DciType        int32
 	TxOutput       types.TxOutput
 }
 

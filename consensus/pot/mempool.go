@@ -30,7 +30,7 @@ type DciReward struct {
 	Address []byte
 	Amount  int64
 	Proof   DciProof
-	ChainID int64
+	ChainID int32
 	weight  float64
 }
 

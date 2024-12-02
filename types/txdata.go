@@ -176,6 +176,7 @@ type TxInput struct {
 	Scriptsig  []byte
 	Value      int64
 	Address    []byte
+	BciType    int32
 }
 
 type TxOutput struct {
@@ -185,13 +186,14 @@ type TxOutput struct {
 	ScriptPk   []byte
 	Proof      []byte
 	LockTime   uint64
+	BciType    int32
 }
 
 type CoinbaseProof struct {
 	Address []byte
 	Amount  int64
 	TxHash  []byte
-	Type    int8
+	Type    int32
 	Weight  float64 // only for test
 }
 

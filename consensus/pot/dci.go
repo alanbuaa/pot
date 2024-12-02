@@ -16,10 +16,10 @@ import (
 )
 
 const (
-	PotMiner           = int8(0)
-	PotUncleBlockMiner = int8(1)
-	CommitteeLeader    = int8(2)
-	CommitteeMember    = int8(3)
+	PotMiner           = int32(0)
+	PotUncleBlockMiner = int32(1)
+	CommitteeLeader    = int32(2)
+	CommitteeMember    = int32(3)
 )
 const (
 	ChainID0Rate = 0.1
@@ -74,21 +74,6 @@ func (w *Worker) GetBalance(ctx context.Context, request *pb.GetBalanceRequest) 
 	pbutxos := make([]*pb.Utxo, 0)
 	//count := 0
 	for utxokey, utxo := range utxos {
-		//txouts := make([]*pb.TxOutput, 0)
-		//for _, output := range utxo {
-		//	txouts = append(txouts, output.ToProto())
-		//	balance += output.Value
-		//}
-		//if len(txouts) == 0 {
-		//	continue
-		//}
-		//id := make([]byte, 32)
-		//copy(id, txid[:])
-		//Utxo := &pb.Utxo{
-		//	Txid:      id,
-		//	TxOutputs: txouts,
-		//}
-		//pbutxos = append(pbutxos, Utxo)
 		var txid [32]byte
 		var voutput int64
 		_, err := fmt.Sscanf(utxokey, "%s:%d", &txid, &voutput)
@@ -329,7 +314,7 @@ func (w *Worker) GenerateCoinbaseTx(pubkeybyte []byte, vdf0res []byte, totalrewa
 	}
 	txouts = append(txouts, minerout)
 
-	selectreward := make(map[int64][]*DciReward)
+	selectreward := make(map[int32][]*DciReward)
 	if len(dcirewards) != 0 {
 		groupsdata := groupByChainID(dcirewards)
 		for _, rewards := range groupsdata {
@@ -406,15 +391,15 @@ func (w *Worker) GenerateCoinbaseTx(pubkeybyte []byte, vdf0res []byte, totalrewa
 	return &types.Tx{Data: txdata}
 }
 
-func groupByChainID(rewards []*DciReward) map[int64][]*DciReward {
-	groupData := make(map[int64][]*DciReward)
+func groupByChainID(rewards []*DciReward) map[int32][]*DciReward {
+	groupData := make(map[int32][]*DciReward)
 	for _, reward := range rewards {
 		groupData[reward.ChainID] = append(groupData[reward.ChainID], reward)
 	}
 	return groupData
 }
 
-func (w *Worker) GenerateCoinbaseTxWithMinerKey(dcirewards []*DciReward, privkey *crypto.PrivateKey, totalreward int64) *types.RawTx {
+func (w *Worker) GenerateCoinbaseTxWithoutMinerKey(dcirewards []*DciReward, privkey *crypto.PrivateKey, totalreward int64) *types.RawTx {
 	coinbaseproof := make([]types.CoinbaseProof, 0)
 	pubkeybyte := privkey.PublicKeyBytes()
 	minerout := types.TxOutput{
@@ -437,6 +422,7 @@ func (w *Worker) GenerateCoinbaseTxWithMinerKey(dcirewards []*DciReward, privkey
 			TxHash:  dcireward.Proof.TxHash,
 			Address: dcireward.Address,
 			Amount:  dcireward.Amount,
+			Type:    dcireward.ChainID,
 		}
 		coinbaseproof = append(coinbaseproof, proof)
 	}
@@ -460,8 +446,8 @@ func (w *Worker) GenerateCoinbaseTxWithMinerKey(dcirewards []*DciReward, privkey
 	}
 	return tx
 }
-func groupByType(proofs []types.CoinbaseProof) map[int8][]types.CoinbaseProof {
-	groupData := make(map[int8][]types.CoinbaseProof)
+func groupByType(proofs []types.CoinbaseProof) map[int32][]types.CoinbaseProof {
+	groupData := make(map[int32][]types.CoinbaseProof)
 	for _, reward := range proofs {
 		groupData[reward.Type] = append(groupData[reward.Type], reward)
 	}

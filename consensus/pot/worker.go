@@ -348,7 +348,7 @@ func (w *Worker) mine(epoch uint64, vdf0res []byte, nonce int64, workerid int, a
 
 	privkey := crypto.GenerateKey()
 	pubkeybyte := privkey.PublicKeyBytes()
-	coinbasetx := w.GenerateCoinbaseTxWithMinerKey(dcirewards, privkey, TotalReward)
+	coinbasetx := w.GenerateCoinbaseTxWithoutMinerKey(dcirewards, privkey, TotalReward)
 	coinbaseproofs := coinbasetx.CoinbaseProofs
 	coinbaseProofsbyte := CoinbaseProofToBytes(coinbaseproofs)
 	mixdigest := w.calcMixdigest(epoch, parentblock, uncleblock, difficulty, w.PeerId, pubkeybyte, coinbaseProofsbyte)
@@ -417,7 +417,7 @@ func (w *Worker) mine(epoch uint64, vdf0res []byte, nonce int64, workerid int, a
 			noncebyte := tmp.Bytes()
 			privkey = crypto.GenerateKey()
 			pubkey2byte := privkey.PublicKeyBytes()
-			coinbasetx = w.GenerateCoinbaseTxWithMinerKey(dcirewards, privkey, TotalReward)
+			coinbasetx = w.GenerateCoinbaseTxWithoutMinerKey(dcirewards, privkey, TotalReward)
 			coinbaseproofs2 := coinbasetx.CoinbaseProofs
 			coinbaseProofsbyte2 := CoinbaseProofToBytes(coinbaseproofs2)
 			mix2digest := w.calcMixdigest(epoch, parentblock, uncleblock, difficulty, w.PeerId, pubkey2byte, coinbaseProofsbyte2)
@@ -531,7 +531,7 @@ func (w *Worker) CompleteBlock(emptyblock *types.Block, vdf0res []byte, vdf1res 
 }
 func (w *Worker) CompleteCoinbaseTx(vdf1res []byte, coinbasetx *types.RawTx) *types.Tx {
 	coinbaseproofs := coinbasetx.CoinbaseProofs
-	selectproofs := make(map[int8][]*types.CoinbaseProof)
+	selectproofs := make(map[int32][]*types.CoinbaseProof)
 	if len(coinbaseproofs) != 0 {
 		groupsdata := groupByType(coinbaseproofs)
 		for _, proofs := range groupsdata {
