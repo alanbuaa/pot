@@ -9,7 +9,8 @@ message ExecBlock {
   repeated bytes txs = 1;
   bytes shardingName = 2;
   uint64 randomNumber = 3;
-  bytes Votes = 4;
+  bytes votes = 4;
+  bytes justify = 5;
 }
 
 message Result {
