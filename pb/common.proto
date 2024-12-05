@@ -31,6 +31,8 @@ message QuorumCert {
   MsgType type = 2;
   uint64 viewNum = 3;
   bytes signature = 4;
+  uint64 randomNumber = 5;
+  bytes Votes = 6;
 }
 
 message Request {

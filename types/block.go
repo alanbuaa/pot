@@ -16,6 +16,8 @@ import (
 type ConsensusBlock interface {
 	GetTxs() [][]byte
 	GetShardingName() []byte
+	GetRandomNumber() int64
+	GetVotes() []byte
 	protoreflect.ProtoMessage
 }
 

@@ -8,6 +8,8 @@ option go_package="./pb";
 message ExecBlock {
   repeated bytes txs = 1;
   bytes shardingName = 2;
+  uint64 randomNumber = 3;
+  bytes Votes = 4;
 }
 
 message Result {
