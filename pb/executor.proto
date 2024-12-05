@@ -10,7 +10,6 @@ message ExecBlock {
   bytes shardingName = 2;
   uint64 randomNumber = 3;
   bytes votes = 4;
-  bytes justify = 5;
 }
 
 message Result {
