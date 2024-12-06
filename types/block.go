@@ -16,14 +16,8 @@ import (
 type ConsensusBlock interface {
 	GetTxs() [][]byte
 	GetShardingName() []byte
-	GetJustify() Justify
+	GetIncentive() []byte
 	protoreflect.ProtoMessage
-}
-
-type Justify interface {
-	GetRandomNumber() int64
-	GetVotes() []byte
-	GetLeader() []byte
 }
 
 type Header struct {
