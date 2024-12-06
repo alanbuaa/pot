@@ -26,9 +26,6 @@ message SimpleWhirlyProof {
   bytes BlockHash = 1;
   uint64 viewNum = 2;
   repeated WhirlyVote proof = 3;
-  uint64 randomNumber = 4;
-  bytes votes = 5;
-  bytes leader = 6;
 }
 
 message WhirlyProposal {

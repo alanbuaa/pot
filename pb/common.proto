@@ -13,6 +13,7 @@ message WhirlyBlock {
   QuorumCert Justify = 5;
   bool committed = 6;
   bytes shardingName = 7;
+  bytes incentive = 8;
 }
 
 enum MsgType {
@@ -31,9 +32,6 @@ message QuorumCert {
   MsgType type = 2;
   uint64 viewNum = 3;
   bytes signature = 4;
-  uint64 randomNumber = 5;
-  bytes votes = 6;
-  bytes leader = 7;
 }
 
 message Request {
