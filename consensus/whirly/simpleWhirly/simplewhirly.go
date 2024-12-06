@@ -740,7 +740,7 @@ func (sw *SimpleWhirlyImpl) createProposal(txs []types.RawTransaction) *pb.Whirl
 		sw.Log.Error("Encode Incentive Error: ", err)
 	}
 
-	block := sw.CreateLeaf(sw.lockProof.BlockHash, sw.View.ViewNum, txs, nil)
+	block := sw.CreateLeaf(sw.lockProof.BlockHash, sw.View.ViewNum, txs, nil, incentiveBytes)
 	sw.lock.Unlock()
 	// store the block
 	err = sw.BlockStorage.Put(block)

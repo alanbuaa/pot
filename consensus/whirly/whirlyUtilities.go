@@ -273,13 +273,14 @@ func (wu *WhirlyUtilitiesImpl) PingMsg() *pb.WhirlyMsg {
 	return wMsg
 }
 
-func (wu *WhirlyUtilitiesImpl) CreateLeaf(parentHash []byte, viewNum uint64, txs []types.RawTransaction, justify *pb.QuorumCert) *pb.WhirlyBlock {
+func (wu *WhirlyUtilitiesImpl) CreateLeaf(parentHash []byte, viewNum uint64, txs []types.RawTransaction, justify *pb.QuorumCert, incentive []byte) *pb.WhirlyBlock {
 	b := &pb.WhirlyBlock{
 		ParentHash: parentHash,
 		Hash:       nil,
 		Height:     viewNum,
 		Txs:        types.RawTxArrayToBytes(txs),
 		Justify:    justify,
+		Incentive:  incentive,
 	}
 
 	b.Hash = types.Hash(b)

@@ -578,7 +578,7 @@ func (whi *WhirlyImpl) createProposal(txs []types.RawTransaction) *pb.WhirlyBloc
 	// create a new block
 	whi.lock.Lock()
 	// do not use qc fields for blocks
-	block := whi.CreateLeaf(whi.lockQC.BlockHash, whi.View.ViewNum, txs, nil)
+	block := whi.CreateLeaf(whi.lockQC.BlockHash, whi.View.ViewNum, txs, nil, nil)
 	whi.lock.Unlock()
 	// store the block
 	err := whi.BlockStorage.Put(block)
