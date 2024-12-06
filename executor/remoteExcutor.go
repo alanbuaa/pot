@@ -37,7 +37,10 @@ func (e *RemoteExecutor) CommitBlock(block types.ConsensusBlock, proof []byte, c
 	eb := &pb.ExecBlock{
 		Txs:          block.GetTxs(),
 		ShardingName: block.GetShardingName(),
+		Incentive:    block.GetIncentive(),
 	}
+	// e.log.Info("Incentive: ", hex.EncodeToString(block.GetIncentive()))
+
 	if eb.Txs == nil {
 		e.log.Debug("block txs is nil ")
 		return

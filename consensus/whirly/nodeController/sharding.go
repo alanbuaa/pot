@@ -149,6 +149,7 @@ func (s *Sharding) CommitBlock(block types.ConsensusBlock, proof []byte, cid int
 	newBlock := &pb.WhirlyBlock{
 		Txs:          txs,
 		ShardingName: []byte(s.Name),
+		Incentive:    block.GetIncentive(),
 	}
 	s.controller.Executor.CommitBlock(newBlock, proof, cid)
 }

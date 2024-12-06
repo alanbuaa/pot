@@ -6,7 +6,7 @@ import (
 
 type Incentive struct {
 	Leader         string
-	NodeIncentives []*NodeIncentive
+	NodeIncentives []NodeIncentive
 }
 
 type NodeIncentive struct {
@@ -18,13 +18,13 @@ type NodeIncentive struct {
 func NewIncentive(leader string) *Incentive {
 	incentive := &Incentive{
 		Leader:         leader,
-		NodeIncentives: make([]*NodeIncentive, 0),
+		NodeIncentives: make([]NodeIncentive, 0),
 	}
 	return incentive
 }
 
 func (in *Incentive) InsertYesVote(address string) {
-	nodeIncentive := &NodeIncentive{
+	nodeIncentive := NodeIncentive{
 		NodePublicAddress: address,
 		Type:              "YES",
 		Number:            1,
@@ -33,7 +33,7 @@ func (in *Incentive) InsertYesVote(address string) {
 }
 
 func (in *Incentive) InsertNoVote(address string) {
-	nodeIncentive := &NodeIncentive{
+	nodeIncentive := NodeIncentive{
 		NodePublicAddress: address,
 		Type:              "No",
 		Number:            1,

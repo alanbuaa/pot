@@ -676,10 +676,6 @@ func (sw *SimpleWhirlyImpl) OnPropose() {
 	sw.proposeView = sw.View.ViewNum
 	sw.proposalLock.Unlock()
 
-	sw.voteLock.Lock()
-	sw.CleanVote()
-	sw.voteLock.Unlock()
-
 	sw.Log.Trace("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] OnPropose")
 	txs := sw.MemPool.GetFirst(int(sw.Config.Whirly.BatchSize))
 	if len(txs) != 0 {
@@ -694,6 +690,11 @@ func (sw *SimpleWhirlyImpl) OnPropose() {
 	proposal := sw.createProposal(txs)
 	// create a new prepare msg
 	msg := sw.ProposalMsg(proposal, nil, sw.lockProof, sw.epoch)
+
+	// 创建完区块后才能clean
+	sw.voteLock.Lock()
+	sw.CleanVote()
+	sw.voteLock.Unlock()
 
 	// the old leader should vote too
 	msgByte, err := proto.Marshal(msg)
@@ -739,6 +740,7 @@ func (sw *SimpleWhirlyImpl) createProposal(txs []types.RawTransaction) *pb.Whirl
 	if err != nil {
 		sw.Log.Error("Encode Incentive Error: ", err)
 	}
+	// sw.Log.Info("create Incentive", sw.incentive)
 
 	block := sw.CreateLeaf(sw.lockProof.BlockHash, sw.View.ViewNum, txs, nil, incentiveBytes)
 	sw.lock.Unlock()
