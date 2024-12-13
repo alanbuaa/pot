@@ -42,6 +42,7 @@ message Header{
   string PeerId = 11;
   bytes Pubkey = 12;
   bytes Txhash = 13;
+  bytes CommiteePubkey = 14;
 //  bytes ExeHash = 14;
 //  bytes Command = 15;
 }
@@ -67,7 +68,6 @@ message BlockResponse{
   string des = 3;
   int64  srcid = 4;
   int64  desid = 5;
-
 }
 
 message PoTRequest{
@@ -104,15 +104,7 @@ message TxData {
   bytes TxData = 2;
 }
 
-message DciTx{
-  bytes    TxID                  = 1;
-  repeated TxInput TxInput       = 2;
-  repeated TxOutput TxOutput     = 3;
-  repeated CoinbaseProof Proof   = 4;
-}
-
 message TxInput{
-  bool  IsCoinbase  = 1;
   bytes TxID        = 2;
   int64 Voutput     = 3;
   bytes Scriptsig   = 4;
@@ -225,6 +217,7 @@ message RawTxData {
   bytes TxID                  = 1;
   repeated TxInput TxInput    = 2;
   repeated TxOutput TxOutput  = 3;
+  int64 TransactionFee = 5;
   repeated CoinbaseProof CoinbaseProofs              = 4;
 }
 

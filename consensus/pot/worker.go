@@ -8,6 +8,9 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"math"
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/shopspring/decimal"
@@ -22,8 +25,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/proto"
-	"math"
-	"math/big"
 
 	"net"
 	"os"
@@ -382,7 +383,7 @@ func (w *Worker) mine(epoch uint64, vdf0res []byte, nonce int64, workerid int, a
 			if tmp.Cmp(target) >= 0 {
 
 				//block := w.createNilBlock(epoch, parentblock, uncleblock, difficulty, mixdigest, nonce, vdf0res, res1)
-				w.log.Infof("[PoT]\tepoch %d:workerid %d fail to find a %d block", epoch, workerid, difficulty.Int64())
+				w.log.Infof("[PoT]\tepoch %d:workerid %d fail to find a %d block %v", epoch, workerid, difficulty.Int64(), tmp.Bytes())
 				//w.blockStorage.Put(block)
 
 				nonce += 1
@@ -564,26 +565,28 @@ func (w *Worker) CompleteCoinbaseTx(vdf1res []byte, coinbasetx *types.RawTx) *ty
 		}
 
 		for bcitype, proofs := range selectproofs {
-			lenproof := len(proofs)
-			switch bcitype {
-			case PotMiner:
-
-			case CommitteeLeader:
-				for _, proof := range proofs {
-					txout := types.TxOutput{
-						Address:    proof.Address,
-						Value:      int64(math.Floor(float64(TotalReward)*ChainID1Rate) / float64(lenproof)),
-						IsCoinbase: false,
-						ScriptPk:   nil,
-						Proof:      nil,
-						LockTime:   144,
-					}
-					coinbasetx.TxOutput = append(coinbasetx.TxOutput, txout)
+			rate, ok := bcimap[bcitype]
+			if !ok {
+				return nil
+			}
+			lenproofs := len(proofs)
+			for _, proof := range proofs {
+				txout := types.TxOutput{
+					Address:  proof.Address,
+					Value:    int64(math.Floor(float64(TotalReward) * rate / float64(lenproofs))),
+					Interest: 0,
+					ScriptPk: nil,
+					Proof:    nil,
+					LockTime: 144,
+					BciType:  bcitype,
+					Data:     nil,
 				}
+				coinbasetx.TxOutput = append(coinbasetx.TxOutput, txout)
 			}
 		}
-
+		sort.Slice(coinbasetx.TxOutput, func(i, j int) bool { return coinbasetx.TxOutput[i].BciType < coinbasetx.TxOutput[j].BciType })
 	}
+
 	coinbasetx.Txid = coinbasetx.Hash()
 	if len(coinbasetx.TxOutput) > 1 {
 		for _, output := range coinbasetx.TxOutput {
@@ -592,6 +595,25 @@ func (w *Worker) CompleteCoinbaseTx(vdf1res []byte, coinbasetx *types.RawTx) *ty
 	}
 	txdata, _ := coinbasetx.EncodeToByte()
 	return &types.Tx{Data: txdata}
+}
+
+func (w *Worker) CreateExchequerTx(height uint64) types.TxOutput {
+
+	return types.TxOutput{
+		Address:  nil,
+		Value:    0,
+		Interest: 0,
+		ScriptPk: nil,
+		Proof:    nil,
+		LockTime: 0,
+		BciType:  0,
+		Data:     nil,
+		BurnLock: 0,
+	}
+}
+
+func (w *Worker) GenerateExchequerTxOutputData() {
+
 }
 
 func (w *Worker) createBlock(epoch uint64, parentBlock *types.Block, uncleBlock []*types.Block, difficulty *big.Int, mixdigest []byte, nonce int64, vdf0res []byte, vdf1res []byte) *types.Block {

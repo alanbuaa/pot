@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"bytes"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -103,15 +104,17 @@ func ExecWesolowskiVDFAffinity(challenge []byte, iterations int, ctrl *Controlle
 	// affinity
 	commandAffinity := fmt.Sprintf("taskset -pc %d %d", ctrl.CpuNo, ctrl.Pid)
 	tasksetcmd := exec.Command("bash", "-c", commandAffinity)
+	var stderr bytes.Buffer
 
+	tasksetcmd.Stderr = &stderr
 	if err := tasksetcmd.Run(); err != nil {
-		fmt.Printf("cmdAffinity.Start: %v\n", err)
+		fmt.Printf("cmdAffinity.Start: %v for %s\n", err, stderr.String())
 	}
 
 	output, err := io.ReadAll(stdout) // 读取输出结果
 	command.Wait()
 	if err != nil {
-		return nil, nil
+		return nil, err
 	}
 
 	return output, nil
@@ -133,6 +136,7 @@ func ExecPietrzakVDFAffinity(challenge []byte, iterations int, ctrl *Controller)
 	commandAffinity := fmt.Sprintf("taskset -pc %d %d", ctrl.CpuNo, ctrl.Pid)
 	cmdAffinity := exec.Command("bash", "-c", commandAffinity)
 	if err := cmdAffinity.Start(); err != nil {
+
 		fmt.Printf("cmdAffinity.Start: %v\n", err)
 	}
 

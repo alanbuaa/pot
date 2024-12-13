@@ -10,7 +10,7 @@ build_client:
 build_server:
 	go build -o upgradeable-consensus ./cmd/server
 
-build_test:
+btest:
 	go build -o test ./cmd/pot_test
 
 win_build:

@@ -197,9 +197,6 @@ func (b *Header) BasicVerify() (bool, error) {
 	if b.Difficulty.Cmp(common.Big0) == 0 {
 		return b.CheckNilBlock()
 	}
-	if !b.CheckMixdigest() {
-		return false, fmt.Errorf("the mixdigest of block is wrong")
-	}
 	flag, err := b.CheckHash()
 	if !flag {
 		return false, err
@@ -207,27 +204,26 @@ func (b *Header) BasicVerify() (bool, error) {
 	return true, nil
 }
 
-func (b *Header) CheckMixdigest() bool {
+// TODO: need to complete
+func (h *Header) CheckMixdigest() bool {
 	unclehash := make([]byte, 0)
-	for i := 0; i < len(b.UncleHash); i++ {
-		if len(b.UncleHash[i]) != crypto.Hashlen {
+	for i := 0; i < len(h.UncleHash); i++ {
+		if len(h.UncleHash[i]) != crypto.Hashlen {
 			return false
 		}
-		unclehash = append(unclehash, b.UncleHash[i]...)
+		unclehash = append(unclehash, h.UncleHash[i]...)
 	}
 	// mixdigest verify
 	tmp := new(big.Int)
-	tmp.Set(b.Difficulty)
+	tmp.Set(h.Difficulty)
 	difficultybyte := tmp.Bytes()
-	idbyte := []byte(b.PeerId)
-	tmp.SetInt64(int64(b.Height))
+	idbyte := []byte(h.PeerId)
+	tmp.SetInt64(int64(h.Height))
 	epochbyte := tmp.Bytes()
-	hashinput := bytes.Join([][]byte{epochbyte, b.ParentHash, unclehash, difficultybyte, idbyte}, []byte(""))
+
+	hashinput := bytes.Join([][]byte{epochbyte, h.ParentHash, unclehash, difficultybyte, idbyte}, []byte(""))
 	res := crypto.Hash(hashinput)
-	if !bytes.Equal(res[:], b.Mixdigest) {
-		return false
-	}
-	return true
+	return bytes.Equal(res[:], h.Mixdigest)
 }
 
 func (b *Header) CheckHash() (bool, error) {

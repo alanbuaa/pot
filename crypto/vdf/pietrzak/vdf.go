@@ -22,7 +22,12 @@ func Execute(challenge []byte, iterations int, ctrl *utils.Controller, cpuCounte
 		return nil, fmt.Errorf("missing vdf executable file")
 	}
 	// 执行命令
-	output := utils.ExecPietrzakVDFAffinity(challenge, iterations, ctrl)
+	output, err := utils.ExecPietrzakVDFAffinity(challenge, iterations, ctrl)
+	if err != nil {
+		cpuCounter.Release(ctrl)
+		fmt.Println("vdf result: ", err)
+		return nil, err
+	}
 	// 释放CPU
 	cpuCounter.Release(ctrl)
 
@@ -33,7 +38,7 @@ func Execute(challenge []byte, iterations int, ctrl *utils.Controller, cpuCounte
 	}
 	// 转换输出为字节数组
 	res := make([]byte, hex.DecodedLen(outputLen-1)) // 去除末尾换行符
-	_, err := hex.Decode(res, output[:outputLen-1])
+	_, err = hex.Decode(res, output[:outputLen-1])
 	if err != nil {
 		fmt.Println("vdf result: ", err)
 		return nil, err

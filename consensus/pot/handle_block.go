@@ -5,6 +5,11 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"math/big"
+	"math/rand"
+	"sync"
+	"time"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/zzz136454872/upgradeable-consensus/crypto"
@@ -12,10 +17,6 @@ import (
 	"github.com/zzz136454872/upgradeable-consensus/pb"
 	"github.com/zzz136454872/upgradeable-consensus/types"
 	"google.golang.org/protobuf/proto"
-	"math/big"
-	"math/rand"
-	"sync"
-	"time"
 )
 
 func (w *Worker) handleBlock() {
@@ -160,6 +161,7 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 
 				return fmt.Errorf("get Branch error for %s", err.Error())
 			}
+			nowBranch, _, err := w.GetBranch(ances, currentblock)
 
 			flag, err := w.CheckVDF0ForBranch(forkBranch)
 			if flag {
@@ -179,11 +181,19 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 			w2 := w.calculateChainWeight(ances, block)
 			w.log.Infof("[PoT]\tthe chain weight %d, the fork chain weight %d", w1.Int64(), w2.Int64())
 
-			if w1.Int64() < w2.Int64() {
-				err := w.chainreset(forkBranch)
-				if err != nil {
-					w.log.Errorf("[PoT]\tchain reset error for %s", err)
-				}
+			if w1.Int64() > w2.Int64() {
+				w.log.Infof("[PoT]\tthe fork chain weight less than current chain not to change")
+				return nil
+			}
+
+			flag, err = w.handleForkTx(nowBranch, forkBranch)
+			if err != nil {
+
+			}
+
+			err = w.chainreset(forkBranch)
+			if err != nil {
+				w.log.Errorf("[PoT]\tchain reset error for %s", err)
 			}
 
 			_ = w.blockStorage.Put(block)
@@ -234,29 +244,6 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 	defer w.SetChainSelectFlagFalse()
 	w.mutex.Unlock()
 
-	//w.log.Errorf("Start handleing fork at epoch %d block %s", block.GetHeader().Height, hexutil.Encode(block.GetHeader().Hashes))
-	//if epoch+100 < block.GetHeader().Height {
-	//	err := w.setVDF0epoch(block.GetHeader().Height - 1)
-	//	if err != nil {
-	//		w.log.Warnf("[PoT]\tepoch %d: execset vdf error for %s", epoch, err)
-	//		return err
-	//	}
-	//
-	//	// w.backupBlock = append(w.backupBlock, block)
-	//
-	//	w.blockCounter += 1
-	//	//err = w.storage.Put(block)
-	//	err = w.blockStorage.Put(block)
-	//
-	//	res := &types.VDF0res{
-	//		Res:   block.GetHeader().PoTProof[0],
-	//		Epoch: block.GetHeader().Height - 1,
-	//	}
-	//
-	//	w.vdf0Chan <- res
-	//	w.log.Infof("[PoT]\tepoch %d:execset vdf complete. Start from epoch %d with res %s", epoch, block.GetHeader().Height-1, hexutil.Encode(crypto.Hash(res.Res)))
-	//	return nil
-	//}
 	done := make(chan struct{})
 	var doonce sync.Once
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -513,21 +500,6 @@ func (w *Worker) CheckHeaderVDF1(block *types.Block) (bool, error) {
 	return true, nil
 }
 
-func (w *Worker) CheckBlock(block *types.Block) (bool, error) {
-	header := block.GetHeader()
-	flag, err := header.BasicVerify()
-	if err != nil {
-		return flag, err
-	}
-	flag, err = w.CheckHeaderVDF1(block)
-	if err != nil {
-		return flag, err
-	}
-	return true, nil
-	//excutedtxs := block.GetExecutedHeaders()
-
-}
-
 func (w *Worker) workReset(epoch uint64, block *types.Block) error {
 	header := block.GetHeader()
 
@@ -595,4 +567,17 @@ func (w *Worker) CheckBlockNumEnough(block *types.Block) bool {
 	} else {
 		return true
 	}
+}
+
+func (w *Worker) handleForkTx(current []*types.Block, fork []*types.Block) (bool, error) {
+
+	for i := len(current) - 1; i >= 0; i-- {
+		curblock := current[i]
+		if flag, _ := w.chainReader.IsBlockOnChain(curblock); flag {
+			//err := w.chainReader.ResetTxForBlock(curblock)
+
+		}
+	}
+
+	return true, nil
 }

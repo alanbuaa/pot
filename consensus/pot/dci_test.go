@@ -4,13 +4,14 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"math/big"
+	"sort"
+	"testing"
+
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/zzz136454872/upgradeable-consensus/crypto"
 	"github.com/zzz136454872/upgradeable-consensus/types"
 	"golang.org/x/exp/rand"
-	"math/big"
-	"sort"
-	"testing"
 )
 
 func TestDci(t *testing.T) {
@@ -21,28 +22,28 @@ func TestDci(t *testing.T) {
 		Address: big.NewInt(rand.Int63()).Bytes(),
 		Amount:  10,
 		Proof:   DciProof{},
-		ChainID: 1,
+		BciType: 1,
 		weight:  0,
 	}
 	dcireward2 := &DciReward{
 		Address: big.NewInt(rand.Int63()).Bytes(),
 		Amount:  5,
 		Proof:   DciProof{},
-		ChainID: 1,
+		BciType: 1,
 		weight:  0,
 	}
 	dcireward3 := &DciReward{
 		Address: big.NewInt(rand.Int63()).Bytes(),
 		Amount:  1,
 		Proof:   DciProof{},
-		ChainID: 1,
+		BciType: 1,
 		weight:  0,
 	}
 	dcireward4 := &DciReward{
 		Address: big.NewInt(rand.Int63()).Bytes(),
 		Amount:  5,
 		Proof:   DciProof{},
-		ChainID: 2,
+		BciType: 1,
 		weight:  0,
 	}
 
@@ -58,9 +59,10 @@ func TestDci(t *testing.T) {
 			//t.Log(reward.weight)
 		}
 	}
-	selectreward := make(map[int64][]*DciReward)
+	selectreward := make(map[int32][]*DciReward)
 	vdf0res := []byte("abcdefg789456121323sssswererewrerwwerssssessssssss")
 	for chainID, rewards := range groupsdata {
+		t.Log(rewards)
 		sort.Slice(rewards, func(i, j int) bool {
 			return bytes.Compare(rewards[i].Address, rewards[j].Address) < 0
 		})
@@ -96,6 +98,7 @@ func TestRandom(t *testing.T) {
 	vdf0res := []byte("abcdefg789456121323")
 	for i := 0; i < 10; i++ {
 		rand.Seed(binary.BigEndian.Uint64(crypto.Hash(vdf0res)[:8]))
+		t.Log(rand.Float64())
 		t.Log(rand.Float64())
 	}
 }
@@ -165,9 +168,7 @@ func TestRandom(t *testing.T) {
 func TestBytesEqual(t *testing.T) {
 	first := [32]byte{}
 	second := &types.RawTx{
-		Txid:     [32]byte{},
-		TxInput:  nil,
-		TxOutput: nil,
+		Txid: [32]byte{},
 	}
 	t.Log(first == second.Txid)
 	t.Log(bytes.Equal(first[:], second.Txid[:]))
@@ -236,4 +237,9 @@ func TestBuffer(t *testing.T) {
 	fmt.Println(buffer.Len())
 	b := buffer.Bytes()
 	fmt.Printf("%v\n", b)
+}
+
+func TestBciInterest(t *testing.T) {
+	year := TenYears + 365*144
+	t.Log(year / TenYears)
 }

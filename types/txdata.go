@@ -3,8 +3,11 @@ package types
 import (
 	"bytes"
 	"encoding/gob"
+	"encoding/json"
+
 	"github.com/zzz136454872/upgradeable-consensus/crypto"
 	"github.com/zzz136454872/upgradeable-consensus/pb"
+
 	"google.golang.org/protobuf/proto"
 )
 
@@ -166,27 +169,31 @@ type RawTx struct {
 	Txid           [crypto.Hashlen]byte
 	TxInput        []TxInput
 	TxOutput       []TxOutput
+	TransactionFee int64
 	CoinbaseProofs []CoinbaseProof
 }
 
 type TxInput struct {
-	IsCoinbase bool
-	Txid       [crypto.Hashlen]byte
-	Voutput    int64
-	Scriptsig  []byte
-	Value      int64
-	Address    []byte
-	BciType    int32
+	Txid      [crypto.Hashlen]byte
+	Voutput   int64
+	Scriptsig []byte
+	Value     int64
+	Address   []byte
+	BciType   int32
 }
 
 type TxOutput struct {
-	Address    []byte
-	Value      int64
-	IsCoinbase bool
-	ScriptPk   []byte
-	Proof      []byte
-	LockTime   uint64
-	BciType    int32
+	Address     []byte `json:"address"`
+	Value       int64  `json:"value"`
+	Interest    int64  `json:"interest"`
+	ScriptPk    []byte `json:"scriptpk"`
+	Proof       []byte `json:"proof"`
+	LockTime    uint64 `json:"locktime"`
+	BciType     int32  `json:"bciType"`
+	Data        []byte `json:"data"`
+	BurnLock    uint64 `json:"burnTime"`
+	BlockHeight uint64 `json:"blockHeight"` //only for local check
+	UseFlag     bool   `json:"useFlag"`     //only for local check
 }
 
 type CoinbaseProof struct {
@@ -194,7 +201,7 @@ type CoinbaseProof struct {
 	Amount  int64
 	TxHash  []byte
 	Type    int32
-	Weight  float64 // only for test
+	Weight  float64 // only for local
 }
 
 func (r *RawTx) ToProto() *pb.RawTxData {
@@ -216,6 +223,7 @@ func (r *RawTx) ToProto() *pb.RawTxData {
 		TxID:           r.Txid[:],
 		TxInput:        pbinput,
 		TxOutput:       pboutput,
+		TransactionFee: r.TransactionFee,
 		CoinbaseProofs: pbproof,
 	}
 	return pbrawtx
@@ -275,32 +283,30 @@ func (r *RawTx) Hash() [crypto.Hashlen]byte {
 
 func ToTxInput(input *pb.TxInput) TxInput {
 	return TxInput{
-		IsCoinbase: input.IsCoinbase,
-		Txid:       crypto.Convert(input.GetTxID()),
-		Voutput:    input.GetVoutput(),
-		Scriptsig:  input.GetScriptsig(),
-		Value:      input.GetValue(),
-		Address:    input.GetAddress(),
+		Txid:      crypto.Convert(input.GetTxID()),
+		Voutput:   input.GetVoutput(),
+		Scriptsig: input.GetScriptsig(),
+		Value:     input.GetValue(),
+		Address:   input.GetAddress(),
 	}
 }
 
 func (i TxInput) ToProto() *pb.TxInput {
 	return &pb.TxInput{
-		IsCoinbase: i.IsCoinbase,
-		TxID:       i.Txid[:],
-		Voutput:    i.Voutput,
-		Scriptsig:  i.Scriptsig,
-		Value:      i.Value,
-		Address:    i.Address,
+		TxID:      i.Txid[:],
+		Voutput:   i.Voutput,
+		Scriptsig: i.Scriptsig,
+		Value:     i.Value,
+		Address:   i.Address,
 	}
 }
 
 func ToTxOutput(output *pb.TxOutput) TxOutput {
 	return TxOutput{
-		Address:    output.GetAddress(),
-		Value:      output.GetValue(),
-		IsCoinbase: output.GetIsSpent(),
-		ScriptPk:   output.GetScriptPk(),
+		Address:  output.GetAddress(),
+		Value:    output.GetValue(),
+		Interest: output.GetInterest(),
+		ScriptPk: output.GetScriptPk(),
 		//Proof:    output.GetProof(),
 		LockTime: output.GetLockTime(),
 	}
@@ -310,28 +316,21 @@ func (o TxOutput) ToProto() *pb.TxOutput {
 	return &pb.TxOutput{
 		Address:  o.Address,
 		Value:    o.Value,
-		IsSpent:  o.IsCoinbase,
+		Interest: o.Interest,
 		ScriptPk: o.ScriptPk,
 		LockTime: o.LockTime,
 	}
 }
 
 func (o TxOutput) EncodeToByte() []byte {
-	pboutput := o.ToProto()
-	pboutputbyte, err := proto.Marshal(pboutput)
-	if err != nil {
-		return nil
-	}
-	return pboutputbyte
+	databyte, _ := json.Marshal(o)
+	return databyte
 }
 
 func DecodeByteToTxOutput(data []byte) TxOutput {
-	pboutput := new(pb.TxOutput)
-	err := proto.Unmarshal(data, pboutput)
-	if err != nil {
-		return TxOutput{}
-	}
-	return ToTxOutput(pboutput)
+	var txout TxOutput
+	json.Unmarshal(data, &txout)
+	return txout
 }
 
 func ToCoinbaseProof(Proof *pb.CoinbaseProof) CoinbaseProof {
@@ -406,17 +405,14 @@ func (i TxInput) CanUnlockOutputwith(address []byte) bool {
 	return true
 	//
 }
-func (o TxOutput) CanBeUnlockWith(address []byte) bool {
-	return true
-	//return bytes.Equal(o.ScriptPk,address)
-}
+
 func (r *RawTx) IsCoinBase() bool {
 	return len(r.TxInput) == 1 && r.TxInput[0].Voutput == -1
 }
 
 func (r *RawTx) BasicVerify() bool {
 	if r.IsCoinBase() {
-		return true
+
 	} else {
 		for _, output := range r.TxOutput {
 			if output.Address == nil || bytes.Equal(output.Address, []byte{}) {
@@ -429,12 +425,18 @@ func (r *RawTx) BasicVerify() bool {
 		}
 	}
 	return false
+	return true
 }
 
 func (o TxOutput) IsLockedWithKey(pubkey []byte) bool {
 	//fmt.Println(hexutil.Encode(o.Address))
 	//fmt.Println(hexutil.Encode(pubkey))
 	return bytes.Equal(o.Address, pubkey)
+}
+
+func (o TxOutput) CanBeUnlockWith(input TxInput) bool {
+
+	return true
 }
 
 func DecodeByte2Proof(b []byte) *CoinbaseProof {

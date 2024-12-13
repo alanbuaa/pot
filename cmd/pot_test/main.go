@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	config "github.com/zzz136454872/upgradeable-consensus/config"
+	"github.com/zzz136454872/upgradeable-consensus/config"
 	"github.com/zzz136454872/upgradeable-consensus/logging"
 	"github.com/zzz136454872/upgradeable-consensus/node"
 	"log"

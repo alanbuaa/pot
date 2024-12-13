@@ -30,7 +30,7 @@ type DciReward struct {
 	Address []byte
 	Amount  int64
 	Proof   DciProof
-	ChainID int32
+	BciType int32
 	weight  float64
 }
 
@@ -44,7 +44,7 @@ func (d *DciReward) ToProto() *pb.DciReward {
 	return &pb.DciReward{
 		Address: d.Address,
 		Amount:  d.Amount,
-		ChainID: d.ChainID,
+		ChainID: d.BciType,
 		DciProof: &pb.DciProof{
 			Height:    d.Proof.Height,
 			BlockHash: d.Proof.BlockHash,
@@ -57,7 +57,7 @@ func ToDciReward(proof *pb.DciReward) *DciReward {
 	return &DciReward{
 		Address: proof.GetAddress(),
 		Amount:  proof.GetAmount(),
-		ChainID: proof.GetChainID(),
+		BciType: proof.GetChainID(),
 		Proof: DciProof{
 			Height:    proof.GetDciProof().GetHeight(),
 			BlockHash: proof.GetDciProof().GetBlockHash(),
@@ -357,12 +357,22 @@ func (c *Mempool) HasDciReward(reward *DciReward) bool {
 	return ok
 }
 
+func (c *Mempool) HasDciRewardByCoinbaseProof(coinbaseproof *types.CoinbaseProof) bool {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+
+	strings := fmt.Sprintf(hexutil.Encode(coinbaseproof.TxHash) + "-" + hexutil.Encode(coinbaseproof.Address))
+	_, ok := c.DciRewardPool[strings]
+	return ok
+}
+
 func (c *Mempool) AddDciReward(rewards ...*DciReward) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
 	for _, reward := range rewards {
-		strings := hexutil.Encode(reward.Proof.TxHash)
+		strings := fmt.Sprintf(hexutil.Encode(reward.Proof.TxHash) + "-" + hexutil.Encode(reward.Address))
+
 		_, ok := c.DciRewardPool[strings]
 		if ok {
 			continue
@@ -377,13 +387,13 @@ func (c *Mempool) AddDciReward(rewards ...*DciReward) {
 
 }
 
-func (c *Mempool) MarkDciRewardProposed(proof []types.CoinbaseProof) {
+func (c *Mempool) MarkDciRewardProposed(coinbaseProofs []types.CoinbaseProof) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
-	for _, proof := range proof {
-		str := hexutil.Encode(proof.TxHash)
-		if _, ok := c.DciRewardPool[str]; ok {
-			c.DciRewardPool[str].proposed = true
+	for _, proof := range coinbaseProofs {
+		strings := fmt.Sprintf(hexutil.Encode(proof.TxHash) + "-" + hexutil.Encode(proof.Address))
+		if _, ok := c.DciRewardPool[strings]; ok {
+			c.DciRewardPool[strings].proposed = true
 		}
 	}
 }

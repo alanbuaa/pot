@@ -5,27 +5,49 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"math"
+	"sort"
+
+	"github.com/boltdb/bolt"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+
 	"github.com/zzz136454872/upgradeable-consensus/crypto"
 	"github.com/zzz136454872/upgradeable-consensus/pb"
 	"github.com/zzz136454872/upgradeable-consensus/types"
 	"golang.org/x/exp/rand"
 	"google.golang.org/protobuf/proto"
-	"math"
-	"sort"
 )
 
-const (
-	PotMiner           = int32(0)
-	PotUncleBlockMiner = int32(1)
-	CommitteeLeader    = int32(2)
-	CommitteeMember    = int32(3)
+var (
+	exchequer       = int32(0)
+	Miner           = int32(1)
+	UncleBlockMiner = int32(2)
+	CommitteeLeader = int32(3)
+	CommitteeMember = int32(4)
+	bcimap          = map[int32]float64{
+		exchequer:       0.3,
+		Miner:           0.5,
+		UncleBlockMiner: 0.02,
+		CommitteeLeader: 0.2,
+		CommitteeMember: 0.1,
+	}
+	burnoutAddress    = []byte("000000")
+	VsiConvertAddress = []byte("000000")
 )
-const (
-	ChainID0Rate = 0.1
-	ChainID1Rate = 0.2
-	ChainID2Rate = 0.3
-	ChainID3Rate = 0.4
+
+//goland:noinspection ALL
+var (
+	savings       = uint64(0)
+	HalfYear      = OneYear / 2
+	OneYear       = uint64(365 * 144)
+	TwoYears      = OneYear * 2
+	ThreeYears    = OneYear * 3
+	TenYears      = 10 * OneYear
+	savingRate    = 0.001
+	HalfYearRate  = float64(0.005)
+	OneYearRate   = float64(0.01)
+	ThreeYearRate = float64(0.02)
+	TenYearRate   = float64(0.05)
 )
 
 func (w *Worker) VerifyDciReward(reward *DciReward) (bool, *types.ExecutedTx, error) {
@@ -109,7 +131,7 @@ func (w *Worker) VerifyUTXO(ctx context.Context, request *pb.VerifyUTXORequest) 
 	if from != nil {
 		return &pb.VerifyUTXOResponse{Flag: false}, nil
 	}
-	to := request.GetTo()
+
 	amount := request.GetValue()
 	proof := request.GetProof()
 
@@ -133,9 +155,7 @@ func (w *Worker) VerifyUTXO(ctx context.Context, request *pb.VerifyUTXORequest) 
 				return &pb.VerifyUTXOResponse{Flag: false}, fmt.Errorf("txinput is zero")
 			}
 			txinput := tx.TxInput[0]
-			if !bytes.Equal(txinput.Address, to) {
-				return &pb.VerifyUTXOResponse{Flag: false}, fmt.Errorf("wrong address")
-			}
+
 			if amount != txinput.Value {
 				return &pb.VerifyUTXOResponse{Flag: false}, fmt.Errorf("wrong value")
 			}
@@ -202,63 +222,84 @@ func (w *Worker) broadcastSendDciRequest(request *pb.SendDciRequest) error {
 
 func (w *Worker) handleDevastateDciRequest(request *pb.DevastateDciRequest) (*pb.DevastateDciResponse, error) {
 	pbrawtx := request.GetTx()
-	tx := types.ToRawTx(pbrawtx)
-	if !tx.BasicVerify() {
+	rawtx := types.ToRawTx(pbrawtx)
+	if !rawtx.BasicVerify() {
 		return &pb.DevastateDciResponse{Flag: false}, fmt.Errorf("tx is not valid")
 	} else {
-		addr := tx.TxInput[0].Address
-		outputsmap := w.chainReader.FindUTXO(addr)
-		//for _, input := range tx.TxInput {
-		//	if !bytes.Equal(addr, input.Address) {
-		//		return &pb.DevastateDciResponse{Flag: false}, fmt.Errorf("tx is not valid for address not the same")
-		//	}
-		//	flag := false
-		//
-		//	txid := input.Txid
-		//	if outputs, ok := outputsmap[txid]; ok {
-		//		for i, output := range outputs {
-		//			if !output.CanBeUnlockWith(input.Address) {
-		//				continue
-		//			}
-		//			if input.Value == output.Value {
-		//				flag = true
-		//				outputs = append(outputs[:i], outputs[i+1:]...)
-		//				break
-		//			}
-		//		}
-		//	}
-		//	if !flag {
-		//		return &pb.DevastateDciResponse{Flag: false}, fmt.Errorf("tx is not valid for not found spendable utxo")
-		//	}
-		//}
-		amount := int64(0)
-		for _, input := range tx.TxInput {
-			if !bytes.Equal(addr, input.Address) {
-				return &pb.DevastateDciResponse{Flag: false}, fmt.Errorf("tx is not valid for address not the same")
-			}
-			txid := input.Txid
-			voutput := input.Voutput
 
-			utxokey := fmt.Sprintf("%s:%d", txid, voutput)
-			if outputs, ok := outputsmap[utxokey]; ok {
-				if !outputs.CanBeUnlockWith(input.Address) {
-					return &pb.DevastateDciResponse{Flag: false}, fmt.Errorf("tx input cannot unlock corresponding utxo")
+		db := w.chainReader.GetBoltDb()
+		err := db.View(func(tx *bolt.Tx) error {
+			b := tx.Bucket([]byte(types.UTXOBucket))
+			inputmap := make(map[int32]int64)
+			for _, input := range rawtx.TxInput {
+
+				txid := input.Txid
+				voutput := input.Voutput
+
+				utxokey := fmt.Sprintf("%s:%d", txid, voutput)
+				// if outputs, ok := outputsmap[utxokey]; ok {
+				// 	if !outputs.CanBeUnlockWith(input) {
+				// 		return &pb.DevastateDciResponse{Flag: false}, fmt.Errorf("tx input cannot unlock corresponding utxo")
+				// 	}
+				// 	if input.Value != outputs.Value {
+				// 		return &pb.DevastateDciResponse{Flag: false}, fmt.Errorf("tx input value is not equal to corresponding utxo value")
+				// 	}
+				// 	amount += input.Value
+				// 	delete(outputsmap, utxokey)
+				// }
+				outsBytes := b.Get([]byte(utxokey))
+				if outsBytes == nil || len(outsBytes) == 0 {
+					return fmt.Errorf("the input corresponding utxo not found")
 				}
-				if input.Value != outputs.Value {
-					return &pb.DevastateDciResponse{Flag: false}, fmt.Errorf("tx input value is not equal to corresponding utxo value")
+
+				output := types.DecodeByteToTxOutput(outsBytes)
+				// TODO: add script check
+
+				// if output.UseFlag {
+				// 	return fmt.Errorf("tx input corresponding output is used but not check")
+				// }
+				if !output.CanBeUnlockWith(input) {
+					return fmt.Errorf("tx input cannot unlock corresponding utxo")
 				}
-				amount += input.Value
-				delete(outputsmap, utxokey)
+				if input.BciType != output.BciType || input.Value != output.Value {
+					return fmt.Errorf(" tx error for bci type not match or value not match ")
+				}
+				inputmap[input.BciType] += input.Value
+
+				b.Put([]byte(utxokey), output.EncodeToByte())
 			}
+			outputmap := make(map[int32]int64)
+			outputcount := make(map[int32]int)
+			for _, output := range rawtx.TxOutput {
+				//if !output.IsCoinbase {
+				//	return fmt.Errorf(" tx error for output is not coinbase")
+				//}
+				if output.LockTime <= ConfirmDelay && output.LockTime != 0 {
+					return fmt.Errorf(" tx error for output locktime is too short")
+				}
+				outputmap[output.BciType] += output.Value
+				outputcount[output.BciType]++
+			}
+
+			for bcitype, totalvalue := range inputmap {
+				if totalvalue != outputmap[bcitype] {
+					return fmt.Errorf(" tx error for input and output bci amount not match")
+				}
+			}
+
+			for _, output := range rawtx.TxOutput {
+				if output.Value != inputmap[output.BciType]/outputmap[output.BciType] {
+					return fmt.Errorf(" tx error for output bci value and count not match")
+				}
+			}
+			w.mempool.AddRawTx(rawtx)
+			w.mempool.rawmap[rawtx.Hash()] = request.GetTransaction()
+			return nil
+		})
+		if err != nil {
+			return &pb.DevastateDciResponse{Flag: false}, err
 		}
-		if len(tx.TxOutput) != 1 {
-			return &pb.DevastateDciResponse{Flag: false}, fmt.Errorf("wrong tx output len")
-		}
-		if tx.TxOutput[0].Value != amount {
-			return &pb.DevastateDciResponse{Flag: false}, fmt.Errorf("tx output value is not equal to tx input value")
-		}
-		w.mempool.AddRawTx(tx)
-		w.mempool.rawmap[tx.Hash()] = request.GetTransaction()
+
 	}
 
 	return &pb.DevastateDciResponse{Flag: true}, nil
@@ -296,21 +337,21 @@ func (w *Worker) GenerateCoinbaseTx(pubkeybyte []byte, vdf0res []byte, totalrewa
 		coinbaseproof = append(coinbaseproof, proof)
 	}
 	txin := types.TxInput{
-		IsCoinbase: false,
-		Txid:       [32]byte{},
-		Voutput:    -1,
-		Scriptsig:  nil,
-		Value:      0,
-		Address:    []byte{},
+
+		Txid:      [32]byte{},
+		Voutput:   -1,
+		Scriptsig: nil,
+		Value:     0,
+		Address:   []byte{},
 	}
 	txouts := make([]types.TxOutput, 0)
 	minerout := types.TxOutput{
-		Address:    pubkeybyte,
-		Value:      int64(math.Floor(float64(totalreward) * ChainID0Rate)),
-		IsCoinbase: true,
-		ScriptPk:   nil,
-		Proof:      nil,
-		LockTime:   144,
+		Address: pubkeybyte,
+		Value:   int64(math.Floor(float64(totalreward) * bcimap[Miner])),
+
+		ScriptPk: nil,
+		Proof:    nil,
+		LockTime: 144,
 	}
 	txouts = append(txouts, minerout)
 
@@ -332,18 +373,9 @@ func (w *Worker) GenerateCoinbaseTx(pubkeybyte []byte, vdf0res []byte, totalrewa
 				return bytes.Compare(rewards[i].Address, rewards[j].Address) < 0
 			})
 
-			//seed := bytes.Join([][]byte{vdf0res},big.NewInt(chainID).Bytes())
+			//seed := bytes.Join([][]byte{vdf0res},big.NewInt(bcitype).Bytes())
 
 			rand.Seed(binary.BigEndian.Uint64(crypto.Hash(vdf0res)[:8]))
-			//rand.Shuffle(len(rewards), func(i, j int) {
-			//	rewards[i], rewards[j] = rewards[j], rewards[i]
-			//})
-			//if Selectn < len(rewards) {
-			//	selectreward[chainID] = rewards[:Selectn]
-			//} else {
-			//	selectreward[chainID] = rewards
-			//}
-
 			for i := 0; i < Selectn; i++ {
 				r := rand.Float64()
 				acnum := 0.0
@@ -357,22 +389,24 @@ func (w *Worker) GenerateCoinbaseTx(pubkeybyte []byte, vdf0res []byte, totalrewa
 		}
 	}
 
-	for chainID, rewards := range selectreward {
+	for bcitype, rewards := range selectreward {
+
 		lenreward := len(rewards)
-		switch chainID {
-		case 1:
+		switch bcitype {
+		case UncleBlockMiner:
 			for _, reward := range rewards {
 				txout := types.TxOutput{
-					Address:    reward.Address,
-					Value:      int64(math.Floor(float64(totalreward) * ChainID1Rate / float64(lenreward))),
-					IsCoinbase: true,
-					ScriptPk:   nil,
-					Proof:      nil,
-					LockTime:   144,
+					Address: reward.Address,
+					Value:   int64(math.Floor(float64(totalreward) * bcimap[UncleBlockMiner] / float64(lenreward))),
+
+					ScriptPk: nil,
+					Proof:    nil,
+					LockTime: 144,
 				}
 				txouts = append(txouts, txout)
 			}
 		}
+
 	}
 
 	tx := &types.RawTx{
@@ -394,7 +428,7 @@ func (w *Worker) GenerateCoinbaseTx(pubkeybyte []byte, vdf0res []byte, totalrewa
 func groupByChainID(rewards []*DciReward) map[int32][]*DciReward {
 	groupData := make(map[int32][]*DciReward)
 	for _, reward := range rewards {
-		groupData[reward.ChainID] = append(groupData[reward.ChainID], reward)
+		groupData[reward.BciType] = append(groupData[reward.BciType], reward)
 	}
 	return groupData
 }
@@ -403,36 +437,28 @@ func (w *Worker) GenerateCoinbaseTxWithoutMinerKey(dcirewards []*DciReward, priv
 	coinbaseproof := make([]types.CoinbaseProof, 0)
 	pubkeybyte := privkey.PublicKeyBytes()
 	minerout := types.TxOutput{
-		Address:    pubkeybyte,
-		Value:      int64(math.Floor(float64(totalreward) * ChainID0Rate)),
-		IsCoinbase: true,
-		ScriptPk:   nil,
-		Proof:      nil,
-		LockTime:   144,
+		Address:  pubkeybyte,
+		Value:    int64(math.Floor(float64(totalreward) * bcimap[Miner])),
+		ScriptPk: nil,
+		Proof:    nil,
+		LockTime: 144,
 	}
-	minerproof := types.CoinbaseProof{
-		Address: pubkeybyte,
-		Amount:  int64(math.Floor(float64(totalreward) * ChainID0Rate)),
-		TxHash:  nil,
-		Type:    0,
-	}
-	coinbaseproof = append(coinbaseproof, minerproof)
+
 	for _, dcireward := range dcirewards {
 		proof := types.CoinbaseProof{
 			TxHash:  dcireward.Proof.TxHash,
 			Address: dcireward.Address,
 			Amount:  dcireward.Amount,
-			Type:    dcireward.ChainID,
+			Type:    dcireward.BciType,
 		}
 		coinbaseproof = append(coinbaseproof, proof)
 	}
 	txin := types.TxInput{
-		IsCoinbase: false,
-		Txid:       [32]byte{},
-		Voutput:    -1,
-		Scriptsig:  nil,
-		Value:      0,
-		Address:    []byte{},
+		Txid:      [32]byte{},
+		Voutput:   -1,
+		Scriptsig: nil,
+		Value:     0,
+		Address:   []byte{},
 	}
 	txouts := make([]types.TxOutput, 0)
 
@@ -462,4 +488,274 @@ func CoinbaseProofToBytes(coinbaseproofs []types.CoinbaseProof) []byte {
 		buffer.Write(proofbyte)
 	}
 	return buffer.Bytes()
+}
+
+func (w *Worker) handleConfirmBlockTx(height uint64) error {
+	if height-ConfirmDelay > 0 {
+		return nil
+	}
+	block, err := w.chainReader.GetByHeight(height - ConfirmDelay)
+	if err != nil {
+		return err
+	}
+
+	txs := block.GetRawTx()
+	for _, tx := range txs {
+		if !tx.IsCoinBase() {
+			for _, txoutput := range tx.TxOutput {
+				if len(txoutput.Data) != 0 {
+
+				}
+
+			}
+
+		}
+	}
+
+	return nil
+}
+
+func (w *Worker) transferTx2EVM([]byte) error {
+
+	return nil
+}
+
+func (w *Worker) CheckBlockTxs(block *types.Block) (bool, error) {
+	txs := block.GetRawTx()
+	header := block.GetHeader()
+	db := w.chainReader.GetBoltDb()
+	err := db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(types.UTXOBucket))
+		for _, rawtx := range txs {
+			if !rawtx.IsCoinBase() {
+				if !rawtx.BasicVerify() {
+					return fmt.Errorf("tx %s verify failed", hexutil.Encode(rawtx.Txid[:]))
+				}
+				inputmap := make(map[int32]int64)
+				for _, input := range rawtx.TxInput {
+					utxokey := fmt.Sprintf("%s:%d", input.Txid, input.Voutput)
+					outsBytes := b.Get([]byte(utxokey))
+					if outsBytes == nil {
+						return fmt.Errorf(" tx error for can't find corresponding utxo ")
+					}
+					output := types.DecodeByteToTxOutput(outsBytes)
+
+					if !output.CanBeUnlockWith(input) {
+						return fmt.Errorf(" tx error for can't unlock with txinput")
+					}
+					if input.BciType != output.BciType || input.Value != output.Value {
+						return fmt.Errorf(" tx error for bci type not match or value not match ")
+					}
+					if output.BurnLock != 0 && output.BurnLock > header.Height {
+						for _, txOutput := range rawtx.TxOutput {
+							if bytes.Equal(txOutput.Address, burnoutAddress) {
+								return fmt.Errorf(" tx error for utxo has not reached burn lock height")
+							}
+							if txOutput.BurnLock != output.BurnLock {
+								return fmt.Errorf("tx error for output burn lock not match to the input")
+							}
+						}
+					}
+					inputmap[input.BciType] += input.Value
+				}
+
+				outputmap := make(map[int32]int64)
+
+				for _, output := range rawtx.TxOutput {
+					//if !output.IsCoinbase {
+					//	return fmt.Errorf(" tx error for output is not coinbase")
+					//}
+					if output.LockTime <= ConfirmDelay && output.LockTime != 0 {
+						return fmt.Errorf(" tx error for output locktime is too short")
+					}
+					outputmap[output.BciType] += output.Value
+
+				}
+
+				for bcitype, totalvalue := range inputmap {
+					if totalvalue != outputmap[bcitype] {
+						return fmt.Errorf(" tx error for input and output bci amount not match")
+					}
+				}
+
+			} else {
+				coinbaseproofs := make([]types.CoinbaseProof, len(rawtx.CoinbaseProofs))
+				if len(coinbaseproofs) != 0 {
+					copy(coinbaseproofs, rawtx.CoinbaseProofs)
+					for _, coinbaseproof := range coinbaseproofs {
+						if !w.mempool.HasDciRewardByCoinbaseProof(&coinbaseproof) {
+							return fmt.Errorf(" coinbase tx error for can't find corresponding dci reward")
+						}
+					}
+					groupsdata := groupByType(coinbaseproofs)
+					for _, proofs := range groupsdata {
+						total := int64(0)
+						for _, proof := range proofs {
+							total += proof.Amount
+						}
+						for _, proof := range proofs {
+							proof.Weight = float64(proof.Amount) / float64(total)
+						}
+					}
+					selectproofs := make(map[int32][]*types.CoinbaseProof)
+					for bcitypes, proofs := range groupsdata {
+						sort.Slice(proofs, func(i, j int) bool {
+							return bytes.Compare(proofs[i].Address, proofs[j].Address) < 0
+						})
+						if len(header.PoTProof) < 2 {
+							return fmt.Errorf("pot proof len is not enough")
+						}
+						vdf1res := header.PoTProof[1]
+						rand.Seed(binary.BigEndian.Uint64(crypto.Hash(vdf1res)[:8]))
+
+						for i := 0; i < Selectn; i++ {
+							r := rand.Float64()
+							acnum := 0.0
+							for _, proof := range proofs {
+								acnum += proof.Weight
+								if r < acnum {
+									selectproofs[bcitypes] = append(selectproofs[bcitypes], &proof)
+								}
+							}
+						}
+					}
+					for bcitype, proofs := range selectproofs {
+						lenproofs := len(proofs)
+						if _, ok := bcimap[bcitype]; !ok {
+							return fmt.Errorf("proof has illegal bci type")
+						}
+						for _, output := range rawtx.TxOutput {
+							if output.BciType == bcitype {
+								flag := false
+								for _, proof := range proofs {
+									if bytes.Equal(proof.Address, output.Address) {
+										flag = true
+										if output.Value != int64(math.Floor(float64(TotalReward)*bcimap[bcitype]/float64(lenproofs))) {
+											return fmt.Errorf("coinbase tx error for output bci value is not correct")
+										}
+										if output.LockTime != 144 {
+											return fmt.Errorf("coinbase tx error for output locktime is not correct")
+										}
+										//TODO: Scriptcheck
+										break
+									}
+								}
+								if !flag {
+									return fmt.Errorf("coinbase tx error for shuffle result does not match to the txoutput")
+								}
+							}
+						}
+					}
+				}
+
+				if len(rawtx.TxOutput) == 0 {
+					return fmt.Errorf("coinbase tx without miner output")
+				}
+
+				minerout := rawtx.TxOutput[0]
+				if !bytes.Equal(minerout.Address, header.PublicKey) {
+					return fmt.Errorf("coinbase tx miner output does not match to header public key")
+				}
+				if minerout.Value != int64(math.Floor(float64(TotalReward)*bcimap[Miner])) {
+					return fmt.Errorf("coinbase tx miner output value is not correct")
+				}
+				if minerout.LockTime != 144 {
+					return fmt.Errorf("coinbase tx mineroutput format is not correct")
+				}
+			}
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
+}
+
+func (w *Worker) CheckTxInterest(rawtx *types.RawTx, blockheight uint64) (bool, error) {
+	db := w.chainReader.GetBoltDb()
+	err := db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(types.UTXOBucket))
+		if rawtx.IsCoinBase() {
+			for _, output := range rawtx.TxOutput {
+				if output.Interest != 0 {
+					if output.BciType != Miner {
+						return fmt.Errorf("not miner coinbase output does not have interest")
+					}
+				}
+			}
+			return nil
+		}
+		interestmap := make(map[int32]int64)
+		inputtotal := int64(0)
+		for _, input := range rawtx.TxInput {
+			utxokey := fmt.Sprintf("%s:%d", input.Txid, input.Voutput)
+			outsBytes := b.Get([]byte(utxokey))
+			if outsBytes == nil {
+				return fmt.Errorf(" tx error for can't find corresponding utxo ")
+			}
+
+			output := types.DecodeByteToTxOutput(outsBytes)
+			if output.BlockHeight == 0 {
+				return fmt.Errorf("tx has not corresponding blockheight")
+			}
+
+			outputinterest := output.Interest
+			interestmap[output.BciType] += outputinterest
+
+			inputtotal += outputinterest
+			yeargap := blockheight - output.BlockHeight
+			if yeargap/TenYears >= 1 {
+				interest := int64(math.Floor(float64(yeargap) * float64(output.Value) * TenYearRate / float64(OneYear)))
+				interestmap[output.BciType] += interest
+				inputtotal += interest
+			} else if yeargap/TenYears < 1 && yeargap/ThreeYears >= 1 {
+				interest := int64(math.Floor(float64(yeargap) * float64(output.Value) * ThreeYearRate / float64(OneYear)))
+				interestmap[output.BciType] += interest
+				inputtotal += interest
+			} else if yeargap/ThreeYears < 1 && yeargap/OneYear >= 1 {
+				interest := int64(math.Floor(float64(yeargap) * float64(output.Value) * OneYearRate / float64(OneYear)))
+				interestmap[output.BciType] += interest
+				inputtotal += interest
+			} else if yeargap/OneYear < 1 && yeargap/HalfYear >= 1 {
+				interest := int64(math.Floor(float64(yeargap) * float64(output.Value) * HalfYearRate / float64(OneYear)))
+				interestmap[output.BciType] += interest
+				inputtotal += interest
+			} else if yeargap/HalfYear < 1 {
+				interest := int64(math.Floor(float64(yeargap) * float64(output.Value) * savingRate / float64(OneYear)))
+				interestmap[output.BciType] += interest
+				inputtotal += interest
+			}
+		}
+		outputmap := make(map[int32]int64)
+		outputtotal := int64(0)
+		for _, output := range rawtx.TxOutput {
+			outputmap[output.BciType] += output.Interest
+			outputtotal += output.Interest
+		}
+
+		if outputtotal+rawtx.TransactionFee > inputtotal {
+			return fmt.Errorf("use total interest is more than input total interest")
+		}
+
+		for bcitype, useinterest := range outputmap {
+			if haveinterest, ok := interestmap[bcitype]; ok {
+				if haveinterest < useinterest {
+					return fmt.Errorf("txoutput use more than corresponding interest")
+				}
+			} else {
+				return fmt.Errorf("could not find corresponding interest in txinput")
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
 }
