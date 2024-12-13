@@ -27,7 +27,6 @@ type RoundShare struct {
 	Piece []byte
 	Proof []byte
 }
-
 func EncodeRoundShareToBytes(rs RoundShare) ([]byte, error) {
 	rsBytes, err := json.Marshal(rs)
 	if err != nil {
@@ -44,7 +43,6 @@ func DecodeBytesToRoundShare(rsBytes []byte) (*RoundShare, error) {
 	}
 	return rs, nil
 }
-
 func (r *RoundShare) ToBytes() []byte {
 	buffer := bytes.Buffer{}
 	buf := make([]byte, 4)

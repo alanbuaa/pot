@@ -64,6 +64,7 @@ type SimpleWhirlyImpl struct {
 	Committee      []string
 	stopEntrance   chan string
 	updateEntrance chan string
+	incentive      whirlyUtilities.Incentive
 
 	// Ping
 	readyNodes     []string
@@ -252,6 +253,7 @@ func (sw *SimpleWhirlyImpl) GetLeader(epoch int64) string {
 func (sw *SimpleWhirlyImpl) CleanVote() {
 	sw.curYesVote = make([]*pb.WhirlyVote, 0)
 	sw.curNoVote = make([]*pb.SimpleWhirlyProof, 0)
+	sw.incentive = *whirlyUtilities.NewIncentive(sw.PublicAddress)
 }
 
 func (sw *SimpleWhirlyImpl) GetHeight() uint64 {
@@ -613,6 +615,7 @@ func (sw *SimpleWhirlyImpl) OnReceiveVote(whirlyVoteMsg *pb.WhirlyVote) {
 		if whirlyVoteMsg.BlockView >= sw.proposeView {
 			for i := 0; i < int(whirlyVoteMsg.Weight); i++ {
 				sw.curYesVote = append(sw.curYesVote, whirlyVoteMsg)
+				sw.incentive.InsertYesVote(whirlyVoteMsg.PublicAddress)
 			}
 		}
 		sw.proposalLock.Unlock()
@@ -622,6 +625,7 @@ func (sw *SimpleWhirlyImpl) OnReceiveVote(whirlyVoteMsg *pb.WhirlyVote) {
 		sw.voteLock.Lock()
 		for i := 0; i < int(whirlyVoteMsg.Weight); i++ {
 			sw.curNoVote = append(sw.curNoVote, whirlyVoteMsg.SwProof)
+			sw.incentive.InsertNoVote(whirlyVoteMsg.PublicAddress)
 		}
 		sw.lock.Lock()
 		sw.UpdateLockProof(whirlyVoteMsg.SwProof)
@@ -672,10 +676,6 @@ func (sw *SimpleWhirlyImpl) OnPropose() {
 	sw.proposeView = sw.View.ViewNum
 	sw.proposalLock.Unlock()
 
-	sw.voteLock.Lock()
-	sw.CleanVote()
-	sw.voteLock.Unlock()
-
 	sw.Log.Trace("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] OnPropose")
 	txs := sw.MemPool.GetFirst(int(sw.Config.Whirly.BatchSize))
 	if len(txs) != 0 {
@@ -690,6 +690,11 @@ func (sw *SimpleWhirlyImpl) OnPropose() {
 	proposal := sw.createProposal(txs)
 	// create a new prepare msg
 	msg := sw.ProposalMsg(proposal, nil, sw.lockProof, sw.epoch)
+
+	// 创建完区块后才能clean
+	sw.voteLock.Lock()
+	sw.CleanVote()
+	sw.voteLock.Unlock()
 
 	// the old leader should vote too
 	msgByte, err := proto.Marshal(msg)
@@ -731,10 +736,16 @@ func (sw *SimpleWhirlyImpl) createProposal(txs []types.RawTransaction) *pb.Whirl
 	// create a new block
 	sw.lock.Lock()
 	// do not use proof fields for blocks
-	block := sw.CreateLeaf(sw.lockProof.BlockHash, sw.View.ViewNum, txs, nil)
+	incentiveBytes, err := whirlyUtilities.EncodeIncentive(sw.incentive)
+	if err != nil {
+		sw.Log.Error("Encode Incentive Error: ", err)
+	}
+	// sw.Log.Info("create Incentive", sw.incentive)
+
+	block := sw.CreateLeaf(sw.lockProof.BlockHash, sw.View.ViewNum, txs, nil, incentiveBytes)
 	sw.lock.Unlock()
 	// store the block
-	err := sw.BlockStorage.Put(block)
+	err = sw.BlockStorage.Put(block)
 	if err != nil {
 		sw.Log.WithField("blockHash", hex.EncodeToString(block.Hash)).Error("Store new block failed!")
 	}

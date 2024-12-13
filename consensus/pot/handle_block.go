@@ -1,22 +1,21 @@
 package pot
 
 import (
+	"blockchain-crypto/vdf/wesolowski_rust"
 	"bytes"
 	"context"
 	"encoding/hex"
 	"fmt"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/zzz136454872/upgradeable-consensus/crypto"
+	"github.com/zzz136454872/upgradeable-consensus/pb"
+	"github.com/zzz136454872/upgradeable-consensus/types"
+	"google.golang.org/protobuf/proto"
 	"math/big"
 	"math/rand"
 	"sync"
 	"time"
-
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/zzz136454872/upgradeable-consensus/crypto"
-	"github.com/zzz136454872/upgradeable-consensus/crypto/vdf/wesolowski_rust"
-	"github.com/zzz136454872/upgradeable-consensus/pb"
-	"github.com/zzz136454872/upgradeable-consensus/types"
-	"google.golang.org/protobuf/proto"
 )
 
 func (w *Worker) handleBlock() {

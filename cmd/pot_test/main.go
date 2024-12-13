@@ -14,7 +14,7 @@ import (
 
 var (
 	logger  = logging.GetLogger()
-	sigChan = make(chan os.Signal)
+	sigChan = make(chan os.Signal, 1)
 )
 
 //

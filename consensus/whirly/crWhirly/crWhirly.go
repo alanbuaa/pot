@@ -858,7 +858,7 @@ func (sw *CrWhirlyImpl) createProposal(txs []types.RawTransaction) *pb.WhirlyBlo
 	// create a new block
 	sw.lock.Lock()
 	// do not use proof fields for blocks
-	block := sw.CreateLeaf(sw.lockProof.BlockHash, sw.View.ViewNum, txs, nil)
+	block := sw.CreateLeaf(sw.lockProof.BlockHash, sw.View.ViewNum, txs, nil, nil)
 	sw.lock.Unlock()
 	// store the block
 	err := sw.BlockStorage.Put(block)

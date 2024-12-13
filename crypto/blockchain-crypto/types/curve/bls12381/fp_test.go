@@ -10,21 +10,21 @@ import (
 func TestFpSerialization(t *testing.T) {
 	t.Run("zero", func(t *testing.T) {
 		in := make([]byte, fpByteSize)
-		fe, err := fromBytes(in)
+		fe, err := FromBytes(in)
 		if err != nil {
 			t.Fatal(err)
 		}
 		if !fe.isZero() {
 			t.Fatal("serialization failed")
 		}
-		if !bytes.Equal(in, toBytes(fe)) {
+		if !bytes.Equal(in, ToBytes(fe)) {
 			t.Fatal("serialization failed")
 		}
 	})
 	t.Run("Bytes", func(t *testing.T) {
 		for i := 0; i < fuz; i++ {
 			a, _ := new(Fe).Rand(rand.Reader)
-			b, err := fromBytes(toBytes(a))
+			b, err := FromBytes(ToBytes(a))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -48,7 +48,7 @@ func TestFpSerialization(t *testing.T) {
 	t.Run("big", func(t *testing.T) {
 		for i := 0; i < fuz; i++ {
 			a, _ := new(Fe).Rand(rand.Reader)
-			b, err := fromBig(toBig(a))
+			b, err := FromBig(ToBig(a))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -303,11 +303,11 @@ func TestFpMultiplicationCrossAgainstBigInt(t *testing.T) {
 		a, _ := new(Fe).Rand(rand.Reader)
 		b, _ := new(Fe).Rand(rand.Reader)
 		c := new(Fe)
-		big_a := toBig(a)
-		big_b := toBig(b)
+		big_a := ToBig(a)
+		big_b := ToBig(b)
 		big_c := new(big.Int)
 		mul(c, a, b)
-		out_1 := toBytes(c)
+		out_1 := ToBytes(c)
 		out_2 := padBytes(big_c.Mul(big_a, big_b).Mod(big_c, modulus.big()).Bytes(), fpByteSize)
 		if !bytes.Equal(out_1, out_2) {
 			t.Fatal("cross test against big.Int is failed")

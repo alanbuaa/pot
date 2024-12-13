@@ -77,7 +77,7 @@ func (p *pacemakerImpl) OnNextSyncView() {
 
 	p.log.Warn("[replica_" + strconv.Itoa(int(p.whi.ID)) + "] [view_" + strconv.Itoa(int(p.whi.View.ViewNum)) + "] [WHIRLY] NewViewTimeout triggered.")
 	// create a dummyNode
-	dummyBlock := p.whi.CreateLeaf(p.whi.GetLock().Hash, p.whi.View.ViewNum, nil, nil)
+	dummyBlock := p.whi.CreateLeaf(p.whi.GetLock().Hash, p.whi.View.ViewNum, nil, nil, nil)
 	p.whi.SetLock(dummyBlock)
 	dummyBlock.Committed = true
 	_ = p.whi.BlockStorage.Put(dummyBlock)

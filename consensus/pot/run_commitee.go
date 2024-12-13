@@ -2,6 +2,11 @@ package pot
 
 import (
 	bc_api "blockchain-crypto/blockchain_api"
+	mrpvss "blockchain-crypto/share/mrpvss/bls12381"
+	"blockchain-crypto/shuffle"
+	"blockchain-crypto/types/curve/bls12381"
+	"blockchain-crypto/types/srs"
+	"blockchain-crypto/verifiable_draw"
 	"container/list"
 	"crypto/rand"
 	"encoding/json"
@@ -9,11 +14,6 @@ import (
 	"github.com/zzz136454872/upgradeable-consensus/config"
 	"github.com/zzz136454872/upgradeable-consensus/consensus/whirly/nodeController"
 	"github.com/zzz136454872/upgradeable-consensus/crypto"
-	mrpvss "github.com/zzz136454872/upgradeable-consensus/crypto/share/mrpvss/bls12381"
-	"github.com/zzz136454872/upgradeable-consensus/crypto/shuffle"
-	"github.com/zzz136454872/upgradeable-consensus/crypto/types/curve/bls12381"
-	"github.com/zzz136454872/upgradeable-consensus/crypto/types/srs"
-	"github.com/zzz136454872/upgradeable-consensus/crypto/verifiable_draw"
 	"github.com/zzz136454872/upgradeable-consensus/types"
 )
 
@@ -269,139 +269,139 @@ func inWorkStage(height uint64) bool {
 	return height > BigN+2*SmallN
 }
 
-// uponReceivedBlock 当收到区块，height 为该区块的高度, 返回该区块是否验证通过
-func (w *Worker) uponReceivedBlock(
-	height uint64, block *types.Block,
-) bool {
-	// 如果处于初始化阶段（参数生成阶段）
-	receivedBlock := block.GetHeader().CryptoElement
-	if inInitStage(height) {
-		// 检查srs的更新证明，如果验证失败，则丢弃
-		if !srs.Verify(receivedBlock.SRS, w.Cryptoset.LocalSRS.G1PowerOf(1), receivedBlock.SrsUpdateProof) {
-			return false
-		}
-		return true
-	}
-	// 如果处于置换阶段，则验证置换
-	if inShuffleStage(height) {
-		// 验证置换
-		// 如果验证失败，丢弃
-		if !shuffle.Verify(w.Cryptoset.LocalSRS, w.Cryptoset.PrevShuffledPKList, w.Cryptoset.PrevRCommitForShuffle, receivedBlock.ShuffleProof) {
-			return false
-		}
-	}
-	// 如果处于抽签阶段，则验证抽签
-	if inDrawStage(height) {
-		// 验证抽签
-		// 如果验证失败，丢弃
-		if !verifiable_draw.Verify(w.Cryptoset.LocalSRS, uint32(BigN), w.Cryptoset.PrevShuffledPKList, uint32(w.Cryptoset.SmallN), w.Cryptoset.PrevRCommitForDraw, receivedBlock.DrawProof) {
-			return false
-		}
-	}
-	// 如果处于DPVSS阶段
-	if inDPVSSStage(height) {
-		// 验证PVSS加密份额
-		pvssTimes := len(receivedBlock.CommitteeWorkHeightList)
-		for i := 0; i < pvssTimes; i++ {
-			// 如果验证失败，丢弃
-			if !mrpvss.VerifyEncShares(uint32(SmallN), w.Cryptoset.Threshold, w.Cryptoset.G, w.Cryptoset.H, receivedBlock.HolderPKLists[i], receivedBlock.ShareCommitLists[i], receivedBlock.CoeffCommitLists[i], receivedBlock.EncShareLists[i]) {
-				return false
-			}
-		}
-	}
-	return true
-}
+// // uponReceivedBlock 当收到区块，height 为该区块的高度, 返回该区块是否验证通过
+// func (w *Worker) uponReceivedBlock(
+// 	height uint64, block *types.Block,
+// ) bool {
+// 	// 如果处于初始化阶段（参数生成阶段）
+// 	receivedBlock := block.GetHeader().CryptoElement
+// 	if inInitStage(height) {
+// 		// 检查srs的更新证明，如果验证失败，则丢弃
+// 		if !srs.Verify(receivedBlock.SRS, w.Cryptoset.LocalSRS.G1PowerOf(1), receivedBlock.SrsUpdateProof) {
+// 			return false
+// 		}
+// 		return true
+// 	}
+// 	// 如果处于置换阶段，则验证置换
+// 	if inShuffleStage(height) {
+// 		// 验证置换
+// 		// 如果验证失败，丢弃
+// 		if !shuffle.Verify(w.Cryptoset.LocalSRS, w.Cryptoset.PrevShuffledPKList, w.Cryptoset.PrevRCommitForShuffle, receivedBlock.ShuffleProof) {
+// 			return false
+// 		}
+// 	}
+// 	// 如果处于抽签阶段，则验证抽签
+// 	if inDrawStage(height) {
+// 		// 验证抽签
+// 		// 如果验证失败，丢弃
+// 		if !verifiable_draw.Verify(w.Cryptoset.LocalSRS, uint32(BigN), w.Cryptoset.PrevShuffledPKList, uint32(w.Cryptoset.SmallN), w.Cryptoset.PrevRCommitForDraw, receivedBlock.DrawProof) {
+// 			return false
+// 		}
+// 	}
+// 	// 如果处于DPVSS阶段
+// 	if inDPVSSStage(height) {
+// 		// 验证PVSS加密份额
+// 		pvssTimes := len(receivedBlock.CommitteeWorkHeightList)
+// 		for i := 0; i < pvssTimes; i++ {
+// 			// 如果验证失败，丢弃
+// 			if !mrpvss.VerifyEncShares(uint32(SmallN), w.Cryptoset.Threshold, w.Cryptoset.G, w.Cryptoset.H, receivedBlock.HolderPKLists[i], receivedBlock.ShareCommitLists[i], receivedBlock.CoeffCommitLists[i], receivedBlock.EncShareLists[i]) {
+// 				return false
+// 			}
+// 		}
+// 	}
+// 	return true
+// }
 
-func (w *Worker) UpdateLocalCryptoSetByBlock(height uint64, receivedBlock *types.Block) {
-	if inInitStage(height) {
-		// 记录最新srs
-		w.Cryptoset.LocalSRS = receivedBlock.GetHeader().CryptoElement.SRS
-	}
-	// 置换阶段
-	if inShuffleStage(height) {
-		// 记录该置换公钥列表为最新置换公钥列表
-		w.Cryptoset.PrevShuffledPKList = receivedBlock.GetHeader().CryptoElement.ShuffleProof.SelectedPubKeys
-		// 记录该置换随机数承诺为最新置换随机数承诺 localStorage.PrevRCommitForShuffle
-		w.Cryptoset.PrevRCommitForShuffle.Set(receivedBlock.GetHeader().CryptoElement.ShuffleProof.RCommit)
-		// 如果处于置换阶段的最后一次置换（height%localStorage.BigN==SmallN），更新抽签随机数承诺
-		//     因为先进行置换验证，再进行抽签验证，抽签使用的是同周期最后一次置换输出的
-		//     顺序： 验证最后置换（收到区块）->进行抽签（出新区块）->验证抽签（收到区块）
-		//     抽签阶段不改变 localStorage.PrevRCommitForDraw
-		if isTheLastShuffle(height) {
-			w.Cryptoset.PrevRCommitForDraw.Set(w.Cryptoset.PrevRCommitForShuffle)
-		}
-	}
-	// 抽签阶段
-	if inDrawStage(height) {
-		// 记录抽出来的委员会（公钥列表）
-		w.Cryptoset.UnenabledCommitteeQueue.PushBack(CommitteeMark{
-			WorkHeight:  height + SmallN,
-			PKList:      receivedBlock.GetHeader().CryptoElement.DrawProof.SelectedPubKeys,
-			CommitteePK: group1.Zero(),
-		})
-		// 获取抽签结果
-		isSelected, pk := verifiable_draw.IsSelected(w.Cryptoset.SK, receivedBlock.GetHeader().CryptoElement.DrawProof.RCommit, receivedBlock.GetHeader().CryptoElement.DrawProof.SelectedPubKeys)
-		// 如果抽中，在自己所在的委员会队列创建新条目记录
-		if isSelected {
-			w.Cryptoset.UnenabledSelfCommitteeQueue.PushBack(SelfCommitteeMark{
-				WorkHeight:   height + SmallN,
-				SelfPK:       pk,
-				AggrEncShare: mrpvss.NewEmptyEncShare(),
-				Share:        bls12381.NewFr().Zero(),
-			})
-		}
-	}
-	// DPVSS阶段
-	if inDPVSSStage(height) {
-		pvssTimes := len(receivedBlock.GetHeader().CryptoElement.CommitteeWorkHeightList)
-		for i := 0; i < pvssTimes; i++ {
-			// 聚合对应委员会的公钥
-			for e := w.Cryptoset.UnenabledCommitteeQueue.Front(); e != nil; e = e.Next() {
-				if e.Value.(*CommitteeMark).WorkHeight == receivedBlock.GetHeader().CryptoElement.CommitteeWorkHeightList[i] {
-					e.Value.(*CommitteeMark).CommitteePK = mrpvss.AggregateLeaderPK(e.Value.(*CommitteeMark).CommitteePK, receivedBlock.GetHeader().CryptoElement.CommitteePKList[i])
-				}
-			}
-			for e := w.Cryptoset.UnenabledSelfCommitteeQueue.Front(); e != nil; e = e.Next() {
-				// 如果自己是对应份额持有者(委员会工作高度相等)，则获取对应加密份额，聚合加密份额
-				if e.Value.(SelfCommitteeMark).WorkHeight == receivedBlock.GetHeader().CryptoElement.CommitteeWorkHeightList[i] {
-					holderPKList := receivedBlock.GetHeader().CryptoElement.HolderPKLists[i]
-					encShares := receivedBlock.GetHeader().CryptoElement.EncShareLists[i]
-					holderNum := len(holderPKList)
-					for j := 0; j < holderNum; j++ {
-						if group1.Equal(e.Value.(*SelfCommitteeMark).SelfPK, holderPKList[j]) {
-							// 聚合加密份额
-							mrpvss.AggregateEncShares(e.Value.(*SelfCommitteeMark).AggrEncShare, encShares[j])
-							e.Value.(*SelfCommitteeMark).AggrEncShare = encShares[j]
-						}
-					}
-					// 如果当前是该委员会的最后一次PVSS，后续没有新的PVSS份额，则解密聚合份额
-					if int64(e.Value.(*SelfCommitteeMark).WorkHeight)-int64(height) == 1 {
-						// 解密聚合加密份额
-						e.Value.(*SelfCommitteeMark).Share = mrpvss.DecryptAggregateShare(w.Cryptoset.G, w.Cryptoset.SK, e.Value.(*SelfCommitteeMark).AggrEncShare, uint32(SmallN-1))
-					}
-				}
-			}
+// func (w *Worker) UpdateLocalCryptoSetByBlock(height uint64, receivedBlock *types.Block) {
+// 	if inInitStage(height) {
+// 		// 记录最新srs
+// 		w.Cryptoset.LocalSRS = receivedBlock.GetHeader().CryptoElement.SRS
+// 	}
+// 	// 置换阶段
+// 	if inShuffleStage(height) {
+// 		// 记录该置换公钥列表为最新置换公钥列表
+// 		w.Cryptoset.PrevShuffledPKList = receivedBlock.GetHeader().CryptoElement.ShuffleProof.SelectedPubKeys
+// 		// 记录该置换随机数承诺为最新置换随机数承诺 localStorage.PrevRCommitForShuffle
+// 		w.Cryptoset.PrevRCommitForShuffle.Set(receivedBlock.GetHeader().CryptoElement.ShuffleProof.RCommit)
+// 		// 如果处于置换阶段的最后一次置换（height%localStorage.BigN==SmallN），更新抽签随机数承诺
+// 		//     因为先进行置换验证，再进行抽签验证，抽签使用的是同周期最后一次置换输出的
+// 		//     顺序： 验证最后置换（收到区块）->进行抽签（出新区块）->验证抽签（收到区块）
+// 		//     抽签阶段不改变 localStorage.PrevRCommitForDraw
+// 		if isTheLastShuffle(height) {
+// 			w.Cryptoset.PrevRCommitForDraw.Set(w.Cryptoset.PrevRCommitForShuffle)
+// 		}
+// 	}
+// 	// 抽签阶段
+// 	if inDrawStage(height) {
+// 		// 记录抽出来的委员会（公钥列表）
+// 		w.Cryptoset.UnenabledCommitteeQueue.PushBack(CommitteeMark{
+// 			WorkHeight:  height + SmallN,
+// 			PKList:      receivedBlock.GetHeader().CryptoElement.DrawProof.SelectedPubKeys,
+// 			CommitteePK: group1.Zero(),
+// 		})
+// 		// 获取抽签结果
+// 		isSelected, pk := verifiable_draw.IsSelected(w.Cryptoset.SK, receivedBlock.GetHeader().CryptoElement.DrawProof.RCommit, receivedBlock.GetHeader().CryptoElement.DrawProof.SelectedPubKeys)
+// 		// 如果抽中，在自己所在的委员会队列创建新条目记录
+// 		if isSelected {
+// 			w.Cryptoset.UnenabledSelfCommitteeQueue.PushBack(SelfCommitteeMark{
+// 				WorkHeight:   height + SmallN,
+// 				SelfPK:       pk,
+// 				AggrEncShare: mrpvss.NewEmptyEncShare(),
+// 				Share:        bls12381.NewFr().Zero(),
+// 			})
+// 		}
+// 	}
+// 	// DPVSS阶段
+// 	if inDPVSSStage(height) {
+// 		pvssTimes := len(receivedBlock.GetHeader().CryptoElement.CommitteeWorkHeightList)
+// 		for i := 0; i < pvssTimes; i++ {
+// 			// 聚合对应委员会的公钥
+// 			for e := w.Cryptoset.UnenabledCommitteeQueue.Front(); e != nil; e = e.Next() {
+// 				if e.Value.(*CommitteeMark).WorkHeight == receivedBlock.GetHeader().CryptoElement.CommitteeWorkHeightList[i] {
+// 					e.Value.(*CommitteeMark).CommitteePK = mrpvss.AggregateLeaderPK(e.Value.(*CommitteeMark).CommitteePK, receivedBlock.GetHeader().CryptoElement.CommitteePKList[i])
+// 				}
+// 			}
+// 			for e := w.Cryptoset.UnenabledSelfCommitteeQueue.Front(); e != nil; e = e.Next() {
+// 				// 如果自己是对应份额持有者(委员会工作高度相等)，则获取对应加密份额，聚合加密份额
+// 				if e.Value.(SelfCommitteeMark).WorkHeight == receivedBlock.GetHeader().CryptoElement.CommitteeWorkHeightList[i] {
+// 					holderPKList := receivedBlock.GetHeader().CryptoElement.HolderPKLists[i]
+// 					encShares := receivedBlock.GetHeader().CryptoElement.EncShareLists[i]
+// 					holderNum := len(holderPKList)
+// 					for j := 0; j < holderNum; j++ {
+// 						if group1.Equal(e.Value.(*SelfCommitteeMark).SelfPK, holderPKList[j]) {
+// 							// 聚合加密份额
+// 							mrpvss.AggregateEncShares(e.Value.(*SelfCommitteeMark).AggrEncShare, encShares[j])
+// 							e.Value.(*SelfCommitteeMark).AggrEncShare = encShares[j]
+// 						}
+// 					}
+// 					// 如果当前是该委员会的最后一次PVSS，后续没有新的PVSS份额，则解密聚合份额
+// 					if int64(e.Value.(*SelfCommitteeMark).WorkHeight)-int64(height) == 1 {
+// 						// 解密聚合加密份额
+// 						e.Value.(*SelfCommitteeMark).Share = mrpvss.DecryptAggregateShare(w.Cryptoset.G, w.Cryptoset.SK, e.Value.(*SelfCommitteeMark).AggrEncShare, uint32(SmallN-1))
+// 					}
+// 				}
+// 			}
 
-		}
-	}
-	// 委员会更新阶段
-	if inWorkStage(height) {
-		// 更新未工作的委员会队列，删除第一个元素
-		if w.Cryptoset.UnenabledCommitteeQueue.Front() != nil {
-			w.Cryptoset.UnenabledCommitteeQueue.Remove(w.Cryptoset.UnenabledCommitteeQueue.Front())
-		}
-		// 检查自己是否需要作为委员会成员工作
-		// 遍历队列查找，如果自己该作为委员会成员执行业务处理，则解密聚合加密份额，并发送信号
-		for e := w.Cryptoset.UnenabledSelfCommitteeQueue.Front(); e != nil; e = e.Next() {
-			if height == e.Value.(*SelfCommitteeMark).WorkHeight {
-				// 从自己所属委员会队列中移除该委员会标记
-				// TODO 移除前接收数据（如果需要）
-				w.Cryptoset.UnenabledSelfCommitteeQueue.Remove(e)
-				// TODO 发送相关信号
-			}
-		}
-	}
-}
+// 		}
+// 	}
+// 	// 委员会更新阶段
+// 	if inWorkStage(height) {
+// 		// 更新未工作的委员会队列，删除第一个元素
+// 		if w.Cryptoset.UnenabledCommitteeQueue.Front() != nil {
+// 			w.Cryptoset.UnenabledCommitteeQueue.Remove(w.Cryptoset.UnenabledCommitteeQueue.Front())
+// 		}
+// 		// 检查自己是否需要作为委员会成员工作
+// 		// 遍历队列查找，如果自己该作为委员会成员执行业务处理，则解密聚合加密份额，并发送信号
+// 		for e := w.Cryptoset.UnenabledSelfCommitteeQueue.Front(); e != nil; e = e.Next() {
+// 			if height == e.Value.(*SelfCommitteeMark).WorkHeight {
+// 				// 从自己所属委员会队列中移除该委员会标记
+// 				// TODO 移除前接收数据（如果需要）
+// 				w.Cryptoset.UnenabledSelfCommitteeQueue.Remove(e)
+// 				// TODO 发送相关信号
+// 			}
+// 		}
+// 	}
+// }
 
 func (w *Worker) SetWhirly(impl *nodeController.NodeController) {
 	w.whirly = impl
@@ -508,7 +508,7 @@ func (w *Worker) GenerateCryptoSetFromLocal(height uint64) (types.CryptoElement,
 	var committeePKList []*bls12381.PointG1 = nil
 	// 如果处于置换阶段，则进行置换
 	if inShuffleStage(height) {
-		newShuffleProof = shuffle.SimpleShuffle(w.Cryptoset.LocalSRS, w.Cryptoset.PrevShuffledPKList, w.Cryptoset.PrevRCommitForShuffle)
+		newShuffleProof,_ = shuffle.SimpleShuffle(w.Cryptoset.LocalSRS, w.Cryptoset.PrevShuffledPKList, w.Cryptoset.PrevRCommitForShuffle)
 	}
 	// 如果处于抽签阶段，则进行抽签
 	if inDrawStage(height) {

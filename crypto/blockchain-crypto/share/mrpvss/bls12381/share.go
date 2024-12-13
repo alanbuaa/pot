@@ -4,6 +4,8 @@ import (
 	dleq "blockchain-crypto/proof/dleq/bls12381"
 	. "blockchain-crypto/types/curve/bls12381"
 	"bytes"
+	"fmt"
+	"strings"
 )
 
 type EncShare struct {
@@ -14,7 +16,45 @@ type EncShare struct {
 	DealProof *dleq.Proof
 }
 
+func (e *EncShare) String() string {
+	var sb strings.Builder
+
+	sb.WriteString(fmt.Sprintf("EncShare{A: %v, ", e.A[0][0]))
+	sb.WriteString("BList: [")
+	// 写入 BList 字段的字符串表示
+	for i := 0; i < 2; i++ {
+		sb.WriteString(fmt.Sprintf("%v, ", e.BList[i][0][0]))
+	}
+	sb.WriteString(fmt.Sprintf("], DealProof: %v}", e.DealProof))
+	return sb.String()
+}
+
+func (e *EncShare) DeepCopy() *EncShare {
+	group1 := NewG1()
+	ret := &EncShare{
+		A:         nil,
+		BList:     nil,
+		DealProof: nil,
+	}
+	if e.A != nil {
+		ret.A = e.A
+	}
+	if e.BList != nil {
+		ret.BList = make([]*PointG1, 32)
+		for i := 0; i < 32; i++ {
+			if e.BList[i] != nil {
+				ret.BList[i] = group1.New().Set(e.BList[i])
+			}
+		}
+	}
+	if e.DealProof != nil {
+		ret.DealProof = e.DealProof.DeepCopy()
+	}
+	return ret
+}
+
 func NewEmptyEncShare() *EncShare {
+	group1 := NewG1()
 	bList := make([]*PointG1, 32)
 	for i := 0; i < 32; i++ {
 		bList[i] = group1.Zero()
@@ -27,6 +67,7 @@ func NewEmptyEncShare() *EncShare {
 }
 
 func (e *EncShare) ToBytes() []byte {
+	group1 := NewG1()
 	buffer := bytes.Buffer{}
 	buffer.Write(group1.ToCompressed(e.A))
 	for _, b := range e.BList {
@@ -37,6 +78,7 @@ func (e *EncShare) ToBytes() []byte {
 }
 
 func (e *EncShare) FromBytes(data []byte) (*EncShare, error) {
+	group1 := NewG1()
 	pointG1Buf := make([]byte, 48)
 	bList := make([]*PointG1, 32)
 	buffer := bytes.NewBuffer(data)

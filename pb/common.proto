@@ -13,6 +13,7 @@ message WhirlyBlock {
   QuorumCert Justify = 5;
   bool committed = 6;
   bytes shardingName = 7;
+  bytes incentive = 8;
 }
 
 enum MsgType {

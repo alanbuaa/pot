@@ -1,4 +1,4 @@
-build: build_genkey build_client build_server build_test
+build: build_genkey build_client build_server btest
 	@:
 
 build_genkey:
@@ -9,6 +9,7 @@ build_client:
 
 build_server:
 	go build -o upgradeable-consensus ./cmd/server
+
 
 btest:
 	go build -o test ./cmd/pot_test

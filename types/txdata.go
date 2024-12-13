@@ -405,26 +405,24 @@ func (i TxInput) CanUnlockOutputwith(address []byte) bool {
 	return true
 	//
 }
-
 func (r *RawTx) IsCoinBase() bool {
 	return len(r.TxInput) == 1 && r.TxInput[0].Voutput == -1
 }
 
 func (r *RawTx) BasicVerify() bool {
-	if r.IsCoinBase() {
-
-	} else {
-		for _, output := range r.TxOutput {
-			if output.Address == nil || bytes.Equal(output.Address, []byte{}) {
-				return true
-			} else if len(r.TxOutput) == 1 {
-				return true
-			} else {
-				return false
-			}
-		}
-	}
-	return false
+	// if r.IsCoinBase() {
+	// } else {
+	// 	for _, output := range r.TxOutput {
+	// 		if output.Address == nil || bytes.Equal(output.Address, []byte{}) {
+	// 			return true
+	// 		} else if len(r.TxOutput) == 1 {
+	// 			return true
+	// 		} else {
+	// 			return false
+	// 		}
+	// 	}
+	// }
+	// return false
 	return true
 }
 

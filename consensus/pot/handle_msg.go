@@ -259,7 +259,6 @@ func (e *PoTEngine) handlePoTMsg(message *pb.PoTMessage) error {
 			return err
 		}
 		e.log.Error("[Engine]Get Devastate dci request")
-
 	}
 	return nil
 }

@@ -1,12 +1,15 @@
 package ibve
 
 import (
+	. "blockchain-crypto/types/curve/bls12381"
 	"crypto/rand"
 	"fmt"
 	"testing"
 )
 
 func TestIBVE(t *testing.T) {
+	g1 := NewG1()
+	gt := NewGT()
 	x, y := Keygen()
 	msg, _ := gt.New().Rand(rand.Reader)
 	cipherText := Encrypt(y, msg)
@@ -17,6 +20,8 @@ func TestIBVE(t *testing.T) {
 }
 
 func TestCipherText_ToBytes_FromBytes(t *testing.T) {
+	g1 := NewG1()
+	gt := NewGT()
 	msg, _ := gt.New().Rand(rand.Reader)
 	x, y := Keygen()
 	cipherText := Encrypt(y, msg)

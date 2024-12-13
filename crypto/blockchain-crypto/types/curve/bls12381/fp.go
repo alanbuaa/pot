@@ -5,7 +5,7 @@ import (
 	"math/big"
 )
 
-func fromBytes(in []byte) (*Fe, error) {
+func FromBytes(in []byte) (*Fe, error) {
 	fe := &Fe{}
 	if len(in) != fpByteSize {
 		return nil, errors.New("input string must be equal 48 Bytes")
@@ -26,11 +26,11 @@ func from64Bytes(in []byte) (*Fe, error) {
 	copy(a0[fpByteSize-32:fpByteSize], in[:32])
 	a1 := make([]byte, fpByteSize)
 	copy(a1[fpByteSize-32:fpByteSize], in[32:])
-	e0, err := fromBytes(a0)
+	e0, err := FromBytes(a0)
 	if err != nil {
 		return nil, err
 	}
-	e1, err := fromBytes(a1)
+	e1, err := FromBytes(a1)
 	if err != nil {
 		return nil, err
 	}
@@ -49,7 +49,7 @@ func from64Bytes(in []byte) (*Fe, error) {
 	return e1, nil
 }
 
-func fromBig(in *big.Int) (*Fe, error) {
+func FromBig(in *big.Int) (*Fe, error) {
 	fe := new(Fe).SetBig(in)
 	if !fe.isValid() {
 		return nil, errors.New("invalid input string")
@@ -70,13 +70,13 @@ func fromString(in string) (*Fe, error) {
 	return fe, nil
 }
 
-func toBytes(e *Fe) []byte {
+func ToBytes(e *Fe) []byte {
 	e2 := new(Fe)
 	fromMont(e2, e)
 	return e2.Bytes()
 }
 
-func toBig(e *Fe) *big.Int {
+func ToBig(e *Fe) *big.Int {
 	e2 := new(Fe)
 	fromMont(e2, e)
 	return e2.big()

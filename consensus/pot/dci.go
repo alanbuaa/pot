@@ -131,7 +131,6 @@ func (w *Worker) VerifyUTXO(ctx context.Context, request *pb.VerifyUTXORequest) 
 	if from != nil {
 		return &pb.VerifyUTXOResponse{Flag: false}, nil
 	}
-
 	amount := request.GetValue()
 	proof := request.GetProof()
 
@@ -406,7 +405,6 @@ func (w *Worker) GenerateCoinbaseTx(pubkeybyte []byte, vdf0res []byte, totalrewa
 				txouts = append(txouts, txout)
 			}
 		}
-
 	}
 
 	tx := &types.RawTx{

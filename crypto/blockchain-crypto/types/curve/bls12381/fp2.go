@@ -31,11 +31,11 @@ func (e *fp2) fromBytes(in []byte) (*Fe2, error) {
 	if len(in) != 2*fpByteSize {
 		return nil, errors.New("input string must be equal to 96 Bytes")
 	}
-	c1, err := fromBytes(in[:fpByteSize])
+	c1, err := FromBytes(in[:fpByteSize])
 	if err != nil {
 		return nil, err
 	}
-	c0, err := fromBytes(in[fpByteSize:])
+	c0, err := FromBytes(in[fpByteSize:])
 	if err != nil {
 		return nil, err
 	}
@@ -44,8 +44,8 @@ func (e *fp2) fromBytes(in []byte) (*Fe2, error) {
 
 func (e *fp2) toBytes(a *Fe2) []byte {
 	out := make([]byte, 2*fpByteSize)
-	copy(out[:fpByteSize], toBytes(&a[1]))
-	copy(out[fpByteSize:], toBytes(&a[0]))
+	copy(out[:fpByteSize], ToBytes(&a[1]))
+	copy(out[fpByteSize:], ToBytes(&a[0]))
 	return out
 }
 

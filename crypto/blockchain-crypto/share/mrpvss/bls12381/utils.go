@@ -7,6 +7,7 @@ import (
 
 // bruteForceFindExp only use for small scalar which is on the exponent of target
 func bruteForceFindExp(g *PointG1, target *PointG1, step *Fr, max uint32) (*Fr, error) {
+	group1 := NewG1()
 	if group1.IsZero(target) {
 		return NewFr().Zero(), nil
 	}

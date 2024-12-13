@@ -163,7 +163,8 @@ func (w *Worker) GetSharedAncestor(forkblock *types.Block, currentblock *types.B
 	return nil, fmt.Errorf("get ancestor error for unknown end")
 }
 
-// GetBranch return to a branch from leaf to the ancestor but not include the root block
+
+
 func (w *Worker) GetBranch(root, leaf *types.Block) ([]*types.Block, [][]*types.Block, error) {
 	if root == nil || leaf == nil {
 		return nil, nil, fmt.Errorf("branch is nil")

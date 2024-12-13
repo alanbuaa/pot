@@ -16,6 +16,7 @@ import (
 type ConsensusBlock interface {
 	GetTxs() [][]byte
 	GetShardingName() []byte
+	GetIncentive() []byte
 	protoreflect.ProtoMessage
 }
 

@@ -1,6 +1,7 @@
 package pot
 
 import (
+	"blockchain-crypto/vdf"
 	"bytes"
 	"context"
 	crand "crypto/rand"
@@ -10,6 +11,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"sort"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -18,7 +20,6 @@ import (
 	"github.com/zzz136454872/upgradeable-consensus/config"
 	"github.com/zzz136454872/upgradeable-consensus/consensus/whirly/nodeController"
 	"github.com/zzz136454872/upgradeable-consensus/crypto"
-	"github.com/zzz136454872/upgradeable-consensus/crypto/vdf"
 	"github.com/zzz136454872/upgradeable-consensus/pb"
 	"github.com/zzz136454872/upgradeable-consensus/types"
 	"golang.org/x/exp/rand"
@@ -28,7 +29,6 @@ import (
 
 	"net"
 	"os"
-	"sort"
 	"sync"
 	"time"
 )
@@ -111,6 +111,7 @@ func NewWorker(id int64, config *config.ConsensusConfig, logger *logrus.Entry, b
 	if err != nil {
 		return nil
 	}
+
 	rands := rand.New(rand.NewSource(seed.Uint64()))
 
 	vdf0 := types.NewVDF(ch0, potconfig.Vdf0Iteration, id)
@@ -314,7 +315,8 @@ func (w *Worker) OnGetVdf0Response() {
 			//w.UpdateLocalCryptoSetByBlock(parentblock.GetHeader().Height, parentblock)
 
 			// if epoch > 1 {
-			// 	w.simpleLeaderUpdate(parentblock)l
+
+			// 	w.simpleLeaderUpdate(parentblock)
 			// }
 			w.CommitteeUpdate(epoch)
 
@@ -335,7 +337,6 @@ func (w *Worker) OnGetVdf0Response() {
 				block := w.createBlockWithoutKey(epoch+1, parentblock, uncleblock, difficulty, exeblocks, rawtxs)
 				go w.mine(epoch+1, vdf0rescopy, rand.Int63(), i, w.abort, difficulty, parentblock, uncleblock, w.wg, block, dcirewards)
 			}
-
 		}
 	}
 }

@@ -13,6 +13,7 @@ message PoWBlock {
   bytes blockHash = 5;
   bool commited = 6;
   bytes shardingName = 7;
+  bytes incentive = 8;
 }
 
 message PoWMessage {

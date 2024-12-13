@@ -39,7 +39,7 @@ func (uc *UpgradeableConsensus) executeNormalTx(block types.ConsensusBlock, proo
 			uc.commitLock.Unlock()
 		}
 	}
-	uc.executor.CommitBlock(&pb.ExecBlock{Txs: ntxs}, GenProof(block, proof, uc.cid), uc.cid)
+	uc.executor.CommitBlock(&pb.WhirlyBlock{Txs: ntxs}, GenProof(block, proof, uc.cid), uc.cid)
 }
 
 func (uc *UpgradeableConsensus) CommitBlock(block types.ConsensusBlock, proof []byte, cid int64) {

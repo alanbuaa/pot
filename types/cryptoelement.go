@@ -1,12 +1,13 @@
 package types
 
 import (
+	schnorr_proof "blockchain-crypto/proof/schnorr_proof/bls12381"
+	mrpvss "blockchain-crypto/share/mrpvss/bls12381"
+	"blockchain-crypto/types/curve/bls12381"
+	"blockchain-crypto/types/srs"
+	"blockchain-crypto/verifiable_draw"
 	"fmt"
-	schnorr_proof "github.com/zzz136454872/upgradeable-consensus/crypto/proof/schnorr_proof/bls12381"
-	mrpvss "github.com/zzz136454872/upgradeable-consensus/crypto/share/mrpvss/bls12381"
-	"github.com/zzz136454872/upgradeable-consensus/crypto/types/curve/bls12381"
-	"github.com/zzz136454872/upgradeable-consensus/crypto/types/srs"
-	"github.com/zzz136454872/upgradeable-consensus/crypto/verifiable_draw"
+
 	"github.com/zzz136454872/upgradeable-consensus/pb"
 )
 
