@@ -6,7 +6,6 @@ replace p2padaptor => ./p2p/p2p-adaptor/p2padaptor
 
 replace network => ./p2p/p2p-adaptor/network
 
-require p2padaptor v0.0.0-00010101000000-000000000000
 
 replace blockchain-crypto => ./crypto/blockchain-crypto
 
@@ -23,6 +22,7 @@ require (
 	google.golang.org/grpc v1.65.0
 	google.golang.org/protobuf v1.34.2
 	gopkg.in/yaml.v3 v3.0.1
+	p2padaptor v0.0.0-00010101000000-000000000000
 )
 
 require (

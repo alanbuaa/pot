@@ -37,7 +37,7 @@ var (
 
 //goland:noinspection ALL
 var (
-	savings       = uint64(0)
+	// savings       = uint64(0)
 	HalfYear      = OneYear / 2
 	OneYear       = uint64(365 * 144)
 	TwoYears      = OneYear * 2
@@ -247,7 +247,7 @@ func (w *Worker) handleDevastateDciRequest(request *pb.DevastateDciRequest) (*pb
 				// 	delete(outputsmap, utxokey)
 				// }
 				outsBytes := b.Get([]byte(utxokey))
-				if outsBytes == nil || len(outsBytes) == 0 {
+				if len(outsBytes) == 0 {
 					return fmt.Errorf("the input corresponding utxo not found")
 				}
 
@@ -502,7 +502,10 @@ func (w *Worker) handleConfirmBlockTx(height uint64) error {
 		if !tx.IsCoinBase() {
 			for _, txoutput := range tx.TxOutput {
 				if len(txoutput.Data) != 0 {
-
+					err := w.transferTx2EVM(txoutput.Data)
+					if err != nil {
+						return err
+					}
 				}
 
 			}
@@ -574,6 +577,10 @@ func (w *Worker) CheckBlockTxs(block *types.Block) (bool, error) {
 					if totalvalue != outputmap[bcitype] {
 						return fmt.Errorf(" tx error for input and output bci amount not match")
 					}
+				}
+
+				if _, err := w.CheckBlockTxInterest(rawtx, header.Height); err != nil {
+					return fmt.Errorf("check block interest error for: %s", err)
 				}
 
 			} else {
@@ -673,7 +680,7 @@ func (w *Worker) CheckBlockTxs(block *types.Block) (bool, error) {
 	return true, nil
 }
 
-func (w *Worker) CheckTxInterest(rawtx *types.RawTx, blockheight uint64) (bool, error) {
+func (w *Worker) CheckBlockTxInterest(rawtx *types.RawTx, blockheight uint64) (bool, error) {
 	db := w.chainReader.GetBoltDb()
 	err := db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(types.UTXOBucket))
@@ -753,6 +760,49 @@ func (w *Worker) CheckTxInterest(rawtx *types.RawTx, blockheight uint64) (bool, 
 	})
 	if err != nil {
 		return false, err
+	}
+	return true, nil
+}
+
+func (w *Worker) CheckMinerTransacFee(block *types.Block) (bool, error) {
+
+	txs := block.GetRawTx()
+	coinbasetx := txs[0]
+	if !coinbasetx.IsCoinBase() {
+		return false, fmt.Errorf("first tx is not coinbase tx")
+	}
+	minerout := coinbasetx.TxOutput[0]
+	_, err := CheckMinerOutput(minerout, block)
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func CheckMinerOutput(minerout types.TxOutput, block *types.Block) (bool, error) {
+	addr := minerout.Address
+	header := block.GetHeader()
+	if !bytes.Equal(addr, header.PublicKey) {
+		return false, fmt.Errorf("coinbase tx miner output does not match to header public key")
+	}
+	if minerout.Value != int64(math.Floor(float64(TotalReward)*bcimap[Miner])) {
+		return false, fmt.Errorf("coinbase tx miner output value is not correct")
+	}
+	if minerout.LockTime != 144 {
+		return false, fmt.Errorf("coinbase tx mineroutput lockTime is not correct")
+	}
+
+	txs := block.GetRawTx()
+	transactionfee := int64(0)
+
+	for _, tx := range txs {
+		if !tx.IsCoinBase() {
+			transactionfee += tx.TransactionFee
+		}
+	}
+
+	if minerout.Interest > transactionfee {
+		return false, fmt.Errorf("coinbase tx miner output interest is more than transaction fee")
 	}
 
 	return true, nil
