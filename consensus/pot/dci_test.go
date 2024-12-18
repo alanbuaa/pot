@@ -243,3 +243,7 @@ func TestBciInterest(t *testing.T) {
 	year := TenYears + 365*144
 	t.Log(year / TenYears)
 }
+
+func TestLog(t *testing.T) {
+	t.Log(CalcTotalReward(ThreeYears + OneYear))
+}

@@ -525,6 +525,7 @@ func (w *Worker) CheckBlockTxs(block *types.Block) (bool, error) {
 	txs := block.GetRawTx()
 	header := block.GetHeader()
 	db := w.chainReader.GetBoltDb()
+	height := header.Height
 	err := db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(types.UTXOBucket))
 		for _, rawtx := range txs {
@@ -532,8 +533,20 @@ func (w *Worker) CheckBlockTxs(block *types.Block) (bool, error) {
 				if !rawtx.BasicVerify() {
 					return fmt.Errorf("tx %s verify failed", hexutil.Encode(rawtx.Txid[:]))
 				}
-				inputmap := make(map[int32]int64)
+				if len(rawtx.TxInput) == 0 {
+					return fmt.Errorf("tx %s has no input", hexutil.Encode(rawtx.Txid[:]))
+				}
+
+				expectedtype := rawtx.TxInput[0].BciType
+
+				inputAmountTotal := int64(0)
+				inputInterestTotal := int64(0)
+
 				for _, input := range rawtx.TxInput {
+					if input.BciType != expectedtype {
+						return fmt.Errorf("tx %s input type not match", hexutil.Encode(rawtx.Txid[:]))
+					}
+
 					utxokey := fmt.Sprintf("%s:%d", input.Txid, input.Voutput)
 					outsBytes := b.Get([]byte(utxokey))
 					if outsBytes == nil {
@@ -557,11 +570,29 @@ func (w *Worker) CheckBlockTxs(block *types.Block) (bool, error) {
 							}
 						}
 					}
-					inputmap[input.BciType] += input.Value
+					inputAmountTotal += output.Value
+					inputInterestTotal += output.Interest
+					yeargap := height - output.BlockHeight
+					if yeargap/TenYears >= 1 {
+						interest := int64(math.Floor(float64(yeargap) * float64(output.Value) * TenYearRate / float64(OneYear)))
+						inputInterestTotal += interest
+					} else if yeargap/TenYears < 1 && yeargap/ThreeYears >= 1 {
+						interest := int64(math.Floor(float64(yeargap) * float64(output.Value) * ThreeYearRate / float64(OneYear)))
+						inputInterestTotal += interest
+					} else if yeargap/ThreeYears < 1 && yeargap/OneYear >= 1 {
+						interest := int64(math.Floor(float64(yeargap) * float64(output.Value) * OneYearRate / float64(OneYear)))
+						inputInterestTotal += interest
+					} else if yeargap/OneYear < 1 && yeargap/HalfYear >= 1 {
+						interest := int64(math.Floor(float64(yeargap) * float64(output.Value) * HalfYearRate / float64(OneYear)))
+						inputInterestTotal += interest
+					} else if yeargap/HalfYear < 1 {
+						interest := int64(math.Floor(float64(yeargap) * float64(output.Value) * savingRate / float64(OneYear)))
+						inputInterestTotal += interest
+					}
 				}
-
-				outputmap := make(map[int32]int64)
-
+				uniqueAddress := rawtx.TxOutput[0].Address
+				OutputAmountTotal := int64(0)
+				OutputInterestTotal := int64(0)
 				for _, output := range rawtx.TxOutput {
 					//if !output.IsCoinbase {
 					//	return fmt.Errorf(" tx error for output is not coinbase")
@@ -569,20 +600,31 @@ func (w *Worker) CheckBlockTxs(block *types.Block) (bool, error) {
 					if output.LockTime <= ConfirmDelay && output.LockTime != 0 {
 						return fmt.Errorf(" tx error for output locktime is too short")
 					}
-					outputmap[output.BciType] += output.Value
-
-				}
-
-				for bcitype, totalvalue := range inputmap {
-					if totalvalue != outputmap[bcitype] {
-						return fmt.Errorf(" tx error for input and output bci amount not match")
+					// outputmap[output.BciType] += output.Value
+					if output.BciType != expectedtype {
+						return fmt.Errorf(" tx error for output bcitype not match")
 					}
+					if !bytes.Equal(output.Address, uniqueAddress) {
+						return fmt.Errorf(" tx error for output address is not only one")
+					}
+					if output.Value <= 0 {
+						return fmt.Errorf(" tx error for output value is not positive")
+					}
+
+					OutputAmountTotal += output.Value
+					OutputInterestTotal += output.Interest
 				}
 
-				if _, err := w.CheckBlockTxInterest(rawtx, header.Height); err != nil {
-					return fmt.Errorf("check block interest error for: %s", err)
-				}
+				// if _, err := w.CheckBlockTxInterest(rawtx, header.Height); err != nil {
+				// 	return fmt.Errorf("check block interest error for: %s", err)
+				// }
 
+				if OutputInterestTotal+rawtx.TransactionFee > inputInterestTotal {
+					return fmt.Errorf(" tx error for  interest is not enough")
+				}
+				if OutputAmountTotal != inputAmountTotal {
+					return fmt.Errorf(" tx error for amount is not match")
+				}
 			} else {
 				coinbaseproofs := make([]types.CoinbaseProof, len(rawtx.CoinbaseProofs))
 				if len(coinbaseproofs) != 0 {
@@ -677,6 +719,90 @@ func (w *Worker) CheckBlockTxs(block *types.Block) (bool, error) {
 		return false, err
 	}
 
+	return true, nil
+}
+
+func (w *Worker) CheckTxWithBlock(rawtx *types.RawTx, block *types.Block) (bool, error) {
+	db := w.chainReader.GetBoltDb()
+	header := block.GetHeader()
+
+	err := db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(types.UTXOBucket))
+		if !rawtx.IsCoinBase() {
+			if !rawtx.BasicVerify() {
+				return fmt.Errorf("tx %s verify failed", hexutil.Encode(rawtx.Txid[:]))
+			}
+			if len(rawtx.TxInput) == 0 {
+				return fmt.Errorf("tx %s has no input", hexutil.Encode(rawtx.Txid[:]))
+			}
+
+			expectedtype := rawtx.TxInput[0].BciType
+
+			inputAmountTotal := int64(0)
+			for _, input := range rawtx.TxInput {
+				if input.BciType != expectedtype {
+					return fmt.Errorf("tx %s input type not match", hexutil.Encode(rawtx.Txid[:]))
+				}
+
+				utxokey := fmt.Sprintf("%s:%d", input.Txid, input.Voutput)
+				outsBytes := b.Get([]byte(utxokey))
+				if outsBytes == nil {
+					return fmt.Errorf(" tx error for can't find corresponding utxo ")
+				}
+				output := types.DecodeByteToTxOutput(outsBytes)
+
+				if !output.CanBeUnlockWith(input) {
+					return fmt.Errorf(" tx error for can't unlock with txinput")
+				}
+				if input.BciType != output.BciType || input.Value != output.Value {
+					return fmt.Errorf(" tx error for bci type not match or value not match ")
+				}
+				if output.BurnLock != 0 && output.BurnLock > header.Height {
+					for _, txOutput := range rawtx.TxOutput {
+						if bytes.Equal(txOutput.Address, burnoutAddress) {
+							return fmt.Errorf(" tx error for utxo has not reached burn lock height")
+						}
+						if txOutput.BurnLock != output.BurnLock {
+							return fmt.Errorf("tx error for output burn lock not match to the input")
+						}
+					}
+				}
+				inputAmountTotal += output.Value
+
+			}
+			uniqueAddress := rawtx.TxOutput[0].Address
+			OutputAmountTotal := int64(0)
+
+			for _, output := range rawtx.TxOutput {
+
+				if output.LockTime <= ConfirmDelay && output.LockTime != 0 {
+					return fmt.Errorf(" tx error for output locktime is too short")
+				}
+				// outputmap[output.BciType] += output.Value
+				if output.BciType != expectedtype {
+					return fmt.Errorf(" tx error for output bcitype not match")
+				}
+				if !bytes.Equal(output.Address, uniqueAddress) {
+					return fmt.Errorf(" tx error for output address is not only one")
+				}
+				if output.Value <= 0 {
+					return fmt.Errorf(" tx error for output value is not positive")
+				}
+
+				OutputAmountTotal += output.Value
+
+			}
+			if OutputAmountTotal != inputAmountTotal {
+				return fmt.Errorf(" tx error for amount is not match")
+			}
+		} else {
+
+		}
+		return nil
+	})
+	if err != nil {
+		return false, err
+	}
 	return true, nil
 }
 
@@ -806,4 +932,49 @@ func CheckMinerOutput(minerout types.TxOutput, block *types.Block) (bool, error)
 	}
 
 	return true, nil
+}
+
+func CalcTotalReward(height uint64) int64 {
+	year := float64(height) / float64(OneYear)
+	if year < 1 {
+		return TotalReward
+	}
+
+	halfTimes := math.Floor(math.Log2(year))
+	return int64(math.Floor(float64(TotalReward) * math.Pow(0.5, halfTimes)))
+}
+
+// func CalcInterest(height uint64, value int64, bciType int32) int64 {
+
+// }
+
+func (w *Worker) IsFirstLockTransaction(rawtx *types.RawTx, block *types.Block) (bool, error) {
+	height := block.GetHeader().Height
+
+	boltdb := w.chainReader.GetBoltDb()
+	err := boltdb.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(types.UTXOBucket))
+		if !rawtx.IsCoinBase() {
+			for _, input := range rawtx.TxInput {
+				lockkey := fmt.Sprintf("%s:%d", input.Txid, input.Voutput)
+				outputbyte := b.Get([]byte(lockkey))
+				if outputbyte == nil {
+					return fmt.Errorf("lock tx error for can't find corresponding utxo ")
+				}
+				output := types.DecodeByteToTxOutput(outputbyte)
+				if output.BurnLock != 0 && output.BurnLock > height {
+					return fmt.Errorf("the tx is not a lock tx")
+				}
+
+			}
+
+		}
+
+		return nil
+	})
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+
 }

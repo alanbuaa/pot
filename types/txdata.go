@@ -192,6 +192,7 @@ type TxOutput struct {
 	BciType     int32  `json:"bciType"`
 	Data        []byte `json:"data"`
 	BurnLock    uint64 `json:"burnTime"`
+	CreatedAt   uint64 `json:"createdAt"`
 	BlockHeight uint64 `json:"blockHeight"` //only for local check
 	UseFlag     bool   `json:"useFlag"`     //only for local check
 }
