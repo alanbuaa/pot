@@ -523,200 +523,13 @@ func (w *Worker) transferTx2EVM([]byte) error {
 
 func (w *Worker) CheckBlockTxs(block *types.Block) (bool, error) {
 	txs := block.GetRawTx()
-	header := block.GetHeader()
-	db := w.chainReader.GetBoltDb()
-	height := header.Height
-	err := db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(types.UTXOBucket))
-		for _, rawtx := range txs {
-			if !rawtx.IsCoinBase() {
-				if !rawtx.BasicVerify() {
-					return fmt.Errorf("tx %s verify failed", hexutil.Encode(rawtx.Txid[:]))
-				}
-				if len(rawtx.TxInput) == 0 {
-					return fmt.Errorf("tx %s has no input", hexutil.Encode(rawtx.Txid[:]))
-				}
-
-				expectedtype := rawtx.TxInput[0].BciType
-
-				inputAmountTotal := int64(0)
-				inputInterestTotal := int64(0)
-
-				for _, input := range rawtx.TxInput {
-					if input.BciType != expectedtype {
-						return fmt.Errorf("tx %s input type not match", hexutil.Encode(rawtx.Txid[:]))
-					}
-
-					utxokey := fmt.Sprintf("%s:%d", input.Txid, input.Voutput)
-					outsBytes := b.Get([]byte(utxokey))
-					if outsBytes == nil {
-						return fmt.Errorf(" tx error for can't find corresponding utxo ")
-					}
-					output := types.DecodeByteToTxOutput(outsBytes)
-
-					if !output.CanBeUnlockWith(input) {
-						return fmt.Errorf(" tx error for can't unlock with txinput")
-					}
-					if input.BciType != output.BciType || input.Value != output.Value {
-						return fmt.Errorf(" tx error for bci type not match or value not match ")
-					}
-					if output.BurnLock != 0 && output.BurnLock > header.Height {
-						for _, txOutput := range rawtx.TxOutput {
-							if bytes.Equal(txOutput.Address, burnoutAddress) {
-								return fmt.Errorf(" tx error for utxo has not reached burn lock height")
-							}
-							if txOutput.BurnLock != output.BurnLock {
-								return fmt.Errorf("tx error for output burn lock not match to the input")
-							}
-						}
-					}
-					inputAmountTotal += output.Value
-					inputInterestTotal += output.Interest
-					yeargap := height - output.BlockHeight
-					if yeargap/TenYears >= 1 {
-						interest := int64(math.Floor(float64(yeargap) * float64(output.Value) * TenYearRate / float64(OneYear)))
-						inputInterestTotal += interest
-					} else if yeargap/TenYears < 1 && yeargap/ThreeYears >= 1 {
-						interest := int64(math.Floor(float64(yeargap) * float64(output.Value) * ThreeYearRate / float64(OneYear)))
-						inputInterestTotal += interest
-					} else if yeargap/ThreeYears < 1 && yeargap/OneYear >= 1 {
-						interest := int64(math.Floor(float64(yeargap) * float64(output.Value) * OneYearRate / float64(OneYear)))
-						inputInterestTotal += interest
-					} else if yeargap/OneYear < 1 && yeargap/HalfYear >= 1 {
-						interest := int64(math.Floor(float64(yeargap) * float64(output.Value) * HalfYearRate / float64(OneYear)))
-						inputInterestTotal += interest
-					} else if yeargap/HalfYear < 1 {
-						interest := int64(math.Floor(float64(yeargap) * float64(output.Value) * savingRate / float64(OneYear)))
-						inputInterestTotal += interest
-					}
-				}
-				uniqueAddress := rawtx.TxOutput[0].Address
-				OutputAmountTotal := int64(0)
-				OutputInterestTotal := int64(0)
-				for _, output := range rawtx.TxOutput {
-					//if !output.IsCoinbase {
-					//	return fmt.Errorf(" tx error for output is not coinbase")
-					//}
-					if output.LockTime <= ConfirmDelay && output.LockTime != 0 {
-						return fmt.Errorf(" tx error for output locktime is too short")
-					}
-					// outputmap[output.BciType] += output.Value
-					if output.BciType != expectedtype {
-						return fmt.Errorf(" tx error for output bcitype not match")
-					}
-					if !bytes.Equal(output.Address, uniqueAddress) {
-						return fmt.Errorf(" tx error for output address is not only one")
-					}
-					if output.Value <= 0 {
-						return fmt.Errorf(" tx error for output value is not positive")
-					}
-
-					OutputAmountTotal += output.Value
-					OutputInterestTotal += output.Interest
-				}
-
-				// if _, err := w.CheckBlockTxInterest(rawtx, header.Height); err != nil {
-				// 	return fmt.Errorf("check block interest error for: %s", err)
-				// }
-
-				if OutputInterestTotal+rawtx.TransactionFee > inputInterestTotal {
-					return fmt.Errorf(" tx error for  interest is not enough")
-				}
-				if OutputAmountTotal != inputAmountTotal {
-					return fmt.Errorf(" tx error for amount is not match")
-				}
-			} else {
-				coinbaseproofs := make([]types.CoinbaseProof, len(rawtx.CoinbaseProofs))
-				if len(coinbaseproofs) != 0 {
-					copy(coinbaseproofs, rawtx.CoinbaseProofs)
-					for _, coinbaseproof := range coinbaseproofs {
-						if !w.mempool.HasDciRewardByCoinbaseProof(&coinbaseproof) {
-							return fmt.Errorf(" coinbase tx error for can't find corresponding dci reward")
-						}
-					}
-					groupsdata := groupByType(coinbaseproofs)
-					for _, proofs := range groupsdata {
-						total := int64(0)
-						for _, proof := range proofs {
-							total += proof.Amount
-						}
-						for _, proof := range proofs {
-							proof.Weight = float64(proof.Amount) / float64(total)
-						}
-					}
-					selectproofs := make(map[int32][]*types.CoinbaseProof)
-					for bcitypes, proofs := range groupsdata {
-						sort.Slice(proofs, func(i, j int) bool {
-							return bytes.Compare(proofs[i].Address, proofs[j].Address) < 0
-						})
-						if len(header.PoTProof) < 2 {
-							return fmt.Errorf("pot proof len is not enough")
-						}
-						vdf1res := header.PoTProof[1]
-						rand.Seed(binary.BigEndian.Uint64(crypto.Hash(vdf1res)[:8]))
-
-						for i := 0; i < Selectn; i++ {
-							r := rand.Float64()
-							acnum := 0.0
-							for _, proof := range proofs {
-								acnum += proof.Weight
-								if r < acnum {
-									selectproofs[bcitypes] = append(selectproofs[bcitypes], &proof)
-								}
-							}
-						}
-					}
-					for bcitype, proofs := range selectproofs {
-						lenproofs := len(proofs)
-						if _, ok := bcimap[bcitype]; !ok {
-							return fmt.Errorf("proof has illegal bci type")
-						}
-						for _, output := range rawtx.TxOutput {
-							if output.BciType == bcitype {
-								flag := false
-								for _, proof := range proofs {
-									if bytes.Equal(proof.Address, output.Address) {
-										flag = true
-										if output.Value != int64(math.Floor(float64(TotalReward)*bcimap[bcitype]/float64(lenproofs))) {
-											return fmt.Errorf("coinbase tx error for output bci value is not correct")
-										}
-										if output.LockTime != 144 {
-											return fmt.Errorf("coinbase tx error for output locktime is not correct")
-										}
-										//TODO: Scriptcheck
-										break
-									}
-								}
-								if !flag {
-									return fmt.Errorf("coinbase tx error for shuffle result does not match to the txoutput")
-								}
-							}
-						}
-					}
-				}
-
-				if len(rawtx.TxOutput) == 0 {
-					return fmt.Errorf("coinbase tx without miner output")
-				}
-
-				minerout := rawtx.TxOutput[0]
-				if !bytes.Equal(minerout.Address, header.PublicKey) {
-					return fmt.Errorf("coinbase tx miner output does not match to header public key")
-				}
-				if minerout.Value != int64(math.Floor(float64(TotalReward)*bcimap[Miner])) {
-					return fmt.Errorf("coinbase tx miner output value is not correct")
-				}
-				if minerout.LockTime != 144 {
-					return fmt.Errorf("coinbase tx mineroutput format is not correct")
-				}
-			}
+	// header := block.GetHeader()
+	for _, tx := range txs {
+		flag, err := w.CheckTxWithBlock(tx, block)
+		if err != nil {
+			return flag, fmt.Errorf("tx %s check failed %s", hexutil.Encode(tx.Txid[:]), err.Error())
 		}
 
-		return nil
-	})
-
-	if err != nil {
-		return false, err
 	}
 
 	return true, nil
@@ -762,9 +575,6 @@ func (w *Worker) CheckTxWithBlock(rawtx *types.RawTx, block *types.Block) (bool,
 						if bytes.Equal(txOutput.Address, burnoutAddress) {
 							return fmt.Errorf(" tx error for utxo has not reached burn lock height")
 						}
-						if txOutput.BurnLock != output.BurnLock {
-							return fmt.Errorf("tx error for output burn lock not match to the input")
-						}
 					}
 				}
 				inputAmountTotal += output.Value
@@ -795,8 +605,91 @@ func (w *Worker) CheckTxWithBlock(rawtx *types.RawTx, block *types.Block) (bool,
 			if OutputAmountTotal != inputAmountTotal {
 				return fmt.Errorf(" tx error for amount is not match")
 			}
-		} else {
 
+		} else {
+			coinbaseproofs := make([]types.CoinbaseProof, len(rawtx.CoinbaseProofs))
+			if len(coinbaseproofs) != 0 {
+				copy(coinbaseproofs, rawtx.CoinbaseProofs)
+				for _, coinbaseproof := range coinbaseproofs {
+					if !w.mempool.HasDciRewardByCoinbaseProof(&coinbaseproof) {
+						return fmt.Errorf(" coinbase tx error for can't find corresponding dci reward")
+					}
+				}
+				groupsdata := groupByType(coinbaseproofs)
+				for _, proofs := range groupsdata {
+					total := int64(0)
+					for _, proof := range proofs {
+						total += proof.Amount
+					}
+					for _, proof := range proofs {
+						proof.Weight = float64(proof.Amount) / float64(total)
+					}
+				}
+				selectproofs := make(map[int32][]*types.CoinbaseProof)
+				for bcitypes, proofs := range groupsdata {
+					sort.Slice(proofs, func(i, j int) bool {
+						return bytes.Compare(proofs[i].Address, proofs[j].Address) < 0
+					})
+					if len(header.PoTProof) < 2 {
+						return fmt.Errorf("pot proof len is not enough")
+					}
+					vdf1res := header.PoTProof[1]
+					rand.Seed(binary.BigEndian.Uint64(crypto.Hash(vdf1res)[:8]))
+
+					for i := 0; i < Selectn; i++ {
+						r := rand.Float64()
+						acnum := 0.0
+						for _, proof := range proofs {
+							acnum += proof.Weight
+							if r < acnum {
+								selectproofs[bcitypes] = append(selectproofs[bcitypes], &proof)
+							}
+						}
+					}
+				}
+				for bcitype, proofs := range selectproofs {
+					lenproofs := len(proofs)
+					if _, ok := bcimap[bcitype]; !ok {
+						return fmt.Errorf("proof has illegal bci type")
+					}
+					for _, output := range rawtx.TxOutput {
+						if output.BciType == bcitype {
+							flag := false
+							for _, proof := range proofs {
+								if bytes.Equal(proof.Address, output.Address) {
+									flag = true
+									if output.Value != int64(math.Floor(float64(TotalReward)*bcimap[bcitype]/float64(lenproofs))) {
+										return fmt.Errorf("coinbase tx error for output bci value is not correct")
+									}
+									if output.LockTime != 144 {
+										return fmt.Errorf("coinbase tx error for output locktime is not correct")
+									}
+									//TODO: Scriptcheck
+									break
+								}
+							}
+							if !flag {
+								return fmt.Errorf("coinbase tx error for shuffle result does not match to the txoutput")
+							}
+						}
+					}
+				}
+			}
+
+			if len(rawtx.TxOutput) == 0 {
+				return fmt.Errorf("coinbase tx without miner output")
+			}
+
+			minerout := rawtx.TxOutput[0]
+			if !bytes.Equal(minerout.Address, header.PublicKey) {
+				return fmt.Errorf("coinbase tx miner output does not match to header public key")
+			}
+			if minerout.Value != int64(math.Floor(float64(TotalReward)*bcimap[Miner])) {
+				return fmt.Errorf("coinbase tx miner output value is not correct")
+			}
+			if minerout.LockTime != 144 {
+				return fmt.Errorf("coinbase tx mineroutput format is not correct")
+			}
 		}
 		return nil
 	})
@@ -948,7 +841,7 @@ func CalcTotalReward(height uint64) int64 {
 
 // }
 
-func (w *Worker) IsFirstLockTransaction(rawtx *types.RawTx, block *types.Block) (bool, error) {
+func (w *Worker) IsCreateLockTransaction(rawtx *types.RawTx, block *types.Block) bool {
 	height := block.GetHeader().Height
 
 	boltdb := w.chainReader.GetBoltDb()
@@ -963,15 +856,323 @@ func (w *Worker) IsFirstLockTransaction(rawtx *types.RawTx, block *types.Block) 
 				}
 				output := types.DecodeByteToTxOutput(outputbyte)
 				if output.BurnLock != 0 && output.BurnLock > height {
-					return fmt.Errorf("the tx is not a lock tx")
+					return fmt.Errorf("the tx is not a TryLock tx")
 				}
-
 			}
-
+			for _, output := range rawtx.TxOutput {
+				if output.BurnLock <= height {
+					return fmt.Errorf("the tx is not a TryLock tx")
+				}
+				// check interest
+			}
+			if len(rawtx.TxOutput) != 1 {
+				return fmt.Errorf("the create lock transaction only have one output")
+			}
 		}
 
 		return nil
 	})
+	return err == nil
+}
+
+func (w *Worker) IsTransferLockTransaction(rawtx *types.RawTx, block *types.Block) (bool, error) {
+	db := w.chainReader.GetBoltDb()
+	err := db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(types.UTXOBucket))
+		for _, txinput := range rawtx.TxInput {
+			lockkey := fmt.Sprintf("%s:%d", txinput.Txid, txinput.Voutput)
+			outpubyte := b.Get([]byte(lockkey))
+			if outpubyte == nil {
+				return fmt.Errorf("update tx error for can't find corresponding utxo ")
+			}
+			output := types.DecodeByteToTxOutput(outpubyte)
+			if output.BurnLock == 0 || output.BurnLock > block.Header.Height {
+				return fmt.Errorf("tx is not a transferlock transaction")
+			}
+		}
+		for _, txoutput := range rawtx.TxOutput {
+			if txoutput.BurnLock != 0 {
+				return fmt.Errorf("tx is not a transferlock transaction")
+			}
+		}
+		return nil
+	})
+
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func (w *Worker) IsDevastedTransaction(rawtx *types.RawTx, block *types.Block) (bool, error) {
+	db := w.chainReader.GetBoltDb()
+	err := db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(types.UTXOBucket))
+		for _, txinput := range rawtx.TxInput {
+			lockkey := fmt.Sprintf("%s:%d", txinput.Txid, txinput.Voutput)
+			outpubyte := b.Get([]byte(lockkey))
+			if outpubyte == nil {
+				return fmt.Errorf("update tx error for can't find corresponding utxo ")
+			}
+			output := types.DecodeByteToTxOutput(outpubyte)
+			if output.BurnLock > block.Header.Height {
+				return fmt.Errorf("tx is not a devasted transaction")
+			}
+		}
+		for _, txoutput := range rawtx.TxOutput {
+			if !bytes.Equal(txoutput.Address, burnoutAddress) {
+				return fmt.Errorf("tx is not a devasted transaction for receiving address is not burnout address")
+			}
+
+		}
+		return nil
+	})
+
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func (w *Worker) IsNonLockTransferTransaction(rawtx *types.RawTx, block *types.Block) (bool, error) {
+	db := w.chainReader.GetBoltDb()
+	err := db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(types.UTXOBucket))
+		for _, txinput := range rawtx.TxInput {
+			lockkey := fmt.Sprintf("%s:%d", txinput.Txid, txinput.Voutput)
+			outpubyte := b.Get([]byte(lockkey))
+			if outpubyte == nil {
+				return fmt.Errorf("update tx error for can't find corresponding utxo ")
+			}
+			output := types.DecodeByteToTxOutput(outpubyte)
+			if output.BurnLock != 0 && output.BurnLock < block.Header.Height {
+				return fmt.Errorf("tx is not a non-lock transfer transaction")
+			}
+		}
+		for _, txoutput := range rawtx.TxOutput {
+			if txoutput.BurnLock != 0 {
+				return fmt.Errorf("tx is not a non-lock transfer transaction")
+			}
+		}
+		return nil
+	})
+
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func (w *Worker) checkCreateLockTransaction(block *types.Block, rawtx *types.RawTx) (bool, error) {
+	db := w.chainReader.GetBoltDb()
+	err := db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(types.UTXOBucket))
+		expectedtype := rawtx.TxInput[0].BciType
+		inputInterest := int64(0)
+		for _, txinput := range rawtx.TxInput {
+			lockkey := fmt.Sprintf("%s:%d", txinput.Txid, txinput.Voutput)
+			outpubyte := b.Get([]byte(lockkey))
+			if outpubyte == nil {
+				return fmt.Errorf("update tx error for can't find corresponding utxo ")
+			}
+			output := types.DecodeByteToTxOutput(outpubyte)
+			if output.BurnLock > block.Header.Height {
+				return fmt.Errorf("tx is not a transferlock transaction")
+			}
+			if output.BciType != expectedtype || txinput.BciType != expectedtype {
+				return fmt.Errorf("tx is not legal for bcitype is not unified")
+			}
+			inputInterest += output.Interest
+			if output.BurnLock != 0 {
+				gap := block.Header.Height - output.BurnLock
+				interest := int64(math.Floor(float64(output.Interest) * float64(gap) / float64(OneYear)))
+				inputInterest += interest
+			} else {
+				gap := block.Header.Height - output.BlockHeight
+				interest := int64(math.Floor(float64(output.Interest) * float64(gap) / float64(OneYear)))
+				inputInterest += interest
+			}
+		}
+		if len(rawtx.TxOutput) != 1 {
+			return fmt.Errorf("tx is not legal for createlock transaction has more than one output")
+		}
+		lockinterest := int64(0)
+		for _, output := range rawtx.TxOutput {
+			if output.BurnLock != 0 {
+				return fmt.Errorf("tx is not a transferlock transaction")
+			}
+			if output.BurnLock < block.Header.Height {
+				return fmt.Errorf("tx is not a transferlock transaction for lock time is less than current height")
+			}
+
+			yeargap := output.BurnLock - block.Header.Height
+			if yeargap < HalfYear {
+				return fmt.Errorf("tx is not a transferlock transaction for lock time is less than half year")
+			}
+			if yeargap/TenYears >= 1 {
+				interest := int64(math.Floor(float64(yeargap) * float64(output.Value) * TenYearRate / float64(OneYear)))
+				lockinterest += interest
+			} else if yeargap/TenYears < 1 && yeargap/ThreeYears >= 1 {
+				interest := int64(math.Floor(float64(yeargap) * float64(output.Value) * ThreeYearRate / float64(OneYear)))
+				lockinterest += interest
+			} else if yeargap/ThreeYears < 1 && yeargap/OneYear >= 1 {
+				interest := int64(math.Floor(float64(yeargap) * float64(output.Value) * OneYearRate / float64(OneYear)))
+				lockinterest += interest
+			} else if yeargap/OneYear < 1 && yeargap/HalfYear >= 1 {
+				interest := int64(math.Floor(float64(yeargap) * float64(output.Value) * HalfYearRate / float64(OneYear)))
+				lockinterest += interest
+			}
+		}
+		if rawtx.TxOutput[0].Interest+rawtx.TransactionFee > lockinterest+inputInterest {
+			return fmt.Errorf("the interest number is too large")
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func (w *Worker) checkTransferLockTransaction(rawtx *types.RawTx, block *types.Block) (bool, error) {
+	db := w.chainReader.GetBoltDb()
+	err := db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(types.UTXOBucket))
+		inputinterest := int64(0)
+		outputinterest := int64(0)
+		count := 0
+		for _, txinput := range rawtx.TxInput {
+			lockkey := fmt.Sprintf("%s:%d", txinput.Txid, txinput.Voutput)
+			outpubyte := b.Get([]byte(lockkey))
+			if outpubyte == nil {
+				return fmt.Errorf("update tx error for can't find corresponding utxo ")
+			}
+			output := types.DecodeByteToTxOutput(outpubyte)
+			if output.BurnLock == 0 || output.BurnLock > block.Header.Height {
+				return fmt.Errorf("tx is not a transferlock transaction")
+			}
+
+			for _, txoutput := range rawtx.TxOutput {
+				if txoutput.BurnLock == output.BurnLock && txoutput.Value == output.Value {
+					if txoutput.Interest <= output.Interest {
+						inputinterest += txoutput.Interest
+						count += 1
+						break
+					}
+				}
+				return fmt.Errorf("transferlock transaction is not valid for could not find a lock utxo corresponding to txinput")
+			}
+		}
+		if count != len(rawtx.TxInput) {
+			return fmt.Errorf("transferlock transaction is not valid")
+		}
+		for _, txoutput := range rawtx.TxOutput {
+			if txoutput.BurnLock != 0 {
+				return fmt.Errorf("tx is not a transferlock transaction")
+			}
+			outputinterest += txoutput.Interest
+		}
+		if outputinterest+rawtx.TransactionFee > inputinterest {
+			return fmt.Errorf("transferlock transaction is not valid for use more than input interest")
+		}
+		return nil
+	})
+
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func (w *Worker) checkNonLockTransferTransaction(rawtx *types.RawTx, block *types.Block) (bool, error) {
+	db := w.chainReader.GetBoltDb()
+	err := db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(types.UTXOBucket))
+		inputinterest := int64(0)
+		outputinterest := int64(0)
+		for _, txinput := range rawtx.TxInput {
+			lockkey := fmt.Sprintf("%s:%d", txinput.Txid, txinput.Voutput)
+			outpubyte := b.Get([]byte(lockkey))
+			if outpubyte == nil {
+				return fmt.Errorf("update tx error for can't find corresponding utxo ")
+			}
+			output := types.DecodeByteToTxOutput(outpubyte)
+			if output.BurnLock != 0 && output.BurnLock < block.Header.Height {
+				return fmt.Errorf("tx is not a non-lock transfer transaction")
+			}
+
+			inputinterest += output.Interest
+			if output.BurnLock != 0 && output.BurnLock >= block.Header.Height {
+				gap := block.Header.Height - output.BurnLock
+				interest := int64(math.Floor(savingRate * float64(output.Interest) * float64(gap) / float64(OneYear)))
+				inputinterest += interest
+			} else if output.BurnLock == 0 {
+				gap := block.Header.Height - output.BlockHeight
+				interest := int64(math.Floor(savingRate * float64(output.Interest) * float64(gap) / float64(OneYear)))
+				inputinterest += interest
+			}
+		}
+		for _, txoutput := range rawtx.TxOutput {
+			if txoutput.BurnLock != 0 {
+				return fmt.Errorf("tx is not a non-lock transfer transaction")
+			}
+			outputinterest += txoutput.Interest
+		}
+		if outputinterest+rawtx.TransactionFee > inputinterest {
+			return fmt.Errorf("tx is not valid for use interest is more than input interest")
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func (w *Worker) checkDevastedTransaction(rawtx *types.RawTx, block *types.Block) (bool, error) {
+	db := w.chainReader.GetBoltDb()
+	err := db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(types.UTXOBucket))
+		inputInterest := int64(0)
+		outputinterest := int64(0)
+		for _, txinput := range rawtx.TxInput {
+			lockkey := fmt.Sprintf("%s:%d", txinput.Txid, txinput.Voutput)
+			outpubyte := b.Get([]byte(lockkey))
+			if outpubyte == nil {
+				return fmt.Errorf("update tx error for can't find corresponding utxo ")
+			}
+			output := types.DecodeByteToTxOutput(outpubyte)
+			if output.BurnLock > block.Header.Height {
+				return fmt.Errorf("tx is not a devasted transaction")
+			}
+			inputInterest += output.Interest
+
+			if output.BurnLock != 0 && output.BurnLock >= block.Header.Height {
+				gap := block.Header.Height - output.BurnLock
+				interest := int64(math.Floor(savingRate * float64(output.Interest) * float64(gap) / float64(OneYear)))
+				inputInterest += interest
+			} else if output.BurnLock == 0 {
+				gap := block.Header.Height - output.BlockHeight
+				interest := int64(math.Floor(savingRate * float64(output.Interest) * float64(gap) / float64(OneYear)))
+				inputInterest += interest
+			}
+		}
+		for _, txoutput := range rawtx.TxOutput {
+			if !bytes.Equal(txoutput.Address, burnoutAddress) {
+				return fmt.Errorf("tx is not a devasted transaction for receiving address is not burnout address")
+			}
+			outputinterest += txoutput.Interest
+		}
+		if outputinterest+rawtx.TransactionFee > inputInterest {
+			return fmt.Errorf("tx is not a devasted transaction for output interest is greater than input interest")
+		}
+		return nil
+	})
+
 	if err != nil {
 		return false, err
 	}

@@ -6,7 +6,6 @@ replace p2padaptor => ./p2p/p2p-adaptor/p2padaptor
 
 replace network => ./p2p/p2p-adaptor/network
 
-
 replace blockchain-crypto => ./crypto/blockchain-crypto
 
 require (

@@ -96,9 +96,18 @@ message PoTResponse{
   bytes  Proof = 6;
 }
 
+
 enum TxDataType{
   RawTx = 0;
   ExcutedTx = 1;
+}
+
+enum TxType{
+    GenericTransaction = 0;
+    CreateLockTransaction = 1;
+    LockTransferTranscation = 2;
+    DevasteTransaction = 3;
+
 }
 
 message TxData {

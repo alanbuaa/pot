@@ -394,6 +394,78 @@ func (c *ChainReader) ResetTxForBlock(block *types.Block) error {
 	}
 }
 
+func (c *ChainReader) TryResetTxForBlock(block *types.Block) error {
+	c.sync.Lock()
+	defer c.sync.Unlock()
+	txs := block.GetRawTx()
+	db := c.GetBoltDb()
+	err := db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(types.UTXOBucket))
+		for _, rawtx := range txs {
+			for i, output := range rawtx.TxOutput {
+				utxokey := fmt.Sprintf("%s:%d", rawtx.Txid, i)
+				lockheight := block.GetHeader().Height + output.LockTime
+				if _, exist := c.lockUTXO[lockheight][utxokey]; !exist {
+					return fmt.Errorf("tx error for can't find corresponding utxo")
+				}
+
+				outputbyte := b.Get([]byte(utxokey))
+				if outputbyte == nil {
+					return fmt.Errorf("tx error for can't find corresponding utxo ")
+				}
+			}
+
+			if !rawtx.IsCoinBase() {
+				for _, input := range rawtx.TxInput {
+					txid := input.Txid
+					voutput := input.Voutput
+					height := block.GetHeader().Height - 1
+					findflag := false
+					for height > 0 && !findflag {
+						currBlock, err := c.GetByHeight(height)
+						if err != nil {
+							return err
+						}
+						rawTxes := currBlock.GetRawTx()
+						for _, t := range rawTxes {
+							if txid == t.Txid {
+								if len(t.TxOutput) < int(voutput) {
+									return fmt.Errorf("reset block for could not find tx output")
+								}
+								out := t.TxOutput[voutput]
+								_ = fmt.Sprintf("%s:%d", txid, voutput)
+								out.BlockHeight = height
+								if block.GetHeader().Height >= height+out.LockTime {
+									// err = b.Put([]byte(utxokey), out.EncodeToByte())
+									// if err != nil {
+									// 	return err
+									// }
+								} else {
+									// if _, exist := c.lockUTXO[height+out.LockTime][utxokey]; !exist {
+									// 	c.lockUTXO[height+out.LockTime][utxokey] = &out
+									// }
+								}
+								findflag = true
+								break
+							}
+						}
+						height--
+					}
+					if !findflag {
+						return fmt.Errorf("reset block for could not find corresponding tx output to txinput")
+					}
+				}
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	} else {
+		return nil
+	}
+}
+
 //func (c *ChainReader) copyLockmap()  {
 //	if c.tempLockUTXO == nil {
 //		c.tempLockUTXO = make(map[uint64]map)
@@ -461,6 +533,64 @@ func (c *ChainReader) UpdateTxForBlock(block *types.Block) error {
 		}
 		delete(c.lockUTXO, block.Header.Height)
 		c.sync.Unlock()
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c *ChainReader) TryUpdateTxForBlock(block *types.Block) error {
+	db := c.GetBoltDb()
+	txs := block.GetRawTx()
+	//height := block.GetHeader().Height
+	c.sync.Lock()
+	defer c.sync.Unlock()
+	err := db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(types.UTXOBucket))
+		for _, rawTx := range txs {
+			if !rawTx.IsCoinBase() {
+				for _, input := range rawTx.TxInput {
+					// find if there is corresponding utxo in the utxo
+					utxokey := fmt.Sprintf("%s:%d", input.Txid, input.Voutput)
+					outsBytes := b.Get([]byte(utxokey))
+					if outsBytes == nil {
+						return fmt.Errorf("update tx error for can't find corresponding utxo ")
+					}
+					// TODO: add script check
+
+					// use utxo and burn
+
+				}
+			}
+
+			// add lock tx to the map
+			// for i, output := range rawTx.TxOutput {
+			// 	utxokey := fmt.Sprintf("%s:%d", rawTx.Txid, i)
+			// 	lockheight := height + output.LockTime
+			// 	c.sync.Lock()
+
+			// 	if _, exist := c.lockUTXO[lockheight]; !exist {
+			// 		c.lockUTXO[lockheight] = make(map[string]*types.TxOutput)
+			// 	}
+			// 	output.BlockHeight = height
+			// 	c.lockUTXO[lockheight][utxokey] = &output
+			// 	c.sync.Unlock()
+			// }
+		}
+		// find utxo can be unlocked and add to utxo bucket
+		// c.sync.Lock()
+		// if _, exist := c.lockUTXO[block.Header.Height]; exist {
+		// 	// for s, output := range pendingUtxos {
+		// 	// 	err := b.Put([]byte(s), output.EncodeToByte())
+		// 	// 	if err != nil {
+		// 	// 		return err
+		// 	// 	}
+		// 	// }
+		// }
+		// //delete(c.lockUTXO, block.Header.Height)
+		// c.sync.Unlock()
 		return nil
 	})
 	if err != nil {

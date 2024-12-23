@@ -77,7 +77,6 @@ type Worker struct {
 	blockCounter int
 
 	Engine  *PoTEngine
-	stopCh  chan struct{}
 	mutex   *sync.Mutex
 	rwmutex *sync.RWMutex
 
@@ -1076,15 +1075,12 @@ func (w *Worker) IsVDF1Working() bool {
 	//	}
 	//}
 
-	if w.workFlag {
-		return true
-	}
-	return false
+	return w.workFlag
 }
 
 func (w *Worker) setWorkFlagFalse() {
 	w.mutex.Lock()
-	w.mutex.Unlock()
+	defer w.mutex.Unlock()
 	w.workFlag = false
 }
 

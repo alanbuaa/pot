@@ -186,6 +186,7 @@ type TxOutput struct {
 	Address     []byte `json:"address"`
 	Value       int64  `json:"value"`
 	Interest    int64  `json:"interest"`
+	TxType      int32  `json:"txType"`
 	ScriptPk    []byte `json:"scriptpk"`
 	Proof       []byte `json:"proof"`
 	LockTime    uint64 `json:"locktime"`

@@ -6,16 +6,17 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"math/big"
+	"math/rand"
+	"sync"
+	"time"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/zzz136454872/upgradeable-consensus/crypto"
 	"github.com/zzz136454872/upgradeable-consensus/pb"
 	"github.com/zzz136454872/upgradeable-consensus/types"
 	"google.golang.org/protobuf/proto"
-	"math/big"
-	"math/rand"
-	"sync"
-	"time"
 )
 
 func (w *Worker) handleBlock() {
@@ -132,7 +133,6 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 					doonce.Do(func() {
 						close(done)
 						w.log.Errorf("[PoT]\thandle fork timeout")
-						return
 					})
 					return
 				}
@@ -570,13 +570,82 @@ func (w *Worker) CheckBlockNumEnough(block *types.Block) bool {
 
 func (w *Worker) handleForkTx(current []*types.Block, fork []*types.Block) (bool, error) {
 
-	for i := len(current) - 1; i >= 0; i-- {
+	for i := 0; i < len(current); i++ {
 		curblock := current[i]
 		if flag, _ := w.chainReader.IsBlockOnChain(curblock); flag {
-			//err := w.chainReader.ResetTxForBlock(curblock)
-
+			err := w.chainReader.TryResetTxForBlock(curblock)
+			w.log.Info("reset tx for block", "height", curblock.GetHeader().Height)
+			if err != nil {
+				w.log.Info("try reset error at height ", curblock.GetHeader().Height)
+				return false, err
+			}
+			err = w.chainReader.ResetTxForBlock(curblock)
+			if err != nil {
+				w.log.Info("reset error at height ", curblock.GetHeader().Height)
+				for j := i; j >= 0; j-- {
+					block := current[j]
+					err := w.chainReader.TryUpdateTxForBlock(block)
+					if err != nil {
+						return false, err
+					}
+					w.log.Infof("reset error and back to height %d", block.Header.Height)
+					err = w.chainReader.UpdateTxForBlock(block)
+					if err != nil {
+						return false, err
+					}
+				}
+				return false, err
+			}
 		}
 	}
 
+	for i := len(fork) - 1; i >= 1; i-- {
+		updateblock := fork[i]
+		_, err := w.CheckBlockTxs(updateblock)
+		if err != nil {
+			for j := i + 1; j < len(fork); j++ {
+				err = w.chainReader.ResetTxForBlock(fork[j])
+				if err != nil {
+					return false, err
+				}
+			}
+			for j := len(current) - 1; j >= 0; j-- {
+
+			}
+
+			return false, err
+		}
+
+		err = w.chainReader.TryUpdateTxForBlock(updateblock)
+		if err != nil {
+			for j := i + 1; j < len(fork); j++ {
+				err = w.chainReader.ResetTxForBlock(fork[j])
+				if err != nil {
+					return false, err
+				}
+			}
+
+			for j := len(current) - 1; j >= 0; j-- {
+				_ = w.chainReader.UpdateTxForBlock(current[j])
+
+			}
+			return false, err
+		}
+		err = w.chainReader.UpdateTxForBlock(updateblock)
+		if err != nil {
+			for j := i + 1; j < len(fork); j++ {
+				err = w.chainReader.ResetTxForBlock(fork[j])
+				if err != nil {
+					return false, err
+				}
+			}
+
+			for j := len(current) - 1; j >= 0; j-- {
+				_ = w.chainReader.UpdateTxForBlock(current[j])
+
+			}
+			return false, err
+		}
+	}
 	return true, nil
 }
