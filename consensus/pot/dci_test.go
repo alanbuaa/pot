@@ -4,12 +4,16 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"math"
 	"math/big"
 	"sort"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/zzz136454872/upgradeable-consensus/crypto"
+	"github.com/zzz136454872/upgradeable-consensus/pb"
 	"github.com/zzz136454872/upgradeable-consensus/types"
 	"golang.org/x/exp/rand"
 )
@@ -240,10 +244,62 @@ func TestBuffer(t *testing.T) {
 }
 
 func TestBciInterest(t *testing.T) {
-	year := TenYears + 365*144
+	year := TenYears + 365*CoinbaseLock
 	t.Log(year / TenYears)
 }
 
-func TestLog(t *testing.T) {
-	t.Log(CalcTotalReward(ThreeYears + OneYear))
+func TestUtxoKey(t *testing.T) {
+
+	randbyte := types.RandByte()
+	hexStr := hexutil.Encode(randbyte)
+	fmt.Println(hexStr)
+
+	// 去除 0x 前缀并去除前后空白字符
+
+	fmt.Println(hexStr)
+	utxokey := fmt.Sprintf("%s:%d", hexStr, 0)
+	fmt.Println("Generated utxokey:", utxokey)
+
+	// 使用 strings.Split 进行解析
+	parts := strings.Split(utxokey, ":")
+	if len(parts) != 2 {
+		t.Errorf("Invalid utxokey format: %v", utxokey)
+		return
+	}
+
+	txid := parts[0]
+	voutput, err := strconv.ParseInt(parts[1], 10, 64)
+	if err != nil {
+		t.Errorf("Failed to parse voutput: %v", err)
+		return
+	}
+
+	fmt.Println("Parsed txid:", txid)
+	fmt.Println("Parsed voutput:", voutput)
+
+	// 如果需要将 txid 转换回字节切片
+	decodedTxid, err := hexutil.Decode(txid)
+	if err != nil {
+		t.Errorf("Failed to decode txid: %v", err)
+		return
+	}
+	fmt.Println("Decoded txid:", hexutil.Encode(decodedTxid))
+	fmt.Println(bytes.Equal(decodedTxid, randbyte))
+	id := crypto.Convert(decodedTxid)
+	fmt.Println(hexutil.Encode(id[:]))
+
+}
+
+func TestFloatCompare(t *testing.T) {
+	a := TenYearRate
+	b := &pb.TxOutput{
+		Rate: float32(a),
+	}
+
+	fmt.Println(b.Rate)
+	fmt.Println(a == float64(b.Rate))
+
+	c := math.Abs(a-float64(b.Rate)) < epsilon
+	fmt.Println(c)
+	fmt.Println(epsilon)
 }

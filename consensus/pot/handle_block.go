@@ -152,7 +152,7 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 				return err
 			}
 
-			w.log.Debugf("[PoT]\tthe shared ancestor of fork is %s at %d,match %t", hexutil.Encode(ances.GetHeader().Hashes), ances.GetHeader().Height, bytes.Equal(c.GetHeader().Hashes, ances.GetHeader().Hashes))
+			w.log.Infof("[PoT]\tthe shared ancestor of fork is %s at %d,match %t", hexutil.Encode(ances.GetHeader().Hashes), ances.GetHeader().Height, bytes.Equal(c.GetHeader().Hashes, ances.GetHeader().Hashes))
 			//nowBranch, _, err := w.GetBranch(ances, currentblock)
 
 			forkBranch, _, err := w.GetBranch(ances, block)
@@ -169,12 +169,12 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 				return err
 			}
 
-			//for i := 0; i < len(nowBranch); i++ {
-			//	w.log.Errorf("[PoT]\tthe nowBranch at height %d: %s", nowBranch[i].GetHeader().ExecHeight, hexutil.Encode(nowBranch[i].Hash()))
-			//}
-			//for i := 0; i < len(forkBranch); i++ {
-			//	w.log.Errorf("[PoT]\tthe fork chain at height %d: %s", forkBranch[i].GetHeader().ExecHeight, hexutil.Encode(forkBranch[i].Hash()))
-			//}
+			for i := 0; i < len(nowBranch); i++ {
+				w.log.Errorf("[PoT]\tthe nowBranch at height %d: %s", nowBranch[i].GetHeader().Height, hexutil.Encode(nowBranch[i].Hash()))
+			}
+			for i := 0; i < len(forkBranch); i++ {
+				w.log.Errorf("[PoT]\tthe fork chain at height %d: %s", forkBranch[i].GetHeader().Height, hexutil.Encode(forkBranch[i].Hash()))
+			}
 
 			w1 := w.calculateChainWeight(ances, currentblock)
 			w2 := w.calculateChainWeight(ances, block)
@@ -187,6 +187,7 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 
 			flag, err = w.handleForkTx(nowBranch, forkBranch)
 			if err != nil {
+				w.log.Errorf("[PoT]\thandle fork tx error for %s", err)
 
 			}
 
@@ -214,6 +215,10 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 	} else {
 		flag, err = header.BasicVerify()
 		if !flag {
+			return err
+		}
+		flag, err = w.CheckBlockTxs(block)
+		if !flag && err != nil {
 			return err
 		}
 
@@ -245,7 +250,7 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 
 	done := make(chan struct{})
 	var doonce sync.Once
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
 	defer cancel()
 	go func() {
 		select {
@@ -268,6 +273,14 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 
 	w.log.Infof("[PoT]\tGet shared ancestor of block %s is %s at height %d", hexutil.Encode(block.Hash()), hexutil.Encode(ances.Hash()), ances.GetHeader().Height)
 
+	nowbranch, _, err := w.GetBranch(ances, current)
+	if err != nil {
+		w.log.Errorf("[PoT]\tGet branch error for: %s", err)
+		doonce.Do(func() {
+			close(done)
+		})
+		return err
+	}
 	branch, _, err := w.GetBranch(ances, block)
 	if err != nil {
 		w.log.Errorf("[PoT]\tGet branch error for: %s", err)
@@ -292,7 +305,7 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 	weightnow := w.calculateChainWeight(ances, current)
 	weightadvanced := w.calculateChainWeight(ances, block)
 
-	if weightnow.Cmp(weightadvanced) < 0 {
+	if weightnow.Cmp(weightadvanced) > 0 {
 		w.log.Infof("[PoT]\tthe current chain weight %d is greater than the fork chain weight %d", weightnow.Int64(), weightadvanced.Int64())
 		doonce.Do(func() {
 			close(done)
@@ -305,7 +318,11 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 	//for i := 0; i < len(branch); i++ {
 	//	w.log.Infof("[PoT]\tthe nowbranch at height %d: %s", branch[i].GetHeader().ExecHeight, hexutil.Encode(branch[i].Hash()))
 	//}
-
+	flag, err = w.handleForkTx(nowbranch, branch)
+	if err != nil {
+		w.log.Errorf("[PoT]\thandle fork tx error for %s", err)
+		return err
+	}
 	err = w.chainResetAdvanced(branch)
 	if err != nil {
 		w.log.Errorf("[PoT]\tchain reset error for %s", err)
@@ -576,7 +593,7 @@ func (w *Worker) handleForkTx(current []*types.Block, fork []*types.Block) (bool
 			err := w.chainReader.TryResetTxForBlock(curblock)
 			w.log.Info("reset tx for block", "height", curblock.GetHeader().Height)
 			if err != nil {
-				w.log.Info("try reset error at height ", curblock.GetHeader().Height)
+				w.log.Info("try reset error at height ", curblock.GetHeader().Height, " for ", err)
 				return false, err
 			}
 			err = w.chainReader.ResetTxForBlock(curblock)

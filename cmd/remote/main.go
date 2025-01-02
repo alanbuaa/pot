@@ -71,7 +71,7 @@ func (p *PoTexecutor) GetTxs(ctx context.Context, request *pb.GetTxRequest) (*pb
 
 	return &pb.GetTxResponse{
 		Start:  start,
-		End:    p.height - 1,
+		End:    p.height,
 		Blocks: execblock,
 	}, nil
 

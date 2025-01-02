@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 
 	"github.com/boltdb/bolt"
@@ -155,45 +156,45 @@ func (c *ChainReader) FindUnspentTransactions(address []byte) []*types.RawTx {
 	return unspentTxs
 }
 
-func (c *ChainReader) FindUTXO(address []byte) map[string]types.TxOutput {
+func (c *ChainReader) FindUTXO(address []byte) (map[string]types.TxOutput, error) {
 	utxos := make(map[string]types.TxOutput)
 
 	db := c.GetBoltDb()
-	err := db.View(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(types.UTXOBucket))
 		cursor := b.Cursor()
-
+		count := 0
 		for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
 
 			outs := types.DecodeByteToTxOutput(v)
+
 			if outs.IsLockedWithKey(address) {
+				count += 1
 				utxokey := string(k)
+
+				parts := strings.Split(utxokey, ":")
+
+				if len(parts) != 2 {
+					return fmt.Errorf("invalid utxokey format: %v", utxokey)
+				}
+				txid := parts[0]
+				_, err := hexutil.Decode(txid)
+				if err != nil {
+					return fmt.Errorf("failed to decode txid: %v", err)
+				}
+				fmt.Println(utxokey)
 				utxos[utxokey] = outs
 			}
+			b.Put(k, v)
 		}
-		//fmt.Println(count)
+
 		return nil
 	})
 	if err != nil {
-		return nil
+		return nil, err
 	}
 
-	return utxos
-}
-
-func (c *ChainReader) GetBalance(address []byte) int64 {
-	balance := int64(0)
-
-	utxos := c.FindUTXO(address)
-
-	for _, out := range utxos {
-		//for _, output := range utxo {
-		//	balance += output.Value
-		//}
-		balance += out.Value
-	}
-	return balance
-
+	return utxos, nil
 }
 
 func (c *ChainReader) FindAllUnspentOutputs() map[[32]byte]types.TxOutputs {
@@ -320,7 +321,7 @@ func (c *ChainReader) ResetTxForBlock(block *types.Block) error {
 
 			// delete txoutput of the rawtx
 			for i, output := range rawTx.TxOutput {
-				utxokey := fmt.Sprintf("%s:%d", rawTx.Txid, i)
+				utxokey := fmt.Sprintf("%s:%d", hexutil.Encode(rawTx.Txid[:]), i)
 				// delete the lockutxo in map
 				lockheight := block.GetHeader().Height + output.LockTime
 				if _, exist := c.lockUTXO[lockheight][utxokey]; exist {
@@ -337,7 +338,7 @@ func (c *ChainReader) ResetTxForBlock(block *types.Block) error {
 					if err != nil {
 						return err
 					}
-				}
+				} 
 			}
 
 			// add txinput corresponding output back to database
@@ -359,7 +360,7 @@ func (c *ChainReader) ResetTxForBlock(block *types.Block) error {
 									return fmt.Errorf("reset block for could not find tx output")
 								}
 								out := t.TxOutput[voutput]
-								utxokey := fmt.Sprintf("%s:%d", txid, voutput)
+								utxokey := fmt.Sprintf("%s:%d", hexutil.Encode(txid[:]), voutput)
 								out.BlockHeight = height
 								if block.GetHeader().Height >= height+out.LockTime {
 									err = b.Put([]byte(utxokey), out.EncodeToByte())
@@ -399,19 +400,19 @@ func (c *ChainReader) TryResetTxForBlock(block *types.Block) error {
 	defer c.sync.Unlock()
 	txs := block.GetRawTx()
 	db := c.GetBoltDb()
-	err := db.View(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(types.UTXOBucket))
 		for _, rawtx := range txs {
 			for i, output := range rawtx.TxOutput {
-				utxokey := fmt.Sprintf("%s:%d", rawtx.Txid, i)
+				utxokey := fmt.Sprintf("%s:%d", hexutil.Encode(rawtx.Txid[:]), i)
 				lockheight := block.GetHeader().Height + output.LockTime
-				if _, exist := c.lockUTXO[lockheight][utxokey]; !exist {
-					return fmt.Errorf("tx error for can't find corresponding utxo")
-				}
-
+				_, exist := c.lockUTXO[lockheight][utxokey]
 				outputbyte := b.Get([]byte(utxokey))
-				if outputbyte == nil {
-					return fmt.Errorf("tx error for can't find corresponding utxo ")
+				if outputbyte == nil && !exist {
+					return fmt.Errorf("utxo %s not exist", utxokey)
+				}
+				if outputbyte != nil {
+					b.Put([]byte(utxokey), output.EncodeToByte())
 				}
 			}
 
@@ -433,8 +434,8 @@ func (c *ChainReader) TryResetTxForBlock(block *types.Block) error {
 									return fmt.Errorf("reset block for could not find tx output")
 								}
 								out := t.TxOutput[voutput]
-								_ = fmt.Sprintf("%s:%d", txid, voutput)
-								out.BlockHeight = height
+								_ = fmt.Sprintf("%s:%d", hexutil.Encode(txid[:]), voutput)
+								//out.BlockHeight = height
 								if block.GetHeader().Height >= height+out.LockTime {
 									// err = b.Put([]byte(utxokey), out.EncodeToByte())
 									// if err != nil {
@@ -492,13 +493,14 @@ func (c *ChainReader) UpdateTxForBlock(block *types.Block) error {
 			if !rawTx.IsCoinBase() {
 				for _, input := range rawTx.TxInput {
 					// find if there is corresponding utxo in the utxo
-					utxokey := fmt.Sprintf("%s:%d", input.Txid, input.Voutput)
+					utxokey := fmt.Sprintf("%s:%d", hexutil.Encode(input.Txid[:]), input.Voutput)
 					outsBytes := b.Get([]byte(utxokey))
+
 					if outsBytes == nil {
-						return fmt.Errorf("update tx error for can't find corresponding utxo ")
+						return fmt.Errorf("update tx error for can't find corresponding utxo %s ", utxokey)
 					}
 					// TODO: add script check
-
+					fmt.Printf("use %s\n", utxokey)
 					// use utxo and burn
 					err := b.Delete([]byte(utxokey))
 					if err != nil {
@@ -509,20 +511,19 @@ func (c *ChainReader) UpdateTxForBlock(block *types.Block) error {
 
 			// add lock tx to the map
 			for i, output := range rawTx.TxOutput {
-				utxokey := fmt.Sprintf("%s:%d", rawTx.Txid, i)
+				utxokey := fmt.Sprintf("%s:%d", hexutil.Encode(rawTx.Txid[:]), i)
 				lockheight := height + output.LockTime
-				c.sync.Lock()
 
 				if _, exist := c.lockUTXO[lockheight]; !exist {
 					c.lockUTXO[lockheight] = make(map[string]*types.TxOutput)
 				}
 				output.BlockHeight = height
 				c.lockUTXO[lockheight][utxokey] = &output
-				c.sync.Unlock()
+
 			}
 		}
 		// find utxo can be unlocked and add to utxo bucket
-		c.sync.Lock()
+
 		if pendingUtxos, exist := c.lockUTXO[block.Header.Height]; exist {
 			for s, output := range pendingUtxos {
 				err := b.Put([]byte(s), output.EncodeToByte())
@@ -532,7 +533,7 @@ func (c *ChainReader) UpdateTxForBlock(block *types.Block) error {
 			}
 		}
 		delete(c.lockUTXO, block.Header.Height)
-		c.sync.Unlock()
+
 		return nil
 	})
 	if err != nil {
@@ -553,10 +554,12 @@ func (c *ChainReader) TryUpdateTxForBlock(block *types.Block) error {
 			if !rawTx.IsCoinBase() {
 				for _, input := range rawTx.TxInput {
 					// find if there is corresponding utxo in the utxo
-					utxokey := fmt.Sprintf("%s:%d", input.Txid, input.Voutput)
+					utxokey := fmt.Sprintf("%s:%d", hexutil.Encode(rawTx.Txid[:]), input.Voutput)
 					outsBytes := b.Get([]byte(utxokey))
 					if outsBytes == nil {
 						return fmt.Errorf("update tx error for can't find corresponding utxo ")
+					} else {
+						b.Put([]byte(utxokey), outsBytes)
 					}
 					// TODO: add script check
 

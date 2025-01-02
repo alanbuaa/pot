@@ -1,7 +1,6 @@
 package pot
 
 import (
-	bc_api "blockchain-crypto/blockchain_api"
 	mrpvss "blockchain-crypto/share/mrpvss/bls12381"
 	"blockchain-crypto/shuffle"
 	"blockchain-crypto/types/curve/bls12381"
@@ -9,7 +8,10 @@ import (
 	"blockchain-crypto/verifiable_draw"
 	"container/list"
 	"crypto/rand"
-	"encoding/json"
+	"fmt"
+	"math/big"
+	"os"
+
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/zzz136454872/upgradeable-consensus/config"
 	"github.com/zzz136454872/upgradeable-consensus/consensus/whirly/nodeController"
@@ -115,101 +117,113 @@ func (w *Worker) GetPeerQueue() chan *types.Block {
 
 func (w *Worker) CommitteeUpdate(height uint64) {
 
-	if height >= CommiteeDelay+Commiteelen {
-		committee := make([]string, Commiteelen)
-		selfaddress := make([]string, 0)
-		for i := uint64(0); i < Commiteelen; i++ {
-			block, err := w.chainReader.GetByHeight(height - CommiteeDelay - i)
-			if err != nil {
-				return
-			}
-			if block != nil {
-				header := block.GetHeader()
-				committee[i] = hexutil.Encode(header.PublicKey)
-				flag, _ := w.TryFindKey(crypto.Convert(header.Hash()))
-				if flag {
-					selfaddress = append(selfaddress, hexutil.Encode(header.PublicKey))
-				}
-			}
-		}
-		// potsignal := &simpleWhirly.PoTSignal{
-		// 	Epoch:               int64(epoch),
-		// 	Proof:               nil,
-		// 	ID:                  0,
-		// 	LeaderPublicAddress: committee[0],
-		// 	Committee:           committee,
-		// 	SelfPublicAddress:   selfaddress,
-		// 	CryptoElements:      nil,
-		// }
-		whilyConsensus := &config.WhirlyConfig{
-			Type:      "simple",
-			BatchSize: 2,
-			Timeout:   2,
-		}
+	// if height >= CommiteeDelay+Commiteelen {
+	// 	committee := make([]string, Commiteelen)
+	// 	selfaddress := make([]string, 0)
+	// 	for i := uint64(0); i < Commiteelen; i++ {
+	// 		block, err := w.chainReader.GetByHeight(height - CommiteeDelay - i)
+	// 		if err != nil {
+	// 			return
+	// 		}
+	// 		if block != nil {
+	// 			header := block.GetHeader()
+	// 			committee[i] = hexutil.Encode(header.PublicKey)
+	// 			flag, _ := w.TryFindKey(crypto.Convert(header.Hash()))
+	// 			if flag {
+	// 				selfaddress = append(selfaddress, hexutil.Encode(header.PublicKey))
+	// 			}
+	// 		}
+	// 	}
+	// 	// potsignal := &simpleWhirly.PoTSignal{
+	// 	// 	Epoch:               int64(epoch),
+	// 	// 	Proof:               nil,
+	// 	// 	ID:                  0,
+	// 	// 	LeaderPublicAddress: committee[0],
+	// 	// 	Committee:           committee,
+	// 	// 	SelfPublicAddress:   selfaddress,
+	// 	// 	CryptoElements:      nil,
+	// 	// }
+	// 	whilyConsensus := &config.WhirlyConfig{
+	// 		Type:      "simple",
+	// 		BatchSize: 2,
+	// 		Timeout:   2,
+	// 	}
 
-		consensus := config.ConsensusConfig{
-			Type:        "whirly",
-			ConsensusID: 1201,
-			Whirly:      whilyConsensus,
-			Nodes:       w.config.Nodes,
-			Topic:       w.config.Topic,
-			F:           w.config.F,
-		}
+	// 	consensus := config.ConsensusConfig{
+	// 		Type:        "whirly",
+	// 		ConsensusID: 1201,
+	// 		Whirly:      whilyConsensus,
+	// 		Nodes:       w.config.Nodes,
+	// 		Topic:       w.config.Topic,
+	// 		F:           w.config.F,
+	// 	}
 
-		sharding1 := nodeController.PoTSharding{
-			Name:                hexutil.EncodeUint64(1),
-			ParentSharding:      nil,
-			LeaderPublicAddress: committee[0],
-			Committee:           committee,
-			CryptoElements:      bc_api.CommitteeConfig{},
-			SubConsensus:        consensus,
-		}
+	// 	sharding1 := nodeController.PoTSharding{
+	// 		Name:                hexutil.EncodeUint64(1),
+	// 		ParentSharding:      nil,
+	// 		LeaderPublicAddress: committee[0],
+	// 		Committee:           committee,
+	// 		CryptoElements:      bc_api.CommitteeConfig{},
+	// 		SubConsensus:        consensus,
+	// 	}
 
-		//w.log.Error(len(committee))
+	// 	//w.log.Error(len(committee))
 
-		//sharding2 := simpleWhirly.PoTSharding{
-		//	Name:                "hello_world",
-		//	ParentSharding:      nil,
-		//	LeaderPublicAddress: committee[0],
-		//	Committee:           committee,
-		//	CryptoElements:      nil,
-		//	SubConsensus:        consensus,
-		//}
-		//shardings := []simpleWhirly.PoTSharding{sharding1, sharding2}
+	// 	//sharding2 := simpleWhirly.PoTSharding{
+	// 	//	Name:                "hello_world",
+	// 	//	ParentSharding:      nil,
+	// 	//	LeaderPublicAddress: committee[0],
+	// 	//	Committee:           committee,
+	// 	//	CryptoElements:      nil,
+	// 	//	SubConsensus:        consensus,
+	// 	//}
+	// 	//shardings := []simpleWhirly.PoTSharding{sharding1, sharding2}
 
-		shardings := []nodeController.PoTSharding{sharding1}
-		potsignal := &nodeController.PoTSignal{
-			Epoch:             int64(height),
-			Proof:             make([]byte, 0),
-			ID:                0,
-			SelfPublicAddress: selfaddress,
-			Shardings:         shardings,
-		}
-		b, err := json.Marshal(potsignal)
+	// 	shardings := []nodeController.PoTSharding{sharding1}
+	// 	potsignal := &nodeController.PoTSignal{
+	// 		Epoch:             int64(height),
+	// 		Proof:             make([]byte, 0),
+	// 		ID:                0,
+	// 		SelfPublicAddress: selfaddress,
+	// 		Shardings:         shardings,
+	// 	}
+	// 	b, err := json.Marshal(potsignal)
+	// 	if err != nil {
+	// 		w.log.WithError(err)
+	// 		return
+	// 	}
+	// 	if w.potSignalChan != nil {
+	// 		w.potSignalChan <- b
+	// 	}
+	// }
+	epoch := height
+	if epoch > 1 && w.ID == 1 {
+		block, err := w.chainReader.GetByHeight(epoch - 1)
 		if err != nil {
-			w.log.WithError(err)
 			return
 		}
-		if w.potSignalChan != nil {
-			w.potSignalChan <- b
+		header := block.GetHeader()
+		fill, err := os.OpenFile("bci", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
+		if err != nil {
+			fmt.Println(err)
 		}
+
+		txs := block.GetRawTx()
+		coinbasetx := txs[0]
+		if coinbasetx.IsCoinBase() {
+			fill.WriteString(fmt.Sprintf("[%d]%s\n", epoch, hexutil.Encode(header.Hash())))
+			fill.WriteString(fmt.Sprintf("[%d]%s\n", epoch, hexutil.Encode(coinbasetx.Txid[:])))
+			fill.WriteString(fmt.Sprintf("[%d]%s\n", epoch, hexutil.Encode(coinbasetx.TxOutput[0].Address)))
+			// test, _ := hexutil.Decode(hexutil.Encode(coinbasetx.TxOutput[0].Address))
+			// fmt.Println(bytes.Equal(test, coinbasetx.TxOutput[0].Address))
+			fill.WriteString(fmt.Sprintf("[%d]%s\n", epoch, hexutil.EncodeBig(big.NewInt(coinbasetx.TxOutput[0].Value))))
+			fill.WriteString(fmt.Sprintf("\n"))
+		}
+		if err != nil {
+			fmt.Println(err)
+		}
+		fill.Close()
 	}
-	//if epoch > 10 && w.ID == 1 {
-	//	block, err := w.chainReader.GetByHeight(epoch - 1)
-	//	if err != nil {
-	//		return
-	//	}
-	//	header := block.GetHeader()
-	//	fill, err := os.OpenFile("difficulty", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
-	//	if err != nil {
-	//		fmt.Println(err)
-	//	}
-	//	_, err = fill.WriteString(fmt.Sprintf("%d\Commitees", header.Difficulty.Int64()))
-	//	if err != nil {
-	//		fmt.Println(err)
-	//	}
-	//	fill.Close()
-	//}
 }
 
 type queue = list.List
@@ -448,7 +462,7 @@ func (w *Worker) GetBackupCommitee(epoch uint64) ([]string, []string) {
 				header := block.GetHeader()
 				commiteekey := header.PublicKey
 				commitee = append(commitee, hexutil.Encode(commiteekey))
-				flag, _ := w.TryFindKey(crypto.Convert(header.Hash()))
+				flag, _ := w.TryFindCommiteeKey(crypto.Convert(header.Hash()))
 				if flag {
 					selfAddr = append(selfAddr, hexutil.Encode(header.PublicKey))
 				}
@@ -508,7 +522,7 @@ func (w *Worker) GenerateCryptoSetFromLocal(height uint64) (types.CryptoElement,
 	var committeePKList []*bls12381.PointG1 = nil
 	// 如果处于置换阶段，则进行置换
 	if inShuffleStage(height) {
-		newShuffleProof,_ = shuffle.SimpleShuffle(w.Cryptoset.LocalSRS, w.Cryptoset.PrevShuffledPKList, w.Cryptoset.PrevRCommitForShuffle)
+		newShuffleProof, _ = shuffle.SimpleShuffle(w.Cryptoset.LocalSRS, w.Cryptoset.PrevShuffledPKList, w.Cryptoset.PrevRCommitForShuffle)
 	}
 	// 如果处于抽签阶段，则进行抽签
 	if inDrawStage(height) {

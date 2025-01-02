@@ -12,6 +12,7 @@ enum MessageType{
   PoT_Proof = 5;
   SendDci_Request = 6;
   DevastateDci_Request = 7;
+  Client_Transaction = 8;
 }
 message Block {
   Header Header = 1;
@@ -103,11 +104,16 @@ enum TxDataType{
 }
 
 enum TxType{
-    GenericTransaction = 0;
-    CreateLockTransaction = 1;
-    LockTransferTranscation = 2;
+    CreateLockTransaction = 0;
+    LockTransferTranscation = 1;
+    NonLockTransferTranscation = 2;
     DevasteTransaction = 3;
 
+}
+
+message ClientTransaction{
+  TxType TxType = 1;
+  RawTxData Tx = 2;
 }
 
 message TxData {
@@ -131,6 +137,11 @@ message TxOutput{
   bytes   ScriptPk   = 4;
   int32   BciType    = 5;
   uint64  LockTime   = 6;
+  bytes   Proof  = 7;
+  float   Rate = 8;
+  bytes   Data = 9;
+  uint64  BurnLock = 10;
+  uint64  CreatedAt = 11;  
 }
 
 
@@ -189,6 +200,10 @@ service DciExector{
   rpc   GetBalance(GetBalanceRequest)     returns (GetBalanceResponse)    {}
   rpc   DevastateDci(DevastateDciRequest) returns (DevastateDciResponse)  {}
   rpc   VerifyUTXO(VerifyUTXORequest)     returns (VerifyUTXOResponse)    {}
+  rpc   CreateLockTransaction(CreateLockTransactionRequest) returns (CreateLockTransactionResponse) {}
+  rpc   CreateLockTransferTransaction(CreateLockTransferTransactionRequest) returns (CreateLockTransferTransactionResponse) {}
+  rpc   CreateDevastateTransaction(CreateDevastateTransactionRequest) returns (CreateDevastateTransactionResponse) {}
+  rpc   CreateNonLockTransferTransaction(CreateNonLockTransferTransactionRequest) returns (CreateNonLockTransferTransactionResponse) {}
 }
 
 message DciReward{
@@ -202,6 +217,7 @@ message DciProof {
   uint64 Height = 1 ;
   bytes BlockHash = 2;
   bytes  TxHash = 3;
+  int32 BciType = 4;
 }
 
 message SendDciRequest{
@@ -271,4 +287,46 @@ message CoinbaseProof{
   bytes TxHash = 2;
   int64 Amount = 3;
   int32 BciType = 4;
+}
+
+message CreateLockTransactionRequest{
+    RawTxData Tx = 1;
+}
+
+message CreateLockTransactionResponse{
+  RawTxData Tx = 1;
+  bool IsSuccess = 2;
+}
+
+message CreateLockTransferTransactionRequest{
+  RawTxData Tx = 1;
+  bytes To = 2;
+  int64 Amount = 3;
+}
+
+message CreateLockTransferTransactionResponse{
+  RawTxData Tx = 1;
+  bool IsSuccess = 2;
+}
+
+message CreateDevastateTransactionRequest{
+  RawTxData Tx = 1;
+  bytes To = 2;
+  int64 Amount = 3;
+}
+
+message CreateDevastateTransactionResponse{
+  RawTxData Tx = 1;
+  bool IsSuccess = 2;
+}
+
+message CreateNonLockTransferTransactionRequest{
+  RawTxData Tx = 1;
+  bytes To = 2;
+  int64 Amount = 3;
+}
+
+message CreateNonLockTransferTransactionResponse{
+  RawTxData Tx = 1;
+  bool IsSuccess = 2;
 }

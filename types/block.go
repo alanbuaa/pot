@@ -21,21 +21,22 @@ type ConsensusBlock interface {
 }
 
 type Header struct {
-	Height        uint64
-	ParentHash    []byte
-	UncleHash     [][]byte
-	Mixdigest     []byte
-	Difficulty    *big.Int
-	Nonce         int64
-	Timestamp     time.Time
-	PoTProof      [][]byte
-	Address       int64
-	PeerId        string
-	TxHash        []byte
-	ExeHash       []byte
-	Hashes        []byte
-	PublicKey     []byte
-	CryptoElement CryptoElement
+	Height         uint64
+	ParentHash     []byte
+	UncleHash      [][]byte
+	Mixdigest      []byte
+	Difficulty     *big.Int
+	Nonce          int64
+	Timestamp      time.Time
+	PoTProof       [][]byte
+	Address        int64
+	PeerId         string
+	TxHash         []byte
+	ExeHash        []byte
+	Hashes         []byte
+	PublicKey      []byte
+	CryptoElement  CryptoElement
+	CommiteePubkey []byte
 }
 
 type Block struct {
@@ -292,20 +293,20 @@ func ToHeader(header *pb.Header) *Header {
 	//var Evidence Evidence
 	//Evidence.FromByte(header.Evidence)
 	h := &Header{
-		Height:     header.GetHeight(),
-		ParentHash: header.GetParentHash(),
-		UncleHash:  header.GetUncleHash(),
-
-		Mixdigest:  header.GetMixdigest(),
-		Difficulty: difficulty,
-		Nonce:      header.GetNonce(),
-		Timestamp:  timestamp,
-		PoTProof:   header.PoTProof,
-		Address:    header.GetAddress(),
-		Hashes:     header.GetHashes(),
-		PeerId:     header.GetPeerId(),
-		PublicKey:  header.GetPubkey(),
-		TxHash:     header.GetTxhash(),
+		Height:         header.GetHeight(),
+		ParentHash:     header.GetParentHash(),
+		UncleHash:      header.GetUncleHash(),
+		Mixdigest:      header.GetMixdigest(),
+		Difficulty:     difficulty,
+		Nonce:          header.GetNonce(),
+		Timestamp:      timestamp,
+		PoTProof:       header.PoTProof,
+		Address:        header.GetAddress(),
+		Hashes:         header.GetHashes(),
+		PeerId:         header.GetPeerId(),
+		PublicKey:      header.GetPubkey(),
+		TxHash:         header.GetTxhash(),
+		CommiteePubkey: header.GetCommiteePubkey(),
 	}
 	return h
 }
@@ -344,19 +345,20 @@ func (b *Header) ToProto() *pb.Header {
 	}
 
 	return &pb.Header{
-		Height:     b.Height,
-		ParentHash: b.ParentHash,
-		UncleHash:  b.UncleHash,
-		Mixdigest:  b.Mixdigest,
-		Difficulty: b.Difficulty.Bytes(),
-		Nonce:      b.Nonce,
-		Timestamp:  ts,
-		PoTProof:   b.PoTProof,
-		Address:    b.Address,
-		Hashes:     b.Hashes,
-		PeerId:     b.PeerId,
-		Pubkey:     b.PublicKey,
-		Txhash:     b.TxHash,
+		Height:         b.Height,
+		ParentHash:     b.ParentHash,
+		UncleHash:      b.UncleHash,
+		Mixdigest:      b.Mixdigest,
+		Difficulty:     b.Difficulty.Bytes(),
+		Nonce:          b.Nonce,
+		Timestamp:      ts,
+		PoTProof:       b.PoTProof,
+		Address:        b.Address,
+		Hashes:         b.Hashes,
+		PeerId:         b.PeerId,
+		Pubkey:         b.PublicKey,
+		Txhash:         b.TxHash,
+		CommiteePubkey: b.CommiteePubkey,
 	}
 }
 

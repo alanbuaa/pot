@@ -9,19 +9,19 @@ nodes:
     rpc_address: 127.0.0.1:9081
     dcirpcAddress : 127.0.0.1:9867
     private_key_path: keys/r2.key
-  # - id: 2
-  #   address: 127.0.0.1:8082
-  #   rpc_address: 127.0.0.1:9082
-  #   dcirpcAddress : 127.0.0.1:9868
-  #   private_key_path: keys/r3.key
-  # - id: 3
-  #   address: 127.0.0.1:8083
-  #   rpc_address: 127.0.0.1:9083
-  #   dcirpcAddress : 127.0.0.1:9869
-  #   private_key_path: keys/r4.key
+  - id: 2
+    address: 127.0.0.1:8082
+    rpc_address: 127.0.0.1:9082
+    dcirpcAddress : 127.0.0.1:9868
+    private_key_path: keys/r3.key
+  - id: 3
+    address: 127.0.0.1:8083
+    rpc_address: 127.0.0.1:9083
+    dcirpcAddress : 127.0.0.1:9869
+    private_key_path: keys/r4.key
 public_key_path: keys/pub.key
 
-total: 2
+total: 4
 
 log:
   level: info
@@ -69,7 +69,7 @@ consensus:
   pot:
     snum : 2
     sysPara: 2
-    vdf0Iteration: 300000
+    vdf0Iteration: 200000
     vdf1Iteration: 160000
     excutorAddress: 127.0.0.1:9877
     batchsize: 100

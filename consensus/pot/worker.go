@@ -25,7 +25,6 @@ import (
 	"golang.org/x/exp/rand"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/protobuf/proto"
 
 	"net"
 	"os"
@@ -42,7 +41,7 @@ const (
 	NoParentD          = 2
 	Batchsize          = 100
 	Selectn            = 1
-	TotalReward        = 10000
+	TotalReward        = 65536
 	BackupCommiteeSize = 64
 	ConfirmDelay       = 6
 	CandidateKeyLen    = 32 // candidate pubkey len
@@ -58,19 +57,20 @@ type Worker struct {
 	epoch  uint64
 
 	// vdf work
-	timestamp      time.Time
-	vdf0           *types.VDF
-	vdf0Chan       chan *types.VDF0res
-	vdf1           []*types.VDF
-	vdf1Chan       chan *types.VDF0res
-	vdfChecker     *vdf.Vdf
-	abort          *Abortcontrol
-	wg             *sync.WaitGroup
-	workFlag       bool
-	blockKeyMap    map[[crypto.Hashlen]byte][]byte
-	executeheight  uint64
-	mempool        *Mempool
-	chainresetflag bool
+	timestamp       time.Time
+	vdf0            *types.VDF
+	vdf0Chan        chan *types.VDF0res
+	vdf1            []*types.VDF
+	vdf1Chan        chan *types.VDF0res
+	vdfChecker      *vdf.Vdf
+	abort           *Abortcontrol
+	wg              *sync.WaitGroup
+	workFlag        bool
+	blockKeyMap     map[[crypto.Hashlen]byte][]byte
+	CommitteeKeyMap map[[crypto.Hashlen]byte][]byte
+	executeheight   uint64
+	mempool         *Mempool
+	chainresetflag  bool
 
 	// rand seed
 	rand         *rand.Rand
@@ -125,6 +125,7 @@ func NewWorker(id int64, config *config.ConsensusConfig, logger *logrus.Entry, b
 
 	peer := make(chan *types.Block, 5)
 	keyblockmap := make(map[[crypto.Hashlen]byte][]byte)
+	commiteemap := make(map[[crypto.Hashlen]byte][]byte)
 	mempool := NewMempool()
 	Commitee := make([][]string, 0)
 	BackupCommitee := make([]string, BackupCommiteeSize)
@@ -155,15 +156,16 @@ func NewWorker(id int64, config *config.ConsensusConfig, logger *logrus.Entry, b
 		mempool:      mempool,
 		blockStorage: bst,
 		//committee:    orderedmap.NewOrderedMap(),
-		vdfChecker:     vdf.New("wesolowski_rust", []byte(""), potconfig.Vdf0Iteration, id),
-		chainReader:    NewChainReader(bst),
-		PeerId:         engine.GetPeerID(),
-		workFlag:       false,
-		blockKeyMap:    keyblockmap,
-		Commitee:       Commitee,
-		CommiteeNum:    int32(1),
-		BackupCommitee: BackupCommitee,
-		chainresetflag: false,
+		vdfChecker:      vdf.New("wesolowski_rust", []byte(""), potconfig.Vdf0Iteration, id),
+		chainReader:     NewChainReader(bst),
+		PeerId:          engine.GetPeerID(),
+		workFlag:        false,
+		blockKeyMap:     keyblockmap,
+		CommitteeKeyMap: commiteemap,
+		Commitee:        Commitee,
+		CommiteeNum:     int32(1),
+		BackupCommitee:  BackupCommitee,
+		chainresetflag:  false,
 	}
 	rpcserver := grpc.NewServer()
 	pb.RegisterDciExectorServer(rpcserver, w)
@@ -318,7 +320,6 @@ func (w *Worker) OnGetVdf0Response() {
 			// 	w.simpleLeaderUpdate(parentblock)
 			// }
 			w.CommitteeUpdate(epoch)
-
 			difficulty := w.calcDifficulty(parentblock, uncleblock)
 			w.startWorking()
 			w.abort = NewAbortcontrol()
@@ -347,9 +348,11 @@ func (w *Worker) mine(epoch uint64, vdf0res []byte, nonce int64, workerid int, a
 	defer w.setWorkFlagFalse()
 	w.log.Infof("[PoT]\tepoch %d:workerid %d start to mine", epoch, workerid)
 
-	privkey := crypto.GenerateKey()
+	privkey, _ := crypto.GeneratePqcKey()
 	pubkeybyte := privkey.PublicKeyBytes()
-	coinbasetx := w.GenerateCoinbaseTxWithoutMinerKey(dcirewards, privkey, TotalReward)
+
+	totalreward := CalcTotalReward(epoch)
+	coinbasetx := w.GenerateCoinbaseTxWithoutMinerKey(dcirewards, privkey, totalreward)
 	coinbaseproofs := coinbasetx.CoinbaseProofs
 	coinbaseProofsbyte := CoinbaseProofToBytes(coinbaseproofs)
 	mixdigest := w.calcMixdigest(epoch, parentblock, uncleblock, difficulty, w.PeerId, pubkeybyte, coinbaseProofsbyte)
@@ -383,7 +386,7 @@ func (w *Worker) mine(epoch uint64, vdf0res []byte, nonce int64, workerid int, a
 			if tmp.Cmp(target) >= 0 {
 
 				//block := w.createNilBlock(epoch, parentblock, uncleblock, difficulty, mixdigest, nonce, vdf0res, res1)
-				w.log.Infof("[PoT]\tepoch %d:workerid %d fail to find a %d block %v", epoch, workerid, difficulty.Int64(), tmp.Bytes())
+				w.log.Infof("[PoT]\tepoch %d: workerid %d fail to find a %d block %s", epoch, workerid, difficulty.Int64(), hexutil.Encode(tmp.Bytes()))
 				//w.blockStorage.Put(block)
 
 				nonce += 1
@@ -416,9 +419,9 @@ func (w *Worker) mine(epoch uint64, vdf0res []byte, nonce int64, workerid int, a
 			nonce = rand.Int63()
 			tmp.SetInt64(nonce)
 			noncebyte := tmp.Bytes()
-			privkey = crypto.GenerateKey()
+			privkey, _ = crypto.GeneratePqcKey()
 			pubkey2byte := privkey.PublicKeyBytes()
-			coinbasetx = w.GenerateCoinbaseTxWithoutMinerKey(dcirewards, privkey, TotalReward)
+			coinbasetx = w.GenerateCoinbaseTxWithoutMinerKey(dcirewards, privkey, totalreward)
 			coinbaseproofs2 := coinbasetx.CoinbaseProofs
 			coinbaseProofsbyte2 := CoinbaseProofToBytes(coinbaseproofs2)
 			mix2digest := w.calcMixdigest(epoch, parentblock, uncleblock, difficulty, w.PeerId, pubkey2byte, coinbaseProofsbyte2)
@@ -471,6 +474,25 @@ func (w *Worker) createBlockWithoutKey(epoch uint64, parentBlock *types.Block,
 
 	Txs := make([]*types.Tx, 0)
 	for _, rawtx := range rawtxs {
+		if err := w.checkLockTransaction(rawtx); err == nil {
+			txoutput := &rawtx.TxOutput[0]
+			txoutput.CreatedAt = epoch
+			if math.Abs(txoutput.Rate-float64(0)) < epsilon && txoutput.BurnLock != 0 {
+				yeargap := txoutput.BurnLock - epoch
+				rate := float64(0)
+				if yeargap/TenYears >= 1 {
+					rate = TenYearRate
+
+				} else if yeargap/TenYears < 1 && yeargap/ThreeYears >= 1 {
+					rate = ThreeYearRate
+				} else if yeargap/ThreeYears < 1 && yeargap/OneYear >= 1 {
+					rate = OneYearRate
+				} else if yeargap/OneYear < 1 && yeargap/HalfYear >= 1 {
+					rate = HalfYearRate
+				}
+				txoutput.Rate = rate
+			}
+		}
 		//fmt.Println(hexutil.Encode(rawtx.Txid[:]), 123456)
 		txbyte, err := rawtx.EncodeToByte()
 		if err != nil {
@@ -504,7 +526,7 @@ func (w *Worker) createBlockWithoutKey(epoch uint64, parentBlock *types.Block,
 		ExeHeaders: exeheader,
 	}
 }
-func (w *Worker) CompleteBlock(emptyblock *types.Block, vdf0res []byte, vdf1res []byte, coinbasetx *types.RawTx, mixdigest []byte, privkey *crypto.PrivateKey) *types.Block {
+func (w *Worker) CompleteBlock(emptyblock *types.Block, vdf0res []byte, vdf1res []byte, coinbasetx *types.RawTx, mixdigest []byte, privkey *crypto.PqcKey) *types.Block {
 	vdf0rescopy := make([]byte, len(vdf0res))
 	copy(vdf0rescopy, vdf0res)
 	vdf1rescopy := make([]byte, len(vdf1res))
@@ -512,7 +534,7 @@ func (w *Worker) CompleteBlock(emptyblock *types.Block, vdf0res []byte, vdf1res 
 	PotProof := [][]byte{vdf0rescopy, vdf1rescopy}
 
 	block := emptyblock
-	cointx := w.CompleteCoinbaseTx(vdf1res, coinbasetx)
+	cointx := w.CompleteCoinbaseTx(vdf1res, coinbasetx, emptyblock.Header.Height)
 	txs := make([]*types.Tx, 0)
 	txs = append(txs, cointx)
 	txs = append(txs, emptyblock.Txs...)
@@ -526,13 +548,19 @@ func (w *Worker) CompleteBlock(emptyblock *types.Block, vdf0res []byte, vdf1res 
 	block.Header.TxHash = txhash
 
 	block.Header.Hashes = block.Header.Hash()
-	w.SetKeyBlockMap(privkey.Private(), crypto.Convert(block.Header.Hash()))
+	w.SetBlockKeyMap(privkey.PrivateKeyBytes(), crypto.Convert(block.Header.Hash()))
+
+	commiteekey := crypto.GenerateKey()
+	keybyte := commiteekey.PublicKeyBytes()
+	block.Header.CommiteePubkey = keybyte
+	w.SetCommiteeKeyMap(commiteekey.Private(), crypto.Convert(block.Header.Hash()))
 
 	return block
 }
-func (w *Worker) CompleteCoinbaseTx(vdf1res []byte, coinbasetx *types.RawTx) *types.Tx {
+func (w *Worker) CompleteCoinbaseTx(vdf1res []byte, coinbasetx *types.RawTx, height uint64) *types.Tx {
 	coinbaseproofs := coinbasetx.CoinbaseProofs
 	selectproofs := make(map[int32][]*types.CoinbaseProof)
+	totalreward := CalcTotalReward(height)
 	if len(coinbaseproofs) != 0 {
 		groupsdata := groupByType(coinbaseproofs)
 		for _, proofs := range groupsdata {
@@ -573,11 +601,11 @@ func (w *Worker) CompleteCoinbaseTx(vdf1res []byte, coinbasetx *types.RawTx) *ty
 			for _, proof := range proofs {
 				txout := types.TxOutput{
 					Address:  proof.Address,
-					Value:    int64(math.Floor(float64(TotalReward) * rate / float64(lenproofs))),
+					Value:    int64(math.Floor(float64(totalreward) * rate / float64(lenproofs))),
 					Interest: 0,
 					ScriptPk: nil,
 					Proof:    nil,
-					LockTime: 144,
+					LockTime: CoinbaseLock,
 					BciType:  bcitype,
 					Data:     nil,
 				}
@@ -642,8 +670,9 @@ func (w *Worker) createBlock(epoch uint64, parentBlock *types.Block, uncleBlock 
 	privateKey := crypto.GenerateKey()
 	publicKeyBytes := privateKey.PublicKeyBytes()
 	//publicKeyBytes32 := crypto.Convert(publicKeyBytes)
+	totalreward := CalcTotalReward(epoch)
 
-	coinbasetx := w.GenerateCoinbaseTx(publicKeyBytes, vdf0res, TotalReward)
+	coinbasetx := w.GenerateCoinbaseTx(publicKeyBytes, vdf0res, totalreward)
 	Txs := []*types.Tx{coinbasetx}
 	rawtxs := w.mempool.GetRawTx()
 	for _, rawtx := range rawtxs {
@@ -681,7 +710,7 @@ func (w *Worker) createBlock(epoch uint64, parentBlock *types.Block, uncleBlock 
 	}
 
 	h.Hashes = h.Hash()
-	w.SetKeyBlockMap(privateKey.Private(), crypto.Convert(h.Hash()))
+	w.SetBlockKeyMap(privateKey.Private(), crypto.Convert(h.Hash()))
 
 	return &types.Block{
 		Header:     h,
@@ -795,7 +824,7 @@ func (w *Worker) createNilBlock(epoch uint64, parentBlock *types.Block, uncleBlo
 	}
 	h.Hashes = h.Hash()
 
-	w.SetKeyBlockMap(privateKey.Private(), crypto.Convert(h.Hash()))
+	w.SetBlockKeyMap(privateKey.Private(), crypto.Convert(h.Hash()))
 
 	return &types.Block{
 		Header: h,
@@ -803,15 +832,32 @@ func (w *Worker) createNilBlock(epoch uint64, parentBlock *types.Block, uncleBlo
 	}
 }
 
-func (w *Worker) SetKeyBlockMap(privatekey []byte, blockhash [crypto.Hashlen]byte) {
+func (w *Worker) SetBlockKeyMap(privatekey []byte, blockhash [crypto.Hashlen]byte) {
 	w.rwmutex.Lock()
 	defer w.rwmutex.Unlock()
 	w.blockKeyMap[blockhash] = privatekey
 }
 
-func (w *Worker) TryFindKey(blockhash [crypto.PrivateKeyLen]byte) (bool, []byte) {
+func (w *Worker) TryFindKey(blockhash [crypto.Hashlen]byte) (bool, []byte) {
 	w.rwmutex.RLock()
 	prikey := w.blockKeyMap[blockhash]
+	w.rwmutex.RUnlock()
+	if prikey != nil {
+		return true, prikey
+	} else {
+		return false, nil
+	}
+}
+
+func (w *Worker) SetCommiteeKeyMap(privatekey []byte, blockhash [crypto.Hashlen]byte) {
+	w.rwmutex.Lock()
+	defer w.rwmutex.Unlock()
+	w.CommitteeKeyMap[blockhash] = privatekey
+}
+
+func (w *Worker) TryFindCommiteeKey(blockhash [crypto.Hashlen]byte) (bool, []byte) {
+	w.rwmutex.RLock()
+	prikey := w.CommitteeKeyMap[blockhash]
 	w.rwmutex.RUnlock()
 	if prikey != nil {
 		return true, prikey
@@ -1111,12 +1157,21 @@ func (w *Worker) handleBlockExecutedHeader(block *types.Block) error {
 }
 
 func (w *Worker) handleBlockRawTx(block *types.Block) error {
-	//w.log.Errorf("len of rawtx is %d", len(block.GetRawTx()))
-	//if len(block.GetRawTx()) != 0 {
-	//	fmt.Println(hexutil.Encode(block.GetRawTx()[0].Txid[:]))
-	//}
 
 	txs := block.GetRawTx()
+	//
+	if len(block.GetRawTx()) != 0 {
+		//fmt.Println(hexutil.Encode(block.GetRawTx()[0].Txid[:]))
+	} else if len(txs) == 0 && block.Header.Height != 0 {
+		return fmt.Errorf("block %s at %d has no tx", block.Hash(), block.Header.Height)
+	} else {
+		return nil
+	}
+
+	err := w.chainReader.UpdateTxForBlock(block)
+	if err != nil {
+		return err
+	}
 	for _, tx := range txs {
 		if tx.IsCoinBase() {
 			dciproofs := tx.CoinbaseProofs
@@ -1125,11 +1180,10 @@ func (w *Worker) handleBlockRawTx(block *types.Block) error {
 				fmt.Println(hexutil.Encode(tx.Txid[:]), tx.TxOutput[1].Value)
 			}
 		}
+
 	}
-	err := w.chainReader.UpdateTxForBlock(block)
-	if err != nil {
-		return err
-	}
+	w.mempool.MarkRawTxProposed(txs)
+
 	if block.Header.Height > ConfirmDelay {
 		block, err := w.chainReader.GetByHeight(block.Header.Height - ConfirmDelay)
 		if err != nil {
@@ -1137,31 +1191,33 @@ func (w *Worker) handleBlockRawTx(block *types.Block) error {
 		}
 		rawtxs := block.GetRawTx()
 		for _, tx := range rawtxs {
-			if !tx.IsCoinBase() {
-				txid := tx.Txid
-				transactionbyte, ok := w.mempool.rawmap[txid]
-				if !ok {
-					return fmt.Errorf("handle block raw tx error for tx %s does not exist in mempool", hexutil.Encode(txid[:]))
-				}
-				ptx := &pb.Transaction{
-					Type:    pb.TransactionType_NORMAL,
-					Payload: transactionbyte,
-				}
+			if tx.IsCoinBase() {
 
-				btx, err := proto.Marshal(ptx)
-				if err != nil {
-					return err
-				}
-
-				sharding := []byte(hexutil.EncodeUint64(1))
-				request := &pb.Request{
-					Tx:       btx,
-					Sharding: sharding,
-				}
-				w.Engine.UpperConsensus.GetRequestEntrance() <- request
 			}
-		}
+			// 	if !tx.IsCoinBase() {
+			// 		txid := tx.Txid
+			// 		transactionbyte, ok := w.mempool.rawmap[txid]
+			// 		if !ok {
+			// 			return fmt.Errorf("handle block raw tx error for tx %s does not exist in mempool", hexutil.Encode(txid[:]))
+			// 		}
+			// 		ptx := &pb.Transaction{
+			// 			Type:    pb.TransactionType_NORMAL,
+			// 			Payload: transactionbyte,
+			// 		}
 
+			// 		btx, err := proto.Marshal(ptx)
+			// 		if err != nil {
+			// 			return err
+			// 		}
+
+			// 		sharding := []byte(hexutil.EncodeUint64(1))
+			// 		request := &pb.Request{
+			// 			Tx:       btx,
+			// 			Sharding: sharding,
+			// 		}
+			// 		w.Engine.UpperConsensus.GetRequestEntrance() <- request
+			// 	}
+		}
 	}
 
 	return nil

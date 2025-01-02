@@ -10,3 +10,7 @@ func TestNewSet(t *testing.T) {
 	fmt.Println(set.Contains(4))
 	fmt.Println(set.Contains(1))
 }
+
+func TestFilePath(t *testing.T) {
+	fmt.Println(GetCurrentAbPathByCaller())
+}

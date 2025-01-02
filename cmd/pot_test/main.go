@@ -2,14 +2,15 @@ package main
 
 import (
 	"fmt"
-	"github.com/zzz136454872/upgradeable-consensus/config"
-	"github.com/zzz136454872/upgradeable-consensus/logging"
-	"github.com/zzz136454872/upgradeable-consensus/node"
 	"log"
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"syscall"
+
+	"github.com/zzz136454872/upgradeable-consensus/config"
+	"github.com/zzz136454872/upgradeable-consensus/logging"
+	"github.com/zzz136454872/upgradeable-consensus/node"
 )
 
 var (
@@ -75,6 +76,9 @@ func main() {
 	for i := int64(0); i < int64(len(cfg.Nodes)); i++ {
 		go func(index int64) {
 			if cfg.Nodes[index] != nil {
+				// if index == 3 {
+				// 	time.Sleep(100 * time.Second)
+				// }
 				nodes[index] = node.NewNode(cfg.Nodes[index].ID)
 			}
 		}(i)

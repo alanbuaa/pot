@@ -78,7 +78,7 @@ func ExecCmdAffinity(command string, ctrl *Controller) []byte {
 	commandAffinity := fmt.Sprintf("taskset -pc %d %d", ctrl.CpuNo, ctrl.Pid)
 	cmdAffinity := exec.Command("bash", "-c", commandAffinity)
 	if err := cmdAffinity.Start(); err != nil {
-		fmt.Printf("cmdAffinity.Start: %v\n", err)
+		//fmt.Printf("cmdAffinity.Start: %v\n", err)
 	}
 
 	output, err := io.ReadAll(stdout) // 读取输出结果
@@ -105,7 +105,7 @@ func ExecWesolowskiVDFAffinity(challenge []byte, iterations int, ctrl *Controlle
 	tasksetcmd := exec.Command("bash", "-c", commandAffinity)
 
 	if err := tasksetcmd.Run(); err != nil {
-		fmt.Printf("cmdAffinity.Start: %v\n", err)
+		//fmt.Printf("cmdAffinity.Start: %v\n", err)
 	}
 
 	output, err := io.ReadAll(stdout) // 读取输出结果

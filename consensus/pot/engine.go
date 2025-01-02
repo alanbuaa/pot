@@ -42,7 +42,7 @@ type PoTEngine struct {
 
 	//headerStorage  *types.HeaderStorage
 	blockStorage   *types.BlockStorage
-	chainReader    *ChainReader
+	//chainReader    *ChainReader
 	UpperConsensus *nodeController.NodeController
 }
 

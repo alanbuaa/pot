@@ -259,6 +259,42 @@ func (e *PoTEngine) handlePoTMsg(message *pb.PoTMessage) error {
 			return err
 		}
 		e.log.Error("[Engine]Get Devastate dci request")
+	case pb.MessageType_Client_Transaction:
+		bytes := message.GetMsgByte()
+		clienttrsaction := new(pb.ClientTransaction)
+		err := proto.Unmarshal(bytes, clienttrsaction)
+		if err != nil {
+			return err
+		}
+		pbrawtx := clienttrsaction.GetTx()
+		rawtx := types.ToRawTx(pbrawtx)
+		txtype := clienttrsaction.GetTxType()
+		switch txtype {
+		case pb.TxType_CreateLockTransaction:
+			err := e.worker.checkLockTransaction(rawtx)
+			if err != nil {
+				return err
+			}
+			e.worker.mempool.AddRawTx(rawtx)
+		case pb.TxType_LockTransferTranscation:
+			err := e.worker.CheckLockTransferTransaction(rawtx)
+			if err != nil {
+				return err
+			}
+			e.worker.mempool.AddRawTx(rawtx)
+		case pb.TxType_NonLockTransferTranscation:
+			err := e.worker.CheckNonLockTransferTransaction(rawtx)
+			if err != nil {
+				return err
+			}
+			e.worker.mempool.AddRawTx(rawtx)
+		case pb.TxType_DevasteTransaction:
+			err := e.worker.CheckDevastateTransaction(rawtx)
+			if err != nil {
+				return err
+			}
+			e.worker.mempool.AddRawTx(rawtx)
+		}
 	}
 	return nil
 }

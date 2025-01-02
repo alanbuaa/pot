@@ -1,9 +1,11 @@
 package types
 
 import (
+	"blockchain-crypto/pqcgo"
 	"bytes"
 	"encoding/gob"
 	"encoding/json"
+	"fmt"
 
 	"github.com/zzz136454872/upgradeable-consensus/crypto"
 	"github.com/zzz136454872/upgradeable-consensus/pb"
@@ -166,36 +168,36 @@ func (e *ExecutedTxData) Hash() [crypto.Hashlen]byte {
 }
 
 type RawTx struct {
-	Txid           [crypto.Hashlen]byte
-	TxInput        []TxInput
-	TxOutput       []TxOutput
-	TransactionFee int64
-	CoinbaseProofs []CoinbaseProof
+	Txid           [crypto.Hashlen]byte `json:"txid"`
+	TxInput        []TxInput            `json:"txinput"`
+	TxOutput       []TxOutput           `json:"txoutput"`
+	TransactionFee int64                `json:"transactionFee"`
+	CoinbaseProofs []CoinbaseProof      `json:"coinbaseProofs"`
 }
 
 type TxInput struct {
-	Txid      [crypto.Hashlen]byte
-	Voutput   int64
-	Scriptsig []byte
-	Value     int64
-	Address   []byte
-	BciType   int32
+	Txid      [crypto.Hashlen]byte `json:"txid"`
+	Voutput   int64                `json:"voutput"`
+	Scriptsig []byte               `json:"scriptsig"`
+	Value     int64                `json:"value"`
+	Address   []byte               `json:"address"`
+	BciType   int32                `json:"bciType"`
 }
 
 type TxOutput struct {
-	Address     []byte `json:"address"`
-	Value       int64  `json:"value"`
-	Interest    int64  `json:"interest"`
-	TxType      int32  `json:"txType"`
-	ScriptPk    []byte `json:"scriptpk"`
-	Proof       []byte `json:"proof"`
-	LockTime    uint64 `json:"locktime"`
-	BciType     int32  `json:"bciType"`
-	Data        []byte `json:"data"`
-	BurnLock    uint64 `json:"burnTime"`
-	CreatedAt   uint64 `json:"createdAt"`
-	BlockHeight uint64 `json:"blockHeight"` //only for local check
-	UseFlag     bool   `json:"useFlag"`     //only for local check
+	Address     []byte  `json:"address"`
+	Value       int64   `json:"value"`
+	Interest    int64   `json:"interest"`
+	ScriptPk    []byte  `json:"scriptpk"`
+	Proof       []byte  `json:"proof"`
+	LockTime    uint64  `json:"locktime"`
+	BciType     int32   `json:"bciType"`
+	Data        []byte  `json:"data"`
+	BurnLock    uint64  `json:"burnTime"`
+	Rate        float64 `json:"Rate"`
+	CreatedAt   uint64  `json:"createdAt"`
+	BlockHeight uint64  `json:"blockHeight"` //only for local check
+	UseFlag     bool    `json:"useFlag"`     //only for local check
 }
 
 type CoinbaseProof struct {
@@ -305,22 +307,33 @@ func (i TxInput) ToProto() *pb.TxInput {
 
 func ToTxOutput(output *pb.TxOutput) TxOutput {
 	return TxOutput{
-		Address:  output.GetAddress(),
-		Value:    output.GetValue(),
-		Interest: output.GetInterest(),
-		ScriptPk: output.GetScriptPk(),
-		//Proof:    output.GetProof(),
-		LockTime: output.GetLockTime(),
+		Address:   output.GetAddress(),
+		Value:     output.GetValue(),
+		Interest:  output.GetInterest(),
+		ScriptPk:  output.GetScriptPk(),
+		Proof:     output.GetProof(),
+		LockTime:  output.GetLockTime(),
+		BciType:   output.GetBciType(),
+		Data:      output.GetData(),
+		Rate:      float64(output.GetRate()),
+		CreatedAt: output.GetCreatedAt(),
+		BurnLock:  output.GetBurnLock(),
 	}
 }
 
 func (o TxOutput) ToProto() *pb.TxOutput {
 	return &pb.TxOutput{
-		Address:  o.Address,
-		Value:    o.Value,
-		Interest: o.Interest,
-		ScriptPk: o.ScriptPk,
-		LockTime: o.LockTime,
+		Address:   o.Address,
+		Value:     o.Value,
+		Interest:  o.Interest,
+		ScriptPk:  o.ScriptPk,
+		LockTime:  o.LockTime,
+		BciType:   o.BciType,
+		Proof:     o.Proof,
+		Data:      o.Data,
+		Rate:      float32(o.Rate),
+		CreatedAt: o.CreatedAt,
+		BurnLock:  o.BurnLock,
 	}
 }
 
@@ -435,7 +448,26 @@ func (o TxOutput) IsLockedWithKey(pubkey []byte) bool {
 }
 
 func (o TxOutput) CanBeUnlockWith(input TxInput) bool {
+	pubkey := o.Address
+	if len(pubkey) == pqcgo.PUBLICKEYBYTES[crypto.PqcScheme] {
+		sig := input.Scriptsig
+		utxokey := fmt.Sprintf("%s:%d", input.Txid, input.Voutput)
+		flag, err := crypto.VerifySig([]byte(utxokey), sig, pubkey)
+		if err != nil && !flag {
+			return false
+		} else {
+			return true
+		}
+	} else {
+		sig := input.Scriptsig
+		utxokey := fmt.Sprintf("%s:%d", input.Txid, input.Voutput)
+		flag, err := crypto.VerifySig([]byte(utxokey), sig, pubkey)
+		if err != nil && !flag {
+			return false
+		}
+		// TODO: check commiteekey
 
+	}
 	return true
 }
 
