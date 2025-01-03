@@ -449,6 +449,9 @@ func (o TxOutput) IsLockedWithKey(pubkey []byte) bool {
 
 func (o TxOutput) CanBeUnlockWith(input TxInput) bool {
 	pubkey := o.Address
+	if bytes.Equal(o.Address, input.Scriptsig) {
+		return true
+	}
 	if len(pubkey) == pqcgo.PUBLICKEYBYTES[crypto.PqcScheme] {
 		sig := input.Scriptsig
 		utxokey := fmt.Sprintf("%s:%d", input.Txid, input.Voutput)

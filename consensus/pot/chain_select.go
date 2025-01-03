@@ -252,7 +252,7 @@ func (w *Worker) chainResetAdvanced(branch []*types.Block) error {
 		for _, rawtx := range rawtxs {
 			if rawtx.IsCoinBase() {
 				dciproof := rawtx.CoinbaseProofs
-				w.mempool.MarkDciRewardProposed(dciproof)
+				w.mempool.MarkBciRewardProposed(dciproof)
 			}
 		}
 	}

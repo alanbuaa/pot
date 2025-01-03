@@ -3,6 +3,7 @@ package pot
 import (
 	"container/list"
 	"fmt"
+
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/zzz136454872/upgradeable-consensus/crypto"
 	"github.com/zzz136454872/upgradeable-consensus/pb"
@@ -21,31 +22,31 @@ type WrappedRawTx struct {
 	proposed bool
 }
 
-type WrappedDciReward struct {
-	dcireward *DciReward
+type WrappedBciReward struct {
+	Bcireward *BciReward
 	proposed  bool
 }
 
-type DciReward struct {
+type BciReward struct {
 	Address []byte
 	Amount  int64
-	Proof   DciProof
+	Proof   BciProof
 	BciType int32
 	weight  float64
 }
 
-type DciProof struct {
+type BciProof struct {
 	Height    uint64
 	BlockHash []byte
 	TxHash    []byte
 }
 
-func (d *DciReward) ToProto() *pb.DciReward {
-	return &pb.DciReward{
+func (d *BciReward) ToProto() *pb.BciReward {
+	return &pb.BciReward{
 		Address: d.Address,
 		Amount:  d.Amount,
 		ChainID: d.BciType,
-		DciProof: &pb.DciProof{
+		BciProof: &pb.BciProof{
 			Height:    d.Proof.Height,
 			BlockHash: d.Proof.BlockHash,
 			TxHash:    d.Proof.TxHash,
@@ -53,22 +54,22 @@ func (d *DciReward) ToProto() *pb.DciReward {
 	}
 }
 
-func ToDciReward(proof *pb.DciReward) *DciReward {
-	return &DciReward{
+func ToBciReward(proof *pb.BciReward) *BciReward {
+	return &BciReward{
 		Address: proof.GetAddress(),
 		Amount:  proof.GetAmount(),
 		BciType: proof.GetChainID(),
-		Proof: DciProof{
-			Height:    proof.GetDciProof().GetHeight(),
-			BlockHash: proof.GetDciProof().GetBlockHash(),
-			TxHash:    proof.GetDciProof().GetTxHash(),
+		Proof: BciProof{
+			Height:    proof.GetBciProof().GetHeight(),
+			BlockHash: proof.GetBciProof().GetBlockHash(),
+			TxHash:    proof.GetBciProof().GetTxHash(),
 		},
 	}
 }
 
 type Mempool struct {
 	mutex         *sync.RWMutex
-	DciRewardPool map[string]*WrappedDciReward
+	BciRewardPool map[string]*WrappedBciReward
 	execorder     *list.List
 	execset       map[[crypto.Hashlen]byte]*list.Element
 	raworder      *list.List
@@ -79,7 +80,7 @@ type Mempool struct {
 func NewMempool() *Mempool {
 	c := &Mempool{
 		mutex:         new(sync.RWMutex),
-		DciRewardPool: make(map[string]*WrappedDciReward),
+		BciRewardPool: make(map[string]*WrappedBciReward),
 		execorder:     new(list.List),
 		execset:       make(map[[crypto.Hashlen]byte]*list.Element),
 		raworder:      new(list.List),
@@ -348,37 +349,37 @@ func (c *Mempool) UnmarkRawTx(txs []*types.RawTx) {
 	}
 }
 
-func (c *Mempool) HasDciReward(reward *DciReward) bool {
+func (c *Mempool) HasBciReward(reward *BciReward) bool {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
 
 	strings := fmt.Sprintf(hexutil.Encode(reward.Address)+"-%d", reward.Amount)
-	_, ok := c.DciRewardPool[strings]
+	_, ok := c.BciRewardPool[strings]
 	return ok
 }
 
-func (c *Mempool) HasDciRewardByCoinbaseProof(coinbaseproof *types.CoinbaseProof) bool {
+func (c *Mempool) HasBciRewardByCoinbaseProof(coinbaseproof *types.CoinbaseProof) bool {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
 
 	strings := fmt.Sprintf(hexutil.Encode(coinbaseproof.TxHash) + "-" + hexutil.Encode(coinbaseproof.Address))
-	_, ok := c.DciRewardPool[strings]
+	_, ok := c.BciRewardPool[strings]
 	return ok
 }
 
-func (c *Mempool) AddDciReward(rewards ...*DciReward) {
+func (c *Mempool) AddBciReward(rewards ...*BciReward) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
 	for _, reward := range rewards {
 		strings := fmt.Sprintf(hexutil.Encode(reward.Proof.TxHash) + "-" + hexutil.Encode(reward.Address))
 
-		_, ok := c.DciRewardPool[strings]
+		_, ok := c.BciRewardPool[strings]
 		if ok {
 			continue
 		} else {
-			c.DciRewardPool[strings] = &WrappedDciReward{
-				dcireward: reward,
+			c.BciRewardPool[strings] = &WrappedBciReward{
+				Bcireward: reward,
 				proposed:  false,
 			}
 		}
@@ -387,37 +388,37 @@ func (c *Mempool) AddDciReward(rewards ...*DciReward) {
 
 }
 
-func (c *Mempool) MarkDciRewardProposed(coinbaseProofs []types.CoinbaseProof) {
+func (c *Mempool) MarkBciRewardProposed(coinbaseProofs []types.CoinbaseProof) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	for _, proof := range coinbaseProofs {
 		strings := fmt.Sprintf(hexutil.Encode(proof.TxHash) + "-" + hexutil.Encode(proof.Address))
-		if _, ok := c.DciRewardPool[strings]; ok {
-			c.DciRewardPool[strings].proposed = true
+		if _, ok := c.BciRewardPool[strings]; ok {
+			c.BciRewardPool[strings].proposed = true
 		}
 	}
 }
 
-func (c *Mempool) RemoveDciRewardByTxHash(hash []byte) {
+func (c *Mempool) RemoveBciRewardByTxHash(hash []byte) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	str := hexutil.Encode(hash)
-	if _, ok := c.DciRewardPool[str]; ok {
-		delete(c.DciRewardPool, str)
+	if _, ok := c.BciRewardPool[str]; ok {
+		delete(c.BciRewardPool, str)
 	}
 }
 
-func (c *Mempool) GetAllDciRewards() []*DciReward {
+func (c *Mempool) GetAllBciRewards() []*BciReward {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
-	rewards := make([]*DciReward, 0)
-	for _, reward := range c.DciRewardPool {
+	rewards := make([]*BciReward, 0)
+	for _, reward := range c.BciRewardPool {
 		if !reward.proposed {
-			rewards = append(rewards, reward.dcireward)
+			rewards = append(rewards, reward.Bcireward)
 		}
 	}
 
-	//c.DciRewardPool = make(map[string]*DciReward)
+	//c.BciRewardPool = make(map[string]*BciReward)
 	return rewards
 }

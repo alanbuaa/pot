@@ -103,7 +103,7 @@ type ReplicaInfo struct {
 	ID             int64  `yaml:"id"`
 	Address        string `yaml:"address"`
 	RpcAddress     string `yaml:"rpc_address"`
-	DciRpcAddress  string `yaml:"dcirpcAddress"`
+	BciRpcAddress  string `yaml:"bcirpcAddress"`
 	PrivateKeyPath string `yaml:"private_key_path"`
 }
 

@@ -555,11 +555,11 @@ func (w *Worker) workReset(epoch uint64, block *types.Block) error {
 	copy(vdf0rescopy, res0)
 	exeblocks := w.GetExecutedBlockFromMempool()
 	rawtxs := w.mempool.GetRawTx()
-	dcirewards := w.mempool.GetAllDciRewards()
+	Bcirewards := w.mempool.GetAllBciRewards()
 
 	for i := 0; i < cpuCounter; i++ {
 		emptyblock := w.createBlockWithoutKey(epoch+1, parentblock, uncleblock, difficulty, exeblocks, rawtxs)
-		go w.mine(epoch, vdf0rescopy, rand.Int63(), i, w.abort, difficulty, parentblock, uncleblock, w.wg, emptyblock, dcirewards)
+		go w.mine(epoch, vdf0rescopy, rand.Int63(), i, w.abort, difficulty, parentblock, uncleblock, w.wg, emptyblock, Bcirewards)
 	}
 
 	return nil

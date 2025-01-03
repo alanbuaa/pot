@@ -35,7 +35,7 @@ func main() {
 	defer conn.Close()
 
 	// 创建客户端
-	client := pb.NewDciExectorClient(conn)
+	client := pb.NewPoTConsensusClient(conn)
 
 	for true {
 

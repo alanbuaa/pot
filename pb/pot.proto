@@ -10,7 +10,7 @@ enum MessageType{
   PoT_Request = 3;
   PoT_Response = 4;
   PoT_Proof = 5;
-  SendDci_Request = 6;
+  SendBci_Request = 6;
   DevastateDci_Request = 7;
   Client_Transaction = 8;
 }
@@ -160,6 +160,11 @@ message ExecuteHeader {
   bytes   BlockHash = 2;
   int64   ChainID = 3;
   bytes   TxsHash = 4;
+  uint64  CommitedTxNum = 5;
+  uint64  ExecutedTxNum = 6;
+  uint64  GasIncentive = 7;
+  bytes   PoSLeader = 8;
+  bytes   PoSVoteInfo = 9;
 }
 
 message ExecutedTx{
@@ -171,6 +176,8 @@ message ExecutedTx{
 service PoTExecutor {
   rpc   GetTxs(GetTxRequest) returns (GetTxResponse){}
   rpc   VerifyTxs(VerifyTxRequest) returns (VerifyTxResponse){}
+  rpc   ExecuteTxs(ExecuteTxRequest) returns (ExecuteTxResponse){}
+  rpc   VerifyIncensentive(IncensentiveVerifyRequest) returns (IncensentiveVerifyResponse){}
 }
 
 message GetTxRequest{
@@ -195,10 +202,28 @@ message VerifyTxResponse{
   repeated bool flag =2;
 }
 
-service DciExector{
-  rpc   SendDci(SendDciRequest)           returns (SendDciResponse)       {}
+message ExecuteTxRequest{
+    bytes Tx = 1;
+}
+
+message ExecuteTxResponse{
+    bytes Tx = 1;
+    bool  Flag = 2;
+    bytes TxID = 3;
+}
+message IncensentiveVerifyRequest{
+    repeated bytes TxHash = 1;
+  }
+
+  message IncensentiveVerifyResponse{
+    repeated bool VerifyRes = 1;
+}
+
+
+service PoTConsensus{
+  rpc   SendBci(SendBciRequest)           returns (SendBciResponse)       {}
   rpc   GetBalance(GetBalanceRequest)     returns (GetBalanceResponse)    {}
-  rpc   DevastateDci(DevastateDciRequest) returns (DevastateDciResponse)  {}
+  
   rpc   VerifyUTXO(VerifyUTXORequest)     returns (VerifyUTXOResponse)    {}
   rpc   CreateLockTransaction(CreateLockTransactionRequest) returns (CreateLockTransactionResponse) {}
   rpc   CreateLockTransferTransaction(CreateLockTransferTransactionRequest) returns (CreateLockTransferTransactionResponse) {}
@@ -206,25 +231,25 @@ service DciExector{
   rpc   CreateNonLockTransferTransaction(CreateNonLockTransferTransactionRequest) returns (CreateNonLockTransferTransactionResponse) {}
 }
 
-message DciReward{
+message BciReward{
   bytes Address = 1;
   int64 Amount = 2;
   int32 ChainID = 3;
-  DciProof DciProof = 4;
+  BciProof BciProof = 4;
 }
 
-message DciProof {
+message BciProof {
   uint64 Height = 1 ;
   bytes BlockHash = 2;
   bytes  TxHash = 3;
   int32 BciType = 4;
 }
 
-message SendDciRequest{
-  repeated DciReward DciReward = 1;
+message SendBciRequest{
+  repeated BciReward BciReward = 1;
 }
 
-message SendDciResponse{
+message SendBciResponse{
   bool IsSuccess = 1;
   uint64 Height = 2;
 }
@@ -266,7 +291,7 @@ message DevastateDciResponse{
 }
 
 message UTXOProof{
-  uint64  Height  = 1;
+  int64   Voutput = 1;
   bytes   TxHash  = 2;
   bytes   Data    = 3;
 }

@@ -1,4 +1,4 @@
-build: build_genkey build_client build_server btest
+build: build_genkey build_client build_server btest check_boltdbfile
 	@:
 
 build_genkey:
@@ -9,7 +9,6 @@ build_client:
 
 build_server:
 	go build -o upgradeable-consensus ./cmd/server
-
 
 btest:
 	go build -o test ./cmd/pot_test
@@ -22,6 +21,15 @@ win_build:
 test:
 	go clean -testcache
 	go test -v ./...
+
+check_boltdbfile:
+	@if [ ! -d "boltdbfile" ]; then \
+		echo "boltdbfile directory does not exist, creating..."; \
+		mkdir boltdbfile; \
+	else \
+		echo "boltdbfile directory already exists."; \
+	fi
+
 
 compile_proto:
 	protoc pb/*.proto --go_out=. --go-grpc_out=. --go-grpc_opt=require_unimplemented_servers=false

@@ -235,30 +235,30 @@ func (e *PoTEngine) handlePoTMsg(message *pb.PoTMessage) error {
 		if err != nil {
 			return err
 		}
-	case pb.MessageType_SendDci_Request:
+	case pb.MessageType_SendBci_Request:
 		bytes := message.GetMsgByte()
-		request := new(pb.SendDciRequest)
+		request := new(pb.SendBciRequest)
 		err := proto.Unmarshal(bytes, request)
 		if err != nil {
 			return err
 		}
-		_, err = e.worker.handleSendDciRequest(request)
-		e.log.Error("[Engine]Get send dci request")
+		_, err = e.worker.handleSendBciRequest(request)
+		e.log.Error("[Engine]Get send Bci request")
 		if err != nil {
 			return err
 		}
-	case pb.MessageType_DevastateDci_Request:
-		bytes := message.GetMsgByte()
-		request := new(pb.DevastateDciRequest)
-		err := proto.Unmarshal(bytes, request)
-		if err != nil {
-			return err
-		}
-		_, err = e.worker.handleDevastateDciRequest(request)
-		if err != nil {
-			return err
-		}
-		e.log.Error("[Engine]Get Devastate dci request")
+	// case pb.MessageType_DevastateBci_Request:
+	// 	bytes := message.GetMsgByte()
+	// 	request := new(pb.DevastateBciRequest)
+	// 	err := proto.Unmarshal(bytes, request)
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// 	_, err = e.worker.handleDevastateBciRequest(request)
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// 	e.log.Error("[Engine]Get Devastate Bci request")
 	case pb.MessageType_Client_Transaction:
 		bytes := message.GetMsgByte()
 		clienttrsaction := new(pb.ClientTransaction)

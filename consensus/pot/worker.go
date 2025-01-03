@@ -118,7 +118,7 @@ func NewWorker(id int64, config *config.ConsensusConfig, logger *logrus.Entry, b
 	for i := 0; i < cpuCounter; i++ {
 		vdf1[i] = types.NewVDF(ch1, potconfig.Vdf1Iteration, id)
 	}
-	listen, err := net.Listen("tcp", config.Nodes[id].DciRpcAddress)
+	listen, err := net.Listen("tcp", config.Nodes[id].BciRpcAddress)
 	if err != nil {
 		panic(err)
 	}
@@ -168,7 +168,7 @@ func NewWorker(id int64, config *config.ConsensusConfig, logger *logrus.Entry, b
 		chainresetflag:  false,
 	}
 	rpcserver := grpc.NewServer()
-	pb.RegisterDciExectorServer(rpcserver, w)
+	pb.RegisterPoTConsensusServer(rpcserver, w)
 	w.rpcserver = rpcserver
 	w.listener = listen
 
@@ -331,11 +331,11 @@ func (w *Worker) OnGetVdf0Response() {
 
 			exeblocks := w.GetExecutedBlockFromMempool()
 			rawtxs := w.mempool.GetRawTx()
-			dcirewards := w.mempool.GetAllDciRewards()
+			Bcirewards := w.mempool.GetAllBciRewards()
 
 			for i := 0; i < cpuCounter; i++ {
 				block := w.createBlockWithoutKey(epoch+1, parentblock, uncleblock, difficulty, exeblocks, rawtxs)
-				go w.mine(epoch+1, vdf0rescopy, rand.Int63(), i, w.abort, difficulty, parentblock, uncleblock, w.wg, block, dcirewards)
+				go w.mine(epoch+1, vdf0rescopy, rand.Int63(), i, w.abort, difficulty, parentblock, uncleblock, w.wg, block, Bcirewards)
 			}
 		}
 	}
@@ -343,7 +343,7 @@ func (w *Worker) OnGetVdf0Response() {
 
 func (w *Worker) mine(epoch uint64, vdf0res []byte, nonce int64, workerid int, abort *Abortcontrol,
 	difficulty *big.Int, parentblock *types.Block, uncleblock []*types.Block, wg *sync.WaitGroup,
-	emptyblock *types.Block, dcirewards []*DciReward) *types.Block {
+	emptyblock *types.Block, Bcirewards []*BciReward) *types.Block {
 	defer wg.Done()
 	defer w.setWorkFlagFalse()
 	w.log.Infof("[PoT]\tepoch %d:workerid %d start to mine", epoch, workerid)
@@ -352,7 +352,7 @@ func (w *Worker) mine(epoch uint64, vdf0res []byte, nonce int64, workerid int, a
 	pubkeybyte := privkey.PublicKeyBytes()
 
 	totalreward := CalcTotalReward(epoch)
-	coinbasetx := w.GenerateCoinbaseTxWithoutMinerKey(dcirewards, privkey, totalreward)
+	coinbasetx := w.GenerateCoinbaseTxWithoutMinerKey(Bcirewards, privkey, totalreward)
 	coinbaseproofs := coinbasetx.CoinbaseProofs
 	coinbaseProofsbyte := CoinbaseProofToBytes(coinbaseproofs)
 	mixdigest := w.calcMixdigest(epoch, parentblock, uncleblock, difficulty, w.PeerId, pubkeybyte, coinbaseProofsbyte)
@@ -421,7 +421,7 @@ func (w *Worker) mine(epoch uint64, vdf0res []byte, nonce int64, workerid int, a
 			noncebyte := tmp.Bytes()
 			privkey, _ = crypto.GeneratePqcKey()
 			pubkey2byte := privkey.PublicKeyBytes()
-			coinbasetx = w.GenerateCoinbaseTxWithoutMinerKey(dcirewards, privkey, totalreward)
+			coinbasetx = w.GenerateCoinbaseTxWithoutMinerKey(Bcirewards, privkey, totalreward)
 			coinbaseproofs2 := coinbasetx.CoinbaseProofs
 			coinbaseProofsbyte2 := CoinbaseProofToBytes(coinbaseproofs2)
 			mix2digest := w.calcMixdigest(epoch, parentblock, uncleblock, difficulty, w.PeerId, pubkey2byte, coinbaseProofsbyte2)
@@ -720,7 +720,8 @@ func (w *Worker) createBlock(epoch uint64, parentBlock *types.Block, uncleBlock 
 }
 
 func (w *Worker) GetExcutedTxsFromExecutor(epoch uint64) ([]*types.ExecutedBlock, error) {
-	conn, err := grpc.Dial(w.config.PoT.ExcutorAddress, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(1024*1024*1024)))
+	conn, err := grpc.NewClient(w.config.PoT.ExcutorAddress, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(1024*1024*1024)))
+
 	if err != nil {
 		return nil, err
 	}
@@ -1174,8 +1175,8 @@ func (w *Worker) handleBlockRawTx(block *types.Block) error {
 	}
 	for _, tx := range txs {
 		if tx.IsCoinBase() {
-			dciproofs := tx.CoinbaseProofs
-			w.mempool.MarkDciRewardProposed(dciproofs)
+			Bciproofs := tx.CoinbaseProofs
+			w.mempool.MarkBciRewardProposed(Bciproofs)
 			if len(tx.TxOutput) == 2 {
 				fmt.Println(hexutil.Encode(tx.Txid[:]), tx.TxOutput[1].Value)
 			}

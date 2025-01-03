@@ -17,6 +17,8 @@ import (
 	"github.com/zzz136454872/upgradeable-consensus/pb"
 	"github.com/zzz136454872/upgradeable-consensus/types"
 	"golang.org/x/exp/rand"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -54,7 +56,7 @@ var (
 	TenYearRate   = float64(0.05)
 )
 
-func (w *Worker) VerifyDciReward(reward *DciReward) (bool, *types.ExecutedTx, error) {
+func (w *Worker) VerifyBciReward(reward *BciReward) (bool, *types.ExecutedTx, error) {
 	//return true
 	//address := reward.Address
 	//amount := reward.Amount
@@ -81,12 +83,12 @@ func (w *Worker) VerifyDciReward(reward *DciReward) (bool, *types.ExecutedTx, er
 	return false, nil, fmt.Errorf("not found tx in block")
 }
 
-func (w *Worker) SendDci(ctx context.Context, request *pb.SendDciRequest) (*pb.SendDciResponse, error) {
-	err := w.broadcastSendDciRequest(request)
+func (w *Worker) SendBci(ctx context.Context, request *pb.SendBciRequest) (*pb.SendBciResponse, error) {
+	err := w.broadcastSendBciRequest(request)
 	if err != nil {
-		return &pb.SendDciResponse{IsSuccess: false}, err
+		return &pb.SendBciResponse{IsSuccess: false}, err
 	}
-	return w.handleSendDciRequest(request)
+	return w.handleSendBciRequest(request)
 }
 
 func (w *Worker) GetBalance(ctx context.Context, request *pb.GetBalanceRequest) (*pb.GetBalanceResponse, error) {
@@ -140,21 +142,21 @@ func (w *Worker) GetBalance(ctx context.Context, request *pb.GetBalanceRequest) 
 	}, nil
 }
 
-func (w *Worker) DevastateDci(ctx context.Context, request *pb.DevastateDciRequest) (*pb.DevastateDciResponse, error) {
-	err := w.broadcastDevastateDciRequest(request)
-	if err != nil {
-		return &pb.DevastateDciResponse{Flag: false}, err
-	}
+// func (w *Worker) DevastateBci(ctx context.Context, request *pb.DevastateBciRequest) (*pb.DevastateBciResponse, error) {
+// 	err := w.broadcastDevastateBciRequest(request)
+// 	if err != nil {
+// 		return &pb.DevastateBciResponse{Flag: false}, err
+// 	}
 
-	return w.handleDevastateDciRequest(request)
-}
+// 	return w.handleDevastateBciRequest(request)
+// }
 
 func (w *Worker) VerifyUTXO(ctx context.Context, request *pb.VerifyUTXORequest) (*pb.VerifyUTXOResponse, error) {
 	from := request.GetFrom()
 	if from != nil {
 		return &pb.VerifyUTXOResponse{Flag: false}, nil
 	}
-	amount := request.GetValue()
+
 	proof := request.GetProof()
 
 	utxoproof := &pb.UTXOProof{}
@@ -162,31 +164,37 @@ func (w *Worker) VerifyUTXO(ctx context.Context, request *pb.VerifyUTXORequest) 
 	if err != nil {
 		return &pb.VerifyUTXOResponse{Flag: false}, err
 	}
-	height := utxoproof.GetHeight()
+
 	hash := utxoproof.GetTxHash()
+	height := w.chainReader.GetCurrentHeight()
+	for height > 0 {
 
-	block, err := w.chainReader.GetByHeight(height)
-	if err != nil {
-		return &pb.VerifyUTXOResponse{Flag: false}, err
-	}
+		block, err := w.chainReader.GetByHeight(height)
+		if err != nil {
+			return &pb.VerifyUTXOResponse{Flag: false}, err
 
-	rawtx := block.GetRawTx()
-	for _, tx := range rawtx {
-		if bytes.Equal(tx.Txid[:], hash) {
-			if len(tx.TxInput) == 0 {
-				return &pb.VerifyUTXOResponse{Flag: false}, fmt.Errorf("txinput is zero")
+		}
+		rawtx := block.GetRawTx()
+		for _, tx := range rawtx {
+			if bytes.Equal(tx.Txid[:], hash) {
+				if len(tx.TxInput) == 0 {
+					return &pb.VerifyUTXOResponse{Flag: false}, fmt.Errorf("txinput is zero")
+				}
+				if len(tx.TxOutput) < int(utxoproof.GetVoutput()) {
+					return &pb.VerifyUTXOResponse{Flag: false}, fmt.Errorf("txinput is less than voutput")
+				}
+				output := tx.TxOutput[utxoproof.GetVoutput()]
+				outputData := output.Data
+				if bytes.Equal(outputData, utxoproof.GetData()) {
+					return &pb.VerifyUTXOResponse{Flag: true}, nil
+				} else {
+					return &pb.VerifyUTXOResponse{Flag: false}, fmt.Errorf("txoutput data is not equal to utxoproof data")
+				}
 			}
-			txinput := tx.TxInput[0]
-
-			if amount != txinput.Value {
-				return &pb.VerifyUTXOResponse{Flag: false}, fmt.Errorf("wrong value")
-			}
-			// return &pb.VerifyUTXOResponse{Flag: true}, nil
 		}
 	}
-
 	//return &pb.VerifyUTXOResponse{Flag: false}, nil
-	return &pb.VerifyUTXOResponse{Flag: true}, nil
+	return &pb.VerifyUTXOResponse{Flag: false}, nil
 }
 
 func (w *Worker) CreateLockTransaction(ctx context.Context, request *pb.CreateLockTransactionRequest) (*pb.CreateLockTransactionResponse, error) {
@@ -450,7 +458,7 @@ func (w *Worker) CreateNonLockTransferTransaction(ctx context.Context, request *
 	if err != nil {
 		return nil, err
 	}
-	w.log.Info("broadcast client transaction")
+
 	err = w.broadcastClientTransaction(rawtx, pb.TxType_NonLockTransferTranscation)
 	if err != nil {
 		return nil, err
@@ -466,7 +474,7 @@ func (w *Worker) CheckNonLockTransferTransaction(rawtx *types.RawTx) error {
 		b := tx.Bucket([]byte(types.UTXOBucket))
 		inputinterest := int64(0)
 		outputinterest := int64(0)
-		w.log.Info("check input")
+
 		for _, txinput := range rawtx.TxInput {
 			lockkey := fmt.Sprintf("%s:%d", hexutil.Encode(txinput.Txid[:]), txinput.Voutput)
 			outpubyte := b.Get([]byte(lockkey))
@@ -489,7 +497,7 @@ func (w *Worker) CheckNonLockTransferTransaction(rawtx *types.RawTx) error {
 				inputinterest += interest
 			}
 		}
-		w.log.Info("check output")
+
 		for _, txoutput := range rawtx.TxOutput {
 			if txoutput.BurnLock != 0 {
 				return fmt.Errorf("tx is not a non-lock transfer transaction")
@@ -512,46 +520,46 @@ func (w *Worker) CheckNonLockTransferTransaction(rawtx *types.RawTx) error {
 	return nil
 }
 
-func (w *Worker) handleSendDciRequest(request *pb.SendDciRequest) (*pb.SendDciResponse, error) {
-	dcirewards := request.GetDciReward()
+func (w *Worker) handleSendBciRequest(request *pb.SendBciRequest) (*pb.SendBciResponse, error) {
+	Bcirewards := request.GetBciReward()
 
-	for _, pbdcireward := range dcirewards {
+	for _, pbBcireward := range Bcirewards {
 
-		dciReward := ToDciReward(pbdcireward)
-		flag, tx, err := w.VerifyDciReward(dciReward)
+		BciReward := ToBciReward(pbBcireward)
+		flag, tx, err := w.VerifyBciReward(BciReward)
 		if !flag {
-			return &pb.SendDciResponse{
+			return &pb.SendBciResponse{
 				IsSuccess: false,
 				Height:    0,
-			}, fmt.Errorf("the dci reward is not valid for %s", err.Error())
+			}, fmt.Errorf("the Bci reward is not valid for %s", err.Error())
 		} else {
 			txdata := tx.Data
 			if len(txdata) < 98 {
-				return &pb.SendDciResponse{
+				return &pb.SendBciResponse{
 					IsSuccess: false,
 					Height:    0,
-				}, fmt.Errorf("the dci reward is not valid for %s", err.Error())
+				}, fmt.Errorf("the Bci reward is not valid for %s", err.Error())
 			} else {
 				address := txdata[2:98]
 				//fmt.Println(hexutil.Encode(address))
-				dciReward.Address = address
-				w.mempool.AddDciReward(dciReward)
+				BciReward.Address = address
+				w.mempool.AddBciReward(BciReward)
 			}
 		}
 	}
-	return &pb.SendDciResponse{
+	return &pb.SendBciResponse{
 		IsSuccess: true,
 		Height:    w.getEpoch(),
 	}, nil
 }
 
-func (w *Worker) broadcastSendDciRequest(request *pb.SendDciRequest) error {
+func (w *Worker) broadcastSendBciRequest(request *pb.SendBciRequest) error {
 	requestbytes, err := proto.Marshal(request)
 	if err != nil {
 		return err
 	}
 	message := &pb.PoTMessage{
-		MsgType: pb.MessageType_SendDci_Request,
+		MsgType: pb.MessageType_SendBci_Request,
 		MsgByte: requestbytes,
 	}
 	messageByte, err := proto.Marshal(message)
@@ -565,120 +573,120 @@ func (w *Worker) broadcastSendDciRequest(request *pb.SendDciRequest) error {
 	return nil
 }
 
-func (w *Worker) handleDevastateDciRequest(request *pb.DevastateDciRequest) (*pb.DevastateDciResponse, error) {
-	pbrawtx := request.GetTx()
-	rawtx := types.ToRawTx(pbrawtx)
-	if !rawtx.BasicVerify() {
-		return &pb.DevastateDciResponse{Flag: false}, fmt.Errorf("tx is not valid")
-	} else {
+// func (w *Worker) handleDevastateBciRequest(request *pb.DevastateBciRequest) (*pb.DevastateBciResponse, error) {
+// 	pbrawtx := request.GetTx()
+// 	rawtx := types.ToRawTx(pbrawtx)
+// 	if !rawtx.BasicVerify() {
+// 		return &pb.DevastateBciResponse{Flag: false}, fmt.Errorf("tx is not valid")
+// 	} else {
 
-		db := w.chainReader.GetBoltDb()
-		err := db.View(func(tx *bolt.Tx) error {
-			b := tx.Bucket([]byte(types.UTXOBucket))
-			inputmap := make(map[int32]int64)
-			for _, input := range rawtx.TxInput {
+// 		db := w.chainReader.GetBoltDb()
+// 		err := db.View(func(tx *bolt.Tx) error {
+// 			b := tx.Bucket([]byte(types.UTXOBucket))
+// 			inputmap := make(map[int32]int64)
+// 			for _, input := range rawtx.TxInput {
 
-				txid := input.Txid
-				voutput := input.Voutput
+// 				txid := input.Txid
+// 				voutput := input.Voutput
 
-				utxokey := fmt.Sprintf("%s:%d", hexutil.Encode(txid[:]), voutput)
-				fmt.Println(utxokey)
-				// if outputs, ok := outputsmap[utxokey]; ok {
-				// 	if !outputs.CanBeUnlockWith(input) {
-				// 		return &pb.DevastateDciResponse{Flag: false}, fmt.Errorf("tx input cannot unlock corresponding utxo")
-				// 	}
-				// 	if input.Value != outputs.Value {
-				// 		return &pb.DevastateDciResponse{Flag: false}, fmt.Errorf("tx input value is not equal to corresponding utxo value")
-				// 	}
-				// 	amount += input.Value
-				// 	delete(outputsmap, utxokey)
-				// }
-				outsBytes := b.Get([]byte(utxokey))
-				if len(outsBytes) == 0 {
-					return fmt.Errorf("the input corresponding utxo not found")
-				}
+// 				utxokey := fmt.Sprintf("%s:%d", hexutil.Encode(txid[:]), voutput)
+// 				fmt.Println(utxokey)
+// 				// if outputs, ok := outputsmap[utxokey]; ok {
+// 				// 	if !outputs.CanBeUnlockWith(input) {
+// 				// 		return &pb.DevastateBciResponse{Flag: false}, fmt.Errorf("tx input cannot unlock corresponding utxo")
+// 				// 	}
+// 				// 	if input.Value != outputs.Value {
+// 				// 		return &pb.DevastateBciResponse{Flag: false}, fmt.Errorf("tx input value is not equal to corresponding utxo value")
+// 				// 	}
+// 				// 	amount += input.Value
+// 				// 	delete(outputsmap, utxokey)
+// 				// }
+// 				outsBytes := b.Get([]byte(utxokey))
+// 				if len(outsBytes) == 0 {
+// 					return fmt.Errorf("the input corresponding utxo not found")
+// 				}
 
-				output := types.DecodeByteToTxOutput(outsBytes)
-				// TODO: add script check
+// 				output := types.DecodeByteToTxOutput(outsBytes)
+// 				// TODO: add script check
 
-				// if output.UseFlag {
-				// 	return fmt.Errorf("tx input corresponding output is used but not check")
-				// }
-				if !output.CanBeUnlockWith(input) {
-					return fmt.Errorf("tx input cannot unlock corresponding utxo")
-				}
-				if input.BciType != output.BciType || input.Value != output.Value {
-					return fmt.Errorf(" tx error for bci type not match or value not match ")
-				}
-				inputmap[input.BciType] += input.Value
+// 				// if output.UseFlag {
+// 				// 	return fmt.Errorf("tx input corresponding output is used but not check")
+// 				// }
+// 				if !output.CanBeUnlockWith(input) {
+// 					return fmt.Errorf("tx input cannot unlock corresponding utxo")
+// 				}
+// 				if input.BciType != output.BciType || input.Value != output.Value {
+// 					return fmt.Errorf(" tx error for bci type not match or value not match ")
+// 				}
+// 				inputmap[input.BciType] += input.Value
 
-				b.Put([]byte(utxokey), output.EncodeToByte())
-			}
-			outputmap := make(map[int32]int64)
-			outputcount := make(map[int32]int)
-			for _, output := range rawtx.TxOutput {
-				//if !output.IsCoinbase {
-				//	return fmt.Errorf(" tx error for output is not coinbase")
-				//}
-				if output.LockTime <= ConfirmDelay && output.LockTime != 0 {
-					return fmt.Errorf(" tx error for output locktime is too short")
-				}
-				outputmap[output.BciType] += output.Value
-				outputcount[output.BciType]++
-			}
+// 				b.Put([]byte(utxokey), output.EncodeToByte())
+// 			}
+// 			outputmap := make(map[int32]int64)
+// 			outputcount := make(map[int32]int)
+// 			for _, output := range rawtx.TxOutput {
+// 				//if !output.IsCoinbase {
+// 				//	return fmt.Errorf(" tx error for output is not coinbase")
+// 				//}
+// 				if output.LockTime <= ConfirmDelay && output.LockTime != 0 {
+// 					return fmt.Errorf(" tx error for output locktime is too short")
+// 				}
+// 				outputmap[output.BciType] += output.Value
+// 				outputcount[output.BciType]++
+// 			}
 
-			for bcitype, totalvalue := range inputmap {
-				if totalvalue != outputmap[bcitype] {
-					return fmt.Errorf(" tx error for input and output bci amount not match")
-				}
-			}
+// 			for bcitype, totalvalue := range inputmap {
+// 				if totalvalue != outputmap[bcitype] {
+// 					return fmt.Errorf(" tx error for input and output bci amount not match")
+// 				}
+// 			}
 
-			for _, output := range rawtx.TxOutput {
-				if output.Value != inputmap[output.BciType]/outputmap[output.BciType] {
-					return fmt.Errorf(" tx error for output bci value and count not match")
-				}
-			}
-			w.mempool.AddRawTx(rawtx)
-			w.mempool.rawmap[rawtx.Hash()] = request.GetTransaction()
-			return nil
-		})
-		if err != nil {
-			return &pb.DevastateDciResponse{Flag: false}, err
-		}
+// 			for _, output := range rawtx.TxOutput {
+// 				if output.Value != inputmap[output.BciType]/outputmap[output.BciType] {
+// 					return fmt.Errorf(" tx error for output bci value and count not match")
+// 				}
+// 			}
+// 			w.mempool.AddRawTx(rawtx)
+// 			w.mempool.rawmap[rawtx.Hash()] = request.GetTransaction()
+// 			return nil
+// 		})
+// 		if err != nil {
+// 			return &pb.DevastateBciResponse{Flag: false}, err
+// 		}
 
-	}
+// 	}
 
-	return &pb.DevastateDciResponse{Flag: true}, nil
-}
+// 	return &pb.DevastateBciResponse{Flag: true}, nil
+// }
 
-func (w *Worker) broadcastDevastateDciRequest(request *pb.DevastateDciRequest) error {
-	requestbytes, err := proto.Marshal(request)
-	if err != nil {
-		return err
-	}
-	message := &pb.PoTMessage{
-		MsgType: pb.MessageType_DevastateDci_Request,
-		MsgByte: requestbytes,
-	}
-	messageByte, err := proto.Marshal(message)
-	if err != nil {
-		return err
-	}
-	err = w.Engine.Broadcast(messageByte)
-	if err != nil {
-		return err
-	}
-	return nil
-}
+// func (w *Worker) broadcastDevastateBciRequest(request *pb.DevastateBciRequest) error {
+// 	requestbytes, err := proto.Marshal(request)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	message := &pb.PoTMessage{
+// 		MsgType: pb.MessageType_DevastateBci_Request,
+// 		MsgByte: requestbytes,
+// 	}
+// 	messageByte, err := proto.Marshal(message)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	err = w.Engine.Broadcast(messageByte)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	return nil
+// }
 
 func (w *Worker) GenerateCoinbaseTx(pubkeybyte []byte, vdf0res []byte, totalreward int64) *types.Tx {
-	dcirewards := w.mempool.GetAllDciRewards()
+	Bcirewards := w.mempool.GetAllBciRewards()
 	coinbaseproof := make([]types.CoinbaseProof, 0)
-	for _, dcireward := range dcirewards {
+	for _, Bcireward := range Bcirewards {
 		proof := types.CoinbaseProof{
-			TxHash:  dcireward.Proof.TxHash,
-			Address: dcireward.Address,
-			Amount:  dcireward.Amount,
+			TxHash:  Bcireward.Proof.TxHash,
+			Address: Bcireward.Address,
+			Amount:  Bcireward.Amount,
 		}
 		coinbaseproof = append(coinbaseproof, proof)
 	}
@@ -701,9 +709,9 @@ func (w *Worker) GenerateCoinbaseTx(pubkeybyte []byte, vdf0res []byte, totalrewa
 	}
 	txouts = append(txouts, minerout)
 
-	selectreward := make(map[int32][]*DciReward)
-	if len(dcirewards) != 0 {
-		groupsdata := groupByChainID(dcirewards)
+	selectreward := make(map[int32][]*BciReward)
+	if len(Bcirewards) != 0 {
+		groupsdata := groupByChainID(Bcirewards)
 		for _, rewards := range groupsdata {
 			total := int64(0)
 			for _, reward := range rewards {
@@ -770,15 +778,15 @@ func (w *Worker) GenerateCoinbaseTx(pubkeybyte []byte, vdf0res []byte, totalrewa
 	return &types.Tx{Data: txdata}
 }
 
-func groupByChainID(rewards []*DciReward) map[int32][]*DciReward {
-	groupData := make(map[int32][]*DciReward)
+func groupByChainID(rewards []*BciReward) map[int32][]*BciReward {
+	groupData := make(map[int32][]*BciReward)
 	for _, reward := range rewards {
 		groupData[reward.BciType] = append(groupData[reward.BciType], reward)
 	}
 	return groupData
 }
 
-func (w *Worker) GenerateCoinbaseTxWithoutMinerKey(dcirewards []*DciReward, privkey *crypto.PqcKey, totalreward int64) *types.RawTx {
+func (w *Worker) GenerateCoinbaseTxWithoutMinerKey(Bcirewards []*BciReward, privkey *crypto.PqcKey, totalreward int64) *types.RawTx {
 	coinbaseproof := make([]types.CoinbaseProof, 0)
 	pubkeybyte := privkey.PublicKeyBytes()
 	minerout := types.TxOutput{
@@ -789,12 +797,12 @@ func (w *Worker) GenerateCoinbaseTxWithoutMinerKey(dcirewards []*DciReward, priv
 		LockTime: CoinbaseLock,
 	}
 
-	for _, dcireward := range dcirewards {
+	for _, Bcireward := range Bcirewards {
 		proof := types.CoinbaseProof{
-			TxHash:  dcireward.Proof.TxHash,
-			Address: dcireward.Address,
-			Amount:  dcireward.Amount,
-			Type:    dcireward.BciType,
+			TxHash:  Bcireward.Proof.TxHash,
+			Address: Bcireward.Address,
+			Amount:  Bcireward.Amount,
+			Type:    Bcireward.BciType,
 		}
 		coinbaseproof = append(coinbaseproof, proof)
 	}
@@ -836,7 +844,7 @@ func CoinbaseProofToBytes(coinbaseproofs []types.CoinbaseProof) []byte {
 }
 
 func (w *Worker) handleConfirmBlockTx(height uint64) error {
-	if height-ConfirmDelay > 0 {
+	if height < ConfirmDelay {
 		return nil
 	}
 	block, err := w.chainReader.GetByHeight(height - ConfirmDelay)
@@ -849,22 +857,36 @@ func (w *Worker) handleConfirmBlockTx(height uint64) error {
 		if !tx.IsCoinBase() {
 			for _, txoutput := range tx.TxOutput {
 				if len(txoutput.Data) != 0 {
-					err := w.transferTx2EVM(txoutput.Data)
+					err := w.TransferTx2EVM(txoutput.Data)
 					if err != nil {
 						return err
 					}
 				}
 
 			}
-
 		}
 	}
 
 	return nil
 }
 
-func (w *Worker) transferTx2EVM([]byte) error {
+func (w *Worker) TransferTx2EVM(data []byte) error {
+	conn, err := grpc.NewClient(w.config.PoT.ExcutorAddress, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(1024*1024*1024)))
 
+	if err != nil {
+		return err
+	}
+	client := pb.NewPoTExecutorClient(conn)
+	request := &pb.ExecuteTxRequest{
+		Tx: data,
+	}
+	resp, err := client.ExecuteTxs(context.Background(), request)
+	if err != nil {
+		return err
+	}
+	if resp.GetFlag() {
+		return nil
+	}
 	return nil
 }
 
@@ -974,8 +996,8 @@ func (w *Worker) CheckTxWithBlock(rawtx *types.RawTx, block *types.Block) (bool,
 			if len(coinbaseproofs) != 0 {
 				copy(coinbaseproofs, rawtx.CoinbaseProofs)
 				for _, coinbaseproof := range coinbaseproofs {
-					if !w.mempool.HasDciRewardByCoinbaseProof(&coinbaseproof) {
-						return fmt.Errorf(" coinbase tx error for can't find corresponding dci reward")
+					if !w.mempool.HasBciRewardByCoinbaseProof(&coinbaseproof) {
+						return fmt.Errorf(" coinbase tx error for can't find corresponding Bci reward")
 					}
 				}
 				groupsdata := groupByType(coinbaseproofs)
@@ -1305,6 +1327,9 @@ func (w *Worker) IsDevastedTransaction(rawtx *types.RawTx, block *types.Block) b
 		for _, txoutput := range rawtx.TxOutput {
 			if !bytes.Equal(txoutput.Address, BurnoutAddress) {
 				return fmt.Errorf("tx is not a devasted transaction for receiving address is not burnout address")
+			}
+			if len(txoutput.Data) == 0 {
+
 			}
 
 		}

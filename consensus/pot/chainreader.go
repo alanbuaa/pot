@@ -338,7 +338,7 @@ func (c *ChainReader) ResetTxForBlock(block *types.Block) error {
 					if err != nil {
 						return err
 					}
-				} 
+				}
 			}
 
 			// add txinput corresponding output back to database
@@ -607,7 +607,7 @@ type LockProof struct {
 	Amount         int64
 	Locktime       uint64
 	RemainLockTime uint64
-	DciType        int32
+	BciType        int32
 	TxOutput       types.TxOutput
 }
 
@@ -640,7 +640,7 @@ func (c *ChainReader) GetSelfLockUTXO() map[string][]*LockProof {
 						Amount:         output.Value,
 						Locktime:       output.LockTime,
 						RemainLockTime: remainlocktime,
-						DciType:        proof.Type,
+						BciType:        proof.Type,
 						TxOutput:       *output,
 					}
 					addressString := hexutil.Encode(output.Address)

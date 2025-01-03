@@ -18,41 +18,41 @@ import (
 	"golang.org/x/exp/rand"
 )
 
-func TestDci(t *testing.T) {
+func TestBci(t *testing.T) {
 	vdf1res := []byte("abcdefg789456121323")
 	rand.Seed(binary.BigEndian.Uint64(vdf1res[:8]))
 	//test := big.NewInt(0)
-	dcireward1 := &DciReward{
+	Bcireward1 := &BciReward{
 		Address: big.NewInt(rand.Int63()).Bytes(),
 		Amount:  10,
-		Proof:   DciProof{},
+		Proof:   BciProof{},
 		BciType: 1,
 		weight:  0,
 	}
-	dcireward2 := &DciReward{
+	Bcireward2 := &BciReward{
 		Address: big.NewInt(rand.Int63()).Bytes(),
 		Amount:  5,
-		Proof:   DciProof{},
+		Proof:   BciProof{},
 		BciType: 1,
 		weight:  0,
 	}
-	dcireward3 := &DciReward{
+	Bcireward3 := &BciReward{
 		Address: big.NewInt(rand.Int63()).Bytes(),
 		Amount:  1,
-		Proof:   DciProof{},
+		Proof:   BciProof{},
 		BciType: 1,
 		weight:  0,
 	}
-	dcireward4 := &DciReward{
+	Bcireward4 := &BciReward{
 		Address: big.NewInt(rand.Int63()).Bytes(),
 		Amount:  5,
-		Proof:   DciProof{},
+		Proof:   BciProof{},
 		BciType: 1,
 		weight:  0,
 	}
 
-	dcirewards := []*DciReward{dcireward1, dcireward2, dcireward3, dcireward4}
-	groupsdata := groupByChainID(dcirewards)
+	Bcirewards := []*BciReward{Bcireward1, Bcireward2, Bcireward3, Bcireward4}
+	groupsdata := groupByChainID(Bcirewards)
 	for _, rewards := range groupsdata {
 		total := int64(0)
 		for _, reward := range rewards {
@@ -63,7 +63,7 @@ func TestDci(t *testing.T) {
 			//t.Log(reward.weight)
 		}
 	}
-	selectreward := make(map[int32][]*DciReward)
+	selectreward := make(map[int32][]*BciReward)
 	vdf0res := []byte("abcdefg789456121323sssswererewrerwwerssssessssssss")
 	for chainID, rewards := range groupsdata {
 		t.Log(rewards)

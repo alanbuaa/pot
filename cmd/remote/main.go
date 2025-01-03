@@ -3,12 +3,13 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/zzz136454872/upgradeable-consensus/crypto"
-	"github.com/zzz136454872/upgradeable-consensus/pb"
-	"google.golang.org/grpc"
 	"math/big"
 	"net"
 	"time"
+
+	"github.com/zzz136454872/upgradeable-consensus/crypto"
+	"github.com/zzz136454872/upgradeable-consensus/pb"
+	"google.golang.org/grpc"
 )
 
 func main() {
@@ -89,6 +90,22 @@ func (p *PoTexecutor) VerifyTxs(ctx context.Context, request *pb.VerifyTxRequest
 	return reponse, nil
 }
 
+func (p *PoTexecutor) ExecuteTxs(ctx context.Context, request *pb.ExecuteTxRequest) (*pb.ExecuteTxResponse, error) {
+
+	return &pb.ExecuteTxResponse{
+		Tx:   request.Tx,
+		Flag: true,
+		TxID: []byte{},
+	}, nil
+
+}
+
+func (p *PoTexecutor) VerifyIncensentive(ctx context.Context, request *pb.IncensentiveVerifyRequest) (*pb.IncensentiveVerifyResponse, error) {
+
+	return &pb.IncensentiveVerifyResponse{
+		VerifyRes: []bool{true},
+	}, nil
+}
 func (p *PoTexecutor) GenerateTxsForHeight(height uint64) *Testblock {
 	txs := make([][]byte, 0)
 	for i := 0; i < 1000; i++ {
