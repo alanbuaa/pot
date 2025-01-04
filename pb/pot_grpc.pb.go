@@ -240,6 +240,7 @@ const (
 	PoTConsensus_CreateLockTransferTransaction_FullMethodName    = "/pb.PoTConsensus/CreateLockTransferTransaction"
 	PoTConsensus_CreateDevastateTransaction_FullMethodName       = "/pb.PoTConsensus/CreateDevastateTransaction"
 	PoTConsensus_CreateNonLockTransferTransaction_FullMethodName = "/pb.PoTConsensus/CreateNonLockTransferTransaction"
+	PoTConsensus_CreateBciToVsi_FullMethodName                   = "/pb.PoTConsensus/CreateBciToVsi"
 )
 
 // PoTConsensusClient is the client API for PoTConsensus service.
@@ -253,6 +254,7 @@ type PoTConsensusClient interface {
 	CreateLockTransferTransaction(ctx context.Context, in *CreateLockTransferTransactionRequest, opts ...grpc.CallOption) (*CreateLockTransferTransactionResponse, error)
 	CreateDevastateTransaction(ctx context.Context, in *CreateDevastateTransactionRequest, opts ...grpc.CallOption) (*CreateDevastateTransactionResponse, error)
 	CreateNonLockTransferTransaction(ctx context.Context, in *CreateNonLockTransferTransactionRequest, opts ...grpc.CallOption) (*CreateNonLockTransferTransactionResponse, error)
+	CreateBciToVsi(ctx context.Context, in *CreateBciToVsiRequest, opts ...grpc.CallOption) (*CreateBciToVsiResponse, error)
 }
 
 type poTConsensusClient struct {
@@ -333,6 +335,16 @@ func (c *poTConsensusClient) CreateNonLockTransferTransaction(ctx context.Contex
 	return out, nil
 }
 
+func (c *poTConsensusClient) CreateBciToVsi(ctx context.Context, in *CreateBciToVsiRequest, opts ...grpc.CallOption) (*CreateBciToVsiResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateBciToVsiResponse)
+	err := c.cc.Invoke(ctx, PoTConsensus_CreateBciToVsi_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // PoTConsensusServer is the server API for PoTConsensus service.
 // All implementations should embed UnimplementedPoTConsensusServer
 // for forward compatibility.
@@ -344,6 +356,7 @@ type PoTConsensusServer interface {
 	CreateLockTransferTransaction(context.Context, *CreateLockTransferTransactionRequest) (*CreateLockTransferTransactionResponse, error)
 	CreateDevastateTransaction(context.Context, *CreateDevastateTransactionRequest) (*CreateDevastateTransactionResponse, error)
 	CreateNonLockTransferTransaction(context.Context, *CreateNonLockTransferTransactionRequest) (*CreateNonLockTransferTransactionResponse, error)
+	CreateBciToVsi(context.Context, *CreateBciToVsiRequest) (*CreateBciToVsiResponse, error)
 }
 
 // UnimplementedPoTConsensusServer should be embedded to have
@@ -373,6 +386,9 @@ func (UnimplementedPoTConsensusServer) CreateDevastateTransaction(context.Contex
 }
 func (UnimplementedPoTConsensusServer) CreateNonLockTransferTransaction(context.Context, *CreateNonLockTransferTransactionRequest) (*CreateNonLockTransferTransactionResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateNonLockTransferTransaction not implemented")
+}
+func (UnimplementedPoTConsensusServer) CreateBciToVsi(context.Context, *CreateBciToVsiRequest) (*CreateBciToVsiResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CreateBciToVsi not implemented")
 }
 func (UnimplementedPoTConsensusServer) testEmbeddedByValue() {}
 
@@ -520,6 +536,24 @@ func _PoTConsensus_CreateNonLockTransferTransaction_Handler(srv interface{}, ctx
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PoTConsensus_CreateBciToVsi_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateBciToVsiRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PoTConsensusServer).CreateBciToVsi(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PoTConsensus_CreateBciToVsi_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PoTConsensusServer).CreateBciToVsi(ctx, req.(*CreateBciToVsiRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // PoTConsensus_ServiceDesc is the grpc.ServiceDesc for PoTConsensus service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -554,6 +588,10 @@ var PoTConsensus_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CreateNonLockTransferTransaction",
 			Handler:    _PoTConsensus_CreateNonLockTransferTransaction_Handler,
+		},
+		{
+			MethodName: "CreateBciToVsi",
+			Handler:    _PoTConsensus_CreateBciToVsi_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -108,7 +108,7 @@ enum TxType{
     LockTransferTranscation = 1;
     NonLockTransferTranscation = 2;
     DevasteTransaction = 3;
-
+    BciToVsiTransaction = 4;
 }
 
 message ClientTransaction{
@@ -229,7 +229,9 @@ service PoTConsensus{
   rpc   CreateLockTransferTransaction(CreateLockTransferTransactionRequest) returns (CreateLockTransferTransactionResponse) {}
   rpc   CreateDevastateTransaction(CreateDevastateTransactionRequest) returns (CreateDevastateTransactionResponse) {}
   rpc   CreateNonLockTransferTransaction(CreateNonLockTransferTransactionRequest) returns (CreateNonLockTransferTransactionResponse) {}
+  rpc   CreateBciToVsi(CreateBciToVsiRequest)returns (CreateBciToVsiResponse){}
 }
+
 
 message BciReward{
   bytes Address = 1;
@@ -352,6 +354,14 @@ message CreateNonLockTransferTransactionRequest{
 }
 
 message CreateNonLockTransferTransactionResponse{
+  RawTxData Tx = 1;
+  bool IsSuccess = 2;
+}
+
+message CreateBciToVsiRequest{
+  RawTxData Tx = 1;
+}
+message CreateBciToVsiResponse{
   RawTxData Tx = 1;
   bool IsSuccess = 2;
 }

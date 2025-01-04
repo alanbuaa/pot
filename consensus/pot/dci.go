@@ -520,6 +520,71 @@ func (w *Worker) CheckNonLockTransferTransaction(rawtx *types.RawTx) error {
 	return nil
 }
 
+func (w *Worker) CreateBciToVsi(ctx context.Context, request *pb.CreateBciToVsiRequest) (*pb.CreateBciToVsiResponse, error) {
+	pbrawtx := request.GetTx()
+	rawtx := types.ToRawTx(pbrawtx)
+	err := w.CheckBciToVsiRequest(rawtx)
+	if err != nil {
+		return nil, err
+	}
+	err = w.broadcastClientTransaction(rawtx, pb.TxType_BciToVsiTransaction)
+	if err != nil {
+		return nil, err
+	}
+	w.mempool.AddRawTx(rawtx)
+	return &pb.CreateBciToVsiResponse{IsSuccess: true}, nil
+}
+
+func (w *Worker) CheckBciToVsiRequest(rawtx *types.RawTx) error {
+	db := w.chainReader.GetBoltDb()
+	height := w.getEpoch()
+
+	err := db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(types.UTXOBucket))
+		inputinterest := int64(0)
+		outputinterest := int64(0)
+
+		for _, txinput := range rawtx.TxInput {
+			lockkey := fmt.Sprintf("%s:%d", hexutil.Encode(txinput.Txid[:]), txinput.Voutput)
+			outpubyte := b.Get([]byte(lockkey))
+			if outpubyte == nil {
+				return fmt.Errorf("update tx error for can't find corresponding utxo ")
+			}
+			output := types.DecodeByteToTxOutput(outpubyte)
+			if output.BurnLock != 0 && output.BurnLock < height {
+				return fmt.Errorf("tx is not a transfer To Vsi transaction")
+			}
+
+			inputinterest += output.Interest
+			if output.BurnLock != 0 && output.BurnLock >= height {
+				gap := height - output.BurnLock
+				interest := int64(math.Floor(savingRate * float64(output.Interest) * float64(gap) / float64(OneYear)))
+				inputinterest += interest
+			} else if output.BurnLock == 0 {
+				gap := height - output.BlockHeight
+				interest := int64(math.Floor(savingRate * float64(output.Interest) * float64(gap) / float64(OneYear)))
+				inputinterest += interest
+			}
+		}
+		for _, txoutput := range rawtx.TxOutput {
+			if !bytes.Equal(txoutput.Address, BurnoutAddress) {
+				return fmt.Errorf("tx is not a devasted transaction for receiving address is not burnout address")
+			}
+			outputinterest += txoutput.Interest
+		}
+		if outputinterest+rawtx.TransactionFee > inputinterest {
+			return fmt.Errorf("tx is not a devasted transaction for output interest is greater than input interest")
+		}
+
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (w *Worker) handleSendBciRequest(request *pb.SendBciRequest) (*pb.SendBciResponse, error) {
 	Bcirewards := request.GetBciReward()
 
