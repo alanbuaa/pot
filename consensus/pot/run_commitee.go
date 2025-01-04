@@ -129,10 +129,10 @@ func (w *Worker) CommitteeUpdate(height uint64) {
 			}
 			if block != nil {
 				header := block.GetHeader()
-				committee[i] = hexutil.Encode(header.PublicKey)
-				flag, _ := w.TryFindKey(crypto.Convert(header.Hash()))
+				committee[i] = hexutil.Encode(header.CommiteePubkey)
+				flag, _ := w.TryFindCommiteeKey(crypto.Convert(header.Hash()))
 				if flag {
-					selfaddress = append(selfaddress, hexutil.Encode(header.PublicKey))
+					selfaddress = append(selfaddress, hexutil.Encode(header.CommiteePubkey))
 				}
 			}
 		}
