@@ -75,6 +75,7 @@ type Worker struct {
 	// rand seed
 	rand         *rand.Rand
 	blockCounter int
+	keyseed      []byte
 
 	Engine  *PoTEngine
 	mutex   *sync.Mutex
@@ -134,6 +135,11 @@ func NewWorker(id int64, config *config.ConsensusConfig, logger *logrus.Entry, b
 		abortchannel: make(chan struct{}),
 		once:         new(sync.Once),
 	}
+	randseed := make([]byte, 32)
+	_, err = rand.Read(randseed)
+	if err != nil {
+		return nil
+	}
 
 	w := &Worker{
 		abort:         aborts,
@@ -166,7 +172,14 @@ func NewWorker(id int64, config *config.ConsensusConfig, logger *logrus.Entry, b
 		CommiteeNum:     int32(1),
 		BackupCommitee:  BackupCommitee,
 		chainresetflag:  false,
+		keyseed:         randseed,
 	}
+	fill, err := os.OpenFile("bci", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
+	if err != nil {
+		fmt.Println(err)
+	}
+	fill.WriteString(fmt.Sprintf("[seed]%s\n", hexutil.Encode(randseed)))
+	fill.Close()
 	rpcserver := grpc.NewServer()
 	pb.RegisterPoTConsensusServer(rpcserver, w)
 	w.rpcserver = rpcserver
@@ -550,10 +563,15 @@ func (w *Worker) CompleteBlock(emptyblock *types.Block, vdf0res []byte, vdf1res 
 	block.Header.Hashes = block.Header.Hash()
 	w.SetBlockKeyMap(privkey.PrivateKeyBytes(), crypto.Convert(block.Header.Hash()))
 
-	commiteekey := crypto.GenerateKey()
-	keybyte := commiteekey.PublicKeyBytes()
-	block.Header.CommiteePubkey = keybyte
-	w.SetCommiteeKeyMap(commiteekey.Private(), crypto.Convert(block.Header.Hash()))
+	// commiteekey := crypto.GenerateKey()
+	// keybyte := commiteekey.PublicKeyBytes()
+	// block.Header.CommiteePubkey = keybyte
+	// w.SetCommiteeKeyMap(commiteekey.Private(), crypto.Convert(block.Header.Hash()))
+	commiteekey := crypto.GenerateCommiteeKey(privkey, w.keyseed, vdf0rescopy)
+	block.Header.CommiteePubkey = commiteekey.PublicKeyBytes()
+	block.Header.Hashes = block.Header.Hash()
+
+	w.SetBlockKeyMap(privkey.PrivateKeyBytes(), crypto.Convert(block.Header.Hash()))
 
 	return block
 }
@@ -850,18 +868,33 @@ func (w *Worker) TryFindKey(blockhash [crypto.Hashlen]byte) (bool, []byte) {
 	}
 }
 
-func (w *Worker) SetCommiteeKeyMap(privatekey []byte, blockhash [crypto.Hashlen]byte) {
-	w.rwmutex.Lock()
-	defer w.rwmutex.Unlock()
-	w.CommitteeKeyMap[blockhash] = privatekey
-}
+// func (w *Worker) SetCommiteeKeyMap(privatekey []byte, blockhash [crypto.Hashlen]byte) {
+// 	w.rwmutex.Lock()
+// 	defer w.rwmutex.Unlock()
+// 	w.CommitteeKeyMap[blockhash] = privatekey
+// }
 
-func (w *Worker) TryFindCommiteeKey(blockhash [crypto.Hashlen]byte) (bool, []byte) {
+func (w *Worker) TryFindCommiteeKey(blockhash [crypto.Hashlen]byte) (bool, *crypto.PrivateKey) {
 	w.rwmutex.RLock()
-	prikey := w.CommitteeKeyMap[blockhash]
+	prikey := w.blockKeyMap[blockhash]
 	w.rwmutex.RUnlock()
+
 	if prikey != nil {
-		return true, prikey
+		block, _ := w.blockStorage.Get(blockhash[:])
+		if block == nil {
+			return false, nil
+		}
+		pubkey := block.GetHeader().PublicKey
+		pqckey := &crypto.PqcKey{
+			Privkey: prikey,
+			Pubkey:  pubkey,
+			Scheme:  crypto.PqcScheme,
+		}
+		commiteekey := crypto.GenerateCommiteeKey(pqckey, w.keyseed, block.GetHeader().PoTProof[0])
+		if commiteekey == nil {
+			return false, nil
+		}
+		return true, commiteekey
 	} else {
 		return false, nil
 	}
@@ -1186,38 +1219,26 @@ func (w *Worker) handleBlockRawTx(block *types.Block) error {
 	w.mempool.MarkRawTxProposed(txs)
 
 	if block.Header.Height > ConfirmDelay {
-		block, err := w.chainReader.GetByHeight(block.Header.Height - ConfirmDelay)
+		handleblock, err := w.chainReader.GetByHeight(block.Header.Height - ConfirmDelay)
 		if err != nil {
 			return err
 		}
-		rawtxs := block.GetRawTx()
+		rawtxs := handleblock.GetRawTx()
 		for _, tx := range rawtxs {
 			if tx.IsCoinBase() {
 
 			}
-			// 	if !tx.IsCoinBase() {
-			// 		txid := tx.Txid
-			// 		transactionbyte, ok := w.mempool.rawmap[txid]
-			// 		if !ok {
-			// 			return fmt.Errorf("handle block raw tx error for tx %s does not exist in mempool", hexutil.Encode(txid[:]))
-			// 		}
-			// 		ptx := &pb.Transaction{
-			// 			Type:    pb.TransactionType_NORMAL,
-			// 			Payload: transactionbyte,
-			// 		}
 
-			// 		btx, err := proto.Marshal(ptx)
-			// 		if err != nil {
-			// 			return err
-			// 		}
-
-			// 		sharding := []byte(hexutil.EncodeUint64(1))
-			// 		request := &pb.Request{
-			// 			Tx:       btx,
-			// 			Sharding: sharding,
-			// 		}
-			// 		w.Engine.UpperConsensus.GetRequestEntrance() <- request
-			// 	}
+			for _, txoutput := range tx.TxOutput {
+				if len(txoutput.Data) != 0 {
+					if w.IsConvertToVsiTransaction(tx, handleblock) || w.IsDevastedTransaction(tx, handleblock) {
+						err := w.TransferTx2EVM(txoutput.Data)
+						if err != nil {
+							return err
+						}
+					}
+				}
+			}
 		}
 	}
 
@@ -1227,9 +1248,10 @@ func (w *Worker) handleBlockRawTx(block *types.Block) error {
 func (w *Worker) stop() {
 	fill, err := os.OpenFile(fmt.Sprintf("./logs/blockmyself-%d", w.ID), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
 	if err != nil {
-		return
+		fill.WriteString(err.Error())
 	}
 	fill.WriteString("")
+	fill.Close()
 	w.rpcserver.Stop()
 	w.listener.Close()
 }

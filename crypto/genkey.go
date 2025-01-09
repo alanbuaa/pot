@@ -13,7 +13,7 @@ const (
 )
 
 var (
-	PqcScheme = int(0)
+	PqcScheme = int(3)
 )
 
 type PrivateKey struct {
@@ -50,6 +50,21 @@ func GenerateCommiteeKeyWithPqcKey(pqcKey *PqcKey) (*PrivateKey, []byte, error) 
 	}, randseed, nil
 }
 
+func GenerateCommiteeKey(pqckey *PqcKey, seed []byte, randbyte []byte) *PrivateKey {
+	pqcbyte := pqckey.PublicKeyBytes()
+	hashkey1 := bytes.Join([][]byte{seed, randbyte}, []byte{})
+	hash1 := Hash(hashkey1)
+
+	hashkey2 := bytes.Join([][]byte{pqcbyte, hash1}, []byte{})
+	privKey := bls12382.NewFr().FromBytes(Hash(hashkey2))
+	group1 := bls12382.NewG1()
+	return &PrivateKey{
+		priv: privKey.ToBytes(),
+		pub:  *group1.MulScalar(group1.New(), group1.One(), privKey),
+	}
+
+}
+
 func (k *PrivateKey) Private() []byte {
 	return k.priv
 }
@@ -63,9 +78,9 @@ func (k *PrivateKey) PublicKeyBytes() []byte {
 }
 
 type PqcKey struct {
-	privkey []byte
-	pubkey  []byte
-	scheme  int
+	Privkey []byte
+	Pubkey  []byte
+	Scheme  int
 }
 
 func GeneratePqcKey() (*PqcKey, error) {
@@ -83,19 +98,19 @@ func GeneratePqcKey() (*PqcKey, error) {
 }
 
 func (k *PqcKey) PrivateKeyBytes() []byte {
-	return k.privkey
+	return k.Privkey
 }
 
 func (k *PqcKey) PublicKeyBytes() []byte {
-	return k.pubkey
+	return k.Pubkey
 }
 
 func (k *PqcKey) SignatureScheme() int {
-	return k.scheme
+	return k.Scheme
 }
 
 func (k *PqcKey) Sign(message []byte) ([]byte, error) {
-	sig, err := pqcgo.Sign(k.scheme, message, k.privkey)
+	sig, err := pqcgo.Sign(k.Scheme, message, k.Privkey)
 	if err != nil {
 		return nil, err
 	}
@@ -104,4 +119,41 @@ func (k *PqcKey) Sign(message []byte) ([]byte, error) {
 
 func VerifySig(message []byte, sig []byte, pk []byte) (bool, error) {
 	return pqcgo.Verify(PqcScheme, sig, message, pk)
+}
+
+func VerifyCommitteePKAPI(alphaBytes, pkBytes, gBytes, yBytes, gDotBytes, yDotBytes []byte) bool {
+	group1 := bls12382.NewG1()
+	g, err := group1.FromBytes(gBytes)
+	if err != nil {
+		return false
+	}
+	y, err := group1.FromBytes(yBytes)
+	if err != nil {
+		return false
+	}
+	gDot, err := group1.FromCompressed(gDotBytes)
+	if err != nil {
+		return false
+	}
+	yDot, err := group1.FromCompressed(yDotBytes)
+	if err != nil {
+		return false
+	}
+	x := bls12382.HashToFr(append(alphaBytes, pkBytes...))
+	if !group1.Equal(y, group1.MulScalar(group1.New(), g, x)) {
+		return false
+	}
+	if !group1.Equal(yDot, group1.MulScalar(group1.New(), gDot, x)) {
+		return false
+	}
+	return true
+}
+
+type CommiteeKeySig struct {
+	Alpha       []byte `json:"alpha"`
+	Pqcpubkey   []byte `json:"pqcpubkey"`
+	G           []byte `json:"g"`
+	CommiteeKey []byte `json:"commiteekey"`
+	Rcommit     []byte `json:"rcommit"`
+	AwardKey    []byte `json:"awardkey"`
 }

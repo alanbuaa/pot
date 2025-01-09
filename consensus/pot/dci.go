@@ -520,7 +520,7 @@ func (w *Worker) CheckNonLockTransferTransaction(rawtx *types.RawTx) error {
 	return nil
 }
 
-func (w *Worker) CreateBciToVsi(ctx context.Context, request *pb.CreateBciToVsiRequest) (*pb.CreateBciToVsiResponse, error) {
+func (w *Worker) CreateBciToVsiTransaction(ctx context.Context, request *pb.CreateBciToVsiRequest) (*pb.CreateBciToVsiResponse, error) {
 	pbrawtx := request.GetTx()
 	rawtx := types.ToRawTx(pbrawtx)
 	err := w.CheckBciToVsiRequest(rawtx)
@@ -567,13 +567,16 @@ func (w *Worker) CheckBciToVsiRequest(rawtx *types.RawTx) error {
 			}
 		}
 		for _, txoutput := range rawtx.TxOutput {
-			if !bytes.Equal(txoutput.Address, BurnoutAddress) {
-				return fmt.Errorf("tx is not a devasted transaction for receiving address is not burnout address")
+			if !bytes.Equal(txoutput.Address, VsiConvertAddress) {
+				return fmt.Errorf("tx is not a SelfLock transaction for receiving address is not burnout address")
+			}
+			if txoutput.Data == nil {
+				return fmt.Errorf("tx is not a SelfLock transaction for txoutput data is nil")
 			}
 			outputinterest += txoutput.Interest
 		}
 		if outputinterest+rawtx.TransactionFee > inputinterest {
-			return fmt.Errorf("tx is not a devasted transaction for output interest is greater than input interest")
+			return fmt.Errorf("tx is not a SelfLock transaction for output interest is greater than input interest")
 		}
 
 		return nil
@@ -922,6 +925,7 @@ func (w *Worker) handleConfirmBlockTx(height uint64) error {
 		if !tx.IsCoinBase() {
 			for _, txoutput := range tx.TxOutput {
 				if len(txoutput.Data) != 0 {
+					fmt.Printf("txid %s data transfer to vm\n", hexutil.Encode(tx.Txid[:]))
 					err := w.TransferTx2EVM(txoutput.Data)
 					if err != nil {
 						return err
@@ -1425,6 +1429,35 @@ func (w *Worker) IsNonLockTransferTransaction(rawtx *types.RawTx, block *types.B
 			}
 			if bytes.Equal(txoutput.Address, BurnoutAddress) {
 				return fmt.Errorf("tx is not a non-lock transfer transaction for output address is burnout address")
+			}
+		}
+		return nil
+	})
+
+	return err == nil
+}
+
+func (w *Worker) IsConvertToVsiTransaction(rawtx *types.RawTx, block *types.Block) bool {
+	db := w.chainReader.GetBoltDb()
+	err := db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(types.UTXOBucket))
+		for _, txinput := range rawtx.TxInput {
+			lockkey := fmt.Sprintf("%s:%d", hexutil.Encode(txinput.Txid[:]), txinput.Voutput)
+			outpubyte := b.Get([]byte(lockkey))
+			if outpubyte == nil {
+				return fmt.Errorf("update tx error for can't find corresponding utxo ")
+			}
+			output := types.DecodeByteToTxOutput(outpubyte)
+			if output.BurnLock != 0 && output.BurnLock < block.Header.Height {
+				return fmt.Errorf("tx is not a BciToVsi transaction")
+			}
+		}
+		for _, txoutput := range rawtx.TxOutput {
+			if txoutput.BurnLock != 0 {
+				return fmt.Errorf("tx is not a BciToVsi transaction")
+			}
+			if bytes.Equal(txoutput.Address, VsiConvertAddress) {
+				return fmt.Errorf("tx is not a BciToVsi transaction for output address is burnout address")
 			}
 		}
 		return nil

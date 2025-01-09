@@ -4,8 +4,12 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	ethtype "github.com/ethereum/go-ethereum/core/types"
+	ethcrypto "github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/zzz136454872/upgradeable-consensus/consensus/pot"
 	"github.com/zzz136454872/upgradeable-consensus/crypto"
 	"github.com/zzz136454872/upgradeable-consensus/pb"
@@ -153,6 +157,52 @@ func main() {
 			return
 
 		}
+
+		ethclient, err := ethclient.Dial("http://111.119.239.159:36054")
+		if err != nil {
+			fmt.Println(err)
+			return
+
+		}
+
+		key, err := ethcrypto.GenerateKey()
+		if err != nil {
+			fmt.Println(err)
+		}
+		nonce, err := ethclient.PendingNonceAt(context.Background(), ethcrypto.PubkeyToAddress(key.PublicKey))
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		value := big.NewInt(10)
+		gaslimit := uint64(21000)
+		gasprice, err := ethclient.SuggestGasPrice(context.Background())
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		toaddress := ethcrypto.PubkeyToAddress(key.PublicKey)
+
+		chainID, err := ethclient.ChainID(context.Background())
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+
+		amountbyte := big.NewInt(amount)
+		data := append([]byte{0x0D, 0x02}, amountbyte.Bytes()...)
+		txs := ethtype.NewTransaction(nonce, toaddress, value, gaslimit, gasprice, data)
+		signedtx, err := ethtype.SignTx(txs, ethtype.NewEIP155Signer(chainID), key)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		txdata, err := signedtx.MarshalBinary()
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+
 		txoutput2 := types.TxOutput{
 			Address:   addr2,
 			Value:     amount,
@@ -161,6 +211,7 @@ func main() {
 			LockTime:  7,
 			Rate:      pot.TenYearRate,
 			CreatedAt: 11,
+			Data:      txdata,
 		}
 		tx2 := types.RawTx{
 			Txid:           [32]byte{},
@@ -170,11 +221,14 @@ func main() {
 			CoinbaseProofs: nil,
 		}
 		tx2.Txid = tx2.Hash()
-		request2 := &pb.CreateNonLockTransferTransactionRequest{
+		fmt.Println(hexutil.Encode(tx2.Txid[:]))
+
+		request2 := &pb.CreateDevastateTransactionRequest{
 			Tx: tx2.ToProto(),
 		}
 
-		response2, err := client.CreateNonLockTransferTransaction(context.Background(), request2)
+		response2, err := client.CreateDevastateTransaction(context.Background(), request2)
+
 		if err != nil {
 			fmt.Println(err)
 			return

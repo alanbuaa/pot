@@ -223,13 +223,12 @@ message IncensentiveVerifyRequest{
 service PoTConsensus{
   rpc   SendBci(SendBciRequest)           returns (SendBciResponse)       {}
   rpc   GetBalance(GetBalanceRequest)     returns (GetBalanceResponse)    {}
-  
   rpc   VerifyUTXO(VerifyUTXORequest)     returns (VerifyUTXOResponse)    {}
   rpc   CreateLockTransaction(CreateLockTransactionRequest) returns (CreateLockTransactionResponse) {}
   rpc   CreateLockTransferTransaction(CreateLockTransferTransactionRequest) returns (CreateLockTransferTransactionResponse) {}
   rpc   CreateDevastateTransaction(CreateDevastateTransactionRequest) returns (CreateDevastateTransactionResponse) {}
   rpc   CreateNonLockTransferTransaction(CreateNonLockTransferTransactionRequest) returns (CreateNonLockTransferTransactionResponse) {}
-  rpc   CreateBciToVsi(CreateBciToVsiRequest)returns (CreateBciToVsiResponse){}
+  rpc   CreateBciToVsiTransaction(CreateBciToVsiRequest)returns (CreateBciToVsiResponse){}
 }
 
 

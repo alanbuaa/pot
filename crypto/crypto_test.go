@@ -1,6 +1,8 @@
 package crypto
 
 import (
+	"blockchain-crypto/types/curve/bls12381"
+	"fmt"
 	"testing"
 
 	"github.com/niclabs/tcrsa"
@@ -45,4 +47,19 @@ func TestThresholdSignature(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Log("ok")
+}
+
+func TestGenkey(t *testing.T) {
+
+}
+
+func TestVerifySignature(t *testing.T) {
+	alpha := []byte("hello alpha")
+	pk := []byte("hello PK")
+	x := bls12381.HashToFr(append(alpha, pk...))
+	group1 := bls12381.NewG1()
+	y := group1.MulScalar(group1.New(), group1.One(), x)
+	gDot := group1.MulScalar(group1.New(), group1.One(), bls12381.FrFromInt(12345))
+	yDot := group1.MulScalar(group1.New(), y, bls12381.FrFromInt(12345))
+	fmt.Println(VerifyCommitteePKAPI(alpha, pk, group1.ToBytes(group1.One()), group1.ToBytes(y), group1.ToBytes(gDot), group1.ToBytes(yDot)))
 }

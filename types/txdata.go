@@ -2,6 +2,7 @@ package types
 
 import (
 	"blockchain-crypto/pqcgo"
+
 	"bytes"
 	"encoding/gob"
 	"encoding/json"
@@ -16,6 +17,10 @@ import (
 const (
 	RawTxType     = 0x01
 	ExcutedTxType = 0x02
+)
+
+var (
+	FpByteSize = 48
 )
 
 type ExecutedBlock struct {
@@ -462,14 +467,35 @@ func (o TxOutput) CanBeUnlockWith(input TxInput) bool {
 			return true
 		}
 	} else {
-		sig := input.Scriptsig
-		utxokey := fmt.Sprintf("%s:%d", input.Txid, input.Voutput)
-		flag, err := crypto.VerifySig([]byte(utxokey), sig, pubkey)
-		if err != nil && !flag {
+
+		// sig := input.Scriptsig
+		// utxokey := fmt.Sprintf("%s:%d", input.Txid, input.Voutput)
+		// flag, err := crypto.VerifySig([]byte(utxokey), sig, pubkey)
+		// if err != nil && !flag {
+		// 	return false
+		// }
+		// TODO: check commiteekey
+		pqcpubkey := input.Address
+		if len(pqcpubkey) != pqcgo.PUBLICKEYBYTES[crypto.PqcScheme] {
 			return false
 		}
-		// TODO: check commiteekey
 
+		commiteekeysig := &crypto.CommiteeKeySig{}
+		err := json.Unmarshal(input.Scriptsig, commiteekeysig)
+
+		if err != nil {
+			return false
+		}
+
+		if !crypto.VerifyCommitteePKAPI(commiteekeysig.Alpha, commiteekeysig.Pqcpubkey, commiteekeysig.G, commiteekeysig.CommiteeKey, commiteekeysig.Rcommit, commiteekeysig.AwardKey) {
+			return false
+		}
+		// alpha := sig[0:crypto.Hashlen]
+		// ydot := sig[crypto.Hashlen : crypto.Hashlen+FpByteSize]
+		// pqcsig := sig[crypto.Hashlen+FpByteSize:]
+		// gdot :=
+
+		// if crypto.VerifyCommitteePKAPI(alpha, pqcpubkey)
 	}
 	return true
 }

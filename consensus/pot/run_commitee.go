@@ -221,9 +221,7 @@ func (w *Worker) CommitteeUpdate(height uint64) {
 			fill.WriteString(fmt.Sprintf("[%d]%s\n", epoch, hexutil.EncodeBig(big.NewInt(coinbasetx.TxOutput[0].Value))))
 			fill.WriteString(fmt.Sprintf("\n"))
 		}
-		if err != nil {
-			fmt.Println(err)
-		}
+
 		fill.Close()
 	}
 }
