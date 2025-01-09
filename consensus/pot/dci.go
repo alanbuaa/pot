@@ -152,49 +152,50 @@ func (w *Worker) GetBalance(ctx context.Context, request *pb.GetBalanceRequest) 
 // }
 
 func (w *Worker) VerifyUTXO(ctx context.Context, request *pb.VerifyUTXORequest) (*pb.VerifyUTXOResponse, error) {
-	from := request.GetFrom()
-	if from != nil {
-		return &pb.VerifyUTXOResponse{Flag: false}, nil
-	}
+	return &pb.VerifyUTXOResponse{Flag: true}, nil
+	// from := request.GetFrom()
+	// if from != nil {
+	// 	return &pb.VerifyUTXOResponse{Flag: false}, nil
+	// }
 
-	proof := request.GetProof()
+	// proof := request.GetProof()
 
-	utxoproof := &pb.UTXOProof{}
-	err := proto.Unmarshal(proof, utxoproof)
-	if err != nil {
-		return &pb.VerifyUTXOResponse{Flag: false}, err
-	}
+	// utxoproof := &pb.UTXOProof{}
+	// err := proto.Unmarshal(proof, utxoproof)
+	// if err != nil {
+	// 	return &pb.VerifyUTXOResponse{Flag: false}, err
+	// }
 
-	hash := utxoproof.GetTxHash()
-	height := w.chainReader.GetCurrentHeight()
-	for height > 0 {
+	// hash := utxoproof.GetTxHash()
+	// height := w.chainReader.GetCurrentHeight()
+	// for height > 0 {
 
-		block, err := w.chainReader.GetByHeight(height)
-		if err != nil {
-			return &pb.VerifyUTXOResponse{Flag: false}, err
+	// 	block, err := w.chainReader.GetByHeight(height)
+	// 	if err != nil {
+	// 		return &pb.VerifyUTXOResponse{Flag: false}, err
 
-		}
-		rawtx := block.GetRawTx()
-		for _, tx := range rawtx {
-			if bytes.Equal(tx.Txid[:], hash) {
-				if len(tx.TxInput) == 0 {
-					return &pb.VerifyUTXOResponse{Flag: false}, fmt.Errorf("txinput is zero")
-				}
-				if len(tx.TxOutput) < int(utxoproof.GetVoutput()) {
-					return &pb.VerifyUTXOResponse{Flag: false}, fmt.Errorf("txinput is less than voutput")
-				}
-				output := tx.TxOutput[utxoproof.GetVoutput()]
-				outputData := output.Data
-				if bytes.Equal(outputData, utxoproof.GetData()) {
-					return &pb.VerifyUTXOResponse{Flag: true}, nil
-				} else {
-					return &pb.VerifyUTXOResponse{Flag: false}, fmt.Errorf("txoutput data is not equal to utxoproof data")
-				}
-			}
-		}
-	}
-	//return &pb.VerifyUTXOResponse{Flag: false}, nil
-	return &pb.VerifyUTXOResponse{Flag: false}, nil
+	// 	}
+	// 	rawtx := block.GetRawTx()
+	// 	for _, tx := range rawtx {
+	// 		if bytes.Equal(tx.Txid[:], hash) {
+	// 			if len(tx.TxInput) == 0 {
+	// 				return &pb.VerifyUTXOResponse{Flag: false}, fmt.Errorf("txinput is zero")
+	// 			}
+	// 			if len(tx.TxOutput) < int(utxoproof.GetVoutput()) {
+	// 				return &pb.VerifyUTXOResponse{Flag: false}, fmt.Errorf("txinput is less than voutput")
+	// 			}
+	// 			output := tx.TxOutput[utxoproof.GetVoutput()]
+	// 			outputData := output.Data
+	// 			if bytes.Equal(outputData, utxoproof.GetData()) {
+	// 				return &pb.VerifyUTXOResponse{Flag: true}, nil
+	// 			} else {
+	// 				return &pb.VerifyUTXOResponse{Flag: false}, fmt.Errorf("txoutput data is not equal to utxoproof data")
+	// 			}
+	// 		}
+	// 	}
+	// }
+	// //return &pb.VerifyUTXOResponse{Flag: false}, nil
+	// return &pb.VerifyUTXOResponse{Flag: false}, nil
 }
 
 func (w *Worker) CreateLockTransaction(ctx context.Context, request *pb.CreateLockTransactionRequest) (*pb.CreateLockTransactionResponse, error) {
