@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"math/big"
+	"os"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	ethtype "github.com/ethereum/go-ethereum/core/types"
@@ -164,17 +165,30 @@ func main() {
 			return
 
 		}
-
-		key, err := ethcrypto.GenerateKey()
+		testkey, err := ethcrypto.GenerateKey()
 		if err != nil {
 			fmt.Println(err)
+			return
+		}
+		readfill, _ := os.OpenFile("key", os.O_RDWR, 0644)
+		keydata := make([]byte, testkey.Params().BitSize/8)
+		_, err = readfill.Read(keydata)
+
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		key, err := ethcrypto.ToECDSA(keydata)
+		if err != nil {
+			fmt.Println(err)
+			return
 		}
 		nonce, err := ethclient.PendingNonceAt(context.Background(), ethcrypto.PubkeyToAddress(key.PublicKey))
 		if err != nil {
 			fmt.Println(err)
 			return
 		}
-		value := big.NewInt(10)
+
 		gaslimit := uint64(21000)
 		gasprice, err := ethclient.SuggestGasPrice(context.Background())
 		if err != nil {
@@ -191,7 +205,7 @@ func main() {
 
 		amountbyte := big.NewInt(amount)
 		data := append([]byte{0x0D, 0x02}, amountbyte.Bytes()...)
-		txs := ethtype.NewTransaction(nonce, toaddress, value, gaslimit, gasprice, data)
+		txs := ethtype.NewTransaction(nonce, toaddress, big.NewInt(amount), gaslimit, gasprice, data)
 		signedtx, err := ethtype.SignTx(txs, ethtype.NewEIP155Signer(chainID), key)
 		if err != nil {
 			fmt.Println(err)
