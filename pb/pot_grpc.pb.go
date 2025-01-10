@@ -233,20 +233,20 @@ var PoTExecutor_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	PoTConsensus_SendBci_FullMethodName                          = "/pb.PoTConsensus/SendBci"
-	PoTConsensus_GetBalance_FullMethodName                       = "/pb.PoTConsensus/GetBalance"
-	PoTConsensus_VerifyUTXO_FullMethodName                       = "/pb.PoTConsensus/VerifyUTXO"
-	PoTConsensus_CreateLockTransaction_FullMethodName            = "/pb.PoTConsensus/CreateLockTransaction"
-	PoTConsensus_CreateLockTransferTransaction_FullMethodName    = "/pb.PoTConsensus/CreateLockTransferTransaction"
-	PoTConsensus_CreateDevastateTransaction_FullMethodName       = "/pb.PoTConsensus/CreateDevastateTransaction"
-	PoTConsensus_CreateNonLockTransferTransaction_FullMethodName = "/pb.PoTConsensus/CreateNonLockTransferTransaction"
-	PoTConsensus_CreateBciToVsiTransaction_FullMethodName        = "/pb.PoTConsensus/CreateBciToVsiTransaction"
+	DciExector_SendBci_FullMethodName                          = "/pb.DciExector/SendBci"
+	DciExector_GetBalance_FullMethodName                       = "/pb.DciExector/GetBalance"
+	DciExector_VerifyUTXO_FullMethodName                       = "/pb.DciExector/VerifyUTXO"
+	DciExector_CreateLockTransaction_FullMethodName            = "/pb.DciExector/CreateLockTransaction"
+	DciExector_CreateLockTransferTransaction_FullMethodName    = "/pb.DciExector/CreateLockTransferTransaction"
+	DciExector_CreateDevastateTransaction_FullMethodName       = "/pb.DciExector/CreateDevastateTransaction"
+	DciExector_CreateNonLockTransferTransaction_FullMethodName = "/pb.DciExector/CreateNonLockTransferTransaction"
+	DciExector_CreateBciToVsiTransaction_FullMethodName        = "/pb.DciExector/CreateBciToVsiTransaction"
 )
 
-// PoTConsensusClient is the client API for PoTConsensus service.
+// DciExectorClient is the client API for DciExector service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-type PoTConsensusClient interface {
+type DciExectorClient interface {
 	SendBci(ctx context.Context, in *SendBciRequest, opts ...grpc.CallOption) (*SendBciResponse, error)
 	GetBalance(ctx context.Context, in *GetBalanceRequest, opts ...grpc.CallOption) (*GetBalanceResponse, error)
 	VerifyUTXO(ctx context.Context, in *VerifyUTXORequest, opts ...grpc.CallOption) (*VerifyUTXOResponse, error)
@@ -257,98 +257,98 @@ type PoTConsensusClient interface {
 	CreateBciToVsiTransaction(ctx context.Context, in *CreateBciToVsiRequest, opts ...grpc.CallOption) (*CreateBciToVsiResponse, error)
 }
 
-type poTConsensusClient struct {
+type dciExectorClient struct {
 	cc grpc.ClientConnInterface
 }
 
-func NewPoTConsensusClient(cc grpc.ClientConnInterface) PoTConsensusClient {
-	return &poTConsensusClient{cc}
+func NewDciExectorClient(cc grpc.ClientConnInterface) DciExectorClient {
+	return &dciExectorClient{cc}
 }
 
-func (c *poTConsensusClient) SendBci(ctx context.Context, in *SendBciRequest, opts ...grpc.CallOption) (*SendBciResponse, error) {
+func (c *dciExectorClient) SendBci(ctx context.Context, in *SendBciRequest, opts ...grpc.CallOption) (*SendBciResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(SendBciResponse)
-	err := c.cc.Invoke(ctx, PoTConsensus_SendBci_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, DciExector_SendBci_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *poTConsensusClient) GetBalance(ctx context.Context, in *GetBalanceRequest, opts ...grpc.CallOption) (*GetBalanceResponse, error) {
+func (c *dciExectorClient) GetBalance(ctx context.Context, in *GetBalanceRequest, opts ...grpc.CallOption) (*GetBalanceResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetBalanceResponse)
-	err := c.cc.Invoke(ctx, PoTConsensus_GetBalance_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, DciExector_GetBalance_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *poTConsensusClient) VerifyUTXO(ctx context.Context, in *VerifyUTXORequest, opts ...grpc.CallOption) (*VerifyUTXOResponse, error) {
+func (c *dciExectorClient) VerifyUTXO(ctx context.Context, in *VerifyUTXORequest, opts ...grpc.CallOption) (*VerifyUTXOResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(VerifyUTXOResponse)
-	err := c.cc.Invoke(ctx, PoTConsensus_VerifyUTXO_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, DciExector_VerifyUTXO_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *poTConsensusClient) CreateLockTransaction(ctx context.Context, in *CreateLockTransactionRequest, opts ...grpc.CallOption) (*CreateLockTransactionResponse, error) {
+func (c *dciExectorClient) CreateLockTransaction(ctx context.Context, in *CreateLockTransactionRequest, opts ...grpc.CallOption) (*CreateLockTransactionResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(CreateLockTransactionResponse)
-	err := c.cc.Invoke(ctx, PoTConsensus_CreateLockTransaction_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, DciExector_CreateLockTransaction_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *poTConsensusClient) CreateLockTransferTransaction(ctx context.Context, in *CreateLockTransferTransactionRequest, opts ...grpc.CallOption) (*CreateLockTransferTransactionResponse, error) {
+func (c *dciExectorClient) CreateLockTransferTransaction(ctx context.Context, in *CreateLockTransferTransactionRequest, opts ...grpc.CallOption) (*CreateLockTransferTransactionResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(CreateLockTransferTransactionResponse)
-	err := c.cc.Invoke(ctx, PoTConsensus_CreateLockTransferTransaction_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, DciExector_CreateLockTransferTransaction_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *poTConsensusClient) CreateDevastateTransaction(ctx context.Context, in *CreateDevastateTransactionRequest, opts ...grpc.CallOption) (*CreateDevastateTransactionResponse, error) {
+func (c *dciExectorClient) CreateDevastateTransaction(ctx context.Context, in *CreateDevastateTransactionRequest, opts ...grpc.CallOption) (*CreateDevastateTransactionResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(CreateDevastateTransactionResponse)
-	err := c.cc.Invoke(ctx, PoTConsensus_CreateDevastateTransaction_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, DciExector_CreateDevastateTransaction_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *poTConsensusClient) CreateNonLockTransferTransaction(ctx context.Context, in *CreateNonLockTransferTransactionRequest, opts ...grpc.CallOption) (*CreateNonLockTransferTransactionResponse, error) {
+func (c *dciExectorClient) CreateNonLockTransferTransaction(ctx context.Context, in *CreateNonLockTransferTransactionRequest, opts ...grpc.CallOption) (*CreateNonLockTransferTransactionResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(CreateNonLockTransferTransactionResponse)
-	err := c.cc.Invoke(ctx, PoTConsensus_CreateNonLockTransferTransaction_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, DciExector_CreateNonLockTransferTransaction_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *poTConsensusClient) CreateBciToVsiTransaction(ctx context.Context, in *CreateBciToVsiRequest, opts ...grpc.CallOption) (*CreateBciToVsiResponse, error) {
+func (c *dciExectorClient) CreateBciToVsiTransaction(ctx context.Context, in *CreateBciToVsiRequest, opts ...grpc.CallOption) (*CreateBciToVsiResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(CreateBciToVsiResponse)
-	err := c.cc.Invoke(ctx, PoTConsensus_CreateBciToVsiTransaction_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, DciExector_CreateBciToVsiTransaction_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-// PoTConsensusServer is the server API for PoTConsensus service.
-// All implementations should embed UnimplementedPoTConsensusServer
+// DciExectorServer is the server API for DciExector service.
+// All implementations should embed UnimplementedDciExectorServer
 // for forward compatibility.
-type PoTConsensusServer interface {
+type DciExectorServer interface {
 	SendBci(context.Context, *SendBciRequest) (*SendBciResponse, error)
 	GetBalance(context.Context, *GetBalanceRequest) (*GetBalanceResponse, error)
 	VerifyUTXO(context.Context, *VerifyUTXORequest) (*VerifyUTXOResponse, error)
@@ -359,239 +359,239 @@ type PoTConsensusServer interface {
 	CreateBciToVsiTransaction(context.Context, *CreateBciToVsiRequest) (*CreateBciToVsiResponse, error)
 }
 
-// UnimplementedPoTConsensusServer should be embedded to have
+// UnimplementedDciExectorServer should be embedded to have
 // forward compatible implementations.
 //
 // NOTE: this should be embedded by value instead of pointer to avoid a nil
 // pointer dereference when methods are called.
-type UnimplementedPoTConsensusServer struct{}
+type UnimplementedDciExectorServer struct{}
 
-func (UnimplementedPoTConsensusServer) SendBci(context.Context, *SendBciRequest) (*SendBciResponse, error) {
+func (UnimplementedDciExectorServer) SendBci(context.Context, *SendBciRequest) (*SendBciResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SendBci not implemented")
 }
-func (UnimplementedPoTConsensusServer) GetBalance(context.Context, *GetBalanceRequest) (*GetBalanceResponse, error) {
+func (UnimplementedDciExectorServer) GetBalance(context.Context, *GetBalanceRequest) (*GetBalanceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetBalance not implemented")
 }
-func (UnimplementedPoTConsensusServer) VerifyUTXO(context.Context, *VerifyUTXORequest) (*VerifyUTXOResponse, error) {
+func (UnimplementedDciExectorServer) VerifyUTXO(context.Context, *VerifyUTXORequest) (*VerifyUTXOResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method VerifyUTXO not implemented")
 }
-func (UnimplementedPoTConsensusServer) CreateLockTransaction(context.Context, *CreateLockTransactionRequest) (*CreateLockTransactionResponse, error) {
+func (UnimplementedDciExectorServer) CreateLockTransaction(context.Context, *CreateLockTransactionRequest) (*CreateLockTransactionResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateLockTransaction not implemented")
 }
-func (UnimplementedPoTConsensusServer) CreateLockTransferTransaction(context.Context, *CreateLockTransferTransactionRequest) (*CreateLockTransferTransactionResponse, error) {
+func (UnimplementedDciExectorServer) CreateLockTransferTransaction(context.Context, *CreateLockTransferTransactionRequest) (*CreateLockTransferTransactionResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateLockTransferTransaction not implemented")
 }
-func (UnimplementedPoTConsensusServer) CreateDevastateTransaction(context.Context, *CreateDevastateTransactionRequest) (*CreateDevastateTransactionResponse, error) {
+func (UnimplementedDciExectorServer) CreateDevastateTransaction(context.Context, *CreateDevastateTransactionRequest) (*CreateDevastateTransactionResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateDevastateTransaction not implemented")
 }
-func (UnimplementedPoTConsensusServer) CreateNonLockTransferTransaction(context.Context, *CreateNonLockTransferTransactionRequest) (*CreateNonLockTransferTransactionResponse, error) {
+func (UnimplementedDciExectorServer) CreateNonLockTransferTransaction(context.Context, *CreateNonLockTransferTransactionRequest) (*CreateNonLockTransferTransactionResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateNonLockTransferTransaction not implemented")
 }
-func (UnimplementedPoTConsensusServer) CreateBciToVsiTransaction(context.Context, *CreateBciToVsiRequest) (*CreateBciToVsiResponse, error) {
+func (UnimplementedDciExectorServer) CreateBciToVsiTransaction(context.Context, *CreateBciToVsiRequest) (*CreateBciToVsiResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateBciToVsiTransaction not implemented")
 }
-func (UnimplementedPoTConsensusServer) testEmbeddedByValue() {}
+func (UnimplementedDciExectorServer) testEmbeddedByValue() {}
 
-// UnsafePoTConsensusServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to PoTConsensusServer will
+// UnsafeDciExectorServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to DciExectorServer will
 // result in compilation errors.
-type UnsafePoTConsensusServer interface {
-	mustEmbedUnimplementedPoTConsensusServer()
+type UnsafeDciExectorServer interface {
+	mustEmbedUnimplementedDciExectorServer()
 }
 
-func RegisterPoTConsensusServer(s grpc.ServiceRegistrar, srv PoTConsensusServer) {
-	// If the following call pancis, it indicates UnimplementedPoTConsensusServer was
+func RegisterDciExectorServer(s grpc.ServiceRegistrar, srv DciExectorServer) {
+	// If the following call pancis, it indicates UnimplementedDciExectorServer was
 	// embedded by pointer and is nil.  This will cause panics if an
 	// unimplemented method is ever invoked, so we test this at initialization
 	// time to prevent it from happening at runtime later due to I/O.
 	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
 		t.testEmbeddedByValue()
 	}
-	s.RegisterService(&PoTConsensus_ServiceDesc, srv)
+	s.RegisterService(&DciExector_ServiceDesc, srv)
 }
 
-func _PoTConsensus_SendBci_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _DciExector_SendBci_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SendBciRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(PoTConsensusServer).SendBci(ctx, in)
+		return srv.(DciExectorServer).SendBci(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: PoTConsensus_SendBci_FullMethodName,
+		FullMethod: DciExector_SendBci_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(PoTConsensusServer).SendBci(ctx, req.(*SendBciRequest))
+		return srv.(DciExectorServer).SendBci(ctx, req.(*SendBciRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _PoTConsensus_GetBalance_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _DciExector_GetBalance_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetBalanceRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(PoTConsensusServer).GetBalance(ctx, in)
+		return srv.(DciExectorServer).GetBalance(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: PoTConsensus_GetBalance_FullMethodName,
+		FullMethod: DciExector_GetBalance_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(PoTConsensusServer).GetBalance(ctx, req.(*GetBalanceRequest))
+		return srv.(DciExectorServer).GetBalance(ctx, req.(*GetBalanceRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _PoTConsensus_VerifyUTXO_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _DciExector_VerifyUTXO_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(VerifyUTXORequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(PoTConsensusServer).VerifyUTXO(ctx, in)
+		return srv.(DciExectorServer).VerifyUTXO(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: PoTConsensus_VerifyUTXO_FullMethodName,
+		FullMethod: DciExector_VerifyUTXO_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(PoTConsensusServer).VerifyUTXO(ctx, req.(*VerifyUTXORequest))
+		return srv.(DciExectorServer).VerifyUTXO(ctx, req.(*VerifyUTXORequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _PoTConsensus_CreateLockTransaction_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _DciExector_CreateLockTransaction_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CreateLockTransactionRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(PoTConsensusServer).CreateLockTransaction(ctx, in)
+		return srv.(DciExectorServer).CreateLockTransaction(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: PoTConsensus_CreateLockTransaction_FullMethodName,
+		FullMethod: DciExector_CreateLockTransaction_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(PoTConsensusServer).CreateLockTransaction(ctx, req.(*CreateLockTransactionRequest))
+		return srv.(DciExectorServer).CreateLockTransaction(ctx, req.(*CreateLockTransactionRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _PoTConsensus_CreateLockTransferTransaction_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _DciExector_CreateLockTransferTransaction_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CreateLockTransferTransactionRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(PoTConsensusServer).CreateLockTransferTransaction(ctx, in)
+		return srv.(DciExectorServer).CreateLockTransferTransaction(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: PoTConsensus_CreateLockTransferTransaction_FullMethodName,
+		FullMethod: DciExector_CreateLockTransferTransaction_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(PoTConsensusServer).CreateLockTransferTransaction(ctx, req.(*CreateLockTransferTransactionRequest))
+		return srv.(DciExectorServer).CreateLockTransferTransaction(ctx, req.(*CreateLockTransferTransactionRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _PoTConsensus_CreateDevastateTransaction_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _DciExector_CreateDevastateTransaction_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CreateDevastateTransactionRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(PoTConsensusServer).CreateDevastateTransaction(ctx, in)
+		return srv.(DciExectorServer).CreateDevastateTransaction(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: PoTConsensus_CreateDevastateTransaction_FullMethodName,
+		FullMethod: DciExector_CreateDevastateTransaction_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(PoTConsensusServer).CreateDevastateTransaction(ctx, req.(*CreateDevastateTransactionRequest))
+		return srv.(DciExectorServer).CreateDevastateTransaction(ctx, req.(*CreateDevastateTransactionRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _PoTConsensus_CreateNonLockTransferTransaction_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _DciExector_CreateNonLockTransferTransaction_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CreateNonLockTransferTransactionRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(PoTConsensusServer).CreateNonLockTransferTransaction(ctx, in)
+		return srv.(DciExectorServer).CreateNonLockTransferTransaction(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: PoTConsensus_CreateNonLockTransferTransaction_FullMethodName,
+		FullMethod: DciExector_CreateNonLockTransferTransaction_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(PoTConsensusServer).CreateNonLockTransferTransaction(ctx, req.(*CreateNonLockTransferTransactionRequest))
+		return srv.(DciExectorServer).CreateNonLockTransferTransaction(ctx, req.(*CreateNonLockTransferTransactionRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _PoTConsensus_CreateBciToVsiTransaction_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _DciExector_CreateBciToVsiTransaction_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CreateBciToVsiRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(PoTConsensusServer).CreateBciToVsiTransaction(ctx, in)
+		return srv.(DciExectorServer).CreateBciToVsiTransaction(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: PoTConsensus_CreateBciToVsiTransaction_FullMethodName,
+		FullMethod: DciExector_CreateBciToVsiTransaction_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(PoTConsensusServer).CreateBciToVsiTransaction(ctx, req.(*CreateBciToVsiRequest))
+		return srv.(DciExectorServer).CreateBciToVsiTransaction(ctx, req.(*CreateBciToVsiRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-// PoTConsensus_ServiceDesc is the grpc.ServiceDesc for PoTConsensus service.
+// DciExector_ServiceDesc is the grpc.ServiceDesc for DciExector service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
-var PoTConsensus_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "pb.PoTConsensus",
-	HandlerType: (*PoTConsensusServer)(nil),
+var DciExector_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "pb.DciExector",
+	HandlerType: (*DciExectorServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
 			MethodName: "SendBci",
-			Handler:    _PoTConsensus_SendBci_Handler,
+			Handler:    _DciExector_SendBci_Handler,
 		},
 		{
 			MethodName: "GetBalance",
-			Handler:    _PoTConsensus_GetBalance_Handler,
+			Handler:    _DciExector_GetBalance_Handler,
 		},
 		{
 			MethodName: "VerifyUTXO",
-			Handler:    _PoTConsensus_VerifyUTXO_Handler,
+			Handler:    _DciExector_VerifyUTXO_Handler,
 		},
 		{
 			MethodName: "CreateLockTransaction",
-			Handler:    _PoTConsensus_CreateLockTransaction_Handler,
+			Handler:    _DciExector_CreateLockTransaction_Handler,
 		},
 		{
 			MethodName: "CreateLockTransferTransaction",
-			Handler:    _PoTConsensus_CreateLockTransferTransaction_Handler,
+			Handler:    _DciExector_CreateLockTransferTransaction_Handler,
 		},
 		{
 			MethodName: "CreateDevastateTransaction",
-			Handler:    _PoTConsensus_CreateDevastateTransaction_Handler,
+			Handler:    _DciExector_CreateDevastateTransaction_Handler,
 		},
 		{
 			MethodName: "CreateNonLockTransferTransaction",
-			Handler:    _PoTConsensus_CreateNonLockTransferTransaction_Handler,
+			Handler:    _DciExector_CreateNonLockTransferTransaction_Handler,
 		},
 		{
 			MethodName: "CreateBciToVsiTransaction",
-			Handler:    _PoTConsensus_CreateBciToVsiTransaction_Handler,
+			Handler:    _DciExector_CreateBciToVsiTransaction_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

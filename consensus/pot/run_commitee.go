@@ -199,7 +199,7 @@ func (w *Worker) CommitteeUpdate(height uint64) {
 		}
 	}
 	epoch := height
-	if epoch > 1 && w.ID == 1 {
+	if epoch > 1 && w.ID == 0 {
 		block, err := w.chainReader.GetByHeight(epoch - 1)
 		if err != nil {
 			return

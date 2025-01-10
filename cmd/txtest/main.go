@@ -1,13 +1,11 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"math/big"
 	"os"
 
-	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 )
@@ -22,20 +20,20 @@ func main() {
 	}
 	key, err := crypto.GenerateKey()
 
-	if err != nil {
-		fmt.Println(err)
-	}
-	address := crypto.PubkeyToAddress(key.PublicKey)
-	fill, err := os.OpenFile("key", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
-	if err != nil {
-		fmt.Println(err)
-	}
+	// if err != nil {
+	// 	fmt.Println(err)
+	// }
+	// address := crypto.PubkeyToAddress(key.PublicKey)
+	// fill, err := os.OpenFile("key", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
+	// if err != nil {
+	// 	fmt.Println(err)
+	// }
 
-	fill.Write(crypto.FromECDSA(key))
-	fill.WriteString("\n")
+	// fill.Write(crypto.FromECDSA(key))
+	// fill.WriteString("\n")
 
-	fill.WriteString(fmt.Sprintf("[address]%s\n", address.Hex()))
-	fill.Close()
+	// fill.WriteString(fmt.Sprintf("[address]%s\n", address.Hex()))
+	// fill.Close()
 
 	readfill, _ := os.OpenFile("key", os.O_RDWR, 0644)
 	keydata := make([]byte, key.Params().BitSize/8)
@@ -51,58 +49,62 @@ func main() {
 		fmt.Println(err)
 		return
 	}
+	fmt.Println(crypto.PubkeyToAddress(key3.PublicKey).Hex())
 
-	fmt.Println(bytes.Equal(crypto.CompressPubkey(&key.PublicKey), crypto.CompressPubkey(&key3.PublicKey)))
+	addr := common.HexToAddress("0x0A6AcEEC33ceC41b718832E311246bb23F2855b4")
+	fmt.Println(addr.Cmp(crypto.PubkeyToAddress(key3.PublicKey)))
+	balance, err := client.BalanceAt(context.Background(), addr, nil)
 
-	key2, err := crypto.GenerateKey()
-	if err != nil {
-		return
-	}
+	fmt.Println(balance.Int64())
+	// key2, err := crypto.GenerateKey()
+	// if err != nil {
+	// 	return
+	// }
 
-	fromaddress := address
-	nonce, err := client.PendingNonceAt(context.Background(), fromaddress)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	fmt.Println("nonce: ", nonce)
+	// fromaddress := address
+	// nonce, err := client.PendingNonceAt(context.Background(), fromaddress)
+	// if err != nil {
+	// 	fmt.Println(err)
+	// 	return
+	// }
+	// fmt.Println("nonce: ", nonce)
 
-	value := big.NewInt(10)
-	gaslimite := uint64(21000)
-	gasPrice, err := client.SuggestGasPrice(context.Background())
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	fmt.Println("suggestGasPrice: ", gasPrice.Uint64())
-	toaddress := crypto.PubkeyToAddress(key2.PublicKey)
-	var data []byte
+	// value := big.NewInt(10)
+	// gaslimite := uint64(21000)
+	// gasPrice, err := client.SuggestGasPrice(context.Background())
+	// if err != nil {
+	// 	fmt.Println(err)
+	// 	return
+	// }
+	// fmt.Println("suggestGasPrice: ", gasPrice.Uint64())
+	// toaddress := crypto.PubkeyToAddress(key2.PublicKey)
+	// var data []byte
 
-	//chainID, err := client.ChainID(context.Background())
-	chainID, err := client.ChainID(context.Background())
-	fmt.Println("chainID: ", chainID)
-	if err != nil {
-		fmt.Println(err)
-		return
+	// //chainID, err := client.ChainID(context.Background())
+	// chainID, err := client.ChainID(context.Background())
+	// fmt.Println("chainID: ", chainID)
+	// if err != nil {
+	// 	fmt.Println(err)
+	// 	return
 
-	}
-	tx := types.NewTransaction(nonce, toaddress, value, gaslimite, gasPrice, data)
-	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(chainID), key)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	signedTx.Hash()
-	fmt.Println(signedTx.Hash())
+	// }
+	// tx := types.NewTransaction(nonce, toaddress, value, gaslimite, gasPrice, data)
+	// signedTx, err := types.SignTx(tx, types.NewEIP155Signer(chainID), key)
+	// if err != nil {
+	// 	fmt.Println(err)
+	// 	return
+	// }
+	// signedTx.Hash()
+	// fmt.Println(signedTx.Hash())
 
-	err = client.SendTransaction(context.Background(), signedTx)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	signedTx.MarshalBinary()
+	// err = client.SendTransaction(context.Background(), signedTx)
+	// if err != nil {
+	// 	fmt.Println(err)
+	// 	return
+	// }
+	// signedTx.MarshalBinary()
 
-	n, _ := client.BlockNumber(context.Background())
+	// n, _ := client.BlockNumber(context.Background())
 
-	fmt.Println(n)
+	// fmt.Println(n)
 }

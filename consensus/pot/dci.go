@@ -1399,13 +1399,17 @@ func (w *Worker) IsDevastedTransaction(rawtx *types.RawTx, block *types.Block) b
 				return fmt.Errorf("tx is not a devasted transaction for receiving address is not burnout address")
 			}
 			if len(txoutput.Data) == 0 {
-
+				return fmt.Errorf("tx is not a devasted transaction for data is empty")
 			}
 
 		}
 		return nil
 	})
 
+	fmt.Printf("tx %s is a devasted transaction", hexutil.Encode(rawtx.Txid[:]))
+	if err != nil {
+		fmt.Println(err)
+	}
 	return err == nil
 }
 

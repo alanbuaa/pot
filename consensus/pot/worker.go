@@ -181,7 +181,7 @@ func NewWorker(id int64, config *config.ConsensusConfig, logger *logrus.Entry, b
 	fill.WriteString(fmt.Sprintf("[seed]%s\n", hexutil.Encode(randseed)))
 	fill.Close()
 	rpcserver := grpc.NewServer()
-	pb.RegisterPoTConsensusServer(rpcserver, w)
+	pb.RegisterDciExectorServer(rpcserver, w)
 	w.rpcserver = rpcserver
 	w.listener = listen
 
@@ -1231,9 +1231,12 @@ func (w *Worker) handleBlockRawTx(block *types.Block) error {
 
 			for _, txoutput := range tx.TxOutput {
 				if len(txoutput.Data) != 0 {
-					if w.IsConvertToVsiTransaction(tx, handleblock) || w.IsDevastedTransaction(tx, handleblock) {
+					fmt.Println("find tx data not zero")
+					if true {
+						fmt.Printf("txid %s data transfer to vm\n", hexutil.Encode(tx.Txid[:]))
 						err := w.TransferTx2EVM(txoutput.Data)
 						if err != nil {
+							fmt.Println("transfer err:", err)
 							return err
 						}
 					}

@@ -220,7 +220,7 @@ message IncensentiveVerifyRequest{
 }
 
 
-service PoTConsensus{
+service DciExector {
   rpc   SendBci(SendBciRequest)           returns (SendBciResponse)       {}
   rpc   GetBalance(GetBalanceRequest)     returns (GetBalanceResponse)    {}
   rpc   VerifyUTXO(VerifyUTXORequest)     returns (VerifyUTXOResponse)    {}
