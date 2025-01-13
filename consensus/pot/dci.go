@@ -536,6 +536,42 @@ func (w *Worker) CreateBciToVsiTransaction(ctx context.Context, request *pb.Crea
 	return &pb.CreateBciToVsiResponse{IsSuccess: true}, nil
 }
 
+func (w *Worker) GetPqcKey(ctx context.Context, request *pb.GetPqcKeyRequest) (*pb.GetPqcKeyResponse, error) {
+	if request.Height != 0 {
+		b, err := w.chainReader.GetByHeight(request.Height)
+		if err != nil {
+			return &pb.GetPqcKeyResponse{Flag: false}, err
+		}
+		bhash := b.GetHeader().Hash()
+
+		flag, key := w.TryFindKey(crypto.Convert(bhash))
+		if !flag {
+			return &pb.GetPqcKeyResponse{Flag: false}, fmt.Errorf("can't find key for height %d for the block is not owned by this node", request.Height)
+		}
+		return &pb.GetPqcKeyResponse{
+			Flag:      true,
+			PublicKey: b.GetHeader().PublicKey,
+			SecretKey: key,
+		}, nil
+	} else {
+		b, err := w.blockStorage.Get(request.BlockHash)
+		if err != nil {
+			return &pb.GetPqcKeyResponse{Flag: false}, err
+		}
+		bhash := b.GetHeader().Hash()
+
+		flag, key := w.TryFindKey(crypto.Convert(bhash))
+		if !flag {
+			return &pb.GetPqcKeyResponse{Flag: false}, fmt.Errorf("can't find key for height %d for the block is not owned by this node", request.Height)
+		}
+		return &pb.GetPqcKeyResponse{
+			Flag:      true,
+			PublicKey: b.GetHeader().PublicKey,
+			SecretKey: key,
+		}, nil
+	}
+
+}
 func (w *Worker) CheckBciToVsiRequest(rawtx *types.RawTx) error {
 	db := w.chainReader.GetBoltDb()
 	height := w.getEpoch()

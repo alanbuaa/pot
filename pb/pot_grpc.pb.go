@@ -241,6 +241,7 @@ const (
 	DciExector_CreateDevastateTransaction_FullMethodName       = "/pb.DciExector/CreateDevastateTransaction"
 	DciExector_CreateNonLockTransferTransaction_FullMethodName = "/pb.DciExector/CreateNonLockTransferTransaction"
 	DciExector_CreateBciToVsiTransaction_FullMethodName        = "/pb.DciExector/CreateBciToVsiTransaction"
+	DciExector_GetPqcKey_FullMethodName                        = "/pb.DciExector/GetPqcKey"
 )
 
 // DciExectorClient is the client API for DciExector service.
@@ -255,6 +256,7 @@ type DciExectorClient interface {
 	CreateDevastateTransaction(ctx context.Context, in *CreateDevastateTransactionRequest, opts ...grpc.CallOption) (*CreateDevastateTransactionResponse, error)
 	CreateNonLockTransferTransaction(ctx context.Context, in *CreateNonLockTransferTransactionRequest, opts ...grpc.CallOption) (*CreateNonLockTransferTransactionResponse, error)
 	CreateBciToVsiTransaction(ctx context.Context, in *CreateBciToVsiRequest, opts ...grpc.CallOption) (*CreateBciToVsiResponse, error)
+	GetPqcKey(ctx context.Context, in *GetPqcKeyRequest, opts ...grpc.CallOption) (*GetPqcKeyResponse, error)
 }
 
 type dciExectorClient struct {
@@ -345,6 +347,16 @@ func (c *dciExectorClient) CreateBciToVsiTransaction(ctx context.Context, in *Cr
 	return out, nil
 }
 
+func (c *dciExectorClient) GetPqcKey(ctx context.Context, in *GetPqcKeyRequest, opts ...grpc.CallOption) (*GetPqcKeyResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetPqcKeyResponse)
+	err := c.cc.Invoke(ctx, DciExector_GetPqcKey_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // DciExectorServer is the server API for DciExector service.
 // All implementations should embed UnimplementedDciExectorServer
 // for forward compatibility.
@@ -357,6 +369,7 @@ type DciExectorServer interface {
 	CreateDevastateTransaction(context.Context, *CreateDevastateTransactionRequest) (*CreateDevastateTransactionResponse, error)
 	CreateNonLockTransferTransaction(context.Context, *CreateNonLockTransferTransactionRequest) (*CreateNonLockTransferTransactionResponse, error)
 	CreateBciToVsiTransaction(context.Context, *CreateBciToVsiRequest) (*CreateBciToVsiResponse, error)
+	GetPqcKey(context.Context, *GetPqcKeyRequest) (*GetPqcKeyResponse, error)
 }
 
 // UnimplementedDciExectorServer should be embedded to have
@@ -389,6 +402,9 @@ func (UnimplementedDciExectorServer) CreateNonLockTransferTransaction(context.Co
 }
 func (UnimplementedDciExectorServer) CreateBciToVsiTransaction(context.Context, *CreateBciToVsiRequest) (*CreateBciToVsiResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateBciToVsiTransaction not implemented")
+}
+func (UnimplementedDciExectorServer) GetPqcKey(context.Context, *GetPqcKeyRequest) (*GetPqcKeyResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetPqcKey not implemented")
 }
 func (UnimplementedDciExectorServer) testEmbeddedByValue() {}
 
@@ -554,6 +570,24 @@ func _DciExector_CreateBciToVsiTransaction_Handler(srv interface{}, ctx context.
 	return interceptor(ctx, in, info, handler)
 }
 
+func _DciExector_GetPqcKey_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetPqcKeyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DciExectorServer).GetPqcKey(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DciExector_GetPqcKey_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DciExectorServer).GetPqcKey(ctx, req.(*GetPqcKeyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // DciExector_ServiceDesc is the grpc.ServiceDesc for DciExector service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -592,6 +626,10 @@ var DciExector_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CreateBciToVsiTransaction",
 			Handler:    _DciExector_CreateBciToVsiTransaction_Handler,
+		},
+		{
+			MethodName: "GetPqcKey",
+			Handler:    _DciExector_GetPqcKey_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

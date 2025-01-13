@@ -229,7 +229,10 @@ service DciExector {
   rpc   CreateDevastateTransaction(CreateDevastateTransactionRequest) returns (CreateDevastateTransactionResponse) {}
   rpc   CreateNonLockTransferTransaction(CreateNonLockTransferTransactionRequest) returns (CreateNonLockTransferTransactionResponse) {}
   rpc   CreateBciToVsiTransaction(CreateBciToVsiRequest)returns (CreateBciToVsiResponse){}
+  rpc   GetPqcKey (GetPqcKeyRequest) returns (GetPqcKeyResponse) {}
 }
+
+
 
 
 message BciReward{
@@ -363,4 +366,15 @@ message CreateBciToVsiRequest{
 message CreateBciToVsiResponse{
   RawTxData Tx = 1;
   bool IsSuccess = 2;
+}
+message GetPqcKeyRequest{
+    
+    bytes BlockHash = 1;
+    uint64 Height = 2;
+}
+
+message GetPqcKeyResponse{
+    bool Flag = 1;
+    bytes SecretKey =2;
+    bytes PublicKey =3;
 }

@@ -6,6 +6,7 @@ import (
 	"log"
 	"math/big"
 	"os"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	ethtype "github.com/ethereum/go-ethereum/core/types"
@@ -71,8 +72,19 @@ func main() {
 		// fmt.Printf("Response: %d\n", resp.IsSuccess)
 		// break
 
-		str := "0x5f41dce11f9b9a19b92c6dad6d2b8b8f00000000000000007695cd781cde492f5254a88066024237129eb549b0864c8f"
-		addr, err := hexutil.Decode(str)
+		height := uint64(10)
+		keyreq := &pb.GetPqcKeyRequest{
+			Height: height,
+		}
+		keyresp, err := client.GetPqcKey(context.Background(), keyreq)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		addr := keyresp.PublicKey
+
+		// str := "0x5f41dce11f9b9a19b92c6dad6d2b8b8f00000000000000007695cd781cde492f5254a88066024237129eb549b0864c8f"
+		// addr, err := hexutil.Decode(str)
 		// //fmt.Println(addr)
 
 		req := &pb.GetBalanceRequest{
@@ -94,10 +106,31 @@ func main() {
 		utxokey := fmt.Sprintf("%s:%d", hexutil.Encode(utxo.GetTxid()), utxo.GetVoutput())
 		fmt.Println(utxokey)
 		txid := resp.GetUtxos()[0].GetTxid()
+		pqckey := &crypto.PqcKey{
+			Privkey: keyresp.SecretKey,
+			Pubkey:  keyresp.PublicKey,
+			Scheme:  crypto.PqcScheme,
+		}
+		times := time.Now()
+
+		sig, err := pqckey.Sign([]byte(utxokey))
+
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		fmt.Println(float64(time.Since(times)) / float64(time.Millisecond))
+		fmt.Println(utxokey)
+		time2 := time.Now()
+		flag, _ := crypto.VerifySig([]byte(utxokey), sig, pqckey.PublicKeyBytes())
+		fmt.Println(float64(time.Since(time2)) / float64(time.Millisecond))
+		fmt.Println(flag)
+		fmt.Println(len(sig))
+
 		txinput := types.TxInput{
 			Txid:      crypto.Convert(txid),
 			Voutput:   resp.GetUtxos()[0].GetVoutput(),
-			Scriptsig: addr,
+			Scriptsig: sig,
 			Value:     amount,
 			BciType:   utxoOutput.BciType,
 			Address:   addr,
