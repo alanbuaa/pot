@@ -240,6 +240,7 @@ message BciReward{
   int64 Amount = 2;
   int32 ChainID = 3;
   BciProof BciProof = 4;
+  bool DoDraw = 5;
 }
 
 message BciProof {
@@ -247,6 +248,7 @@ message BciProof {
   bytes BlockHash = 2;
   bytes  TxHash = 3;
   int32 BciType = 4;
+  bool DoDraw =5;
 }
 
 message SendBciRequest{
@@ -316,6 +318,9 @@ message CoinbaseProof{
   bytes TxHash = 2;
   int64 Amount = 3;
   int32 BciType = 4;
+  bool DoDraw = 5;
+  uint64 Height = 6;
+  
 }
 
 message CreateLockTransactionRequest{

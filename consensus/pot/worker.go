@@ -15,6 +15,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/gin-gonic/gin"
 	"github.com/shopspring/decimal"
 	"github.com/sirupsen/logrus"
 	"github.com/zzz136454872/upgradeable-consensus/config"
@@ -89,6 +90,7 @@ type Worker struct {
 	chainReader       *ChainReader
 	listener          net.Listener
 	rpcserver         *grpc.Server
+	httpserver        *gin.Engine
 
 	// upper consensus
 	whirly         *nodeController.NodeController
@@ -198,6 +200,8 @@ func (w *Worker) Init() {
 	w.blockStorage.Put(types.DefaultGenesisBlock())
 	w.blockCounter = 0
 
+	g := startHTTPserve(w)
+	w.httpserver = g
 }
 func (w *Worker) startWorking() {
 	w.mutex.Lock()
@@ -213,6 +217,7 @@ func (w *Worker) Work() {
 	if err != nil {
 		return
 	}
+
 }
 func (w *Worker) WaitandReset(res *types.VDF0res) {
 	time.Sleep(10 * time.Second)
@@ -578,16 +583,23 @@ func (w *Worker) CompleteBlock(emptyblock *types.Block, vdf0res []byte, vdf1res 
 func (w *Worker) CompleteCoinbaseTx(vdf1res []byte, coinbasetx *types.RawTx, height uint64) *types.Tx {
 	coinbaseproofs := coinbasetx.CoinbaseProofs
 	selectproofs := make(map[int32][]*types.CoinbaseProof)
+	notdrawProof := make(map[int32][]*types.CoinbaseProof)
 	totalreward := CalcTotalReward(height)
 	if len(coinbaseproofs) != 0 {
 		groupsdata := groupByType(coinbaseproofs)
 		for _, proofs := range groupsdata {
 			total := int64(0)
 			for _, proof := range proofs {
-				total += proof.Amount
+				if !proof.DoDraw {
+					notdrawProof[proof.Type] = append(notdrawProof[proof.Type], &proof)
+				} else {
+					total += proof.Amount
+				}
 			}
 			for _, proof := range proofs {
-				proof.Weight = float64(proof.Amount) / float64(total)
+				if proof.DoDraw {
+					proof.Weight = float64(proof.Amount) / float64(total)
+				}
 			}
 		}
 
@@ -630,7 +642,25 @@ func (w *Worker) CompleteCoinbaseTx(vdf1res []byte, coinbasetx *types.RawTx, hei
 				coinbasetx.TxOutput = append(coinbasetx.TxOutput, txout)
 			}
 		}
+
+		for bcitype, proofs := range notdrawProof {
+			for _, proof := range proofs {
+				txout := types.TxOutput{
+					Address:  proof.Address,
+					Value:    proof.Amount,
+					Interest: 0,
+					ScriptPk: nil,
+					Proof:    nil,
+					LockTime: CoinbaseLock,
+					BciType:  bcitype,
+					Data:     nil,
+				}
+				coinbasetx.TxOutput = append(coinbasetx.TxOutput, txout)
+			}
+		}
+
 		sort.Slice(coinbasetx.TxOutput, func(i, j int) bool { return coinbasetx.TxOutput[i].BciType < coinbasetx.TxOutput[j].BciType })
+
 	}
 
 	coinbasetx.Txid = coinbasetx.Hash()
@@ -641,25 +671,6 @@ func (w *Worker) CompleteCoinbaseTx(vdf1res []byte, coinbasetx *types.RawTx, hei
 	}
 	txdata, _ := coinbasetx.EncodeToByte()
 	return &types.Tx{Data: txdata}
-}
-
-func (w *Worker) CreateExchequerTx(height uint64) types.TxOutput {
-
-	return types.TxOutput{
-		Address:  nil,
-		Value:    0,
-		Interest: 0,
-		ScriptPk: nil,
-		Proof:    nil,
-		LockTime: 0,
-		BciType:  0,
-		Data:     nil,
-		BurnLock: 0,
-	}
-}
-
-func (w *Worker) GenerateExchequerTxOutputData() {
-
 }
 
 func (w *Worker) createBlock(epoch uint64, parentBlock *types.Block, uncleBlock []*types.Block, difficulty *big.Int, mixdigest []byte, nonce int64, vdf0res []byte, vdf1res []byte) *types.Block {
@@ -704,11 +715,6 @@ func (w *Worker) createBlock(epoch uint64, parentBlock *types.Block, uncleBlock 
 	txshash := crypto.ComputeMerkleRoot(types.Txs2Bytes(Txs))
 	id := w.ID
 	peerid := w.PeerId
-
-	//cryptoset, err := w.GenerateCryptoSetFromLocal(epoch)
-	//if err != nil {
-	//	return nil
-	//}
 
 	h := &types.Header{
 		Height:     epoch,
@@ -1207,6 +1213,7 @@ func (w *Worker) handleBlockRawTx(block *types.Block) error {
 		return err
 	}
 	for _, tx := range txs {
+
 		if tx.IsCoinBase() {
 			Bciproofs := tx.CoinbaseProofs
 			w.mempool.MarkBciRewardProposed(Bciproofs)
@@ -1231,6 +1238,10 @@ func (w *Worker) handleBlockRawTx(block *types.Block) error {
 
 			for _, txoutput := range tx.TxOutput {
 				if len(txoutput.Data) != 0 {
+					testbyte, _ := hexutil.Decode("0x00")
+					if bytes.Equal(txoutput.Data, testbyte) {
+						continue
+					}
 					fmt.Println("find tx data not zero")
 					if true {
 						fmt.Printf("txid %s data transfer to vm\n", hexutil.Encode(tx.Txid[:]))

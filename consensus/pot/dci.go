@@ -247,8 +247,11 @@ func (w *Worker) checkLockTransaction(rawtx *types.RawTx) error {
 			if !output.CanBeUnlockWith(input) {
 				return fmt.Errorf(" tx error for can't unlock with txinput")
 			}
-			if input.BciType != output.BciType || input.Value != output.Value {
-				return fmt.Errorf(" tx error for bci type not match or value not match ")
+			if input.BciType != output.BciType {
+				return fmt.Errorf(" tx error for bci type not match,get output bci type %d but input bci type %d ", output.BciType, input.BciType)
+			}
+			if input.Value != output.Value {
+				return fmt.Errorf(" tx error for value not match")
 			}
 			if output.BurnLock != 0 && output.BurnLock > height {
 				return fmt.Errorf(" tx error for use output burnlock of create lock transaction is not zero or before current height")
@@ -1102,9 +1105,14 @@ func (w *Worker) CheckTxWithBlock(rawtx *types.RawTx, block *types.Block) (bool,
 			if len(coinbaseproofs) != 0 {
 				copy(coinbaseproofs, rawtx.CoinbaseProofs)
 				for _, coinbaseproof := range coinbaseproofs {
-					if !w.mempool.HasBciRewardByCoinbaseProof(&coinbaseproof) {
-						return fmt.Errorf(" coinbase tx error for can't find corresponding Bci reward")
+					if !coinbaseproof.DoDraw {
+
+					} else {
+						if !w.mempool.HasBciRewardByCoinbaseProof(&coinbaseproof) {
+							return fmt.Errorf(" coinbase tx error for can't find corresponding Bci reward")
+						}
 					}
+
 				}
 				groupsdata := groupByType(coinbaseproofs)
 				for _, proofs := range groupsdata {

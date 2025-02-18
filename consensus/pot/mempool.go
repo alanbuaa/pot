@@ -33,6 +33,7 @@ type BciReward struct {
 	Proof   BciProof
 	BciType int32
 	weight  float64
+	ToDraw  bool
 }
 
 type BciProof struct {
@@ -362,7 +363,7 @@ func (c *Mempool) HasBciRewardByCoinbaseProof(coinbaseproof *types.CoinbaseProof
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
 
-	strings := fmt.Sprintf(hexutil.Encode(coinbaseproof.TxHash) + "-" + hexutil.Encode(coinbaseproof.Address))
+	strings := fmt.Sprintf("%s", hexutil.Encode(coinbaseproof.TxHash)+"-"+hexutil.Encode(coinbaseproof.Address))
 	_, ok := c.BciRewardPool[strings]
 	return ok
 }
@@ -372,7 +373,7 @@ func (c *Mempool) AddBciReward(rewards ...*BciReward) {
 	defer c.mutex.Unlock()
 
 	for _, reward := range rewards {
-		strings := fmt.Sprintf(hexutil.Encode(reward.Proof.TxHash) + "-" + hexutil.Encode(reward.Address))
+		strings := hexutil.Encode(reward.Proof.TxHash) + "-" + hexutil.Encode(reward.Address)
 
 		_, ok := c.BciRewardPool[strings]
 		if ok {
@@ -392,20 +393,19 @@ func (c *Mempool) MarkBciRewardProposed(coinbaseProofs []types.CoinbaseProof) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	for _, proof := range coinbaseProofs {
-		strings := fmt.Sprintf(hexutil.Encode(proof.TxHash) + "-" + hexutil.Encode(proof.Address))
+		strings := hexutil.Encode(proof.TxHash) + "-" + hexutil.Encode(proof.Address)
 		if _, ok := c.BciRewardPool[strings]; ok {
 			c.BciRewardPool[strings].proposed = true
 		}
 	}
 }
 
-func (c *Mempool) RemoveBciRewardByTxHash(hash []byte) {
+func (c *Mempool) RemoveBciRewardByTxHash(hash []byte, Address []byte) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
-	str := hexutil.Encode(hash)
-	if _, ok := c.BciRewardPool[str]; ok {
-		delete(c.BciRewardPool, str)
-	}
+	str := hexutil.Encode(hash) + "-" + hexutil.Encode(Address)
+
+	delete(c.BciRewardPool, str)
 }
 
 func (c *Mempool) GetAllBciRewards() []*BciReward {

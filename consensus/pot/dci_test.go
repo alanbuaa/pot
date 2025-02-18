@@ -3,6 +3,7 @@ package pot
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"math"
 	"math/big"
@@ -302,4 +303,35 @@ func TestFloatCompare(t *testing.T) {
 	c := math.Abs(a-float64(b.Rate)) < epsilon
 	fmt.Println(c)
 	fmt.Println(epsilon)
+}
+
+func TestHash(t *testing.T) {
+	txinput := types.TxInput{
+		Txid:    [32]byte{},
+		Voutput: -1,
+	}
+	addr := "0xa47155b42648816998e576ffbfa045ab00000000000000007662a30d4b5875b73a8768fcf01bf52d2326a7660e24033a"
+	add, _ := hexutil.Decode(addr)
+	txoutput := types.TxOutput{
+		Address:  add,
+		BciType:  1,
+		BurnLock: 0,
+		Data:     []byte("Test"),
+		Interest: 0,
+		LockTime: 7,
+		Proof:    []byte("Test"),
+		Rate:     0,
+		Value:    32768,
+	}
+	rawtx := &types.RawTx{
+		TxInput:        []types.TxInput{txinput},
+		TxOutput:       []types.TxOutput{txoutput},
+		TransactionFee: 0,
+	}
+	b, err := json.Marshal(rawtx)
+	if err != nil {
+		t.Errorf("Failed to encode rawtx: %v", err)
+		return
+	}
+	fmt.Println(hexutil.Encode(crypto.Hash(b)))
 }

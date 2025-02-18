@@ -72,7 +72,7 @@ func main() {
 		// fmt.Printf("Response: %d\n", resp.IsSuccess)
 		// break
 
-		height := uint64(10)
+		height := uint64(1)
 		keyreq := &pb.GetPqcKeyRequest{
 			Height: height,
 		}
@@ -289,4 +289,31 @@ func main() {
 	//privkey := crypto.GenerateKey()
 	////pubkey := privkey.PublicKey()
 	//fmt.Println(hexutil.Encode(privkey.PublicKeyBytes()))CommitBlock
+}
+
+func test() {
+	_ = types.RawTx{
+		Txid: [32]byte{},
+		TxInput: []types.TxInput{
+			types.TxInput{
+				Address:   []byte("0x978f6ed0d077b93dea3ff4056da903f000000000000000008b94727338b880a339c8152b7451d7a97b9b0932b7275698"),
+				BciType:   1,
+				Scriptsig: []byte("000000"), //
+				Txid:      crypto.Convert([]byte("0xb6d93eb58f0b9328fb00fc0e67ddf91058e28fce171ae6f4c181c4ce41a38192")),
+				Voutput:   1,
+				Value:     32768,
+			},
+		},
+		TxOutput: []types.TxOutput{
+			types.TxOutput{
+				Address:  []byte("0x147147cedf75af4e633d65cfa1891be300000000000000006079c17de427f604b3804ec81055b731c11af5ceeb7abdf0"),
+				Value:    32768,
+				Interest: 10,
+				LockTime: 7,
+				BciType:  1,
+				BurnLock: 0,
+			},
+		},
+		TransactionFee: 1,
+	}
 }
