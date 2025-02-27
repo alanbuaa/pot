@@ -206,13 +206,14 @@ type TxOutput struct {
 }
 
 type CoinbaseProof struct {
-	Address []byte `json:"address"`
-	Amount  int64  `json:"amount"`
-	TxHash  []byte `json:"txhash"`
-	Type    int32  `json:"type"`
-	DoDraw  bool   `json:"doDraw"`
-
-	Weight float64 // only for local
+	Address  []byte  `json:"address"`
+	Amount   int64   `json:"amount"`
+	TxHash   []byte  `json:"txhash"`
+	Type     int32   `json:"type"`
+	DoDraw   bool    `json:"doDraw"`
+	Interest int64   `json:"interest"`
+	Height   uint64  `json:"height"`
+	Weight   float64 // only for local
 }
 
 func (r *RawTx) ToProto() *pb.RawTxData {
@@ -364,6 +365,7 @@ func ToCoinbaseProof(Proof *pb.CoinbaseProof) CoinbaseProof {
 		TxHash:  Proof.GetTxHash(),
 		Type:    Proof.GetBciType(),
 		DoDraw:  Proof.GetDoDraw(),
+		Height:  Proof.GetHeight(),
 	}
 }
 

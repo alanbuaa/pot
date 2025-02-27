@@ -11,7 +11,7 @@ enum MessageType{
   PoT_Response = 4;
   PoT_Proof = 5;
   SendBci_Request = 6;
-  DevastateDci_Request = 7;
+  DevastateBci_Request = 7;
   Client_Transaction = 8;
 }
 message Block {
@@ -108,7 +108,7 @@ enum TxType{
     LockTransferTranscation = 1;
     NonLockTransferTranscation = 2;
     DevasteTransaction = 3;
-    BciToVsiTransaction = 4;
+    CreateBciToVsiTransaction = 4;
 }
 
 message ClientTransaction{
@@ -173,11 +173,23 @@ message ExecutedTx{
   bytes   Data = 3;
 }
 
+message GetIncentiveRequest{
+  uint64 Begin = 1;
+  uint64 End = 2;
+}
+
+message GetIncentiveResponse{
+  repeated BciReward BciReward = 1;
+  uint64 End=2;
+}
+
+
 service PoTExecutor {
   rpc   GetTxs(GetTxRequest) returns (GetTxResponse){}
   rpc   VerifyTxs(VerifyTxRequest) returns (VerifyTxResponse){}
   rpc   ExecuteTxs(ExecuteTxRequest) returns (ExecuteTxResponse){}
   rpc   VerifyIncensentive(IncensentiveVerifyRequest) returns (IncensentiveVerifyResponse){}
+  rpc   GetIncentive(GetIncentiveRequest) returns (GetIncentiveResponse){}
 }
 
 message GetTxRequest{
@@ -220,7 +232,7 @@ message IncensentiveVerifyRequest{
 }
 
 
-service DciExector {
+service BciExector {
   rpc   SendBci(SendBciRequest)           returns (SendBciResponse)       {}
   rpc   GetBalance(GetBalanceRequest)     returns (GetBalanceResponse)    {}
   rpc   VerifyUTXO(VerifyUTXORequest)     returns (VerifyUTXOResponse)    {}
@@ -232,15 +244,13 @@ service DciExector {
   rpc   GetPqcKey (GetPqcKeyRequest) returns (GetPqcKeyResponse) {}
 }
 
-
-
-
 message BciReward{
   bytes Address = 1;
   int64 Amount = 2;
   int32 ChainID = 3;
   BciProof BciProof = 4;
-  bool DoDraw = 5;
+  int32 BciType = 5;
+  bool DoDraw = 6;
 }
 
 message BciProof {
@@ -248,7 +258,6 @@ message BciProof {
   bytes BlockHash = 2;
   bytes  TxHash = 3;
   int32 BciType = 4;
-  bool DoDraw =5;
 }
 
 message SendBciRequest{
@@ -285,14 +294,14 @@ message Utxo{
   TxOutput TxOutput = 3;
 }
 
-message DevastateDciRequest{
+message DevastateBciRequest{
   int64 Amount = 1;
   RawTxData Tx = 2;
   bytes To = 3;
   bytes transaction = 4;
 }
 
-message DevastateDciResponse{
+message DevastateBciResponse{
   bool flag = 1;
 }
 
@@ -320,7 +329,6 @@ message CoinbaseProof{
   int32 BciType = 4;
   bool DoDraw = 5;
   uint64 Height = 6;
-  
 }
 
 message CreateLockTransactionRequest{

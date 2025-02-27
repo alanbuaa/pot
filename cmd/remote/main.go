@@ -106,6 +106,12 @@ func (p *PoTexecutor) VerifyIncensentive(ctx context.Context, request *pb.Incens
 		VerifyRes: []bool{true},
 	}, nil
 }
+
+func (p *PoTexecutor) GetIncentive(ctx context.Context, request *pb.GetIncentiveRequest) (*pb.GetIncentiveResponse, error) {
+
+	return &pb.GetIncentiveResponse{}, nil
+}
+
 func (p *PoTexecutor) GenerateTxsForHeight(height uint64) *Testblock {
 	txs := make([][]byte, 0)
 	for i := 0; i < 1000; i++ {

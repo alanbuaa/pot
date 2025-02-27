@@ -371,7 +371,7 @@ func DefaultGenesisHeader() *Header {
 		Difficulty: big.NewInt(1),
 		Nonce:      0,
 		Timestamp:  time.Date(2023, 8, 14, 15, 35, 00, 0, time.Local),
-		PoTProof:   [][]byte{([]byte("aa")), []byte{}},
+		PoTProof:   [][]byte{([]byte("aa")), {}},
 		Address:    0,
 		Hashes:     nil,
 		PeerId:     "0",

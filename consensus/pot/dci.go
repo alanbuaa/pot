@@ -66,9 +66,9 @@ func (w *Worker) VerifyBciReward(reward *BciReward) (bool, *types.ExecutedTx, er
 	if exeheight > w.executeheight {
 		return false, nil, fmt.Errorf("height is beyond execute height")
 	}
-	exeblock, err := w.blockStorage.GetExcutedBlock(proof.BlockHash)
-	if err != nil {
-		return false, nil, err
+	exeblock := w.mempool.GetBlockByHash(crypto.Convert(proof.BlockHash))
+	if exeblock == nil {
+		return false, nil, fmt.Errorf("could not find exeblock %s", hexutil.Encode(proof.BlockHash))
 	}
 	if exeblock.Header.Height != proof.Height {
 		return false, nil, fmt.Errorf("the height of proof %d is not equal to the height of block %d", proof.Height, exeblock.Header.Height)
@@ -531,7 +531,7 @@ func (w *Worker) CreateBciToVsiTransaction(ctx context.Context, request *pb.Crea
 	if err != nil {
 		return nil, err
 	}
-	err = w.broadcastClientTransaction(rawtx, pb.TxType_BciToVsiTransaction)
+	err = w.broadcastClientTransaction(rawtx, pb.TxType_CreateBciToVsiTransaction)
 	if err != nil {
 		return nil, err
 	}
@@ -1104,8 +1104,12 @@ func (w *Worker) CheckTxWithBlock(rawtx *types.RawTx, block *types.Block) (bool,
 			coinbaseproofs := make([]types.CoinbaseProof, len(rawtx.CoinbaseProofs))
 			if len(coinbaseproofs) != 0 {
 				copy(coinbaseproofs, rawtx.CoinbaseProofs)
+				notdrawProof := make(map[int32][]*types.CoinbaseProof)
 				for _, coinbaseproof := range coinbaseproofs {
 					if !coinbaseproof.DoDraw {
+						if flag, err := w.CheckNotDrawCoinbaseProof(&coinbaseproof); !flag {
+							return err
+						}
 
 					} else {
 						if !w.mempool.HasBciRewardByCoinbaseProof(&coinbaseproof) {
@@ -1114,11 +1118,16 @@ func (w *Worker) CheckTxWithBlock(rawtx *types.RawTx, block *types.Block) (bool,
 					}
 
 				}
+
 				groupsdata := groupByType(coinbaseproofs)
 				for _, proofs := range groupsdata {
 					total := int64(0)
 					for _, proof := range proofs {
-						total += proof.Amount
+						if !proof.DoDraw {
+							notdrawProof[proof.Type] = append(notdrawProof[proof.Type], &proof)
+						} else {
+							total += proof.Amount
+						}
 					}
 					for _, proof := range proofs {
 						proof.Weight = float64(proof.Amount) / float64(total)
@@ -1173,6 +1182,30 @@ func (w *Worker) CheckTxWithBlock(rawtx *types.RawTx, block *types.Block) (bool,
 						}
 					}
 				}
+				for bcitype, proofs := range notdrawProof {
+					for _, output := range rawtx.TxOutput {
+						if output.BciType == bcitype {
+							flag := false
+							for _, proof := range proofs {
+								if bytes.Equal(proof.Address, output.Address) {
+									flag = true
+									if output.Value != proof.Amount {
+										return fmt.Errorf("coinbase tx error for output bci value is not correct")
+									}
+									if output.LockTime != CoinbaseLock {
+										return fmt.Errorf("coinbase tx error for output locktime is not correct")
+									}
+									if output.Interest != proof.Interest {
+										return fmt.Errorf("coinbase tx error for output bci interest is not correct")
+									}
+								}
+							}
+							if !flag {
+								return fmt.Errorf("coinbase tx error for notdrawproof does not find corresponding the txoutput")
+							}
+						}
+					}
+				}
 			}
 
 			if len(rawtx.TxOutput) == 0 {
@@ -1198,6 +1231,25 @@ func (w *Worker) CheckTxWithBlock(rawtx *types.RawTx, block *types.Block) (bool,
 	return true, nil
 }
 
+func (w *Worker) CheckNotDrawCoinbaseProof(proof *types.CoinbaseProof) (bool, error) {
+	//db := w.chainReader.GetBoltDb()
+	height := w.chainReader.GetCurrentHeight()
+	for height > 0 {
+		block, err := w.chainReader.GetByHeight(height)
+		if err != nil {
+			return false, err
+		}
+
+		txs := block.GetRawTx()
+		for _, tx := range txs {
+			if bytes.Equal(tx.Txid[:], proof.TxHash[:]) {
+				return true, nil
+			}
+		}
+		height--
+	}
+	return false, fmt.Errorf("coinbase tx error for the transaction of proof is not found")
+}
 func (w *Worker) CheckBlockTxInterest(rawtx *types.RawTx, blockheight uint64) (bool, error) {
 	db := w.chainReader.GetBoltDb()
 	err := db.View(func(tx *bolt.Tx) error {

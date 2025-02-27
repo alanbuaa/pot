@@ -33,7 +33,7 @@ type BciReward struct {
 	Proof   BciProof
 	BciType int32
 	weight  float64
-	ToDraw  bool
+	DoDraw  bool
 }
 
 type BciProof struct {
@@ -52,6 +52,7 @@ func (d *BciReward) ToProto() *pb.BciReward {
 			BlockHash: d.Proof.BlockHash,
 			TxHash:    d.Proof.TxHash,
 		},
+		BciType: d.BciType,
 	}
 }
 
@@ -59,7 +60,7 @@ func ToBciReward(proof *pb.BciReward) *BciReward {
 	return &BciReward{
 		Address: proof.GetAddress(),
 		Amount:  proof.GetAmount(),
-		BciType: proof.GetChainID(),
+		BciType: proof.GetBciType(),
 		Proof: BciProof{
 			Height:    proof.GetBciProof().GetHeight(),
 			BlockHash: proof.GetBciProof().GetBlockHash(),

@@ -70,6 +70,7 @@ type Worker struct {
 	blockKeyMap     map[[crypto.Hashlen]byte][]byte
 	CommitteeKeyMap map[[crypto.Hashlen]byte][]byte
 	executeheight   uint64
+	incentiveheight uint64
 	mempool         *Mempool
 	chainresetflag  bool
 
@@ -183,7 +184,7 @@ func NewWorker(id int64, config *config.ConsensusConfig, logger *logrus.Entry, b
 	fill.WriteString(fmt.Sprintf("[seed]%s\n", hexutil.Encode(randseed)))
 	fill.Close()
 	rpcserver := grpc.NewServer()
-	pb.RegisterDciExectorServer(rpcserver, w)
+	pb.RegisterBciExectorServer(rpcserver, w)
 	w.rpcserver = rpcserver
 	w.listener = listen
 
@@ -326,6 +327,13 @@ func (w *Worker) OnGetVdf0Response() {
 				w.log.Debugf("[PoT]\tepoch %d: Get Txs from executor", epoch+1)
 			}
 			_ = w.handleBlockExecutedHeader(parentblock)
+
+			_, err = w.GetIncentiveTxFromExecutor(epoch)
+			if err != nil {
+				w.log.Errorf("[PoT]\tepoch %d: Get Incentive Tx from executor error for %s", epoch+1, err)
+			} else {
+				w.log.Infof("[PoT]\tepoch %d: Get Incentive Txs from executor", epoch+1)
+			}
 			err = w.handleBlockRawTx(parentblock)
 			if err != nil {
 				w.log.Errorf("[PoT]\tepoch %d: Handle Txs for block %s err for %s", epoch+1, hexutil.Encode(parentblock.Hash()), err)
@@ -666,7 +674,7 @@ func (w *Worker) CompleteCoinbaseTx(vdf1res []byte, coinbasetx *types.RawTx, hei
 	coinbasetx.Txid = coinbasetx.Hash()
 	if len(coinbasetx.TxOutput) > 1 {
 		for _, output := range coinbasetx.TxOutput {
-			w.log.Infof("bcitx to %v with amount %d ", output.Address, output.Value)
+			w.log.Infof("bcitx to %s with amount %d ", hexutil.Encode(output.Address), output.Value)
 		}
 	}
 	txdata, _ := coinbasetx.EncodeToByte()
@@ -815,6 +823,50 @@ func (w *Worker) GetExecutedBlockFromMempool() []*types.ExecutedBlock {
 	ExecutedBlocks := w.mempool.GetFirstN(w.config.PoT.Batchsize)
 
 	return ExecutedBlocks
+}
+
+func (w *Worker) GetIncentiveTxFromExecutor(epoch uint64) ([]*types.ExecutedBlock, error) {
+	conn, err := grpc.NewClient(w.config.PoT.ExcutorAddress, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(1024*1024*1024)))
+
+	if err != nil {
+		return nil, err
+	}
+
+	client := pb.NewPoTExecutorClient(conn)
+	response, err := client.GetIncentive(context.Background(), &pb.GetIncentiveRequest{
+		Begin: w.incentiveheight,
+		End:   w.executeheight,
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	bcireward := response.BciReward
+	for _, pbBcireward := range bcireward {
+
+		BciReward := ToBciReward(pbBcireward)
+		flag, _, err := w.VerifyBciReward(BciReward)
+		if !flag {
+			return nil, fmt.Errorf("the Bci reward is not valid for %s", err.Error())
+		} else {
+			// txdata := tx.Data
+			// if len(txdata) < 98 {
+			// 	return nil, fmt.Errorf("the Bci reward is not valid for %s", err.Error())
+			// } else {
+			// 	address := txdata[2:98]
+			// 	//fmt.Println(hexutil.Encode(address))
+			// 	BciReward.Address = address
+			// 	w.mempool.AddBciReward(BciReward)
+			// }
+			w.log.Infof("[PoT]\tAdd %d Bci reward to %s ", BciReward.Amount, hexutil.Encode(BciReward.Address))
+			w.mempool.AddBciReward(BciReward)
+		}
+	}
+	if w.incentiveheight < response.GetEnd() {
+		w.incentiveheight = response.GetEnd()
+	}
+	return nil, nil
 }
 
 func (w *Worker) createNilBlock(epoch uint64, parentBlock *types.Block, uncleBlock []*types.Block, difficulty *big.Int, mixdigest []byte, nonce int64, vdf0res []byte, vdf1res []byte) *types.Block {

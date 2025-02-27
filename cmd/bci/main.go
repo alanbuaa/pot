@@ -41,7 +41,7 @@ func main() {
 	defer conn.Close()
 
 	// 创建客户端
-	client := pb.NewDciExectorClient(conn)
+	client := pb.NewBciExectorClient(conn)
 
 	for true {
 
@@ -283,7 +283,7 @@ func main() {
 		}
 		fmt.Println(response2.IsSuccess)
 		return
-		return
+
 	}
 
 	//privkey := crypto.GenerateKey()

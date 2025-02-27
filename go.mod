@@ -13,7 +13,6 @@ require (
 	github.com/boltdb/bolt v1.3.1
 	github.com/ethereum/go-ethereum v1.12.2
 	github.com/niclabs/tcrsa v0.0.5
-	github.com/rs/cors v1.7.0
 	github.com/shopspring/decimal v1.3.1
 	github.com/sirupsen/logrus v1.9.3
 	github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7
