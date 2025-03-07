@@ -58,11 +58,15 @@ type Worker struct {
 	epoch  uint64
 
 	// vdf work
-	timestamp       time.Time
-	vdf0            *types.VDF
-	vdf0Chan        chan *types.VDF0res
-	vdf1            []*types.VDF
-	vdf1Chan        chan *types.VDF0res
+	timestamp time.Time
+
+	vdf0        *types.VDF
+	vdf0Chan    chan *types.VDF0res
+	vdf1        []*types.VDF
+	vdf1Chan    chan *types.VDF0res
+	vdfhalf     *types.VDF
+	vdfhalfchan chan *types.VDF0res
+
 	vdfChecker      *vdf.Vdf
 	abort           *Abortcontrol
 	wg              *sync.WaitGroup
@@ -108,6 +112,7 @@ type Worker struct {
 func NewWorker(id int64, config *config.ConsensusConfig, logger *logrus.Entry, bst *types.BlockStorage, engine *PoTEngine) *Worker {
 	ch0 := make(chan *types.VDF0res, 2048)
 	ch1 := make(chan *types.VDF0res, 2048)
+	ch2 := make(chan *types.VDF0res, 2048)
 	potconfig := config.PoT
 
 	seed, err := crand.Int(crand.Reader, big.NewInt(math.MaxInt64))
@@ -122,6 +127,8 @@ func NewWorker(id int64, config *config.ConsensusConfig, logger *logrus.Entry, b
 	for i := 0; i < cpuCounter; i++ {
 		vdf1[i] = types.NewVDF(ch1, potconfig.Vdf1Iteration, id)
 	}
+	vdfhalf := types.NewVDF(ch1, potconfig.Vdf1Iteration, id)
+
 	listen, err := net.Listen("tcp", config.Nodes[id].BciRpcAddress)
 	if err != nil {
 		panic(err)
@@ -155,6 +162,8 @@ func NewWorker(id int64, config *config.ConsensusConfig, logger *logrus.Entry, b
 		vdf0Chan:      ch0,
 		vdf1:          vdf1,
 		vdf1Chan:      ch1,
+		vdfhalf:       vdfhalf,
+		vdfhalfchan:   ch2,
 		wg:            new(sync.WaitGroup),
 		rand:          rands,
 		peerMsgQueue:  peer,
