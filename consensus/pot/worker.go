@@ -127,7 +127,7 @@ func NewWorker(id int64, config *config.ConsensusConfig, logger *logrus.Entry, b
 	for i := 0; i < cpuCounter; i++ {
 		vdf1[i] = types.NewVDF(ch1, potconfig.Vdf1Iteration, id)
 	}
-	vdfhalf := types.NewVDF(ch1, potconfig.Vdf1Iteration, id)
+	vdfhalf := types.NewVDF(ch2, potconfig.Vdf1Iteration, id)
 
 	listen, err := net.Listen("tcp", config.Nodes[id].BciRpcAddress)
 	if err != nil {
@@ -205,7 +205,7 @@ func NewWorker(id int64, config *config.ConsensusConfig, logger *logrus.Entry, b
 func (w *Worker) Init() {
 	// catchup
 	// w.log.Infof("%d %d", w.config.PoT.Snum, w.config.PoT.Vdf1Iteration)
-	w.vdf0.SetInput(crypto.Hash([]byte("aa")), w.config.PoT.Vdf0Iteration)
+	w.vdfhalf.SetInput(crypto.Hash([]byte("aa")), w.config.PoT.Vdf1Iteration)
 	w.SetVdf0res(0, ([]byte("aa")))
 	w.blockStorage.Put(types.DefaultGenesisBlock())
 	w.blockCounter = 0
@@ -223,7 +223,7 @@ func (w *Worker) Work() {
 	w.timestamp = time.Now()
 	w.log.Infof("[PoT]\tStart epoch %d vdf0", w.getEpoch())
 
-	err := w.vdf0.Exec(0)
+	err := w.vdfhalf.Exec(0)
 	if err != nil {
 		return
 	}
@@ -295,7 +295,8 @@ func (w *Worker) OnGetVdf0Response() {
 			}
 
 			w.increaseEpoch()
-			w.vdf0 = types.NewVDFwithInput(w.getVDF0chan(), inputHash, w.config.PoT.Vdf0Iteration, w.ID)
+			//w.vdf0 = types.NewVDFwithInput(w.getVDF0chan(), inputHash, w.config.PoT.Vdf0Iteration, w.ID)
+			w.vdfhalf = types.NewVDFwithInput(w.vdfhalfchan, inputHash, w.config.PoT.Vdf1Iteration, w.ID)
 			if err != nil {
 				w.log.Warnf("[PoT]\tepoch %d:execset vdf0 error for %t", epoch+1, err)
 				continue
@@ -304,7 +305,7 @@ func (w *Worker) OnGetVdf0Response() {
 			w.log.Debugf("[PoT]\tepoch %d:Start epoch %d vdf0", epoch+1, epoch+1)
 			w.timestamp = time.Now()
 			go func() {
-				err = w.vdf0.Exec(epoch + 1)
+				err = w.vdfhalf.Exec(epoch + 1)
 				if err != nil {
 					w.log.Info("[PoT]\texecute vdf error for :", err)
 				}
@@ -335,6 +336,7 @@ func (w *Worker) OnGetVdf0Response() {
 			} else {
 				w.log.Debugf("[PoT]\tepoch %d: Get Txs from executor", epoch+1)
 			}
+
 			_ = w.handleBlockExecutedHeader(parentblock)
 
 			_, err = w.GetIncentiveTxFromExecutor(epoch)
@@ -343,6 +345,7 @@ func (w *Worker) OnGetVdf0Response() {
 			} else {
 				w.log.Infof("[PoT]\tepoch %d: Get Incentive Txs from executor", epoch+1)
 			}
+
 			err = w.handleBlockRawTx(parentblock)
 			if err != nil {
 				w.log.Errorf("[PoT]\tepoch %d: Handle Txs for block %s err for %s", epoch+1, hexutil.Encode(parentblock.Hash()), err)
@@ -354,7 +357,8 @@ func (w *Worker) OnGetVdf0Response() {
 
 			// 	w.simpleLeaderUpdate(parentblock)
 			// }
-			w.CommitteeUpdate(epoch)
+
+			//w.CommitteeUpdate(epoch)
 			difficulty := w.calcDifficulty(parentblock, uncleblock)
 			w.startWorking()
 			w.abort = NewAbortcontrol()
@@ -443,21 +447,14 @@ func (w *Worker) mine(epoch uint64, vdf0res []byte, nonce int64, workerid int, a
 			}
 			// w.createBlock
 
-			block := w.CompleteBlock(emptyblock, vdf0res, res1, coinbasetx, mixdigest, privkey)
-			w.blockCounter += 1
-			w.log.Infof("[PoT]\tepoch %d:get new block %d", epoch, w.blockCounter)
-
-			// broadcast the block
-			w.peerMsgQueue <- block
-
 			// begin new work
 			nonce = rand.Int63()
 			tmp.SetInt64(nonce)
 			noncebyte := tmp.Bytes()
-			privkey, _ = crypto.GeneratePqcKey()
-			pubkey2byte := privkey.PublicKeyBytes()
-			coinbasetx = w.GenerateCoinbaseTxWithoutMinerKey(Bcirewards, privkey, totalreward)
-			coinbaseproofs2 := coinbasetx.CoinbaseProofs
+			privkey2, _ := crypto.GeneratePqcKey()
+			pubkey2byte := privkey2.PublicKeyBytes()
+			coinbasetx2 := w.GenerateCoinbaseTxWithoutMinerKey(Bcirewards, privkey2, totalreward)
+			coinbaseproofs2 := coinbasetx2.CoinbaseProofs
 			coinbaseProofsbyte2 := CoinbaseProofToBytes(coinbaseproofs2)
 			mix2digest := w.calcMixdigest(epoch, parentblock, uncleblock, difficulty, w.PeerId, pubkey2byte, coinbaseProofsbyte2)
 
@@ -474,6 +471,13 @@ func (w *Worker) mine(epoch uint64, vdf0res []byte, nonce int64, workerid int, a
 				}
 			}()
 
+			block := w.CompleteBlock(emptyblock, vdf0res, res1, coinbasetx, mixdigest, privkey)
+
+			w.blockCounter += 1
+			w.log.Infof("[PoT]\tepoch %d:get new block %d", epoch, w.blockCounter)
+
+			// broadcast the block
+			w.peerMsgQueue <- block
 			// w.workFlag = false
 			continue
 		case <-abort.abortchannel:
@@ -488,6 +492,43 @@ func (w *Worker) mine(epoch uint64, vdf0res []byte, nonce int64, workerid int, a
 		}
 
 	}
+}
+
+func (w *Worker) handleVdfhalf() {
+	for {
+		select {
+		case res := <-w.vdfhalfchan:
+			epoch := w.getEpoch()
+			w.log.Infof("[PoT]\tepoch %d:vdfhalf got res %s", epoch, hexutil.Encode(crypto.Hash(res.Res)))
+
+			if res.Epoch != epoch {
+				w.log.Errorf("[PoT]\tepoch %d:vdfhalf got res but epoch is %d", epoch, res.Epoch)
+			}
+
+			w.blockStorage.SetVDFHalf(epoch, res.Res)
+			if !w.vdf0.IsFinished() {
+
+				err := w.vdf0.Abort()
+				if err != nil {
+					w.log.Warnf("[PoT]\tepoch %d: vdf0 abort error for %s", epoch+1, err)
+				}
+				w.log.Warnf("[PoT]\tepoch %d:vdf0 got abort for new epoch ", epoch+1)
+			}
+			inputhash := crypto.Hash(res.Res)
+			w.vdf0 = types.NewVDFwithInput(w.getVDF0chan(), inputhash, w.config.PoT.Vdf0Iteration-w.config.PoT.Vdf1Iteration, w.ID)
+
+			go func() {
+				err := w.vdf0.Exec(epoch)
+				if err != nil {
+					w.log.Warnf("[PoT]\tepoch %d: vdf0 run error for %s", epoch+1, err)
+				}
+
+			}()
+
+		}
+
+	}
+
 }
 
 func (w *Worker) createBlockWithoutKey(epoch uint64, parentBlock *types.Block,
@@ -566,7 +607,24 @@ func (w *Worker) CompleteBlock(emptyblock *types.Block, vdf0res []byte, vdf1res 
 	copy(vdf0rescopy, vdf0res)
 	vdf1rescopy := make([]byte, len(vdf1res))
 	copy(vdf1rescopy, vdf1res)
-	PotProof := [][]byte{vdf0rescopy, vdf1rescopy}
+
+	vdfhalfch := make(chan []byte, 2048)
+	go func(epoch uint64) []byte {
+		for {
+			b, err := w.blockStorage.GetVDFHalf(epoch)
+			if err == nil && b != nil {
+				vdfhalfch <- b
+			} else {
+				time.Sleep(5 * time.Second)
+			}
+		}
+	}(emptyblock.Header.Height)
+
+	vdfhalf := <-vdfhalfch
+	if len(vdfhalf) == 0 {
+		w.log.Error("[PoT]\tget vdfhalf error for result is 0")
+	}
+	PotProof := [][]byte{vdf0rescopy, vdf1rescopy, vdfhalf}
 
 	block := emptyblock
 	cointx := w.CompleteCoinbaseTx(vdf1res, coinbasetx, emptyblock.Header.Height)
@@ -1174,7 +1232,7 @@ func (w *Worker) blockSelection(blocks []*types.Block, vdf0res []byte, height ui
 		blockheader := block.GetHeader()
 		if (bytes.Equal(current.GetHeader().Hashes, blockheader.ParentHash) && block.GetHeader().Difficulty.Cmp(common.Big0) != 0) || blockheader.ParentHash == nil {
 
-			if len(block.Header.PoTProof) == 2 {
+			if len(block.Header.PoTProof) >= 2 {
 				vdf1res := blockheader.PoTProof[1]
 
 				readyblocks = append(readyblocks, block)

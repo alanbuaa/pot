@@ -41,7 +41,7 @@ type PoTEngine struct {
 	worker *Worker
 
 	//headerStorage  *types.HeaderStorage
-	blockStorage   *types.BlockStorage
+	blockStorage *types.BlockStorage
 	//chainReader    *ChainReader
 	UpperConsensus *nodeController.NodeController
 }
@@ -91,6 +91,7 @@ func (e *PoTEngine) start() {
 
 	go e.worker.OnGetVdf0Response()
 	go e.worker.Work()
+	go e.worker.handleVdfhalf()
 	go e.onReceiveMsg()
 	go e.worker.rpcserver.Serve(e.worker.listener)
 }

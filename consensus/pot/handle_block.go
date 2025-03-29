@@ -49,10 +49,13 @@ func (w *Worker) handleBlock() {
 					w.mutex.Lock()
 					// w.backupBlock = append(w.backupBlock, header)
 					//err := w.storage.Put(header)
-					err := w.blockStorage.Put(block)
+					b, err := w.blockStorage.PutByte(block)
 					w.mutex.Unlock()
+					if err != nil {
+						w.log.Errorf("[PoT]\tput block error:%s", err)
+					}
 
-					err = w.blockbroadcast(block)
+					err = w.blockbytebroadcast(b)
 
 					if err != nil {
 						w.log.Errorf("[PoT]\tbroadcast header error:%s", err)
@@ -107,6 +110,20 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 	flag, err := w.CheckVDF0Current(header)
 	if !flag {
 		return err
+	}
+
+	half, _ := w.blockStorage.GetVDFHalf(header.Height)
+	if len(half) != 0 {
+		if !bytes.Equal(half, header.PoTProof[2]) {
+			return fmt.Errorf("block half vdf0 is error")
+		}
+	} else {
+		flag := wesolowski_rust.Verify(header.PoTProof[2], w.config.PoT.Vdf1Iteration, header.PoTProof[0])
+		if !flag {
+			return fmt.Errorf("block half vdf0 is error")
+		} else {
+			w.blockStorage.SetVDFHalf(header.Height, header.PoTProof[2])
+		}
 	}
 
 	if !w.isBehindHeight(header.Height-1, block) {
@@ -361,7 +378,7 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 	err = w.blockStorage.Put(block)
 	w.mutex.Unlock()
 
-	err = w.setVDF0epoch(block.GetHeader().Height - 1)
+	err = w.setVDF0epoch(block.GetHeader().Height)
 	if err != nil {
 		w.log.Warnf("[PoT]\tepoch %d: execset vdf error for %s:", epoch, err)
 		doonce.Do(func() {
@@ -371,11 +388,11 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 	}
 
 	res := &types.VDF0res{
-		Res:   block.GetHeader().PoTProof[0],
-		Epoch: block.GetHeader().Height - 1,
+		Res:   block.GetHeader().PoTProof[2],
+		Epoch: block.GetHeader().Height,
 	}
-	w.vdf0Chan <- res
-	w.log.Infof("[PoT]\tepoch %d:execset vdf complete. Start from epoch %d with res %s", epoch, block.GetHeader().Height-1, hexutil.Encode(crypto.Hash(res.Res)))
+	w.vdfhalfchan <- res
+	w.log.Infof("[PoT]\tepoch %d:execset vdf complete. Start from epoch %d with res %s", epoch, block.GetHeader().Height, hexutil.Encode(crypto.Hash(res.Res)))
 	//w.mutex.Lock()
 	//w.log.Error(w.chainresetflag)
 	//w.mutex.Unlock()
@@ -389,17 +406,32 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 
 }
 
+func (w *Worker) blockbytebroadcast(blockbyte []byte) error {
+	message := &pb.PoTMessage{
+		MsgType: pb.MessageType_Block_Data,
+		MsgByte: blockbyte,
+	}
+	messageByte, err := proto.Marshal(message)
+	if err != nil {
+		return err
+	}
+	err = w.Engine.Broadcast(messageByte)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func (w *Worker) blockbroadcast(block *types.Block) error {
 
 	pbblock := block.ToProto()
-	headerByte, err := proto.Marshal(pbblock)
+	blockbyte, err := proto.Marshal(pbblock)
 	if err != nil {
-
 		return err
 	}
 	message := &pb.PoTMessage{
 		MsgType: pb.MessageType_Block_Data,
-		MsgByte: headerByte,
+		MsgByte: blockbyte,
 	}
 	messageByte, err := proto.Marshal(message)
 	if err != nil {
@@ -428,9 +460,9 @@ func (w *Worker) CheckVDF0Current(header *types.Header) (bool, error) {
 	}
 	if !bytes.Equal(vdfres, header.PoTProof[0]) {
 		return false, fmt.Errorf("the vdf0 proof is wrong ")
-	} else {
-		return true, nil
 	}
+
+	return true, nil
 }
 
 func (w *Worker) CheckVDF0ForBranch(branch []*types.Block) (bool, error) {
@@ -453,17 +485,36 @@ func (w *Worker) CheckVDF0ForBranch(branch []*types.Block) (bool, error) {
 			}
 
 		} else if header.Height == storageheight+1 {
-			vdfres, err := w.blockStorage.GetVDFresbyEpoch(storageheight)
-			if err != nil {
-				return false, err
-			}
-			vdfinput := crypto.Hash(vdfres)
-			vdfoutput := header.PoTProof[0]
-			times := time.Now()
-			if !w.vdfChecker.CheckVDF(vdfinput, vdfoutput) {
+			// vdfres, err := w.blockStorage.GetVDFresbyEpoch(storageheight)
+			// if err != nil {
+			// 	return false, err
+			// }
+			// vdfinput := crypto.Hash(vdfres)
+			// vdfoutput := header.PoTProof[0]
+			// times := time.Now()
+			// if !w.vdfChecker.CheckVDF(vdfinput, vdfoutput) {
+			// 	return false, fmt.Errorf("the vdf0 proof is wrong for height %d", header.Height)
+			// }
+			// w.log.Infof("[PoT]\tVDF Check need %d ms", time.Since(times)/time.Millisecond)
+			// w.blockStorage.SetVDFres(header.Height, header.PoTProof[0])
+			vdfhalfch := make(chan []byte, 2048)
+			go func(epoch uint64) []byte {
+				for {
+					b, err := w.blockStorage.GetVDFHalf(epoch)
+					if err == nil && b != nil {
+						vdfhalfch <- b
+					} else {
+						time.Sleep(5 * time.Second)
+					}
+				}
+			}(storageheight)
+
+			vdfhalf := <-vdfhalfch
+			vdfinput := crypto.Hash(vdfhalf)
+			vdfout := header.PoTProof[0]
+			if !wesolowski_rust.Verify(vdfinput, w.config.PoT.Vdf0Iteration-w.config.PoT.Vdf1Iteration, vdfout) {
 				return false, fmt.Errorf("the vdf0 proof is wrong for height %d", header.Height)
 			}
-			w.log.Infof("[PoT]\tVDF Check need %d ms", time.Since(times)/time.Millisecond)
 			w.blockStorage.SetVDFres(header.Height, header.PoTProof[0])
 		}
 	}
@@ -512,6 +563,27 @@ func (w *Worker) CheckHeaderVDF1(block *types.Block) (bool, error) {
 	tmp := new(big.Int).SetBytes(output)
 	if tmp.Cmp(target) >= 0 {
 		return false, fmt.Errorf("the difficulty check fail")
+	}
+	return true, nil
+}
+
+func (w *Worker) checkHeaderVDFHalf(block *types.Block) (bool, error) {
+	header := block.GetHeader()
+	height := header.Height
+	if len(header.PoTProof) != 3 {
+		return false, fmt.Errorf("the block vdf proof is less than 3")
+	}
+
+	b, err := w.blockStorage.GetVDFHalf(height)
+
+	if err != nil {
+		flag := wesolowski_rust.Verify(header.PoTProof[0], w.config.PoT.Vdf1Iteration, header.PoTProof[2])
+		if !flag {
+			return false, fmt.Errorf("the vdf1 proof is wrong")
+		}
+	}
+	if !bytes.Equal(b, header.PoTProof[2]) {
+		return false, fmt.Errorf("the vdf half proof is wrong")
 	}
 	return true, nil
 }

@@ -148,7 +148,7 @@ func (nc *NodeController) receiveMsg(ctx context.Context) {
 			nc.shardingsLock.Lock()
 			sharding, ok2 := nc.Shardings[shardingName]
 			if !ok2 {
-				nc.Log.Warn("Receive request error: Invaild sharding name")
+				//nc.Log.Warn("Receive request error: Invaild sharding name")
 			} else {
 				sharding.handleRequest(req)
 			}

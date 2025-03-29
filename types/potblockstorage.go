@@ -4,18 +4,20 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
+	"os"
+	"sync"
+
 	"github.com/boltdb/bolt"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/zzz136454872/upgradeable-consensus/pb"
 	"google.golang.org/protobuf/proto"
-	"log"
-	"os"
-	"sync"
 )
 
 const blocksBucket = "blocks"
 const UTXOBucket = "chainstate"
 const ExecutedBucket = "Executed"
+const ClientBucket = "client"
 
 var (
 	ErrHeightHashNotFound = errors.New("height hash not found")
@@ -79,6 +81,39 @@ func NewBlockStorage(id int64) *BlockStorage {
 		vdfheight: 0,
 		rwmutex:   new(sync.RWMutex),
 	}
+}
+
+func (s *BlockStorage) PutByte(block *Block) ([]byte, error) {
+	header := block.GetHeader()
+	protos := block.ToProto()
+	b, err := proto.Marshal(protos)
+	if err != nil {
+		return []byte{}, err
+	}
+
+	hash := header.Hash()
+	//err = s.db.Put(hash, b, nil)
+	//if err != nil {
+	//	return err
+	//}
+
+	err = s.boltdb.Update(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket([]byte(blocksBucket))
+		blockInb := bucket.Get(hash)
+		if blockInb != nil {
+			return nil
+		}
+
+		err = bucket.Put(hash, b)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	err = s.putHeightHash(header.Height, hash)
+	return b, err
 }
 
 func (s *BlockStorage) Put(block *Block) error {
@@ -242,7 +277,9 @@ func (s *BlockStorage) SetVDFres(epoch uint64, vdfres []byte) error {
 	key := []byte(fmt.Sprintf("epoch:%d", epoch))
 	err := s.boltdb.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(blocksBucket))
-
+		if len(b.Get(key)) != 0 {
+			return nil
+		}
 		err := b.Put(key, vdfres)
 		if err != nil {
 			return err
@@ -262,6 +299,42 @@ func (s *BlockStorage) SetVDFres(epoch uint64, vdfres []byte) error {
 func (s *BlockStorage) GetVDFresbyEpoch(epoch uint64) ([]byte, error) {
 	key := []byte(fmt.Sprintf("epoch:%d", epoch))
 	//value, err := s.db.Get(key, nil)
+	var value []byte
+	err := s.boltdb.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(blocksBucket))
+		value = b.Get(key)
+		if value == nil {
+			return fmt.Errorf("not found vdf res for height %d", epoch)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return value, nil
+}
+
+func (s *BlockStorage) SetVDFHalf(epoch uint64, vdfres []byte) error {
+	key := []byte(fmt.Sprintf("epoch half: %d", epoch))
+	err := s.boltdb.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(blocksBucket))
+		if len(b.Get(key)) != 0 {
+			return nil
+		}
+		err := b.Put(key, vdfres)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *BlockStorage) GetVDFHalf(epoch uint64) ([]byte, error) {
+	key := []byte(fmt.Sprintf("epoch half: %d", epoch))
 	var value []byte
 	err := s.boltdb.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(blocksBucket))

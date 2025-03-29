@@ -72,14 +72,51 @@ func (b *Block) GetTxs() []*Tx {
 	}
 }
 
+func (b *Block) Copy() *Block {
+	h := b.GetHeader()
+	header := &Header{
+		Height:         h.Height,
+		ParentHash:     h.ParentHash,
+		UncleHash:      h.UncleHash,
+		Mixdigest:      h.Mixdigest,
+		Difficulty:     big.NewInt(h.Difficulty.Int64()),
+		Nonce:          h.Nonce,
+		Timestamp:      h.Timestamp,
+		PoTProof:       h.PoTProof,
+		Address:        h.Address,
+		PeerId:         h.PeerId,
+		TxHash:         h.TxHash,
+		ExeHash:        h.ExeHash,
+		Hashes:         h.Hashes,
+		PublicKey:      h.PublicKey,
+		CryptoElement:  h.CryptoElement,
+		CommiteePubkey: h.CommiteePubkey,
+	}
+	txs := make([]*Tx, len(b.Txs))
+	copy(txs, b.Txs)
+	exeheader := make([]*ExecuteHeader, len(b.ExeHeaders))
+	copy(exeheader, b.ExeHeaders)
+	return &Block{
+		Header:     header,
+		Txs:        txs,
+		ExeHeaders: exeheader,
+	}
+
+}
 func (b *Block) ToProto() *pb.Block {
-	pbheader := b.GetHeader().ToProto()
+	if b == nil {
+		return nil
+	}
+
+	newb := b.Copy()
+
+	pbheader := newb.GetHeader().ToProto()
 	pbtxs := make([]*pb.Tx, 0)
-	for _, tx := range b.Txs {
+	for _, tx := range newb.Txs {
 		pbtxs = append(pbtxs, tx.ToProto())
 	}
 	pbexeheader := make([]*pb.ExecuteHeader, 0)
-	for _, header := range b.ExeHeaders {
+	for _, header := range newb.ExeHeaders {
 		pbexeheader = append(pbexeheader, header.ToProto())
 	}
 	return &pb.Block{
@@ -342,6 +379,9 @@ func (b *Header) ToProto() *pb.Header {
 	}
 	if b.Hashes == nil {
 		b.Hash()
+	}
+	if b.PublicKey == nil {
+		panic("PublicKey is nil")
 	}
 
 	return &pb.Header{
