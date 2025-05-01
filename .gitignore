@@ -25,5 +25,7 @@ senddci
 getbalance
 /localremote
 
-bci
-dci
+/bci
+/dci
+/http
+/key

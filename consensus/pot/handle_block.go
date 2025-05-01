@@ -118,7 +118,7 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 			return fmt.Errorf("block half vdf0 is error")
 		}
 	} else {
-		flag := wesolowski_rust.Verify(header.PoTProof[2], w.config.PoT.Vdf1Iteration, header.PoTProof[0])
+		flag := wesolowski_rust.Verify(header.PoTProof[0], w.config.PoT.Vdf1Iteration, header.PoTProof[2])
 		if !flag {
 			return fmt.Errorf("block half vdf0 is error")
 		} else {
