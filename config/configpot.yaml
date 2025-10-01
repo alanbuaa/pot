@@ -77,6 +77,6 @@ consensus:
     commiteeSize : 4
     confirmDelay : 6
     slowrate : 6
-    dcirpcAddress : 127.0.0.1:9866
+    bcirpcAddress : 127.0.0.1:9866
 
 # 100 - 5KB 10000 - 411K 30000-1290K

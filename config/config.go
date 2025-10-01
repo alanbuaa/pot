@@ -56,7 +56,7 @@ type PoTConfig struct {
 	CommiteeSize   int    `yaml:"commiteeSize"`
 	ConfirmDelay   int    `yaml:"confirmDelay"`
 	Slowrate       int    `yaml:"slowrate"`
-	RpcAddress     string `yaml:"dcirpcAddress"`
+	RpcAddress     string `yaml:"bcirpcAddress"` // bci rpc address
 }
 type ConsensusConfig struct {
 	Type        string            `yaml:"type"`
