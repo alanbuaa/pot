@@ -29,3 +29,5 @@ getbalance
 /dci
 /http
 /key
+keys/*
+logs/*

@@ -57,6 +57,14 @@ var (
 )
 
 func (w *Worker) VerifyBciReward(reward *BciReward) (bool, *types.ExecutedTx, error) {
+	// VerifyBciReward: 验证一个 BciReward 的有效性。
+	// 输入: reward - 待验证的 BciReward，包含 Proof(区块高度、区块哈希、交易哈希) 等信息。
+	// 输出: (bool, *types.ExecutedTx, error)
+	//   - bool: 验证是否通过
+	//   - *types.ExecutedTx: 如果找到对应交易，返回该已执行交易信息
+	//   - error: 验证失败时返回原因
+	// 行为: 检查 proof 的高度不超过当前执行高度，尝试在内存池中根据区块哈希获取区块，
+	// 并在区块内找到对应交易以确认 reward 的合法性。
 	//return true
 	//address := reward.Address
 	//amount := reward.Amount
@@ -84,6 +92,10 @@ func (w *Worker) VerifyBciReward(reward *BciReward) (bool, *types.ExecutedTx, er
 }
 
 func (w *Worker) SendBci(ctx context.Context, request *pb.SendBciRequest) (*pb.SendBciResponse, error) {
+	// SendBci: 接受并广播 BCI 奖励请求。
+	// 输入: gRPC 上下文和 SendBciRequest 包含若干 BciReward
+	// 输出: SendBciResponse 表明是否成功以及当前高度
+	// 行为: 先广播请求到网络，然后在本地处理请求（将有效的 BciReward 加入内存池）。
 	err := w.broadcastSendBciRequest(request)
 	if err != nil {
 		return &pb.SendBciResponse{IsSuccess: false}, err
@@ -92,6 +104,11 @@ func (w *Worker) SendBci(ctx context.Context, request *pb.SendBciRequest) (*pb.S
 }
 
 func (w *Worker) GetBalance(ctx context.Context, request *pb.GetBalanceRequest) (*pb.GetBalanceResponse, error) {
+
+	// GetBalance: 查询指定地址的 UTXO 与余额并返回
+	// 输入: GetBalanceRequest 包含查询地址
+	// 输出: GetBalanceResponse 包含地址、余额与 UTXO 列表
+	// 行为: 从链上(通过 chainReader) 查找所有 UTXO，将其转换为 pb.Utxo 格式并汇总余额
 
 	addr := request.GetAddress()
 	w.log.Errorf("get balance of %s", hexutil.Encode(addr))
@@ -152,6 +169,10 @@ func (w *Worker) GetBalance(ctx context.Context, request *pb.GetBalanceRequest) 
 // }
 
 func (w *Worker) VerifyUTXO(ctx context.Context, request *pb.VerifyUTXORequest) (*pb.VerifyUTXOResponse, error) {
+	// VerifyUTXO: 验证 UTXO 证明（当前为简单占位实现，总是返回 true）
+	// 输入: VerifyUTXORequest（包含证明或其他字段）
+	// 输出: VerifyUTXOResponse.Flag 表示证明是否有效
+	// 行为: 当前实现直接返回 true；注释掉的代码显示了更完整的验证流程（遍历链上区块查找 txid 并比对 data）。
 	return &pb.VerifyUTXOResponse{Flag: true}, nil
 	// from := request.GetFrom()
 	// if from != nil {
@@ -199,6 +220,11 @@ func (w *Worker) VerifyUTXO(ctx context.Context, request *pb.VerifyUTXORequest) 
 }
 
 func (w *Worker) CreateLockTransaction(ctx context.Context, request *pb.CreateLockTransactionRequest) (*pb.CreateLockTransactionResponse, error) {
+	// CreateLockTransaction: 创建一个锁定类型交易的 gRPC 接口实现。
+	// 输入: 包含要创建交易的 pb.RawTx
+	// 输出: CreateLockTransactionResponse, error
+	// 行为: 将 pb 的交易转换为内部 RawTx，调用 checkLockTransaction 校验，
+	// 若校验通过则广播该交易并加入内存池。
 	txs := request.GetTx()
 	rawtx := types.ToRawTx(txs)
 	err := w.checkLockTransaction(rawtx)
@@ -215,6 +241,10 @@ func (w *Worker) CreateLockTransaction(ctx context.Context, request *pb.CreateLo
 }
 
 func (w *Worker) checkLockTransaction(rawtx *types.RawTx) error {
+	// checkLockTransaction: 在提交前本地校验 CreateLock 交易的合法性。
+	// 输入: rawtx - 待校验的交易
+	// 输出: error - 校验失败时返回具体错误
+	// 行为: 读取本地 UTXO（bolt DB），检查输入输出的类型、数额、锁定时间、签名能否解锁等规则。
 	height := w.getEpoch()
 	db := w.chainReader.GetBoltDb()
 	err := db.View(func(tx *bolt.Tx) error {
@@ -292,6 +322,9 @@ func (w *Worker) checkLockTransaction(rawtx *types.RawTx) error {
 }
 
 func (w *Worker) broadcastClientTransaction(rawtx *types.RawTx, types pb.TxType) error {
+	// broadcastClientTransaction: 将客户端交易封装为 PoT 消息并通过 Engine 广播到网络
+	// 输入: rawtx - 内部 RawTx, types - 交易种类（pb.TxType）
+	// 输出: error - 广播或编码失败时返回
 	pbtx := pb.ClientTransaction{
 		Tx:     rawtx.ToProto(),
 		TxType: types,
@@ -317,6 +350,8 @@ func (w *Worker) broadcastClientTransaction(rawtx *types.RawTx, types pb.TxType)
 }
 
 func (w *Worker) CreateLockTransferTransaction(ctx context.Context, request *pb.CreateLockTransferTransactionRequest) (*pb.CreateLockTransferTransactionResponse, error) {
+	// CreateLockTransferTransaction: gRPC 接口，创建锁定转移交易（transfer lock）
+	// 行为: 校验交易(CheckLockTransferTransaction)、广播并加入内存池。
 	pbrawtx := request.GetTx()
 	rawtx := types.ToRawTx(pbrawtx)
 	err := w.CheckLockTransferTransaction(rawtx)
@@ -335,6 +370,8 @@ func (w *Worker) CreateLockTransferTransaction(ctx context.Context, request *pb.
 }
 
 func (w *Worker) CheckLockTransferTransaction(rawtx *types.RawTx) error {
+	// CheckLockTransferTransaction: 校验一个 transfer-lock 类型交易是否合法。
+	// 主要检查输入是否对应已存在的 lock UTXO、兴趣(interest) 使用是否合理以及费用限制等。
 	height := w.getEpoch()
 	db := w.chainReader.GetBoltDb()
 	err := db.View(func(tx *bolt.Tx) error {
@@ -394,6 +431,8 @@ func (w *Worker) CheckLockTransferTransaction(rawtx *types.RawTx) error {
 	return nil
 }
 func (w *Worker) CreateDevastateTransaction(ctx context.Context, request *pb.CreateDevastateTransactionRequest) (*pb.CreateDevastateTransactionResponse, error) {
+	// CreateDevastateTransaction: gRPC 接口，用于创建“燃烧/销毁”类型的交易（devastate）
+	// 行为: 校验 CreateDevastateTransaction 后广播并加入内存池。
 	pbrawtx := request.GetTx()
 	rawtx := types.ToRawTx(pbrawtx)
 	err := w.CheckDevastateTransaction(rawtx)
@@ -410,6 +449,7 @@ func (w *Worker) CreateDevastateTransaction(ctx context.Context, request *pb.Cre
 }
 
 func (w *Worker) CheckDevastateTransaction(rawtx *types.RawTx) error {
+	// CheckDevastateTransaction: 校验 devastate 交易是否合法，检查输入输出地址是否为 BurnoutAddress、interest 计算等。
 	db := w.chainReader.GetBoltDb()
 	height := w.getEpoch()
 	err := db.View(func(tx *bolt.Tx) error {
@@ -456,6 +496,7 @@ func (w *Worker) CheckDevastateTransaction(rawtx *types.RawTx) error {
 	return nil
 }
 func (w *Worker) CreateNonLockTransferTransaction(ctx context.Context, request *pb.CreateNonLockTransferTransactionRequest) (*pb.CreateNonLockTransferTransactionResponse, error) {
+	// CreateNonLockTransferTransaction: gRPC 接口，创建不带锁定的转账交易（non-lock transfer）。
 	pbrawtx := request.GetTx()
 	rawtx := types.ToRawTx(pbrawtx)
 	err := w.CheckNonLockTransferTransaction(rawtx)
@@ -472,6 +513,7 @@ func (w *Worker) CreateNonLockTransferTransaction(ctx context.Context, request *
 }
 
 func (w *Worker) CheckNonLockTransferTransaction(rawtx *types.RawTx) error {
+	// CheckNonLockTransferTransaction: 校验非锁定转账交易是否合法，确保输入不为锁定 UTXO、输出不为 BurnoutAddress、利息使用等。
 	db := w.chainReader.GetBoltDb()
 	height := w.getEpoch()
 	err := db.View(func(tx *bolt.Tx) error {
@@ -525,6 +567,7 @@ func (w *Worker) CheckNonLockTransferTransaction(rawtx *types.RawTx) error {
 }
 
 func (w *Worker) CreateBciToVsiTransaction(ctx context.Context, request *pb.CreateBciToVsiRequest) (*pb.CreateBciToVsiResponse, error) {
+	// CreateBciToVsiTransaction: gRPC 接口，将 BCI 转换为 VSI 的交易创建入口，经过校验后广播并加入内存池。
 	pbrawtx := request.GetTx()
 	rawtx := types.ToRawTx(pbrawtx)
 	err := w.CheckBciToVsiRequest(rawtx)
@@ -540,6 +583,10 @@ func (w *Worker) CreateBciToVsiTransaction(ctx context.Context, request *pb.Crea
 }
 
 func (w *Worker) GetPqcKey(ctx context.Context, request *pb.GetPqcKeyRequest) (*pb.GetPqcKeyResponse, error) {
+	// GetPqcKey: 根据高度或区块哈希查找并返回与区块关联的 PQC 密钥（若本节点拥有）
+	// 输入: GetPqcKeyRequest 可以包含 Height 或 BlockHash
+	// 输出: GetPqcKeyResponse 包含 Flag（是否成功）、PublicKey 与 SecretKey（若成功）
+	// 行为: 若提供 Height 则从链中读取对应区块并尝试查找私钥；否则使用 BlockHash 从 blockStorage 获取区块并查找。
 	if request.Height != 0 {
 		b, err := w.chainReader.GetByHeight(request.Height)
 		if err != nil {
@@ -576,6 +623,7 @@ func (w *Worker) GetPqcKey(ctx context.Context, request *pb.GetPqcKeyRequest) (*
 
 }
 func (w *Worker) CheckBciToVsiRequest(rawtx *types.RawTx) error {
+	// CheckBciToVsiRequest: 校验将 BCI 转换为 VSI 的交易，确保输出地址是指定的 VsiConvertAddress，且利息使用不超限。
 	db := w.chainReader.GetBoltDb()
 	height := w.getEpoch()
 
@@ -629,6 +677,8 @@ func (w *Worker) CheckBciToVsiRequest(rawtx *types.RawTx) error {
 }
 
 func (w *Worker) handleSendBciRequest(request *pb.SendBciRequest) (*pb.SendBciResponse, error) {
+	// handleSendBciRequest: 处理本地收到的 SendBciRequest，将验证通过的 BciReward 加入内存池
+	// 行为: 对请求中的每个 BciReward 调用 VerifyBciReward，提取地址并 AddBciReward 到 mempool。
 	Bcirewards := request.GetBciReward()
 
 	for _, pbBcireward := range Bcirewards {
@@ -662,6 +712,7 @@ func (w *Worker) handleSendBciRequest(request *pb.SendBciRequest) (*pb.SendBciRe
 }
 
 func (w *Worker) broadcastSendBciRequest(request *pb.SendBciRequest) error {
+	// broadcastSendBciRequest: 将 SendBciRequest 序列化为 PoT 消息并广播到网络。
 	requestbytes, err := proto.Marshal(request)
 	if err != nil {
 		return err
@@ -788,6 +839,10 @@ func (w *Worker) broadcastSendBciRequest(request *pb.SendBciRequest) error {
 // }
 
 func (w *Worker) GenerateCoinbaseTx(pubkeybyte []byte, vdf0res []byte, totalreward int64) *types.Tx {
+	// GenerateCoinbaseTx: 根据内存池中的 BciRewards 生成 coinbase 交易。
+	// 输入: pubkeybyte - 挖矿者公钥字节, vdf0res - VDF 输出种子, totalreward - 本区块应分配的总奖励
+	// 输出: *types.Tx 包含序列化后的 coinbase 交易数据
+	// 行为: 将 BciRewards 分组、按权重抽样、根据 bcimap 规则分配奖励到对应 TxOutput 中，并返回封装好的 coinbase tx。
 	Bcirewards := w.mempool.GetAllBciRewards()
 	coinbaseproof := make([]types.CoinbaseProof, 0)
 	for _, Bcireward := range Bcirewards {
@@ -887,6 +942,7 @@ func (w *Worker) GenerateCoinbaseTx(pubkeybyte []byte, vdf0res []byte, totalrewa
 }
 
 func groupByChainID(rewards []*BciReward) map[int32][]*BciReward {
+	// groupByChainID: 将 BciReward 列表按照 BciType（链 ID）分组，返回 map[bciType] -> rewards
 	groupData := make(map[int32][]*BciReward)
 	for _, reward := range rewards {
 		groupData[reward.BciType] = append(groupData[reward.BciType], reward)
@@ -895,6 +951,8 @@ func groupByChainID(rewards []*BciReward) map[int32][]*BciReward {
 }
 
 func (w *Worker) GenerateCoinbaseTxWithoutMinerKey(Bcirewards []*BciReward, privkey *crypto.PqcKey, totalreward int64) *types.RawTx {
+	// GenerateCoinbaseTxWithoutMinerKey: 在没有矿工本地私钥的情况下，使用提供的 privkey 构建 RawTx coinbase（仅构造，不签名）
+	// 返回: 未编码的 *types.RawTx，供上层进一步处理。
 	coinbaseproof := make([]types.CoinbaseProof, 0)
 	pubkeybyte := privkey.PublicKeyBytes()
 	minerout := types.TxOutput{
@@ -934,6 +992,7 @@ func (w *Worker) GenerateCoinbaseTxWithoutMinerKey(Bcirewards []*BciReward, priv
 	return tx
 }
 func groupByType(proofs []types.CoinbaseProof) map[int32][]types.CoinbaseProof {
+	// groupByType: 将 CoinbaseProof 按 Type 字段分组，便于后续按 BCI 类型处理。
 	groupData := make(map[int32][]types.CoinbaseProof)
 	for _, reward := range proofs {
 		groupData[reward.Type] = append(groupData[reward.Type], reward)
@@ -942,6 +1001,7 @@ func groupByType(proofs []types.CoinbaseProof) map[int32][]types.CoinbaseProof {
 }
 
 func CoinbaseProofToBytes(coinbaseproofs []types.CoinbaseProof) []byte {
+	// CoinbaseProofToBytes: 将 coinbase proofs 序列化为连续字节流（pb 序列化后直接拼接）
 	var buffer bytes.Buffer
 	for _, coinbaseproof := range coinbaseproofs {
 		pbproof := coinbaseproof.ToProto()
@@ -952,6 +1012,8 @@ func CoinbaseProofToBytes(coinbaseproofs []types.CoinbaseProof) []byte {
 }
 
 func (w *Worker) handleConfirmBlockTx(height uint64) error {
+	// handleConfirmBlockTx: 在区块确认（达到 ConfirmDelay）时处理区块内的交易，
+	// 如果交易输出包含 Data 字段（需要转发到 EVM），则调用 TransferTx2EVM。
 	if height < ConfirmDelay {
 		return nil
 	}
@@ -980,6 +1042,9 @@ func (w *Worker) handleConfirmBlockTx(height uint64) error {
 }
 
 func (w *Worker) TransferTx2EVM(data []byte) error {
+	// TransferTx2EVM: 调用远程执行器（gRPC）将交易数据转发到 EVM/执行器进行执行。
+	// 输入: data - 需要在执行器中执行的交易字节
+	// 输出: error - 远程调用失败或执行器返回失败时返回错误
 	conn, err := grpc.NewClient(w.config.PoT.ExcutorAddress, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(1024*1024*1024)))
 
 	if err != nil {
@@ -1000,6 +1065,8 @@ func (w *Worker) TransferTx2EVM(data []byte) error {
 }
 
 func (w *Worker) CheckBlockTxs(block *types.Block) (bool, error) {
+	// CheckBlockTxs: 校验一个区块内所有交易的类型与内容是否合法。
+	// 行为: 对每笔交易调用 CheckTxWithBlock，非 coinbase 类型根据不同判断分派到不同的校验函数（create lock, transfer lock, non-lock, devasted）。
 	txs := block.GetRawTx()
 	// header := block.GetHeader()
 	for _, tx := range txs {
@@ -1029,6 +1096,10 @@ func (w *Worker) CheckBlockTxs(block *types.Block) (bool, error) {
 }
 
 func (w *Worker) CheckTxWithBlock(rawtx *types.RawTx, block *types.Block) (bool, error) {
+	// CheckTxWithBlock: 在应用区块前，针对单笔交易按当前区块头信息进行全面校验。
+	// 输入: rawtx - 待校验交易; block - 当前包含该交易的区块
+	// 输出: bool, error - 校验是否通过及失败原因
+	// 行为: 若为非 coinbase 交易，检查输入 utxo 的存在性、解锁能力、金额一致性等；若为 coinbase，检查 coinbase 输出（矿工份额、抽样分配等）是否符合规则。
 	db := w.chainReader.GetBoltDb()
 	header := block.GetHeader()
 	totalreward := CalcTotalReward(header.Height)
@@ -1232,6 +1303,8 @@ func (w *Worker) CheckTxWithBlock(rawtx *types.RawTx, block *types.Block) (bool,
 }
 
 func (w *Worker) CheckNotDrawCoinbaseProof(proof *types.CoinbaseProof) (bool, error) {
+	// CheckNotDrawCoinbaseProof: 在链上查找 proof 对应的交易是否已经存在以决定该 proof 是否已被“兑现”。
+	// 行为: 向后遍历区块链，查找是否存在 txid 与 proof.TxHash 相同的交易。
 	//db := w.chainReader.GetBoltDb()
 	height := w.chainReader.GetCurrentHeight()
 	for height > 0 {
@@ -1251,6 +1324,8 @@ func (w *Worker) CheckNotDrawCoinbaseProof(proof *types.CoinbaseProof) (bool, er
 	return false, fmt.Errorf("coinbase tx error for the transaction of proof is not found")
 }
 func (w *Worker) CheckBlockTxInterest(rawtx *types.RawTx, blockheight uint64) (bool, error) {
+	// CheckBlockTxInterest: 校验交易使用的 interest（利息）是否合法，不超过输入可用的利息。
+	// 行为: 根据输出的产生时间和锁定期计算累计利息，并比较输出使用是否被允许。
 	db := w.chainReader.GetBoltDb()
 	err := db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(types.UTXOBucket))
@@ -1335,6 +1410,7 @@ func (w *Worker) CheckBlockTxInterest(rawtx *types.RawTx, blockheight uint64) (b
 }
 
 func (w *Worker) CheckMinerTransacFee(block *types.Block) (bool, error) {
+	// CheckMinerTransacFee: 校验 coinbase 中矿工输出是否正确占比总奖励，以及矿工声明的 interest 是否不超过交易费总额。
 
 	txs := block.GetRawTx()
 	coinbasetx := txs[0]
@@ -1350,6 +1426,7 @@ func (w *Worker) CheckMinerTransacFee(block *types.Block) (bool, error) {
 }
 
 func CheckMinerOutput(minerout types.TxOutput, block *types.Block) (bool, error) {
+	// CheckMinerOutput: 辅助函数，校验 miner output 与区块头的 public key、奖励分配和锁定时间是否一致。
 	addr := minerout.Address
 	header := block.GetHeader()
 	totalreward := CalcTotalReward(block.Header.Height)
@@ -1380,6 +1457,7 @@ func CheckMinerOutput(minerout types.TxOutput, block *types.Block) (bool, error)
 }
 
 func CalcTotalReward(height uint64) int64 {
+	// CalcTotalReward: 根据区块高度计算本高度应分配的总奖励，随时间递减（每若干周期衰减一半）。
 	year := float64(height) / float64(OneYear*2)
 	if year < 1 {
 		return TotalReward

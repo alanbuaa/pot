@@ -11,7 +11,7 @@ make
 
 ## generate key
 ```
-generate_key
+make generate_key
 ```
 
 ## test
