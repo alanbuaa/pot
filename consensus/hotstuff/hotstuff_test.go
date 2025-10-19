@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	"github.com/zzz136454872/upgradeable-consensus/config"
-	"github.com/zzz136454872/upgradeable-consensus/types"
-	"github.com/zzz136454872/upgradeable-consensus/utils"
+	storage "github.com/zzz136454872/upgradeable-consensus/internal/storage/whirly"
+	"github.com/zzz136454872/upgradeable-consensus/pkg/utils"
 )
 
 func TestMain(m *testing.M) {
@@ -17,7 +17,7 @@ func TestMain(m *testing.M) {
 
 func TestGenerateGenesisBlock(t *testing.T) {
 	block := GenerateGenesisBlock()
-	t.Log(types.String(block))
+	t.Log(storage.ToString(block))
 }
 
 func TestHotStuffImpl_GetSelfInfo(t *testing.T) {

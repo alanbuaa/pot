@@ -10,8 +10,8 @@ import (
 	"github.com/zzz136454872/upgradeable-consensus/consensus/whirly/crWhirly"
 	"github.com/zzz136454872/upgradeable-consensus/consensus/whirly/simpleWhirly"
 	"github.com/zzz136454872/upgradeable-consensus/pb"
+	"github.com/zzz136454872/upgradeable-consensus/pkg/utils"
 	"github.com/zzz136454872/upgradeable-consensus/types"
-	"github.com/zzz136454872/upgradeable-consensus/utils"
 	"google.golang.org/protobuf/proto"
 
 	bc_api "blockchain-crypto/blockchain_api"

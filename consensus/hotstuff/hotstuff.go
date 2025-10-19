@@ -11,10 +11,11 @@ import (
 	"github.com/zzz136454872/upgradeable-consensus/config"
 	"github.com/zzz136454872/upgradeable-consensus/consensus/model"
 	"github.com/zzz136454872/upgradeable-consensus/executor"
+	"github.com/zzz136454872/upgradeable-consensus/internal/storage/whirly"
 	"github.com/zzz136454872/upgradeable-consensus/p2p"
 	"github.com/zzz136454872/upgradeable-consensus/pb"
+	"github.com/zzz136454872/upgradeable-consensus/pkg/utils"
 	"github.com/zzz136454872/upgradeable-consensus/types"
-	"github.com/zzz136454872/upgradeable-consensus/utils"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -39,7 +40,7 @@ type HotStuff interface {
 type HotStuffImpl struct {
 	ID              int64
 	ConsensusID     int64
-	BlockStorage    types.WhirlyBlockStorage
+	BlockStorage    whirly.WhirlyBlockStorage
 	View            *View
 	Config          *config.ConsensusConfig
 	TimeChan        *utils.Timer
@@ -70,7 +71,7 @@ func (hs *HotStuffImpl) Init(
 	log *logrus.Entry,
 ) {
 	hs.ID = id
-	hs.ConsensusID = cid
+	hs.ID = cid
 	cfg.F = (len(cfg.Nodes) - 1) / 3
 	hs.Config = cfg
 	hs.Executor = exec
@@ -90,7 +91,8 @@ func (hs *HotStuffImpl) Init(
 
 	hs.MemPool = types.NewMemPool()
 	hs.Log.Trace("[HOTSTUFF] Init block storage")
-	hs.BlockStorage = types.NewBlockStorageImpl(strconv.Itoa(int(cid)) + "-" + strconv.Itoa(int(id)))
+	sid := strconv.Itoa(int(id)) + "-" + strconv.Itoa(int(cid))
+	hs.BlockStorage = whirly.NewBlockStorageImpl(sid, cfg.Nodes[id].Datadir)
 	hs.Wg = new(sync.WaitGroup)
 	hs.Closed = make(chan []byte)
 }
@@ -200,7 +202,7 @@ func (h *HotStuffImpl) CreateLeaf(parentHash []byte, txs []types.RawTransaction,
 		Justify:    justify,
 	}
 
-	b.Hash = types.Hash(b)
+	b.Hash = whirly.Hash(b)
 	return b
 }
 
@@ -342,7 +344,7 @@ func GenerateGenesisBlock() *pb.WhirlyBlock {
 		Txs:        nil,
 		Justify:    nil,
 	}
-	hash := types.Hash(genesisBlock)
+	hash := whirly.Hash(genesisBlock)
 	genesisBlock.Hash = hash
 	genesisBlock.Committed = true
 	return genesisBlock

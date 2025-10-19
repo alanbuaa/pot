@@ -173,20 +173,9 @@ func HttpTxOutput2TxOutput(txoutput HTTPTxOutput) (types.TxOutput, error) {
 type ResponseData struct {
 }
 
-func StartAPI() {
-	r := gin.Default()
-	r.GET("/api/hello", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"code": 200,
-			"msg":  "success",
-		})
-	})
-
-	r.Run(fmt.Sprintf("0.0.0.0:%d", port))
-}
-
 func setHTTPservice(w *Worker) *gin.Engine {
 	r := gin.Default()
+	// gin.SetMode(gin.ReleaseMode)
 	createTransaction := r.Group("/api")
 	{
 		createTransaction.POST("/createlocktransaction", func(c *gin.Context) { handlerCreateLockTransaction(c, w) })

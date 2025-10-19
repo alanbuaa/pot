@@ -11,6 +11,7 @@ import (
 	"github.com/boltdb/bolt"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/zzz136454872/upgradeable-consensus/crypto"
+	storage "github.com/zzz136454872/upgradeable-consensus/internal/storage/pot"
 	"github.com/zzz136454872/upgradeable-consensus/types"
 )
 
@@ -19,7 +20,7 @@ ChainReader is used to store chain state for the pot chain
 */
 
 type ChainReader struct {
-	storage      *types.BlockStorage
+	storage      *storage.BlockStorage
 	chain        map[uint64]*types.Block
 	lockUTXO     map[uint64]map[string]*types.TxOutput
 	tempLockUTXO map[uint64]map[string]*types.TxOutput
@@ -27,7 +28,7 @@ type ChainReader struct {
 	sync         *sync.RWMutex
 }
 
-func NewChainReader(storage *types.BlockStorage) *ChainReader {
+func NewChainReader(storage *storage.BlockStorage) *ChainReader {
 	c := &ChainReader{
 		storage:      storage,
 		chain:        make(map[uint64]*types.Block),
@@ -161,7 +162,7 @@ func (c *ChainReader) FindUTXO(address []byte) (map[string]types.TxOutput, error
 
 	db := c.GetBoltDb()
 	err := db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(types.UTXOBucket))
+		b := tx.Bucket([]byte(storage.UTXOBucket))
 		cursor := b.Cursor()
 		count := 0
 		for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
@@ -247,7 +248,7 @@ func (c *ChainReader) FindSpendableOutputs(pubkey []byte, amount int64) (int64, 
 	accumulated := int64(0)
 
 	err := c.GetBoltDb().View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(types.UTXOBucket))
+		b := tx.Bucket([]byte(storage.UTXOBucket))
 		c := b.Cursor()
 
 		for k, v := c.First(); k != nil; k, v = c.Next() {
@@ -273,7 +274,7 @@ func (c *ChainReader) FindSpendableOutputs(pubkey []byte, amount int64) (int64, 
 
 func (c *ChainReader) Reindex() error {
 	db := c.GetBoltDb()
-	bucketName := []byte(types.UTXOBucket)
+	bucketName := []byte(storage.UTXOBucket)
 	err := db.Update(func(tx *bolt.Tx) error {
 		err := tx.DeleteBucket(bucketName)
 		if err != nil && !errors.Is(err, bolt.ErrBucketNotFound) {
@@ -315,7 +316,7 @@ func (c *ChainReader) ResetTxForBlock(block *types.Block) error {
 	txs := block.GetRawTx()
 	db := c.GetBoltDb()
 	err := db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(types.UTXOBucket))
+		b := tx.Bucket([]byte(storage.UTXOBucket))
 
 		for _, rawTx := range txs {
 
@@ -401,7 +402,7 @@ func (c *ChainReader) TryResetTxForBlock(block *types.Block) error {
 	txs := block.GetRawTx()
 	db := c.GetBoltDb()
 	err := db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(types.UTXOBucket))
+		b := tx.Bucket([]byte(storage.UTXOBucket))
 		for _, rawtx := range txs {
 			for i, output := range rawtx.TxOutput {
 				utxokey := fmt.Sprintf("%s:%d", hexutil.Encode(rawtx.Txid[:]), i)
@@ -488,7 +489,7 @@ func (c *ChainReader) UpdateTxForBlock(block *types.Block) error {
 	c.sync.Lock()
 	defer c.sync.Unlock()
 	err := db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(types.UTXOBucket))
+		b := tx.Bucket([]byte(storage.UTXOBucket))
 		for _, rawTx := range txs {
 			if !rawTx.IsCoinBase() {
 				for _, input := range rawTx.TxInput {
@@ -549,7 +550,7 @@ func (c *ChainReader) TryUpdateTxForBlock(block *types.Block) error {
 	c.sync.Lock()
 	defer c.sync.Unlock()
 	err := db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(types.UTXOBucket))
+		b := tx.Bucket([]byte(storage.UTXOBucket))
 		for _, rawTx := range txs {
 			if !rawTx.IsCoinBase() {
 				for _, input := range rawTx.TxInput {

@@ -498,14 +498,14 @@ func IsContain(parent []string, son string) bool {
 	return false
 }
 
-func (w *Worker) GenerateCryptoSetFromLocal(height uint64) (types.CryptoElement, error) {
+func (w *Worker) GenerateCryptoSetFromLocal(height uint64) (crypto.CryptoElement, error) {
 	// 如果处于初始化阶段（参数生成阶段）
 	if inInitStage(height) {
 		// 更新 srs, 并生成证明
 		r, _ := bls12381.NewFr().Rand(rand.Reader)
 		newSRS, newSrsUpdateProof := w.Cryptoset.LocalSRS.Update(r)
 		// 更新后的SRS和更新证明写入区块
-		return types.CryptoElement{
+		return crypto.CryptoElement{
 			SRS:            newSRS,
 			SrsUpdateProof: newSrsUpdateProof,
 		}, nil
@@ -530,7 +530,7 @@ func (w *Worker) GenerateCryptoSetFromLocal(height uint64) (types.CryptoElement,
 		newDrawProof, err = verifiable_draw.Draw(w.Cryptoset.LocalSRS, w.Cryptoset.BigN, w.Cryptoset.PrevShuffledPKList, uint32(SmallN), secretVector, w.Cryptoset.PrevRCommitForDraw)
 		// TODO handle error，能否直接return？还是循环调用？
 		if err != nil {
-			return types.CryptoElement{}, err
+			return crypto.CryptoElement{}, err
 		}
 	}
 	// 如果处于PVSS阶段，则进行PVSS的分发份额
@@ -556,12 +556,12 @@ func (w *Worker) GenerateCryptoSetFromLocal(height uint64) (types.CryptoElement,
 			shareCommitsList[i], coeffCommitsList[i], encSharesList[i], committeePKList[i], err = mrpvss.EncShares(w.Cryptoset.G, w.Cryptoset.H, holderPKLists[i], secret, uint32(uint64(w.Cryptoset.Threshold)))
 			// TODO handle error，能否直接return？还是循环调用？
 			if err != nil {
-				return types.CryptoElement{}, err
+				return crypto.CryptoElement{}, err
 			}
 			i++
 		}
 	}
-	return types.CryptoElement{
+	return crypto.CryptoElement{
 		SRS:                     nil,
 		SrsUpdateProof:          nil,
 		ShuffleProof:            newShuffleProof,

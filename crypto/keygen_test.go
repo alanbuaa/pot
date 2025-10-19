@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/zzz136454872/upgradeable-consensus/utils"
+	"github.com/zzz136454872/upgradeable-consensus/pkg/utils"
 )
 
 func TestMain(m *testing.M) {

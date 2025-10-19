@@ -10,10 +10,11 @@ import (
 	"github.com/zzz136454872/upgradeable-consensus/consensus/model"
 	"github.com/zzz136454872/upgradeable-consensus/consensus/whirly/nodeController"
 	"github.com/zzz136454872/upgradeable-consensus/executor"
+	storage "github.com/zzz136454872/upgradeable-consensus/internal/storage/pot"
 	"github.com/zzz136454872/upgradeable-consensus/p2p"
 	"github.com/zzz136454872/upgradeable-consensus/pb"
+	"github.com/zzz136454872/upgradeable-consensus/pkg/utils"
 	"github.com/zzz136454872/upgradeable-consensus/types"
-	"github.com/zzz136454872/upgradeable-consensus/utils"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -41,7 +42,7 @@ type PoTEngine struct {
 	worker *Worker
 
 	//headerStorage  *types.HeaderStorage
-	blockStorage *types.BlockStorage
+	blockStorage *storage.BlockStorage
 	//chainReader    *ChainReader
 	UpperConsensus *nodeController.NodeController
 }
@@ -49,7 +50,7 @@ type PoTEngine struct {
 func NewEngine(nid int64, cid int64, config *config.ConsensusConfig, exec executor.Executor, adaptor p2p.P2PAdaptor, log *logrus.Entry) *PoTEngine {
 	ch := make(chan []byte, 1024)
 	//st := types.NewHeaderStorage(nid)
-	bst := types.NewBlockStorage(nid)
+	bst := storage.NewBlockStorage(nid, config.Nodes[nid].Datadir)
 	e := &PoTEngine{
 		id:              nid,
 		peerId:          adaptor.GetPeerID(),
@@ -169,7 +170,7 @@ func (e *PoTEngine) Unicast(address string, msgByte []byte) error {
 	return e.Adaptor.Unicast(address, bytePacket, e.consensusID, e.Topic)
 }
 
-func (e *PoTEngine) GetBlockStorage() *types.BlockStorage {
+func (e *PoTEngine) GetBlockStorage() *storage.BlockStorage {
 	return e.blockStorage
 }
 

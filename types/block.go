@@ -35,7 +35,7 @@ type Header struct {
 	ExeHash        []byte
 	Hashes         []byte
 	PublicKey      []byte
-	CryptoElement  CryptoElement
+	CryptoElement  crypto.CryptoElement
 	CommiteePubkey []byte
 }
 

@@ -9,10 +9,11 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/zzz136454872/upgradeable-consensus/config"
 	"github.com/zzz136454872/upgradeable-consensus/executor"
+	storage "github.com/zzz136454872/upgradeable-consensus/internal/storage/whirly"
 	"github.com/zzz136454872/upgradeable-consensus/p2p"
 	"github.com/zzz136454872/upgradeable-consensus/pb"
+	"github.com/zzz136454872/upgradeable-consensus/pkg/utils"
 	"github.com/zzz136454872/upgradeable-consensus/types"
-	"github.com/zzz136454872/upgradeable-consensus/utils"
 	"google.golang.org/protobuf/proto"
 
 	bc_api "blockchain-crypto/blockchain_api"
@@ -39,7 +40,7 @@ type WhirlyUtilitiesImpl struct {
 	ID                      int64
 	PublicAddress           string
 	ConsensusID             int64
-	BlockStorage            types.WhirlyBlockStorage
+	BlockStorage            storage.WhirlyBlockStorage
 	View                    *View
 	Config                  *config.ConsensusConfig
 	TimeChan                *utils.Timer
@@ -63,9 +64,8 @@ func (wu *WhirlyUtilitiesImpl) Init(
 	log *logrus.Entry,
 	publicAddress string,
 ) {
-	wu.ID = id
+	wu.ID = cid // Use consensus ID as the main ID
 	wu.PublicAddress = publicAddress
-	wu.ConsensusID = cid
 	wu.Config = cfg
 	wu.Executor = exec
 	wu.p2pAdaptor = p2pAdaptor
@@ -79,7 +79,10 @@ func (wu *WhirlyUtilitiesImpl) Init(
 	newPeerId2 := strings.Replace(newPeerId1, ":", "", -1)
 
 	// println("newPeerId2: ", newPeerId2)
-	wu.BlockStorage = types.NewBlockStorageImpl(strconv.Itoa(int(cid)) + "-" + newPeerId2 + "-" + strconv.Itoa(int(id)))
+	sid := strconv.Itoa(int(id)) + "-" + newPeerId2 + "-" + strconv.Itoa(int(cid))
+
+	// Use a safe index for accessing cfg.Nodes - use modulo to wrap around if needed
+	wu.BlockStorage = storage.NewBlockStorageImpl(sid, cfg.Nodes[0].Datadir)
 
 	// Set receiver
 	//p2pAdaptor.SetReceiver(wu.GetMsgByteEntrance())
@@ -103,7 +106,7 @@ func (wu *WhirlyUtilitiesImpl) InitForLocalTest(
 ) {
 	wu.ID = id
 	wu.PublicAddress = p2pAdaptor.GetPeerID()
-	wu.ConsensusID = cid
+	wu.ID = cid
 	wu.Config = cfg
 	wu.Executor = exec
 	wu.p2pAdaptor = p2pAdaptor
@@ -114,7 +117,7 @@ func (wu *WhirlyUtilitiesImpl) InitForLocalTest(
 	// wu.Log.Debugf("[HOTSTUFF] Init block storage")
 	newPeerId1 := strings.Replace(wu.PublicAddress, ".", "", -1)
 	newPeerId2 := strings.Replace(newPeerId1, ":", "", -1)
-	wu.BlockStorage = types.NewBlockStorageImpl(strconv.Itoa(int(cid)) + "-" + newPeerId2)
+	wu.BlockStorage = storage.NewBlockStorageImpl(strconv.Itoa(int(cid))+"-"+newPeerId2, cfg.Nodes[id].Datadir)
 
 	// Set receiver
 	p2pAdaptor.SetReceiver(wu.GetMsgByteEntrance())
@@ -283,7 +286,7 @@ func (wu *WhirlyUtilitiesImpl) CreateLeaf(parentHash []byte, viewNum uint64, txs
 		Incentive:  incentive,
 	}
 
-	b.Hash = types.Hash(b)
+	b.Hash = storage.Hash(b)
 	return b
 }
 
@@ -426,7 +429,7 @@ func GenerateGenesisBlock() *pb.WhirlyBlock {
 		Txs:        nil,
 		Justify:    nil,
 	}
-	hash := types.Hash(genesisBlock)
+	hash := storage.Hash(genesisBlock)
 	genesisBlock.Hash = hash
 	genesisBlock.Committed = true
 	return genesisBlock

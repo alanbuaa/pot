@@ -6,7 +6,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/zzz136454872/upgradeable-consensus/config"
-	"github.com/zzz136454872/upgradeable-consensus/utils"
+	"github.com/zzz136454872/upgradeable-consensus/pkg/utils"
 
 	pad "p2padaptor"
 )
@@ -30,9 +30,10 @@ type P2PAdaptor interface {
 }
 
 func BuildP2P(cfg *config.P2PConfig, log *logrus.Entry, id int64) (P2PAdaptor, string, error) {
-	if cfg.Type == "p2p" {
+	switch cfg.Type {
+	case "p2p":
 		return NewBaseP2p(log, id)
-	} else if cfg.Type == "p2p-adaptor" {
+	case "p2p-adaptor":
 		return NewP2pAdaptor(log, id)
 	}
 	log.WithField("type", cfg.Type).Warn("p2p type error")
@@ -40,14 +41,14 @@ func BuildP2P(cfg *config.P2PConfig, log *logrus.Entry, id int64) (P2PAdaptor, s
 }
 
 func NewP2pAdaptor(log *logrus.Entry, id int64) (*pad.NetworkAdaptor, string, error) {
-	cfg, err := config.NewConfig("config/configpot.yaml", id)
+	cfg, err := config.NewConfig("config/config.yaml", id)
 	utils.PanicOnError(err)
 	info := cfg.GetNodeInfo(id)
 	port := info.Address[strings.Index(info.Address, ":")+1:]
 
 	// New adaptor
 	// port = "1" + port
-	nada, err := pad.NewNetworkAdaptor(port)
+	nada, err := pad.NewNetworkAdaptor(id, port, cfg.DataDir)
 	if err != nil {
 		log.WithField("error", err).Error("NewNetworkAdaptor error in port: ", port)
 		return nil, "", err

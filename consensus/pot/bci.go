@@ -14,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 
 	"github.com/zzz136454872/upgradeable-consensus/crypto"
+	storage "github.com/zzz136454872/upgradeable-consensus/internal/storage/pot"
 	"github.com/zzz136454872/upgradeable-consensus/pb"
 	"github.com/zzz136454872/upgradeable-consensus/types"
 	"golang.org/x/exp/rand"
@@ -248,7 +249,7 @@ func (w *Worker) checkLockTransaction(rawtx *types.RawTx) error {
 	height := w.getEpoch()
 	db := w.chainReader.GetBoltDb()
 	err := db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(types.UTXOBucket))
+		b := tx.Bucket([]byte(storage.UTXOBucket))
 		if rawtx.IsCoinBase() {
 			return fmt.Errorf("coinbase tx can't be lock tx")
 		}
@@ -375,7 +376,7 @@ func (w *Worker) CheckLockTransferTransaction(rawtx *types.RawTx) error {
 	height := w.getEpoch()
 	db := w.chainReader.GetBoltDb()
 	err := db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(types.UTXOBucket))
+		b := tx.Bucket([]byte(storage.UTXOBucket))
 		if rawtx.IsCoinBase() {
 			return fmt.Errorf("coinbase tx can't be lock tx")
 		}
@@ -453,7 +454,7 @@ func (w *Worker) CheckDevastateTransaction(rawtx *types.RawTx) error {
 	db := w.chainReader.GetBoltDb()
 	height := w.getEpoch()
 	err := db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(types.UTXOBucket))
+		b := tx.Bucket([]byte(storage.UTXOBucket))
 		inputInterest := int64(0)
 		outputinterest := int64(0)
 		for _, txinput := range rawtx.TxInput {
@@ -517,7 +518,7 @@ func (w *Worker) CheckNonLockTransferTransaction(rawtx *types.RawTx) error {
 	db := w.chainReader.GetBoltDb()
 	height := w.getEpoch()
 	err := db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(types.UTXOBucket))
+		b := tx.Bucket([]byte(storage.UTXOBucket))
 		inputinterest := int64(0)
 		outputinterest := int64(0)
 
@@ -628,7 +629,7 @@ func (w *Worker) CheckBciToVsiRequest(rawtx *types.RawTx) error {
 	height := w.getEpoch()
 
 	err := db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(types.UTXOBucket))
+		b := tx.Bucket([]byte(storage.UTXOBucket))
 		inputinterest := int64(0)
 		outputinterest := int64(0)
 
@@ -741,7 +742,7 @@ func (w *Worker) broadcastSendBciRequest(request *pb.SendBciRequest) error {
 
 // 		db := w.chainReader.GetBoltDb()
 // 		err := db.View(func(tx *bolt.Tx) error {
-// 			b := tx.Bucket([]byte(types.UTXOBucket))
+// 			b := tx.Bucket([]byte(storage.UTXOBucket))
 // 			inputmap := make(map[int32]int64)
 // 			for _, input := range rawtx.TxInput {
 
@@ -1045,7 +1046,7 @@ func (w *Worker) TransferTx2EVM(data []byte) error {
 	// TransferTx2EVM: 调用远程执行器（gRPC）将交易数据转发到 EVM/执行器进行执行。
 	// 输入: data - 需要在执行器中执行的交易字节
 	// 输出: error - 远程调用失败或执行器返回失败时返回错误
-	conn, err := grpc.NewClient(w.config.PoT.ExcutorAddress, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(1024*1024*1024)))
+	conn, err := grpc.NewClient(w.config.PoT.ExecutorAddress, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(1024*1024*1024)))
 
 	if err != nil {
 		return err
@@ -1104,7 +1105,7 @@ func (w *Worker) CheckTxWithBlock(rawtx *types.RawTx, block *types.Block) (bool,
 	header := block.GetHeader()
 	totalreward := CalcTotalReward(header.Height)
 	err := db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(types.UTXOBucket))
+		b := tx.Bucket([]byte(storage.UTXOBucket))
 		if !rawtx.IsCoinBase() {
 			if !rawtx.BasicVerify() {
 				return fmt.Errorf("tx %s verify failed", hexutil.Encode(rawtx.Txid[:]))
@@ -1328,7 +1329,7 @@ func (w *Worker) CheckBlockTxInterest(rawtx *types.RawTx, blockheight uint64) (b
 	// 行为: 根据输出的产生时间和锁定期计算累计利息，并比较输出使用是否被允许。
 	db := w.chainReader.GetBoltDb()
 	err := db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(types.UTXOBucket))
+		b := tx.Bucket([]byte(storage.UTXOBucket))
 		if rawtx.IsCoinBase() {
 			for _, output := range rawtx.TxOutput {
 				if output.Interest != 0 {
@@ -1498,7 +1499,7 @@ func (w *Worker) IsCreateLockTransaction(rawtx *types.RawTx, block *types.Block)
 
 	boltdb := w.chainReader.GetBoltDb()
 	err := boltdb.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(types.UTXOBucket))
+		b := tx.Bucket([]byte(storage.UTXOBucket))
 		if !rawtx.IsCoinBase() {
 			for _, input := range rawtx.TxInput {
 				lockkey := fmt.Sprintf("%s:%d", hexutil.Encode(input.Txid[:]), input.Voutput)
@@ -1530,7 +1531,7 @@ func (w *Worker) IsCreateLockTransaction(rawtx *types.RawTx, block *types.Block)
 func (w *Worker) IsTransferLockTransaction(rawtx *types.RawTx, block *types.Block) bool {
 	db := w.chainReader.GetBoltDb()
 	err := db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(types.UTXOBucket))
+		b := tx.Bucket([]byte(storage.UTXOBucket))
 		for _, txinput := range rawtx.TxInput {
 			lockkey := fmt.Sprintf("%s:%d", hexutil.Encode(txinput.Txid[:]), txinput.Voutput)
 			outpubyte := b.Get([]byte(lockkey))
@@ -1556,7 +1557,7 @@ func (w *Worker) IsTransferLockTransaction(rawtx *types.RawTx, block *types.Bloc
 func (w *Worker) IsDevastedTransaction(rawtx *types.RawTx, block *types.Block) bool {
 	db := w.chainReader.GetBoltDb()
 	err := db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(types.UTXOBucket))
+		b := tx.Bucket([]byte(storage.UTXOBucket))
 		for _, txinput := range rawtx.TxInput {
 			lockkey := fmt.Sprintf("%s:%d", hexutil.Encode(txinput.Txid[:]), txinput.Voutput)
 			outpubyte := b.Get([]byte(lockkey))
@@ -1590,7 +1591,7 @@ func (w *Worker) IsDevastedTransaction(rawtx *types.RawTx, block *types.Block) b
 func (w *Worker) IsNonLockTransferTransaction(rawtx *types.RawTx, block *types.Block) bool {
 	db := w.chainReader.GetBoltDb()
 	err := db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(types.UTXOBucket))
+		b := tx.Bucket([]byte(storage.UTXOBucket))
 		for _, txinput := range rawtx.TxInput {
 			lockkey := fmt.Sprintf("%s:%d", hexutil.Encode(txinput.Txid[:]), txinput.Voutput)
 			outpubyte := b.Get([]byte(lockkey))
@@ -1619,7 +1620,7 @@ func (w *Worker) IsNonLockTransferTransaction(rawtx *types.RawTx, block *types.B
 func (w *Worker) IsConvertToVsiTransaction(rawtx *types.RawTx, block *types.Block) bool {
 	db := w.chainReader.GetBoltDb()
 	err := db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(types.UTXOBucket))
+		b := tx.Bucket([]byte(storage.UTXOBucket))
 		for _, txinput := range rawtx.TxInput {
 			lockkey := fmt.Sprintf("%s:%d", hexutil.Encode(txinput.Txid[:]), txinput.Voutput)
 			outpubyte := b.Get([]byte(lockkey))
@@ -1648,7 +1649,7 @@ func (w *Worker) IsConvertToVsiTransaction(rawtx *types.RawTx, block *types.Bloc
 func (w *Worker) checkCreateLockTransaction(block *types.Block, rawtx *types.RawTx) (bool, error) {
 	db := w.chainReader.GetBoltDb()
 	err := db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(types.UTXOBucket))
+		b := tx.Bucket([]byte(storage.UTXOBucket))
 		expectedtype := rawtx.TxInput[0].BciType
 		inputInterest := int64(0)
 		for _, txinput := range rawtx.TxInput {
@@ -1727,7 +1728,7 @@ func (w *Worker) checkCreateLockTransaction(block *types.Block, rawtx *types.Raw
 func (w *Worker) checkTransferLockTransaction(rawtx *types.RawTx, block *types.Block) (bool, error) {
 	db := w.chainReader.GetBoltDb()
 	err := db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(types.UTXOBucket))
+		b := tx.Bucket([]byte(storage.UTXOBucket))
 		inputinterest := int64(0)
 		outputinterest := int64(0)
 		toptransactionfee := int64(0)
@@ -1784,7 +1785,7 @@ func (w *Worker) checkTransferLockTransaction(rawtx *types.RawTx, block *types.B
 func (w *Worker) checkNonLockTransferTransaction(rawtx *types.RawTx, block *types.Block) (bool, error) {
 	db := w.chainReader.GetBoltDb()
 	err := db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(types.UTXOBucket))
+		b := tx.Bucket([]byte(storage.UTXOBucket))
 		inputinterest := int64(0)
 		outputinterest := int64(0)
 		for _, txinput := range rawtx.TxInput {
@@ -1834,7 +1835,7 @@ func (w *Worker) checkNonLockTransferTransaction(rawtx *types.RawTx, block *type
 func (w *Worker) checkDevastedTransaction(rawtx *types.RawTx, block *types.Block) (bool, error) {
 	db := w.chainReader.GetBoltDb()
 	err := db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(types.UTXOBucket))
+		b := tx.Bucket([]byte(storage.UTXOBucket))
 		inputInterest := int64(0)
 		outputinterest := int64(0)
 		for _, txinput := range rawtx.TxInput {

@@ -16,9 +16,9 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/zzz136454872/upgradeable-consensus/config"
-	"github.com/zzz136454872/upgradeable-consensus/logging"
 	"github.com/zzz136454872/upgradeable-consensus/pb"
-	"github.com/zzz136454872/upgradeable-consensus/utils"
+	"github.com/zzz136454872/upgradeable-consensus/pkg/logging"
+	"github.com/zzz136454872/upgradeable-consensus/pkg/utils"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/proto"

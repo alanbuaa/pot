@@ -72,9 +72,9 @@ func main() {
 		// fmt.Printf("Response: %d\n", resp.IsSuccess)
 		// break
 
-		height := uint64(1)
+		height := uint64(0)
 		keyreq := &pb.GetPqcKeyRequest{
-			Height: height,
+			Height: height, // todo 这里的前置条件是什么？
 		}
 		keyresp, err := client.GetPqcKey(context.Background(), keyreq)
 		if err != nil {

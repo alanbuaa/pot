@@ -4,13 +4,9 @@ import (
 	"context"
 	"errors"
 	net "network"
+	"strconv"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
-)
-
-var (
-	dhtPath = "store/dht-store/"
-	keyPath = "store/host-key/"
 )
 
 type NetworkAdaptor struct {
@@ -23,9 +19,13 @@ type NetworkAdaptor struct {
 	uca *UnicastAdapter
 }
 
-func NewNetworkAdaptor(netPort string) (*NetworkAdaptor, error) {
+func NewNetworkAdaptor(id int64, netPort string, datadir string) (*NetworkAdaptor, error) {
 
-	network, _, err := net.NewNetwork(netPort, dhtPath+netPort+"/", keyPath+netPort+"/", nil, false)
+	datadir = datadir + "/network-" + strconv.FormatInt(id, 10) + "/"
+	dhtPath := datadir + "dht/"
+	keyPath := datadir + "key/"
+
+	network, _, err := net.NewNetwork(netPort, dhtPath, keyPath, nil, false)
 	if err != nil {
 		return &NetworkAdaptor{}, err
 	}

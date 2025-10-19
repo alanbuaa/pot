@@ -1,37 +1,52 @@
 package main
 
 import (
+	"flag"
+	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
 
 	"github.com/zzz136454872/upgradeable-consensus/config"
-	"github.com/zzz136454872/upgradeable-consensus/logging"
-	upgradeable_consensus "github.com/zzz136454872/upgradeable-consensus/node"
+	chain "github.com/zzz136454872/upgradeable-consensus/internal/node"
+	"github.com/zzz136454872/upgradeable-consensus/pkg/logging"
 )
 
-var (
-	logger  = logging.GetLogger()
-	sigChan = make(chan os.Signal)
-)
+var sigChan = make(chan os.Signal, 1)
 
 func main() {
 	// signals to stop nodes
-	signal.Notify(sigChan, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM,
-		syscall.SIGQUIT)
+	signal.Notify(sigChan, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+	// parse command-line flags
+	cfgPath := flag.String("c", "config/config.yaml", "path to config yaml file")
+	flag.Parse()
 
-	cfg, err := config.NewConfig("config/configpot.yaml", 0)
-	if err != nil {
-		logger.Error("read config.yaml failed: ", err)
+	if cfgPath == nil || len(*cfgPath) == 0 {
+		fmt.Printf("config path is empty. Use -c to specify the config file")
+		os.Exit(2)
 	}
+
+	cfg, err := config.NewConfig(*cfgPath, 0)
+	if err != nil {
+		fmt.Printf("read config failed: %v", err)
+		os.Exit(1)
+	}
+
+	logging.Setup(*cfgPath)
+	logger := logging.GetLogger()
 
 	// node list
 	nodeNum := int64(len(cfg.Nodes))
-	nodes := make([]*upgradeable_consensus.Node, nodeNum)
+	if nodeNum <= 0 {
+		logger.Error("no nodes defined in config: ", *cfgPath)
+		fmt.Fprintln(os.Stderr, "no nodes defined in config")
+		os.Exit(1)
+	}
+	nodes := make([]*chain.Node, nodeNum)
 	// create nodes
 	for i := int64(0); i < nodeNum; i++ {
 		go func(index int64) {
-			nodes[index] = upgradeable_consensus.NewNode(index)
+			nodes[index] = chain.NewNode(index)
 		}(i)
 	}
 	// time.Sleep(20 * time.Second)
@@ -39,7 +54,7 @@ func main() {
 
 	<-sigChan
 	logger.Info("[UpgradeableConsensus] Exit...")
-	for i := int64(0); i < nodeNum; i++ {
+	for i := range nodeNum {
 		nodes[i].Stop()
 	}
 }

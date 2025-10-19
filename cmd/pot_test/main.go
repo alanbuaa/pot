@@ -9,8 +9,8 @@ import (
 	"syscall"
 
 	"github.com/zzz136454872/upgradeable-consensus/config"
-	"github.com/zzz136454872/upgradeable-consensus/logging"
-	"github.com/zzz136454872/upgradeable-consensus/node"
+	"github.com/zzz136454872/upgradeable-consensus/internal/node"
+	"github.com/zzz136454872/upgradeable-consensus/pkg/logging"
 )
 
 var (
@@ -55,7 +55,7 @@ var (
 func main() {
 	signal.Notify(sigChan, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM,
 		syscall.SIGQUIT)
-	cfg, _ := config.NewConfig("config/configpot.yaml", 0)
+	cfg, _ := config.NewConfig("config/config.yaml", 0)
 	total := len(cfg.Nodes)
 	fmt.Println(len(cfg.Nodes))
 	nodes := make([]*node.Node, total)

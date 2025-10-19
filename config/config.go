@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/big"
 	"os"
+	"strconv"
 
 	"github.com/niclabs/tcrsa"
 	"gopkg.in/yaml.v3"
@@ -46,18 +47,19 @@ type WhirlyConfig struct {
 }
 
 type PoTConfig struct {
-	Snum           int64  `yaml:"snum"`
-	SysPara        string `yaml:"sysPara"`
-	Vdf0Iteration  int    `yaml:"vdf0Iteration"`
-	Vdf1Iteration  int    `yaml:"vdf1Iteration"`
-	Batchsize      int    `yaml:"batchsize"`
-	ExcutorAddress string `yaml:"excutorAddress"`
-	Timeout        int    `yaml:"timeout"`
-	CommiteeSize   int    `yaml:"commiteeSize"`
-	ConfirmDelay   int    `yaml:"confirmDelay"`
-	Slowrate       int    `yaml:"slowrate"`
-	RpcAddress     string `yaml:"bcirpcAddress"` // bci rpc address
+	Snum            int64  `yaml:"snum"`
+	SysPara         string `yaml:"sysPara"`
+	Vdf0Iteration   int    `yaml:"vdf0Iteration"`
+	Vdf1Iteration   int    `yaml:"vdf1Iteration"`
+	Batchsize       int    `yaml:"batchsize"`
+	ExecutorAddress string `yaml:"executorAddress"`
+	Timeout         int    `yaml:"timeout"`
+	CommiteeSize    int    `yaml:"commiteeSize"`
+	ConfirmDelay    int    `yaml:"confirmDelay"`
+	Slowrate        int    `yaml:"slowrate"`
+	BciRpcAddress   string `yaml:"bciRpcAddress"`
 }
+
 type ConsensusConfig struct {
 	Type        string            `yaml:"type"`
 	ConsensusID int64             `yaml:"consensus_id"`
@@ -88,22 +90,26 @@ type P2PConfig struct {
 }
 
 type Config struct {
-	Nodes         []*ReplicaInfo   `yaml:"nodes"`
-	PublicKeyPath string           `yaml:"public_key_path"`
-	Log           *LogConfig       `yaml:"log"`
-	Executor      *ExecutorConfig  `yaml:"executor"`
-	P2P           *P2PConfig       `yaml:"p2p"`
-	Consensus     *ConsensusConfig `yaml:"consensus"`
-	Topic         string           `yaml:"topic"`
-	Total         int              `yaml:"total"`
-	Keys          *KeySet
+	AddressStartPort    string           `yaml:"address_start_port"`
+	RpcAddressStartPort string           `yaml:"rpc_address_start_port"`
+	DataDir             string           `yaml:"data_dir"`
+	AddressIp           string           `yaml:"address_ip"`
+	Nodes               []*ReplicaInfo   `yaml:"nodes"`
+	PublicKeyPath       string           `yaml:"public_key_path"`
+	Log                 *LogConfig       `yaml:"log"`
+	Executor            *ExecutorConfig  `yaml:"executor"`
+	P2P                 *P2PConfig       `yaml:"p2p"`
+	Consensus           *ConsensusConfig `yaml:"consensus"`
+	Topic               string           `yaml:"topic"`
+	Total               int              `yaml:"total"`
+	Keys                *KeySet
 }
 
 type ReplicaInfo struct {
 	ID             int64  `yaml:"id"`
 	Address        string `yaml:"address"`
+	Datadir        string `yaml:"datadir"`
 	RpcAddress     string `yaml:"rpc_address"`
-	BciRpcAddress  string `yaml:"bcirpcAddress"`
 	PrivateKeyPath string `yaml:"private_key_path"`
 }
 
@@ -116,22 +122,21 @@ func NewConfig(path string, id int64) (*Config, error) {
 	if err := yaml.Unmarshal(data, cfg); err != nil {
 		return nil, err
 	}
-	//keys := new(KeySet)
-	//keys.PublicKey, err = crypto.ReadThresholdPublicKeyFromFile(cfg.PublicKeyPath)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//keys.PrivateKey, err = crypto.ReadThresholdPrivateKeyFromFile(cfg.GetNodeInfo(id).PrivateKeyPath)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//cfg.Keys = keys
-	cfg.Consensus.Nodes = make([]*ReplicaInfo, (cfg.Total))
-	for i := 0; i < len(cfg.Nodes); i++ {
-		cfg.Consensus.Nodes[cfg.Nodes[i].ID] = cfg.Nodes[i]
+
+	// setup nodes info
+	cfg.Nodes = make([]*ReplicaInfo, cfg.Total)
+	for i := 0; i < cfg.Total; i++ {
+		node := &ReplicaInfo{
+			ID:         int64(i),
+			Address:    cfg.GetAddress(i, cfg.AddressStartPort, cfg.AddressIp),
+			RpcAddress: cfg.GetAddress(i, cfg.RpcAddressStartPort, cfg.AddressIp),
+			Datadir:    cfg.DataDir + fmt.Sprintf("/node-%d", i),
+		}
+		cfg.Nodes[i] = node
 	}
-	cfg.Nodes = cfg.Consensus.Nodes
-	//cfg.Consensus.Keys = keys
+	cfg.Consensus.Nodes = cfg.Nodes
+	// cfg.Keys = keys
+	// cfg.Consensus.Keys = keys
 	// cfg.Consensus.F = (len(cfg.Nodes) - 1) / 3
 	cfg.Consensus.F = (cfg.Total - 1) / 3
 	// cfg.Consensus.F = 1
@@ -176,4 +181,13 @@ func DefaultWhirlyConfig() *ConsensusConfig {
 		Keys:  nil,
 		F:     0,
 	}
+}
+
+func (c *Config) GetAddress(id int, initPortStr string, ip string) string {
+	initPort, err := strconv.Atoi(initPortStr)
+	if err != nil {
+		panic(fmt.Sprintf("GetAddress error: %s", err))
+	}
+	address := ip + ":" + strconv.Itoa(initPort+id)
+	return address
 }

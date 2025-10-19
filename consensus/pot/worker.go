@@ -1,3 +1,6 @@
+// Package pot implements the Proof of Time (PoT) consensus algorithm worker.
+// This package provides the core functionality for mining, block creation,
+// and VDF (Verifiable Delay Function) computation in the PoT blockchain system.
 package pot
 
 import (
@@ -21,6 +24,7 @@ import (
 	"github.com/zzz136454872/upgradeable-consensus/config"
 	"github.com/zzz136454872/upgradeable-consensus/consensus/whirly/nodeController"
 	"github.com/zzz136454872/upgradeable-consensus/crypto"
+	storage "github.com/zzz136454872/upgradeable-consensus/internal/storage/pot"
 	"github.com/zzz136454872/upgradeable-consensus/pb"
 	"github.com/zzz136454872/upgradeable-consensus/types"
 	"golang.org/x/exp/rand"
@@ -33,83 +37,112 @@ import (
 	"time"
 )
 
+// bigD represents the maximum difficulty value (2^256 - 1) used in mining calculations.
 var bigD = new(big.Int).Sub(big.NewInt(0).Exp(big.NewInt(2), big.NewInt(256), nil), big.NewInt(1))
 
 const (
-	Commiteelen        = 4
-	CommiteeDelay      = 1
-	cpuCounter         = 1
-	NoParentD          = 2
-	Batchsize          = 100
-	Selectn            = 1
-	TotalReward        = 65536
+	// Commiteelen defines the length of committee members
+	Commiteelen = 4
+	// CommiteeDelay specifies the delay time for committee operations
+	CommiteeDelay = 1
+	// cpuCounter defines the number of CPU workers for parallel mining
+	cpuCounter = 1
+	// NoParentD is the default difficulty when no parent block exists
+	NoParentD = 2
+	// Batchsize defines the batch size for transaction processing
+	Batchsize = 100
+	// Selectn specifies the number of selections in reward distribution
+	Selectn = 1
+	// TotalReward is the total reward amount for mining
+	TotalReward = 65536
+	// BackupCommiteeSize defines the size of backup committee
 	BackupCommiteeSize = 64
-	ConfirmDelay       = 6
-	CandidateKeyLen    = 32 // candidate pubkey len
-	Commitees          = 4  // commitee len
+	// ConfirmDelay specifies the confirmation delay in blocks
+	ConfirmDelay = 6
+	// CandidateKeyLen defines the length of candidate public key
+	CandidateKeyLen = 32
+	// Commitees defines the number of committee members
+	Commitees = 4
 )
 
+// Worker represents a PoT consensus worker that handles mining, block creation,
+// and VDF computations. It manages the entire lifecycle of the PoT consensus process
+// including block mining, committee management, and network communication.
 type Worker struct {
-	// basic info
-	ID     int64
-	PeerId string
-	log    *logrus.Entry
-	config *config.ConsensusConfig
-	epoch  uint64
+	// basic info - core identification and configuration
+	ID     int64                   // unique identifier for this worker node
+	PeerId string                  // peer ID for network identification
+	log    *logrus.Entry           // structured logger for this worker
+	config *config.ConsensusConfig // consensus configuration parameters
+	epoch  uint64                  // current epoch number
 
-	// vdf work
-	timestamp time.Time
+	// vdf work - VDF computation management
+	timestamp time.Time // timestamp for VDF computation tracking
 
-	vdf0        *types.VDF
-	vdf0Chan    chan *types.VDF0res
-	vdf1        []*types.VDF
-	vdf1Chan    chan *types.VDF0res
-	vdfhalf     *types.VDF
-	vdfhalfchan chan *types.VDF0res
+	vdf0        *types.VDF          // VDF0 instance for epoch progression
+	vdf0Chan    chan *types.VDF0res // channel for VDF0 results
+	vdf1        []*types.VDF        // VDF1 instances for mining (parallel workers)
+	vdf1Chan    chan *types.VDF0res // channel for VDF1 results
+	vdfhalf     *types.VDF          // VDF half computation instance
+	vdfhalfchan chan *types.VDF0res // channel for VDF half results
 
-	vdfChecker      *vdf.Vdf
-	abort           *Abortcontrol
-	wg              *sync.WaitGroup
-	workFlag        bool
-	blockKeyMap     map[[crypto.Hashlen]byte][]byte
-	CommitteeKeyMap map[[crypto.Hashlen]byte][]byte
-	executeheight   uint64
-	incentiveheight uint64
-	mempool         *Mempool
-	chainresetflag  bool
+	vdfChecker      *vdf.Vdf                        // VDF verification instance
+	abort           *Abortcontrol                   // control structure for aborting operations
+	wg              *sync.WaitGroup                 // wait group for goroutine synchronization
+	workFlag        bool                            // flag indicating if worker is currently mining
+	blockKeyMap     map[[crypto.Hashlen]byte][]byte // mapping of block hashes to private keys
+	CommitteeKeyMap map[[crypto.Hashlen]byte][]byte // mapping for committee keys
+	executeheight   uint64                          // height of last executed block
+	incentiveheight uint64                          // height of last processed incentive
+	mempool         *Mempool                        // transaction mempool
+	chainresetflag  bool                            // flag for chain reset operations
 
-	// rand seed
-	rand         *rand.Rand
-	blockCounter int
-	keyseed      []byte
+	// rand seed - randomization and counting
+	rand         *rand.Rand // random number generator
+	blockCounter int        // counter for created blocks
+	keyseed      []byte     // seed for key generation
 
-	Engine  *PoTEngine
-	mutex   *sync.Mutex
-	rwmutex *sync.RWMutex
+	Engine  *PoTEngine    // reference to the PoT engine
+	mutex   *sync.Mutex   // mutex for thread-safe operations
+	rwmutex *sync.RWMutex // read-write mutex for concurrent access
 
-	// communication
-	peerMsgQueue      chan *types.Block
-	blockResponseChan chan *pb.BlockResponse
-	potResponseCh     chan *pb.PoTResponse
-	blockStorage      *types.BlockStorage
-	chainReader       *ChainReader
-	listener          net.Listener
-	rpcserver         *grpc.Server
-	httpserver        *gin.Engine
+	// communication - network and RPC interfaces
+	peerMsgQueue      chan *types.Block      // channel for incoming peer messages
+	blockResponseChan chan *pb.BlockResponse // channel for block responses
+	potResponseCh     chan *pb.PoTResponse   // channel for PoT responses
+	blockStorage      *storage.BlockStorage  // persistent block storage
+	chainReader       *ChainReader           // chain state reader
+	listener          net.Listener           // network listener for RPC
+	rpcserver         *grpc.Server           // gRPC server instance
+	httpserver        *gin.Engine            // HTTP server for web interface
 
-	// upper consensus
-	whirly         *nodeController.NodeController
-	potSignalChan  chan<- []byte
-	CommiteeNum    int32
-	Commitee       [][]string
-	Shardings      []Sharding
-	BackupCommitee []string
-	SelfAddress    []string
-	Cryptoset      *CryptoSet
-	//committee     *orderedmap.OrderedMap
+	// upper consensus - integration with higher-level consensus
+	whirly         *nodeController.NodeController // whirly consensus controller
+	potSignalChan  chan<- []byte                  // channel for signaling to upper layer
+	CommiteeNum    int32                          // current committee number
+	Commitee       [][]string                     // committee member lists
+	Shardings      []Sharding                     // sharding configuration
+	BackupCommitee []string                       // backup committee members
+	SelfAddress    []string                       // own addresses in different contexts
+	Cryptoset      *CryptoSet                     // cryptographic parameter set
+	//committee     *orderedmap.OrderedMap       // ordered committee mapping (commented out)
 }
 
-func NewWorker(id int64, config *config.ConsensusConfig, logger *logrus.Entry, bst *types.BlockStorage, engine *PoTEngine) *Worker {
+// NewWorker creates and initializes a new PoT consensus worker instance.
+// It sets up all necessary components including VDF channels, networking,
+// storage, and cryptographic elements required for PoT consensus operation.
+//
+// Parameters:
+//   - id: unique identifier for this worker node
+//   - config: consensus configuration containing PoT parameters
+//   - logger: structured logger for this worker instance
+//   - bst: block storage for persistent block data
+//   - engine: PoT engine instance for core operations
+//
+// Returns:
+//   - *Worker: initialized worker instance ready for consensus participation
+//   - nil if initialization fails (e.g., network setup error)
+func NewWorker(id int64, config *config.ConsensusConfig, logger *logrus.Entry, bst *storage.BlockStorage, engine *PoTEngine) *Worker {
 	ch0 := make(chan *types.VDF0res, 2048)
 	ch1 := make(chan *types.VDF0res, 2048)
 	ch2 := make(chan *types.VDF0res, 2048)
@@ -129,7 +162,7 @@ func NewWorker(id int64, config *config.ConsensusConfig, logger *logrus.Entry, b
 	}
 	vdfhalf := types.NewVDF(ch2, potconfig.Vdf1Iteration, id)
 
-	listen, err := net.Listen("tcp", config.Nodes[id].BciRpcAddress)
+	listen, err := net.Listen("tcp", config.PoT.BciRpcAddress)
 	if err != nil {
 		panic(err)
 	}
@@ -186,6 +219,7 @@ func NewWorker(id int64, config *config.ConsensusConfig, logger *logrus.Entry, b
 		chainresetflag:  false,
 		keyseed:         randseed,
 	}
+	// bci info record
 	fill, err := os.OpenFile("bci", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
 	if err != nil {
 		fmt.Println(err)
@@ -202,23 +236,38 @@ func NewWorker(id int64, config *config.ConsensusConfig, logger *logrus.Entry, b
 	return w
 }
 
+// Init initializes the worker with default values and starts the HTTP server.
+// This method sets up the initial VDF state, genesis block, and web interface.
+// It should be called once after worker creation to prepare for consensus operations.
 func (w *Worker) Init() {
-	// catchup
-	// w.log.Infof("%d %d", w.config.PoT.Snum, w.config.PoT.Vdf1Iteration)
+	// Initialize VDF half computation with default input
 	w.vdfhalf.SetInput(crypto.Hash([]byte("aa")), w.config.PoT.Vdf1Iteration)
+
+	// Set initial VDF0 result for epoch 0
 	w.SetVdf0res(0, ([]byte("aa")))
+
+	// Store the genesis block in block storage
 	w.blockStorage.Put(types.DefaultGenesisBlock())
+
+	// Initialize block counter
 	w.blockCounter = 0
 
+	// Start HTTP server for web interface and monitoring
 	g := startHTTPserve(w)
 	w.httpserver = g
 }
+
+// startWorking sets the worker's work flag to indicate mining is active.
+// This method is thread-safe and should be called when starting mining operations.
 func (w *Worker) startWorking() {
 	w.mutex.Lock()
 	defer w.mutex.Unlock()
 	w.workFlag = true
 }
 
+// Work initiates the worker's mining process by starting VDF computation.
+// This method records the start timestamp and begins the VDF half computation
+// for the current epoch. It's the entry point for the mining workflow.
 func (w *Worker) Work() {
 	w.timestamp = time.Now()
 	w.log.Infof("[PoT]\tStart epoch %d vdf0", w.getEpoch())
@@ -227,14 +276,25 @@ func (w *Worker) Work() {
 	if err != nil {
 		return
 	}
-
 }
+
+// WaitandReset implements a delay mechanism for VDF result processing.
+// It waits for a fixed duration before resending the VDF0 result to the channel.
+// This is used for handling timing-related issues in epoch transitions.
+//
+// Parameters:
+//   - res: VDF0 result to be resent after delay
 func (w *Worker) WaitandReset(res *types.VDF0res) {
 	time.Sleep(10 * time.Second)
 	w.vdf0Chan <- res
 }
 
+// OnGetVdf0Response handles VDF0 computation results and manages epoch transitions.
+// This is the main event loop that processes VDF0 results, validates blocks,
+// updates epochs, and initiates mining for new blocks. It runs continuously
+// and coordinates the entire PoT consensus workflow.
 func (w *Worker) OnGetVdf0Response() {
+	// Start block handling in a separate goroutine
 	go w.handleBlock()
 
 	for {
@@ -358,7 +418,7 @@ func (w *Worker) OnGetVdf0Response() {
 			// 	w.simpleLeaderUpdate(parentblock)
 			// }
 
-			//w.CommitteeUpdate(epoch)
+			w.CommitteeUpdate(epoch)
 			difficulty := w.calcDifficulty(parentblock, uncleblock)
 			w.startWorking()
 			w.abort = NewAbortcontrol()
@@ -380,6 +440,25 @@ func (w *Worker) OnGetVdf0Response() {
 	}
 }
 
+// mine performs the actual mining process for a specific worker thread.
+// It generates a new block by computing VDF1 proofs and checking against the target difficulty.
+// The function runs until a valid block is found or an abort signal is received.
+//
+// Parameters:
+//   - epoch: current epoch number for mining
+//   - vdf0res: VDF0 result from epoch transition
+//   - nonce: starting nonce value for mining attempts
+//   - workerid: identifier for this mining worker thread
+//   - abort: control structure for aborting mining operation
+//   - difficulty: target difficulty for the block
+//   - parentblock: parent block for the new block
+//   - uncleblock: uncle blocks to include in the new block
+//   - wg: wait group for synchronization with other workers
+//   - emptyblock: template block to be completed with mining results
+//   - Bcirewards: BCI rewards to be included in coinbase transaction
+//
+// Returns:
+//   - *types.Block: successfully mined block, or nil if aborted
 func (w *Worker) mine(epoch uint64, vdf0res []byte, nonce int64, workerid int, abort *Abortcontrol,
 	difficulty *big.Int, parentblock *types.Block, uncleblock []*types.Block, wg *sync.WaitGroup,
 	emptyblock *types.Block, Bcirewards []*BciReward) *types.Block {
@@ -494,6 +573,9 @@ func (w *Worker) mine(epoch uint64, vdf0res []byte, nonce int64, workerid int, a
 	}
 }
 
+// handleVdfhalf processes VDF half computation results and manages the transition
+// to VDF0 computation. This function handles the two-stage VDF process where
+// VDF half completion triggers the start of VDF0 computation for epoch progression.
 func (w *Worker) handleVdfhalf() {
 	for {
 		select {
@@ -501,36 +583,52 @@ func (w *Worker) handleVdfhalf() {
 			epoch := w.getEpoch()
 			w.log.Infof("[PoT]\tepoch %d:vdfhalf got res %s", epoch, hexutil.Encode(crypto.Hash(res.Res)))
 
+			// Validate epoch consistency
 			if res.Epoch != epoch {
 				w.log.Errorf("[PoT]\tepoch %d:vdfhalf got res but epoch is %d", epoch, res.Epoch)
 			}
 
+			// Store VDF half result for later use in block completion
 			w.blockStorage.SetVDFHalf(epoch, res.Res)
-			if !w.vdf0.IsFinished() {
 
+			// Abort any running VDF0 computation as we transition to new VDF0
+			if !w.vdf0.IsFinished() {
 				err := w.vdf0.Abort()
 				if err != nil {
 					w.log.Warnf("[PoT]\tepoch %d: vdf0 abort error for %s", epoch+1, err)
 				}
 				w.log.Warnf("[PoT]\tepoch %d:vdf0 got abort for new epoch ", epoch+1)
 			}
+
+			// Start VDF0 computation with VDF half result as input
 			inputhash := crypto.Hash(res.Res)
 			w.vdf0 = types.NewVDFwithInput(w.getVDF0chan(), inputhash, w.config.PoT.Vdf0Iteration-w.config.PoT.Vdf1Iteration, w.ID)
 
+			// Execute VDF0 computation in a separate goroutine
 			go func() {
 				err := w.vdf0.Exec(epoch)
 				if err != nil {
 					w.log.Warnf("[PoT]\tepoch %d: vdf0 run error for %s", epoch+1, err)
 				}
-
 			}()
-
 		}
-
 	}
-
 }
 
+// createBlockWithoutKey creates a template block without cryptographic keys.
+// This creates the basic block structure with transactions and headers that
+// will later be completed with mining proofs and keys during the mining process.
+//
+// Parameters:
+//   - epoch: block epoch/height
+//   - parentBlock: parent block reference
+//   - uncleBlock: uncle blocks to include
+//   - difficulty: target difficulty for mining
+//   - exeblocks: executed blocks from executor
+//   - rawtxs: raw transactions to include
+//
+// Returns:
+//   - *types.Block: template block ready for mining completion
 func (w *Worker) createBlockWithoutKey(epoch uint64, parentBlock *types.Block,
 	uncleBlock []*types.Block, difficulty *big.Int,
 	exeblocks []*types.ExecutedBlock, rawtxs []*types.RawTx) *types.Block {
@@ -602,7 +700,23 @@ func (w *Worker) createBlockWithoutKey(epoch uint64, parentBlock *types.Block,
 		ExeHeaders: exeheader,
 	}
 }
+
+// CompleteBlock finalizes a mined block by adding all required proofs and signatures.
+// This function takes a template block and completes it with VDF proofs, coinbase transaction,
+// cryptographic keys, and all necessary hashes to create a valid block for the blockchain.
+//
+// Parameters:
+//   - emptyblock: template block to be completed
+//   - vdf0res: VDF0 computation result
+//   - vdf1res: VDF1 computation result from mining
+//   - coinbasetx: coinbase transaction template
+//   - mixdigest: computed mix digest for the block
+//   - privkey: private key for block signing
+//
+// Returns:
+//   - *types.Block: completed and signed block ready for broadcast
 func (w *Worker) CompleteBlock(emptyblock *types.Block, vdf0res []byte, vdf1res []byte, coinbasetx *types.RawTx, mixdigest []byte, privkey *crypto.PqcKey) *types.Block {
+	// Create copies of VDF results to avoid modification
 	vdf0rescopy := make([]byte, len(vdf0res))
 	copy(vdf0rescopy, vdf0res)
 	vdf1rescopy := make([]byte, len(vdf1res))
@@ -748,6 +862,22 @@ func (w *Worker) CompleteCoinbaseTx(vdf1res []byte, coinbasetx *types.RawTx, hei
 	return &types.Tx{Data: txdata}
 }
 
+// createBlock creates a complete block with all mining proofs and transactions.
+// This is an older version of block creation that includes VDF proofs and keys
+// directly in the creation process, unlike createBlockWithoutKey which creates a template.
+//
+// Parameters:
+//   - epoch: block epoch/height
+//   - parentBlock: parent block reference
+//   - uncleBlock: uncle blocks to include
+//   - difficulty: mining difficulty
+//   - mixdigest: computed mix digest
+//   - nonce: mining nonce value
+//   - vdf0res: VDF0 computation result
+//   - vdf1res: VDF1 mining result
+//
+// Returns:
+//   - *types.Block: complete block with all proofs and signatures
 func (w *Worker) createBlock(epoch uint64, parentBlock *types.Block, uncleBlock []*types.Block, difficulty *big.Int, mixdigest []byte, nonce int64, vdf0res []byte, vdf1res []byte) *types.Block {
 	exeblocks := w.GetExecutedBlockFromMempool()
 	exeheader := make([]*types.ExecuteHeader, 0)
@@ -818,8 +948,18 @@ func (w *Worker) createBlock(epoch uint64, parentBlock *types.Block, uncleBlock 
 	}
 }
 
+// GetExcutedTxsFromExecutor retrieves executed transaction blocks from the executor service.
+// This function communicates with the external executor to fetch blocks that have been
+// executed and validated, which are then added to the mempool for inclusion in new blocks.
+//
+// Parameters:
+//   - epoch: current epoch for which to retrieve executed transactions
+//
+// Returns:
+//   - []*types.ExecutedBlock: list of executed blocks from the executor
+//   - error: error if communication with executor fails
 func (w *Worker) GetExcutedTxsFromExecutor(epoch uint64) ([]*types.ExecutedBlock, error) {
-	conn, err := grpc.NewClient(w.config.PoT.ExcutorAddress, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(1024*1024*1024)))
+	conn, err := grpc.NewClient(w.config.PoT.ExecutorAddress, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(1024*1024*1024)))
 
 	if err != nil {
 		return nil, err
@@ -827,11 +967,11 @@ func (w *Worker) GetExcutedTxsFromExecutor(epoch uint64) ([]*types.ExecutedBlock
 	client := pb.NewPoTExecutorClient(conn)
 	request := &pb.GetTxRequest{
 		StartHeight: w.executeheight,
-		Des:         w.config.PoT.ExcutorAddress,
+		Des:         w.config.PoT.ExecutorAddress,
 	}
 	response, err := client.GetTxs(context.Background(), request)
 	if err != nil {
-		//w.log.Errorf("[PoT]\tGet Txs from executor error for %s",err)
+		w.log.Errorf("[PoT]\tGet Txs from executor error for %s", err)
 		return nil, err
 	}
 
@@ -886,14 +1026,29 @@ func (w *Worker) GetExcutedTxsFromExecutor(epoch uint64) ([]*types.ExecutedBlock
 	return blocks, nil
 }
 
+// GetExecutedBlockFromMempool retrieves a batch of executed blocks from the mempool.
+// This function gets the first N executed blocks (where N is the configured batch size)
+// that are ready to be included in the next block.
+//
+// Returns:
+//   - []*types.ExecutedBlock: batch of executed blocks from mempool
 func (w *Worker) GetExecutedBlockFromMempool() []*types.ExecutedBlock {
 	ExecutedBlocks := w.mempool.GetFirstN(w.config.PoT.Batchsize)
-
 	return ExecutedBlocks
 }
 
+// GetIncentiveTxFromExecutor retrieves incentive transactions from the executor service.
+// This function fetches BCI (Blockchain Incentive) rewards that should be distributed
+// to miners and other network participants based on their contributions.
+//
+// Parameters:
+//   - epoch: current epoch for which to retrieve incentive transactions
+//
+// Returns:
+//   - []*types.ExecutedBlock: list of executed blocks (currently returns nil)
+//   - error: error if communication with executor fails or reward validation fails
 func (w *Worker) GetIncentiveTxFromExecutor(epoch uint64) ([]*types.ExecutedBlock, error) {
-	conn, err := grpc.NewClient(w.config.PoT.ExcutorAddress, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(1024*1024*1024)))
+	conn, err := grpc.NewClient(w.config.PoT.ExecutorAddress, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(1024*1024*1024)))
 
 	if err != nil {
 		return nil, err
@@ -976,12 +1131,29 @@ func (w *Worker) createNilBlock(epoch uint64, parentBlock *types.Block, uncleBlo
 	}
 }
 
+// SetBlockKeyMap stores the private key associated with a block hash.
+// This mapping is used to retrieve keys for blocks that this worker has mined,
+// enabling block signing and committee participation.
+//
+// Parameters:
+//   - privatekey: private key bytes to store
+//   - blockhash: block hash as the key for the mapping
 func (w *Worker) SetBlockKeyMap(privatekey []byte, blockhash [crypto.Hashlen]byte) {
 	w.rwmutex.Lock()
 	defer w.rwmutex.Unlock()
 	w.blockKeyMap[blockhash] = privatekey
 }
 
+// TryFindKey attempts to retrieve the private key for a given block hash.
+// This is used to check if the worker has the key for a specific block,
+// which indicates the worker mined that block.
+//
+// Parameters:
+//   - blockhash: block hash to look up
+//
+// Returns:
+//   - bool: true if key found, false otherwise
+//   - []byte: private key bytes if found, nil otherwise
 func (w *Worker) TryFindKey(blockhash [crypto.Hashlen]byte) (bool, []byte) {
 	w.rwmutex.RLock()
 	prikey := w.blockKeyMap[blockhash]
@@ -999,22 +1171,37 @@ func (w *Worker) TryFindKey(blockhash [crypto.Hashlen]byte) (bool, []byte) {
 // 	w.CommitteeKeyMap[blockhash] = privatekey
 // }
 
+// TryFindCommiteeKey attempts to derive the committee key for a given block hash.
+// This function reconstructs the committee key from the stored private key and
+// block information, enabling committee operations for blocks mined by this worker.
+//
+// Parameters:
+//   - blockhash: block hash to derive committee key for
+//
+// Returns:
+//   - bool: true if committee key can be derived, false otherwise
+//   - *crypto.PrivateKey: derived committee private key if successful, nil otherwise
 func (w *Worker) TryFindCommiteeKey(blockhash [crypto.Hashlen]byte) (bool, *crypto.PrivateKey) {
 	w.rwmutex.RLock()
 	prikey := w.blockKeyMap[blockhash]
 	w.rwmutex.RUnlock()
 
 	if prikey != nil {
+		// Retrieve block to get public key and PoT proof
 		block, _ := w.blockStorage.Get(blockhash[:])
 		if block == nil {
 			return false, nil
 		}
+
+		// Reconstruct PQC key pair
 		pubkey := block.GetHeader().PublicKey
 		pqckey := &crypto.PqcKey{
 			Privkey: prikey,
 			Pubkey:  pubkey,
 			Scheme:  crypto.PqcScheme,
 		}
+
+		// Generate committee key using PQC key, seed, and VDF0 proof
 		commiteekey := crypto.GenerateCommiteeKey(pqckey, w.keyseed, block.GetHeader().PoTProof[0])
 		if commiteekey == nil {
 			return false, nil
@@ -1025,29 +1212,57 @@ func (w *Worker) TryFindCommiteeKey(blockhash [crypto.Hashlen]byte) (bool, *cryp
 	}
 }
 
+// SetVdf0res stores the VDF0 result for a specific epoch in persistent storage.
+// This function is thread-safe and ensures consistent epoch-to-VDF result mapping.
+//
+// Parameters:
+//   - epoch: epoch number for the VDF result
+//   - vdf0: VDF0 computation result to store
 func (w *Worker) SetVdf0res(epoch uint64, vdf0 []byte) {
 	w.mutex.Lock()
 	defer w.mutex.Unlock()
 	w.blockStorage.SetVDFres(epoch, vdf0)
-
 }
 
+// GetVdf0byEpoch retrieves the VDF0 result for a specific epoch from storage.
+//
+// Parameters:
+//   - epoch: epoch number to query
+//
+// Returns:
+//   - []byte: VDF0 result for the specified epoch
+//   - error: error if epoch not found or storage error
 func (w *Worker) GetVdf0byEpoch(epoch uint64) ([]byte, error) {
 	return w.blockStorage.GetVDFresbyEpoch(epoch)
 }
 
+// getVDF0chan returns the channel for receiving VDF0 computation results.
+// This is used internally for VDF0 result communication between goroutines.
+//
+// Returns:
+//   - chan *types.VDF0res: channel for VDF0 results
 func (w *Worker) getVDF0chan() chan *types.VDF0res {
 	return w.vdf0Chan
 }
 
+// checkVDFforepoch validates a VDF result for a specific epoch by comparing
+// with stored results or using cryptographic verification.
+//
+// Parameters:
+//   - epoch: epoch number to validate against
+//   - vdfres: VDF result to validate
+//
+// Returns:
+//   - bool: true if VDF result is valid for the epoch, false otherwise
 func (w *Worker) checkVDFforepoch(epoch uint64, vdfres []byte) bool {
+	// Check against next epoch VDF result if available
 	epoch1, err := w.blockStorage.GetVDFresbyEpoch(epoch + 1)
-	// we have next epoch vdfres
 	if err == nil && len(epoch1) != 0 {
 		return bytes.Equal(vdfres, epoch1)
 	}
+
+	// Check against current epoch VDF result using cryptographic verification
 	epoch0, err := w.blockStorage.GetVDFresbyEpoch(epoch)
-	// we don't have next epoch vdfres, but we have now vdfres
 	if err == nil && len(epoch0) != 0 {
 		return w.vdfChecker.CheckVDF(epoch0, vdfres)
 	}
@@ -1055,13 +1270,22 @@ func (w *Worker) checkVDFforepoch(epoch uint64, vdfres []byte) bool {
 	return false
 }
 
-// TODO:
+// setVDF0epoch sets the worker's current epoch to a specific value.
+// This function validates that the epoch is not outdated and aborts any
+// running VDF1 computations before updating the epoch.
+//
+// Parameters:
+//   - epoch: target epoch number to set
+//
+// Returns:
+//   - error: error if epoch is outdated or VDF abort fails
 func (w *Worker) setVDF0epoch(epoch uint64) error {
 	epochnow := w.getEpoch()
 	if epochnow > epoch {
 		return fmt.Errorf("could not execset for a outdated epoch %d", epoch)
 	}
 
+	// Abort any running VDF1 work before epoch change
 	if w.IsVDF1Working() {
 		err := w.vdf0.Abort()
 		if err != nil {
@@ -1069,6 +1293,7 @@ func (w *Worker) setVDF0epoch(epoch uint64) error {
 		}
 		w.log.Errorf("[PoT]\tVDF0 got abort for reset")
 	}
+
 	w.mutex.Lock()
 	defer w.mutex.Unlock()
 	w.epoch = epoch
@@ -1076,6 +1301,10 @@ func (w *Worker) setVDF0epoch(epoch uint64) error {
 	return nil
 }
 
+// getEpoch returns the current epoch number in a thread-safe manner.
+//
+// Returns:
+//   - uint64: current epoch number
 func (w *Worker) getEpoch() uint64 {
 	w.mutex.Lock()
 	defer w.mutex.Unlock()
@@ -1083,17 +1312,31 @@ func (w *Worker) getEpoch() uint64 {
 	return epoch
 }
 
+// increaseEpoch increments the current epoch number by 1 in a thread-safe manner.
+// This is called when transitioning to the next epoch in the consensus process.
 func (w *Worker) increaseEpoch() {
 	w.mutex.Lock()
 	w.epoch += 1
 	w.mutex.Unlock()
 }
 
+// calcDifficulty calculates the mining difficulty for the next block based on
+// the parent block and uncle blocks. The difficulty is computed as the average
+// of all included blocks' difficulties, with a minimum value of 1.
+//
+// Parameters:
+//   - parentblock: parent block for difficulty calculation
+//   - uncleBlock: uncle blocks to include in difficulty calculation
+//
+// Returns:
+//   - *big.Int: calculated difficulty for the next block
 func (w *Worker) calcDifficulty(parentblock *types.Block, uncleBlock []*types.Block) *big.Int {
+	// Use default difficulty if no parent block or parent has zero difficulty
 	if parentblock == nil || parentblock.GetHeader().Difficulty.Cmp(common.Big0) == 0 {
 		return big.NewInt(NoParentD)
 	}
 
+	// Sum difficulties from parent and uncle blocks
 	diff := new(big.Int)
 	diff.Set(parentblock.GetHeader().Difficulty)
 	for _, block := range uncleBlock {
@@ -1101,17 +1344,33 @@ func (w *Worker) calcDifficulty(parentblock *types.Block, uncleBlock []*types.Bl
 		diff.Add(diff, header.Difficulty)
 	}
 
+	// Calculate average difficulty based on system parameter
 	snum := new(big.Int)
 	snum.SetInt64(w.config.PoT.Snum)
 	diffculty := diff.Div(diff, snum)
-	//w.log.Infof("[PoT]\tSum difficulty is %d and blocks num is %d, next is %d", diff.Int64(), len(uncleBlock)+1, diffculty.Int64())
 
+	// Ensure minimum difficulty of 1
 	if diffculty.Cmp(big.NewInt(0)) == 0 {
 		return diffculty.SetInt64(1)
 	}
 	return diffculty
 }
 
+// calcMixdigest computes the mix digest for a block by hashing together all
+// block components including epoch, parent hash, uncle hashes, difficulty,
+// peer ID, public key, and coinbase proof.
+//
+// Parameters:
+//   - epoch: current epoch number
+//   - parentblock: parent block reference
+//   - uncleblock: uncle blocks
+//   - difficulty: mining difficulty
+//   - peerid: peer identifier
+//   - pubkeybyte: public key bytes
+//   - coinbaseproof: coinbase proof bytes
+//
+// Returns:
+//   - []byte: computed mix digest hash
 func (w *Worker) calcMixdigest(epoch uint64, parentblock *types.Block, uncleblock []*types.Block,
 	difficulty *big.Int, peerid string, pubkeybyte []byte, coinbaseproof []byte) []byte {
 	parentblockhash := make([]byte, 0)
@@ -1264,68 +1523,85 @@ func (w *Worker) self() string {
 	return w.PeerId
 }
 
+// IsVDF1Working checks if the worker is currently performing VDF1 mining operations.
+// This is used to determine if mining should be aborted when starting new epochs.
+//
+// Returns:
+//   - bool: true if VDF1 mining is active, false otherwise
 func (w *Worker) IsVDF1Working() bool {
-
-	// for i := 0; i < len(w.vdf1); i++ {
-	//	if !w.vdf1[i].Finished {
-	//		return true
-	//	}
-	// }
 	w.mutex.Lock()
 	defer w.mutex.Unlock()
-	//for i := 0; i < cpuCounter; i++ {
-	//	_, ok := <-w.vdf1[i].OutputChan
-	//	if ok {
-	//		return true
-	//	}
-	//}
 
+	// Return the work flag status indicating if mining is active
 	return w.workFlag
 }
 
+// setWorkFlagFalse sets the worker's mining flag to false, indicating mining has stopped.
+// This function is thread-safe and called when mining operations complete or are aborted.
 func (w *Worker) setWorkFlagFalse() {
 	w.mutex.Lock()
 	defer w.mutex.Unlock()
 	w.workFlag = false
 }
 
+// SetEngine updates the worker's PoT engine reference and peer ID.
+// This is used when the engine needs to be replaced or updated after initialization.
+//
+// Parameters:
+//   - engine: new PoT engine instance to set
 func (w *Worker) SetEngine(engine *PoTEngine) {
 	w.Engine = engine
 	w.PeerId = w.Engine.GetPeerID()
 }
 
+// handleBlockExecutedHeader processes the executed headers in a block by storing
+// the corresponding executed blocks and marking them as proposed in the mempool.
+//
+// Parameters:
+//   - block: block containing executed headers to process
+//
+// Returns:
+//   - error: error if executed block not found in mempool or storage fails
 func (w *Worker) handleBlockExecutedHeader(block *types.Block) error {
 	executedHeaders := block.GetExecutedHeaders()
-	//fmt.Println("len of executed headers is :", len(executedHeaders))
+
+	// Process each executed header
 	for _, header := range executedHeaders {
 		hash := header.Hash()
 		exeblock := w.mempool.GetBlockByHash(hash)
 		if exeblock != nil {
+			// Store executed block in persistent storage
 			err := w.blockStorage.PutExcutedBlock(exeblock)
-			//w.log.Error("the exe block height ", exeblock.Header.Height)
 			if err != nil {
 				return err
 			}
 		} else {
 			return fmt.Errorf("handle block excuted tx error for executedblock %s does not exist in mempool", hexutil.Encode(hash[:]))
 		}
-
 	}
+
+	// Mark executed headers as proposed in mempool
 	w.mempool.MarkProposedByHeader(executedHeaders)
 	return nil
 }
 
+// handleBlockRawTx processes the raw transactions in a block and validates
+// that non-genesis blocks contain transactions.
+//
+// Parameters:
+//   - block: block containing raw transactions to process
+//
+// Returns:
+//   - error: error if non-genesis block has no transactions
 func (w *Worker) handleBlockRawTx(block *types.Block) error {
-
 	txs := block.GetRawTx()
-	//
-	if len(block.GetRawTx()) != 0 {
-		//fmt.Println(hexutil.Encode(block.GetRawTx()[0].Txid[:]))
-	} else if len(txs) == 0 && block.Header.Height != 0 {
+
+	// Validate that non-genesis blocks contain transactions
+	if len(txs) == 0 && block.Header.Height != 0 {
 		return fmt.Errorf("block %s at %d has no tx", block.Hash(), block.Header.Height)
-	} else {
-		return nil
 	}
+
+	return nil
 
 	err := w.chainReader.UpdateTxForBlock(block)
 	if err != nil {

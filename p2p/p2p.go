@@ -8,7 +8,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/zzz136454872/upgradeable-consensus/config"
 	"github.com/zzz136454872/upgradeable-consensus/pb"
-	"github.com/zzz136454872/upgradeable-consensus/utils"
+	"github.com/zzz136454872/upgradeable-consensus/pkg/utils"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/proto"
@@ -25,7 +25,7 @@ type BaseP2p struct {
 }
 
 func NewBaseP2p(log *logrus.Entry, id int64) (*BaseP2p, string, error) {
-	cfg, err := config.NewConfig("config/configpot.yaml", id)
+	cfg, err := config.NewConfig("config/config.yaml", id) // TODO  配置文件传递问题
 	utils.PanicOnError(err)
 	info := cfg.GetNodeInfo(id)
 	port := info.Address[strings.Index(info.Address, ":"):]

@@ -1,12 +1,13 @@
 package main
 
 import (
-	"github.com/zzz136454872/upgradeable-consensus/logging"
-	"github.com/zzz136454872/upgradeable-consensus/node"
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"syscall"
+
+	"github.com/zzz136454872/upgradeable-consensus/internal/node"
+	"github.com/zzz136454872/upgradeable-consensus/pkg/logging"
 )
 
 var (

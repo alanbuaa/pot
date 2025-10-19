@@ -6,6 +6,7 @@ import (
 	"github.com/zzz136454872/upgradeable-consensus/pb"
 )
 
+// Consensus defines the interface of a consensus module
 type Consensus interface {
 	// Consensus should has a initialize function like this
 	// NewConsensus(nid int64, cid int64, cfg *config.ConsensusConfig, exec executor.Executor, p2pAdaptor p2p.P2PAdaptor, log *logrus.Entry) Consensus

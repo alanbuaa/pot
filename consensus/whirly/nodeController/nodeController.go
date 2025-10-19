@@ -320,7 +320,7 @@ func (nc *NodeController) handleStop(address string) {
 	sharding, ok := nc.Shardings[shardingName]
 	if !ok {
 		// create a new sharding
-		nc.Log.Warn("Stop Node Error: Sharding does not exist")
+		nc.Log.Warnf("Stop Node Error: Sharding %x does not exist", shardingName)
 	} else {
 		go sharding.handleStop(address)
 	}

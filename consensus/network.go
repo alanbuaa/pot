@@ -2,7 +2,7 @@ package consensus
 
 import (
 	"github.com/zzz136454872/upgradeable-consensus/pb"
-	"github.com/zzz136454872/upgradeable-consensus/utils"
+	"github.com/zzz136454872/upgradeable-consensus/pkg/utils"
 	"google.golang.org/protobuf/proto"
 )
 

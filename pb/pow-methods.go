@@ -6,7 +6,7 @@ import (
 	"encoding/hex"
 	"math/big"
 
-	"github.com/zzz136454872/upgradeable-consensus/crypto"
+	"github.com/zzz136454872/upgradeable-consensus/pkg/utils"
 )
 
 func (b *PoWBlock) Identifier(h string) string {
@@ -21,7 +21,7 @@ func (b *PoWBlock) Hash(h string) []byte {
 }
 
 func (b *PoWBlock) ForceHash(h string) []byte {
-	hasher, _ := crypto.HashFactory(h)
+	hasher, _ := utils.HashFactory(h)
 	hasher.Write(b.ParentHash)
 	hasher.Write(binary.BigEndian.AppendUint64(nil, b.Height))
 	hasher.Write(bytes.Join(b.Txs, []byte{}))

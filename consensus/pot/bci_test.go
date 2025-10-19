@@ -158,7 +158,7 @@ func TestRandom(t *testing.T) {
 //
 //		// 写入一些测试数据
 //		err = db.Update(func(tx *bolt.Tx) error {
-//			b, err := tx.CreateBucketIfNotExists([]byte(types.UTXOBucket))
+//			b, err := tx.CreateBucketIfNotExists([]byte(storage.UTXOBucket))
 //			if err != nil {
 //				return err
 //			}
@@ -177,7 +177,7 @@ func TestRandom(t *testing.T) {
 //
 //		// 测试 View 函数
 //		err = db.View(func(tx *bolt.Tx) error {
-//			b := tx.Bucket([]byte(types.UTXOBucket))
+//			b := tx.Bucket([]byte(storage.UTXOBucket))
 //			if b == nil {
 //				t.Errorf("Bucket not found")
 //				return fmt.Errorf("bucket not found")
