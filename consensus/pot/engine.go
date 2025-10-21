@@ -49,7 +49,14 @@ type PoTEngine struct {
 func NewEngine(nid int64, cid int64, config *config.ConsensusConfig, exec executor.Executor, adaptor p2p.P2PAdaptor, log *logrus.Entry) *PoTEngine {
 	ch := make(chan []byte, 1024)
 	//st := types.NewHeaderStorage(nid)
-	bst := types.NewBlockStorage(nid)
+	potconfig := config.PoT
+
+	var bst *types.BlockStorage
+	if potconfig.StorageMode == 0 {
+		bst = types.NewBlockStorage(nid, cid)
+	} else {
+		bst = types.GetExistedBlockStorage(nid, cid)
+	}
 	e := &PoTEngine{
 		id:              nid,
 		peerId:          adaptor.GetPeerID(),
@@ -64,7 +71,7 @@ func NewEngine(nid int64, cid int64, config *config.ConsensusConfig, exec execut
 		blockStorage: bst,
 		Topic:        []byte(config.Topic),
 	}
-	bst.Put(types.DefaultGenesisBlock())
+
 	worker := NewWorker(nid, config, log, bst, e)
 	e.worker = worker
 
@@ -80,9 +87,61 @@ func NewEngine(nid int64, cid int64, config *config.ConsensusConfig, exec execut
 		return nil
 	}
 
-	e.start()
+	if potconfig.StorageMode == 0 {
+		e.start()
+	} else {
+		e.restart()
+	}
+
 	return e
 }
+
+func (e *PoTEngine) restart() {
+
+	whirly := e.StartCommitee()
+	e.worker.SetWhirly(whirly)
+	epoch, vdfres, err := e.blockStorage.GetHighestVDFRes()
+	curparent := types.DefaultGenesisBlock()
+	e.worker.chainReader.SetHeight(0, curparent)
+
+	for i := uint64(1); i <= epoch-1; i++ {
+		blocks, err := e.blockStorage.GetbyHeight(i)
+		if err != nil {
+			panic(err)
+		}
+		res0, err := e.blockStorage.GetVDFresbyEpoch(i)
+		if err != nil {
+			panic(err)
+		}
+		parent, _ := e.worker.blockSelection(blocks, res0, i)
+
+		e.worker.handleBlockExecutedHeader(parent)
+		err = e.worker.handleBlockRawTx(parent)
+		if err != nil {
+			panic(err)
+		}
+		e.worker.chainReader.SetHeight(i, parent)
+		curparent = parent
+	}
+	if err != nil {
+		go e.worker.Work()
+		e.log.Errorf("[PoT]\tRestart from storage error, startfrom genesis block")
+		return
+	}
+	vdfres, err = e.blockStorage.GetVDFresbyEpoch(epoch - 1)
+
+	res := &types.VDF0res{
+		Epoch: epoch - 2,
+		Res:   vdfres,
+	}
+
+	e.worker.vdf0Chan <- res
+	go e.worker.OnGetVdf0Response()
+	go e.onReceiveMsg()
+	go e.worker.rpcserver.Serve(e.worker.listener)
+	go e.worker.handleVdfhalf()
+}
+
 func (e *PoTEngine) start() {
 
 	e.log.Infof("[PoT]\tPoT Consensus Engine starts working")

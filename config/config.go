@@ -57,6 +57,7 @@ type PoTConfig struct {
 	ConfirmDelay   int    `yaml:"confirmDelay"`
 	Slowrate       int    `yaml:"slowrate"`
 	RpcAddress     string `yaml:"dcirpcAddress"`
+	StorageMode    int    `yaml:"storagemode"`
 }
 type ConsensusConfig struct {
 	Type        string            `yaml:"type"`

@@ -238,144 +238,141 @@ func (w *Worker) OnGetVdf0Response() {
 	go w.handleBlock()
 
 	for {
-		select {
-		// receive vdf0
-		case res := <-w.vdf0Chan:
-			epoch := w.getEpoch()
-			timer := time.Since(w.timestamp) / time.Millisecond
-			w.log.Infof("[PoT]\tepoch %d:Receive epoch %d vdf0 res %s, use %d ms\n", epoch, res.Epoch, hexutil.Encode(crypto.Hash(res.Res)), timer)
-			//time.Sleep(10 * time.Second)
+		res := <-w.vdf0Chan
+		epoch := w.getEpoch()
+		timer := time.Since(w.timestamp) / time.Millisecond
+		w.log.Infof("[PoT]\tepoch %d:Receive epoch %d vdf0 res %s, use %d ms\n", epoch, res.Epoch, hexutil.Encode(crypto.Hash(res.Res)), timer)
+		//time.Sleep(10 * time.Second)
 
-			if epoch > res.Epoch {
-				w.log.Errorf("[PoT]\tthe epoch already execset")
+		if epoch > res.Epoch {
+			w.log.Errorf("[PoT]\tthe epoch already execset")
+			continue
+		}
+		if len(res.Res) == 0 {
+			w.log.Errorf("[PoT]\treceive vdf0 res is empty")
+		}
+
+		//timestop := math.Floor(float64(timer) * float64(10-w.config.PoT.Slowrate) / float64(w.config.PoT.Slowrate))
+		//time.Sleep(time.Duration(timestop) * time.Millisecond)
+		//
+		//timer = time.Since(w.timestamp) / time.Millisecond
+		//w.log.Infof("[PoT]\tepoch %d:Receive epoch %d vdf0 res %s, use %d ms\Commitees", epoch, res.Epoch, hexutil.Encode(crypto.Hash(res.Res)), timer)
+
+		flag, err := w.CheckParentBlockEnough(epoch)
+
+		if !flag {
+			w.log.Infof("[PoT]\tepoch %d: check parent block enough fail for %s", epoch, err)
+			go w.WaitandReset(res)
+			continue
+		}
+		// the last epoch is over
+		// epoch increase
+		res0 := res.Res
+		w.SetVdf0res(res.Epoch+1, res0)
+
+		if w.IsVDF1Working() {
+			w.abort.once.Do(func() {
+				close(w.abort.abortchannel)
+			})
+
+			w.setWorkFlagFalse()
+			w.wg.Wait()
+			w.log.Debugf("[PoT]\tepoch %d:the miner got abort for get in new epoch", epoch+1)
+		}
+
+		// calculate the next epoch vdf
+		inputHash := crypto.Hash(res0)
+
+		if !w.vdf0.IsFinished() {
+
+			err := w.vdf0.Abort()
+			if err != nil {
+				w.log.Warnf("[PoT]\tepoch %d: vdf0 abort error for %s", epoch+1, err)
+			}
+			w.log.Warnf("[PoT]\tepoch %d:vdf0 got abort for new epoch ", epoch+1)
+		}
+
+		w.increaseEpoch(res.Epoch + 1)
+		//w.vdf0 = types.NewVDFwithInput(w.getVDF0chan(), inputHash, w.config.PoT.Vdf0Iteration, w.ID)
+		w.vdfhalf = types.NewVDFwithInput(w.vdfhalfchan, inputHash, w.config.PoT.Vdf1Iteration, w.ID)
+		if err != nil {
+			w.log.Warnf("[PoT]\tepoch %d:execset vdf0 error for %t", epoch+1, err)
+			continue
+		}
+
+		w.log.Debugf("[PoT]\tepoch %d:Start epoch %d vdf0", epoch+1, epoch+1)
+		w.timestamp = time.Now()
+		go func() {
+			err = w.vdfhalf.Exec(epoch + 1)
+			if err != nil {
+				w.log.Info("[PoT]\texecute vdf error for :", err)
+			}
+		}()
+
+		backupblock, err := w.blockStorage.GetbyHeight(epoch)
+		w.log.Infof("[PoT]\tepoch %d:epoch %d block num %d", epoch+1, epoch, len(backupblock))
+
+		parentblock, uncleblock := w.blockSelection(backupblock, res0, epoch)
+
+		if parentblock != nil {
+			w.log.Infof("[PoT]\tepoch %d:parent block hash is : %s Difficulty %d from %d", epoch+1, hex.EncodeToString(parentblock.Hash()), parentblock.GetHeader().Difficulty.Int64(), parentblock.GetHeader().Address)
+		} else {
+			if len(backupblock) != 0 {
+				//w.chainReader.SetHeight(epoch, backupblock[0])
+				//parentblock = backupblock[0]
+				//w.log.Infof("[PoT]\tepoch %d:parent block hash is nil,execset nil block %s as parent", epoch+1, hex.EncodeToString(parentblock.GetHeader().Hashes))
 				continue
-			}
-			if len(res.Res) == 0 {
-				w.log.Errorf("[PoT]\treceive vdf0 res is empty")
-			}
-
-			//timestop := math.Floor(float64(timer) * float64(10-w.config.PoT.Slowrate) / float64(w.config.PoT.Slowrate))
-			//time.Sleep(time.Duration(timestop) * time.Millisecond)
-			//
-			//timer = time.Since(w.timestamp) / time.Millisecond
-			//w.log.Infof("[PoT]\tepoch %d:Receive epoch %d vdf0 res %s, use %d ms\Commitees", epoch, res.Epoch, hexutil.Encode(crypto.Hash(res.Res)), timer)
-
-			flag, err := w.CheckParentBlockEnough(epoch)
-
-			if !flag {
-				w.log.Infof("[PoT]\tepoch %d: check parent block enough fail for %s", epoch, err)
-				go w.WaitandReset(res)
-				continue
-			}
-			// the last epoch is over
-			// epoch increase
-			res0 := res.Res
-			w.SetVdf0res(res.Epoch+1, res0)
-
-			if w.IsVDF1Working() {
-				w.abort.once.Do(func() {
-					close(w.abort.abortchannel)
-				})
-
-				w.setWorkFlagFalse()
-				w.wg.Wait()
-				w.log.Debugf("[PoT]\tepoch %d:the miner got abort for get in new epoch", epoch+1)
-			}
-
-			// calculate the next epoch vdf
-			inputHash := crypto.Hash(res0)
-
-			if !w.vdf0.IsFinished() {
-
-				err := w.vdf0.Abort()
-				if err != nil {
-					w.log.Warnf("[PoT]\tepoch %d: vdf0 abort error for %s", epoch+1, err)
-				}
-				w.log.Warnf("[PoT]\tepoch %d:vdf0 got abort for new epoch ", epoch+1)
-			}
-
-			w.increaseEpoch()
-			//w.vdf0 = types.NewVDFwithInput(w.getVDF0chan(), inputHash, w.config.PoT.Vdf0Iteration, w.ID)
-			w.vdfhalf = types.NewVDFwithInput(w.vdfhalfchan, inputHash, w.config.PoT.Vdf1Iteration, w.ID)
-			if err != nil {
-				w.log.Warnf("[PoT]\tepoch %d:execset vdf0 error for %t", epoch+1, err)
-				continue
-			}
-
-			w.log.Debugf("[PoT]\tepoch %d:Start epoch %d vdf0", epoch+1, epoch+1)
-			w.timestamp = time.Now()
-			go func() {
-				err = w.vdfhalf.Exec(epoch + 1)
-				if err != nil {
-					w.log.Info("[PoT]\texecute vdf error for :", err)
-				}
-			}()
-
-			backupblock, err := w.blockStorage.GetbyHeight(epoch)
-			w.log.Infof("[PoT]\tepoch %d:epoch %d block num %d", epoch+1, epoch, len(backupblock))
-
-			parentblock, uncleblock := w.blockSelection(backupblock, res0, epoch)
-
-			if parentblock != nil {
-				w.log.Infof("[PoT]\tepoch %d:parent block hash is : %s Difficulty %d from %d", epoch+1, hex.EncodeToString(parentblock.Hash()), parentblock.GetHeader().Difficulty.Int64(), parentblock.GetHeader().Address)
 			} else {
-				if len(backupblock) != 0 {
-					//w.chainReader.SetHeight(epoch, backupblock[0])
-					//parentblock = backupblock[0]
-					//w.log.Infof("[PoT]\tepoch %d:parent block hash is nil,execset nil block %s as parent", epoch+1, hex.EncodeToString(parentblock.GetHeader().Hashes))
-					continue
-				} else {
-					w.log.Errorf("[PoT]\tepoch %d:dont't find any parent block", epoch+1)
-					panic(fmt.Errorf("[PoT]\tepoch %d:dont't find any parent block", epoch+1))
-				}
+				w.log.Errorf("[PoT]\tepoch %d:dont't find any parent block", epoch+1)
+				panic(fmt.Errorf("[PoT]\tepoch %d:dont't find any parent block", epoch+1))
 			}
+		}
 
-			_, err = w.GetExcutedTxsFromExecutor(epoch)
-			if err != nil {
-				w.log.Warnf("[PoT]\tepoch %d: Get Tx from executor error for %s", epoch+1, err)
-			} else {
-				w.log.Debugf("[PoT]\tepoch %d: Get Txs from executor", epoch+1)
-			}
+		_, err = w.GetExcutedTxsFromExecutor(epoch)
+		if err != nil {
+			w.log.Warnf("[PoT]\tepoch %d: Get Tx from executor error for %s", epoch+1, err)
+		} else {
+			w.log.Debugf("[PoT]\tepoch %d: Get Txs from executor", epoch+1)
+		}
 
-			_ = w.handleBlockExecutedHeader(parentblock)
+		_ = w.handleBlockExecutedHeader(parentblock)
 
-			_, err = w.GetIncentiveTxFromExecutor(epoch)
-			if err != nil {
-				w.log.Errorf("[PoT]\tepoch %d: Get Incentive Tx from executor error for %s", epoch+1, err)
-			} else {
-				w.log.Infof("[PoT]\tepoch %d: Get Incentive Txs from executor", epoch+1)
-			}
+		_, err = w.GetIncentiveTxFromExecutor(epoch)
+		if err != nil {
+			w.log.Errorf("[PoT]\tepoch %d: Get Incentive Tx from executor error for %s", epoch+1, err)
+		} else {
+			w.log.Infof("[PoT]\tepoch %d: Get Incentive Txs from executor", epoch+1)
+		}
 
-			err = w.handleBlockRawTx(parentblock)
-			if err != nil {
-				w.log.Errorf("[PoT]\tepoch %d: Handle Txs for block %s err for %s", epoch+1, hexutil.Encode(parentblock.Hash()), err)
-			}
+		err = w.handleBlockRawTx(parentblock)
+		if err != nil {
+			w.log.Errorf("[PoT]\tepoch %d: Handle Txs for block %s err for %s", epoch+1, hexutil.Encode(parentblock.Hash()), err)
+		}
 
-			//w.UpdateLocalCryptoSetByBlock(parentblock.GetHeader().Height, parentblock)
+		//w.UpdateLocalCryptoSetByBlock(parentblock.GetHeader().Height, parentblock)
 
-			// if epoch > 1 {
+		// if epoch > 1 {
 
-			// 	w.simpleLeaderUpdate(parentblock)
-			// }
+		// 	w.simpleLeaderUpdate(parentblock)
+		// }
 
-			//w.CommitteeUpdate(epoch)
-			difficulty := w.calcDifficulty(parentblock, uncleblock)
-			w.startWorking()
-			w.abort = NewAbortcontrol()
+		//w.CommitteeUpdate(epoch)
+		difficulty := w.calcDifficulty(parentblock, uncleblock)
+		w.startWorking()
+		w.abort = NewAbortcontrol()
 
-			w.wg.Add(cpuCounter)
+		w.wg.Add(cpuCounter)
 
-			vdf0rescopy := make([]byte, len(res0))
-			copy(vdf0rescopy, res0)
+		vdf0rescopy := make([]byte, len(res0))
+		copy(vdf0rescopy, res0)
 
-			exeblocks := w.GetExecutedBlockFromMempool()
-			rawtxs := w.mempool.GetRawTx()
-			Bcirewards := w.mempool.GetAllBciRewards()
+		exeblocks := w.GetExecutedBlockFromMempool()
+		rawtxs := w.mempool.GetRawTx()
+		Bcirewards := w.mempool.GetAllBciRewards()
 
-			for i := 0; i < cpuCounter; i++ {
-				block := w.createBlockWithoutKey(epoch+1, parentblock, uncleblock, difficulty, exeblocks, rawtxs)
-				go w.mine(epoch+1, vdf0rescopy, rand.Int63(), i, w.abort, difficulty, parentblock, uncleblock, w.wg, block, Bcirewards)
-			}
+		for i := range cpuCounter {
+			block := w.createBlockWithoutKey(epoch+1, parentblock, uncleblock, difficulty, exeblocks, rawtxs)
+			go w.mine(epoch+1, vdf0rescopy, rand.Int63(), i, w.abort, difficulty, parentblock, uncleblock, w.wg, block, Bcirewards)
 		}
 	}
 }
@@ -496,37 +493,33 @@ func (w *Worker) mine(epoch uint64, vdf0res []byte, nonce int64, workerid int, a
 
 func (w *Worker) handleVdfhalf() {
 	for {
-		select {
-		case res := <-w.vdfhalfchan:
-			epoch := w.getEpoch()
-			w.log.Infof("[PoT]\tepoch %d:vdfhalf got res %s", epoch, hexutil.Encode(crypto.Hash(res.Res)))
+		res := <-w.vdfhalfchan
+		epoch := w.getEpoch()
+		w.log.Infof("[PoT]\tepoch %d:vdfhalf got res %s", epoch, hexutil.Encode(crypto.Hash(res.Res)))
 
-			if res.Epoch != epoch {
-				w.log.Errorf("[PoT]\tepoch %d:vdfhalf got res but epoch is %d", epoch, res.Epoch)
-			}
-
-			w.blockStorage.SetVDFHalf(epoch, res.Res)
-			if !w.vdf0.IsFinished() {
-
-				err := w.vdf0.Abort()
-				if err != nil {
-					w.log.Warnf("[PoT]\tepoch %d: vdf0 abort error for %s", epoch+1, err)
-				}
-				w.log.Warnf("[PoT]\tepoch %d:vdf0 got abort for new epoch ", epoch+1)
-			}
-			inputhash := crypto.Hash(res.Res)
-			w.vdf0 = types.NewVDFwithInput(w.getVDF0chan(), inputhash, w.config.PoT.Vdf0Iteration-w.config.PoT.Vdf1Iteration, w.ID)
-
-			go func() {
-				err := w.vdf0.Exec(epoch)
-				if err != nil {
-					w.log.Warnf("[PoT]\tepoch %d: vdf0 run error for %s", epoch+1, err)
-				}
-
-			}()
-
+		if res.Epoch != epoch {
+			w.log.Errorf("[PoT]\tepoch %d:vdfhalf got res but epoch is %d", epoch, res.Epoch)
 		}
 
+		w.blockStorage.SetVDFHalf(epoch, res.Res)
+		if !w.vdf0.IsFinished() {
+
+			err := w.vdf0.Abort()
+			if err != nil {
+				w.log.Warnf("[PoT]\tepoch %d: vdf0 abort error for %s", epoch+1, err)
+			}
+			w.log.Warnf("[PoT]\tepoch %d:vdf0 got abort for new epoch ", epoch+1)
+		}
+		inputhash := crypto.Hash(res.Res)
+		w.vdf0 = types.NewVDFwithInput(w.getVDF0chan(), inputhash, w.config.PoT.Vdf0Iteration-w.config.PoT.Vdf1Iteration, w.ID)
+
+		go func() {
+			err := w.vdf0.Exec(epoch)
+			if err != nil {
+				w.log.Warnf("[PoT]\tepoch %d: vdf0 run error for %s", epoch+1, err)
+			}
+
+		}()
 	}
 
 }
@@ -1083,9 +1076,9 @@ func (w *Worker) getEpoch() uint64 {
 	return epoch
 }
 
-func (w *Worker) increaseEpoch() {
+func (w *Worker) increaseEpoch(epoch uint64) {
 	w.mutex.Lock()
-	w.epoch += 1
+	w.epoch = epoch
 	w.mutex.Unlock()
 }
 

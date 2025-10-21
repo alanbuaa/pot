@@ -1,8 +1,8 @@
 nodes:
   - id: 0
-    address: 127.0.0.1:8080
-    rpc_address: 127.0.0.1:9080
-    bcirpcAddress : 127.0.0.1:9866
+    address: 127.0.0.1:8086
+    rpc_address: 127.0.0.1:9085
+    bcirpcAddress : 127.0.0.1:10157
     private_key_path: keys/r1.key
   # - id: 1
   #   address: 127.0.0.1:8081
@@ -36,34 +36,9 @@ p2p:
   type: p2p-adaptor # p2p-adaptor currently only supports simple-whirly # sudo sysctl -w net.core.rmem_max=2500000
   # type: p2p
 
-topic: this-is-consensus-topic-tttaaabbbcccddd-043
+topic: this-is-consensus-topic-tttaaabbbcccddd-145
 
-consensus:
-  # type: "upgradeable"
-  # consensus_id: 10001
-  # upgradeable:
-  #   commit_time: 5
-  #   network_type: 0
-  #   init_consensus:
-  # type: hotstuff
-  # hotstuff:
-  #   consensus_id: 1000
-  #   type: event-driven
-  #   # type: basic
-  #   batch_size: 10
-  #   batch_timeout: 1
-  #   timeout: 2
-  #  type: whirly
-  #  consensus_id: 1009
-  #  whirly:
-  #    type: simple
-  #    # type: basic
-  #    batch_size: 10
-  #    timeout: 2
-  #     # type: pow
-  #     # consensus_id: 1008
-  #     # pow:
-  #     #   init_difficulty: 0x0010000000000000000000000000000000000000000000000000000000000000
+consensus:  
   type: "pot"
   consensus_id: 10001
   pot:
@@ -78,5 +53,5 @@ consensus:
     confirmDelay : 6
     slowrate : 6
     dcirpcAddress : 127.0.0.1:9866
-
+    storagemode: 1
 # 100 - 5KB 10000 - 411K 30000-1290K

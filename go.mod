@@ -12,6 +12,7 @@ require (
 	blockchain-crypto v0.0.0-00010101000000-000000000000
 	github.com/boltdb/bolt v1.3.1
 	github.com/ethereum/go-ethereum v1.12.2
+	github.com/gin-gonic/gin v1.10.0
 	github.com/niclabs/tcrsa v0.0.5
 	github.com/shopspring/decimal v1.3.1
 	github.com/sirupsen/logrus v1.9.3
@@ -47,7 +48,6 @@ require (
 	github.com/francoispqt/gojay v1.2.13 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.3 // indirect
 	github.com/gin-contrib/sse v0.1.0 // indirect
-	github.com/gin-gonic/gin v1.10.0 // indirect
 	github.com/go-logr/logr v1.3.0 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-ole/go-ole v1.2.1 // indirect

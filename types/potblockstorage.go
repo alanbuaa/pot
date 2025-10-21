@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"sync"
 
 	"github.com/boltdb/bolt"
@@ -42,17 +43,18 @@ func dbExists(dbFile string) bool {
 func (s *BlockStorage) GetBoltdb() *bolt.DB {
 	return s.boltdb
 }
-func NewBlockStorage(id int64) *BlockStorage {
-	sint := fmt.Sprintf("%d", id)
 
-	boltdbname := fmt.Sprintf("boltdbfile/node0-" + sint)
+func NewBlockStorage(id int64, cid int64) *BlockStorage {
+	sint := fmt.Sprintf("node%d-cid%d", id, cid)
+
+	boltdbname := fmt.Sprintf("boltdbfile/" + sint)
 	if dbExists(boltdbname) {
 		err := os.Remove(boltdbname)
 		if err != nil {
 			panic(err)
 		}
 	}
-	boltdb, err := bolt.Open("boltdbfile/node0-"+sint, 0600, nil)
+	boltdb, err := bolt.Open("boltdbfile/"+sint, 0600, nil)
 	if err != nil {
 		fmt.Println("create boltdb err for ", err)
 		log.Panic(err)
@@ -77,6 +79,27 @@ func NewBlockStorage(id int64) *BlockStorage {
 		fmt.Println("create bolt bucket err for ", err)
 		log.Panic(err)
 	}
+	return &BlockStorage{
+		boltdb: boltdb,
+		//db:        db,
+		vdfheight: 0,
+		rwmutex:   new(sync.RWMutex),
+	}
+}
+
+func GetExistedBlockStorage(id int64, cid int64) *BlockStorage {
+	sint := fmt.Sprintf("node%d-cid%d", id, cid)
+
+	boltdbname := fmt.Sprintf("boltdbfile/" + sint)
+	if !dbExists(boltdbname) {
+		return NewBlockStorage(id, cid)
+	}
+	boltdb, err := bolt.Open("boltdbfile/"+sint, 0600, nil)
+	if err != nil {
+		fmt.Println("create boltdb err for ", err)
+		log.Panic(err)
+	}
+
 	return &BlockStorage{
 		boltdb: boltdb,
 		//db:        db,
@@ -294,8 +317,45 @@ func (s *BlockStorage) SetVDFres(epoch uint64, vdfres []byte) error {
 		s.rwmutex.Lock()
 		s.vdfheight = epoch
 		s.rwmutex.Unlock()
+		key := []byte("highest:")
+		err = s.boltdb.Update(func(tx *bolt.Tx) error {
+			b := tx.Bucket([]byte(blocksBucket))
+			err := b.Put(key, []byte(strconv.Itoa(int(epoch))))
+			if err != nil {
+				return err
+			}
+			return nil
+		})
+
 	}
 	return err
+}
+
+func (s *BlockStorage) GetHighestVDFRes() (uint64, []byte, error) {
+	var epoch int
+	err := s.boltdb.View(func(tx *bolt.Tx) error {
+		key := []byte("highest:")
+		b := tx.Bucket([]byte(blocksBucket))
+		epochbyte := b.Get(key)
+		var err error
+		if len(epochbyte) == 0 {
+			return fmt.Errorf("not existed highest vdfres")
+		}
+		epoch, err = strconv.Atoi(string(epochbyte))
+
+		return err
+	})
+
+	if err != nil {
+		return 0, nil, err
+	}
+
+	vdfres, err := s.GetVDFresbyEpoch(uint64(epoch))
+	if err != nil {
+		return 0, nil, err
+	}
+
+	return uint64(epoch), vdfres, nil
 }
 
 func (s *BlockStorage) GetVDFresbyEpoch(epoch uint64) ([]byte, error) {

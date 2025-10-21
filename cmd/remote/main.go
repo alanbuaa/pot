@@ -4,32 +4,41 @@ import (
 	"context"
 	"fmt"
 	"math/big"
-	"net"
-	"time"
+	"os"
+	"os/signal"
+	"syscall"
 
+	"github.com/zzz136454872/upgradeable-consensus/config"
 	"github.com/zzz136454872/upgradeable-consensus/crypto"
+	"github.com/zzz136454872/upgradeable-consensus/node"
 	"github.com/zzz136454872/upgradeable-consensus/pb"
-	"google.golang.org/grpc"
 )
 
 func main() {
 
-	listen, err := net.Listen("tcp", "127.0.0.1:9877")
-	if err != nil {
-		return
-	}
-	rpcserver := grpc.NewServer()
-	exec := NewExec()
-	pb.RegisterPoTExecutorServer(rpcserver, exec)
-	go rpcserver.Serve(listen)
-	defer rpcserver.Stop()
-	defer listen.Close()
-	for {
-		time.Sleep(1000 * time.Second)
-		blocks := exec.GenerateTxsForHeight(exec.height)
-		exec.blocks = append(exec.blocks, blocks)
-		exec.height += 1
-	}
+	// listen, err := net.Listen("tcp", "127.0.0.1:9877")
+	// if err != nil {
+	// 	return
+	// }
+	// rpcserver := grpc.NewServer()
+	// exec := NewExec()
+	// pb.RegisterPoTExecutorServer(rpcserver, exec)
+	// go rpcserver.Serve(listen)
+	// defer rpcserver.Stop()
+	// defer listen.Close()
+	// for {
+	// 	time.Sleep(1000 * time.Second)
+	// 	blocks := exec.GenerateTxsForHeight(exec.height)
+	// 	exec.blocks = append(exec.blocks, blocks)
+	// 	exec.height += 1
+	// }
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM,
+		syscall.SIGQUIT)
+	cfg, _ := config.NewConfig("/home/lxc/pot/config/configpot.yaml", 0)
+
+	fmt.Println(len(cfg.Nodes))
+	_ = node.NewNode(0)
 }
 
 type PoTexecutor struct {
