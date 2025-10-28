@@ -4,10 +4,11 @@ import (
 	"blockchain-crypto/vdf/pietrzak"
 	"blockchain-crypto/vdf/utils"
 	"blockchain-crypto/vdf/wesolowski_rust"
+	"runtime"
 )
 
-var cpuList = []uint8{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
-var cpuCounter = utils.NewCPUCounter(cpuList)
+var cpuList []uint8
+var cpuCounter *utils.CPUCounter
 var cpuChecker = utils.NewCPUCounter([]uint8{4, 5})
 
 type Vdf struct {
@@ -16,6 +17,15 @@ type Vdf struct {
 	Challenge  []byte
 	Iterations int
 	Controller utils.Controller
+}
+
+func init() {
+	cpuCount := runtime.NumCPU()
+	cpuList = make([]uint8, cpuCount)
+	for i := 0; i < cpuCount; i++ {
+		cpuList[i] = uint8(i)
+	}
+	cpuCounter = utils.NewCPUCounter(cpuList)
 }
 
 func New(vdfType string, challenge []byte, iterations int, id int64) *Vdf {
