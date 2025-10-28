@@ -1,4 +1,4 @@
-package types
+package storage
 
 import (
 	"math/big"
@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"testing"
 	"time"
+
+	. "github.com/zzz136454872/upgradeable-consensus/types"
 )
 
 func TestGet(t *testing.T) {

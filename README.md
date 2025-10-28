@@ -16,7 +16,7 @@ This README follows common software engineering conventions: overview, prerequis
 ## High-level layout
 
 - `cmd/` - entry points for different executables (server, client, genkey, etc.).
-- `pb/` - protobuf definitions and generated Go files.
+- `pkg/proto/` - protobuf definitions and generated Go files.
 - `consensus/`, `model/`, `types/`, `utils/` - consensus implementations, data models and utility code.
 - `p2p/`, `node/` - networking and node-level code.
 - `keys/` - runtime/test key files (created by `make genkey`).
@@ -80,7 +80,7 @@ Note: some commands log to `logs/`. You can also run binaries directly from `bin
 
 ## Protobuf code generation
 
-If you modify `pb/*.proto`, regenerate the Go sources:
+If you modify `pkg/proto/*.proto`, regenerate the Go sources:
 
 ```bash
 make compile_proto
@@ -89,7 +89,7 @@ make compile_proto
 The Makefile embeds plugin options into `--go-grpc_out`. If you prefer to run `protoc` manually, for example:
 
 ```bash
-protoc --go_out=. --go-grpc_out=. -I pb pb/*.proto
+protoc --go_out=. --go-grpc_out=. -I pkg/proto pkg/proto/*.proto
 ```
 
 Make sure `protoc-gen-go` and `protoc-gen-go-grpc` are available in your PATH.
@@ -102,11 +102,11 @@ Make sure `protoc-gen-go` and `protoc-gen-go-grpc` are available in your PATH.
 
 ## Useful Makefile targets
 
-- `make` — build primary binaries into `bin/`.
+- `make build` — build primary binaries into `bin/`.
 - `make build-cmds` — build all commands under `cmd/`.
 - `make genkey` — build and run key generator; writes keys to `keys/`.
 - `make test` — run Go tests.
-- `make compile_proto` — generate Go code from `pb/*.proto`.
+- `make compile_proto` — generate Go code from `pkg/proto/*.proto`.
 - `make run_server` — run the server binary (demo).
 - `make run_remote` — run a mock remote executor/client.
 - `make clean` — remove built binaries, keys and logs (see Makefile).
@@ -122,7 +122,7 @@ Make sure `protoc-gen-go` and `protoc-gen-go-grpc` are available in your PATH.
 
 - `main.go` (repo root): top-level entry or demo launcher; it may call into different commands.
 - `cmd/`: individual CLI entrypoints (server, client, genkey, ...).
-- `pb/`: proto definitions and generated artifacts (keep generator versions compatible with `go.mod`).
+- `pkg/proto/`: proto definitions and generated artifacts (keep generator versions compatible with `go.mod`).
 - `consensus/`: consensus implementations (hotstuff, pot, pow, etc.).
 
 ## Troubleshooting

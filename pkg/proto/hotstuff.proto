@@ -1,8 +1,8 @@
 syntax = "proto3";
 package pb;
-import "pb/common.proto";
+import "common.proto";
 
-option go_package="./pb";
+option go_package="github.com/zzz136454872/upgradeable-consensus/pkg/proto";
 
 message Msg {
   oneof Payload {

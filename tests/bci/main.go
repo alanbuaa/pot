@@ -14,14 +14,15 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/zzz136454872/upgradeable-consensus/consensus/pot"
 	"github.com/zzz136454872/upgradeable-consensus/crypto"
-	"github.com/zzz136454872/upgradeable-consensus/pb"
+	pb "github.com/zzz136454872/upgradeable-consensus/pkg/proto"
 	"github.com/zzz136454872/upgradeable-consensus/types"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 // 连接到gRPC服务器
 func connectToServer(addr string) (*grpc.ClientConn, error) {
-	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return nil, fmt.Errorf("did not connect: %v", err)
 	}

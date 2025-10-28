@@ -8,7 +8,7 @@ import (
 	"blockchain-crypto/verifiable_draw"
 	"fmt"
 
-	"github.com/zzz136454872/upgradeable-consensus/pb"
+	pb "github.com/zzz136454872/upgradeable-consensus/pkg/proto"
 )
 
 var (

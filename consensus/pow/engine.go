@@ -11,8 +11,9 @@ import (
 	"github.com/zzz136454872/upgradeable-consensus/config"
 	"github.com/zzz136454872/upgradeable-consensus/consensus/model"
 	"github.com/zzz136454872/upgradeable-consensus/executor"
+	storage "github.com/zzz136454872/upgradeable-consensus/internal/storage"
 	"github.com/zzz136454872/upgradeable-consensus/p2p"
-	"github.com/zzz136454872/upgradeable-consensus/pb"
+	pb "github.com/zzz136454872/upgradeable-consensus/pkg/proto"
 	"github.com/zzz136454872/upgradeable-consensus/types"
 	"google.golang.org/protobuf/proto"
 )
@@ -32,7 +33,7 @@ type Engine struct {
 	exitChan        chan struct{}
 	requestEntrance chan *pb.Request
 	blockChan       chan *pb.PoWBlock
-	storage         *types.Storage
+	storage         *storage.Storage
 	remotePending   *atomic.Int64
 	hasher          string
 	wg              *sync.WaitGroup
@@ -94,7 +95,7 @@ func NewPowEngine(nid int64, cid int64, config *config.ConsensusConfig, exec exe
 		msgByteEntrance: make(chan []byte, 100),
 		requestEntrance: make(chan *pb.Request, 10),
 		blockChan:       make(chan *pb.PoWBlock, 10),
-		storage:         types.NewStorage(fmt.Sprintf("node-%d-%d", cid, nid), config.Pow.Hash),
+		storage:         storage.NewStorage(fmt.Sprintf("node-%d-%d", cid, nid), config.Pow.Hash),
 		remotePending:   new(atomic.Int64),
 		hasher:          config.Pow.Hash,
 		wg:              new(sync.WaitGroup),

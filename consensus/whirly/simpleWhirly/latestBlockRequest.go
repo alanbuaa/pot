@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-	"github.com/zzz136454872/upgradeable-consensus/pb"
+	pb "github.com/zzz136454872/upgradeable-consensus/pkg/proto"
 )
 
 const DaemonNodePublicAddress string = "daemonNode"

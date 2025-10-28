@@ -1,0 +1,666 @@
+# PoT Blockchain API Tests
+# VS Code Rest Client Test File
+# 
+# 使用说明:
+# 1. 安装 VS Code Rest Client 扩展
+# 2. 确保 PoT 服务器运行在 localhost:18025 (HTTP API)
+# 3. 确保 BCI 服务器运行在 localhost:9866 (gRPC API)
+# 4. 点击每个请求上方的 "Send Request" 按钮执行测试
+# 5. 根据需要修改测试数据
+#
+# 重要提示:
+# - PoT 使用 UTXO 模型，需要先通过 gRPC 获取可用的 UTXO
+# - 使用后量子密码学 (PQC) 签名，签名数据较大 (~4KB)
+# - 地址为 PQC 公钥的十六进制表示 (~96字节)
+# - 交易ID留空时系统会自动计算哈希值
+
+# 设置基础变量
+@baseUrl = http://localhost:18025
+@contentType = application/json
+
+###############################################################################
+# 1. 健康检查接口测试
+###############################################################################
+
+### 健康检查 - Hello World
+POST {{baseUrl}}/api/hello
+Content-Type: {{contentType}}
+
+{}
+
+###############################################################################
+# 2. 获取区块高度测试
+###############################################################################
+
+### 获取当前区块高度
+GET {{baseUrl}}/api/getblockheight
+
+###############################################################################
+# 3. 创建锁定交易测试
+###############################################################################
+
+### 创建锁定交易 - 基础测试 (基于实际UTXO模型)
+POST {{baseUrl}}/api/createlocktransaction
+Content-Type: {{contentType}}
+
+{
+  "transaction": {
+    "txid": "",
+    "txInputs": [
+      {
+        "txid": "0xa1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456",
+        "voutput": "0",
+        "scriptSig": "0x308201a0300d06092a864886f70d01010105000382018d00308201880282018100c5d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0",
+        "value": "1000000",
+        "address": "0x5f41dce11f9b9a19b92c6dad6d2b8b8f00000000000000007695cd781cde492f5254a88066024237129eb549b0864c8f",
+        "bciType": "1"
+      }
+    ],
+    "txOutputs": [
+      {
+        "address": "0x742d35cc6e11111111111111111111111111111111111111111111111111",
+        "value": "995000",
+        "interest": "0",
+        "proof": "0x",
+        "lockTime": "1672531200",
+        "bciType": "1",
+        "data": "0x",
+        "burnLock": "0",
+        "rate": "0.05"
+      }
+    ],
+    "transactionFee": "5000"
+  },
+  "type": "CreateLockTransaction"
+}
+
+### 创建锁定交易 - 多输入多输出
+POST {{baseUrl}}/api/createlocktransaction
+Content-Type: {{contentType}}
+
+{
+  "transaction": {
+    "txid": "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+    "txInputs": [
+      {
+        "txid": "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+        "voutput": "0",
+        "scriptSig": "0x4730440220123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "value": "500000",
+        "address": "0x742d35cc6e00000000000000000000000000000000000000000000000000",
+        "bciType": "1"
+      },
+      {
+        "txid": "0xbcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890a",
+        "voutput": "1",
+        "scriptSig": "0x4730440220223456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "value": "600000",
+        "address": "0x742d35cc6e00000000000000000000000000000000000000000000000001",
+        "bciType": "1"
+      }
+    ],
+    "txOutputs": [
+      {
+        "address": "0x742d35cc6e11111111111111111111111111111111111111111111111111",
+        "value": "700000",
+        "interest": "0",
+        "proof": "0x",
+        "lockTime": "1640995200",
+        "bciType": "1",
+        "data": "0x",
+        "burnLock": "0",
+        "rate": "0.0"
+      },
+      {
+        "address": "0x742d35cc6e22222222222222222222222222222222222222222222222222",
+        "value": "397000",
+        "interest": "0",
+        "proof": "0x",
+        "lockTime": "1640995200",
+        "bciType": "1",
+        "data": "0x",
+        "burnLock": "0",
+        "rate": "0.0"
+      }
+    ],
+    "transactionFee": "3000"
+  },
+  "type": "CreateLockTransaction"
+}
+
+###############################################################################
+# 4. 锁定转账交易测试
+###############################################################################
+
+### 锁定转账交易 - 基础测试
+POST {{baseUrl}}/api/locktransfertransaction
+Content-Type: {{contentType}}
+
+{
+  "transaction": {
+    "txid": "0x3345678901bcdefab345678901bcdefab345678901bcdefab345678901bcdefab",
+    "txInputs": [
+      {
+        "txid": "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+        "voutput": "0",
+        "scriptSig": "0x4730440220234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+        "value": "999000",
+        "address": "0x742d35cc6e11111111111111111111111111111111111111111111111111",
+        "bciType": "1"
+      }
+    ],
+    "txOutputs": [
+      {
+        "address": "0x742d35cc6e33333333333333333333333333333333333333333333333333",
+        "value": "997500",
+        "interest": "1000",
+        "proof": "0x",
+        "lockTime": "1640995200",
+        "bciType": "1",
+        "data": "0x",
+        "burnLock": "0",
+        "rate": "0.02"
+      }
+    ],
+    "transactionFee": "1500"
+  },
+  "type": "LockTransferTransaction"
+}
+
+### 锁定转账交易 - 带利息
+POST {{baseUrl}}/api/locktransfertransaction
+Content-Type: {{contentType}}
+
+{
+  "transaction": {
+    "txid": "0x4456789012cdefabc456789012cdefabc456789012cdefabc456789012cdefabc",
+    "txInputs": [
+      {
+        "txid": "0x3345678901bcdefab345678901bcdefab345678901bcdefab345678901bcdefab",
+        "voutput": "0",
+        "scriptSig": "0x4730440220345678901bcdefab345678901bcdefab345678901bcdefab345678901bcdefab",
+        "value": "997500",
+        "address": "0x742d35cc6e33333333333333333333333333333333333333333333333333",
+        "bciType": "1"
+      }
+    ],
+    "txOutputs": [
+      {
+        "address": "0x742d35cc6e44444444444444444444444444444444444444444444444444",
+        "value": "995000",
+        "interest": "2000",
+        "proof": "0x",
+        "lockTime": "1672531200",
+        "bciType": "1",
+        "data": "0x696e746572657374",
+        "burnLock": "0",
+        "rate": "0.05"
+      }
+    ],
+    "transactionFee": "2500"
+  },
+  "type": "LockTransferTransaction"
+}
+
+###############################################################################
+# 5. 非锁定转账交易测试
+###############################################################################
+
+### 非锁定转账交易 - 基础测试
+POST {{baseUrl}}/api/nonlocktransfertransaction
+Content-Type: {{contentType}}
+
+{
+  "transaction": {
+    "txid": "0x5567890123defabcd567890123defabcd567890123defabcd567890123defabcd",
+    "txInputs": [
+      {
+        "txid": "0x4456789012cdefabc456789012cdefabc456789012cdefabc456789012cdefabc",
+        "voutput": "0",
+        "scriptSig": "0x4730440220456789012cdefabc456789012cdefabc456789012cdefabc456789012cdefabc",
+        "value": "500000",
+        "address": "0x742d35cc6e55555555555555555555555555555555555555555555555555",
+        "bciType": "0"
+      }
+    ],
+    "txOutputs": [
+      {
+        "address": "0x742d35cc6e66666666666666666666666666666666666666666666666666",
+        "value": "498500",
+        "interest": "0",
+        "proof": "0x",
+        "lockTime": "0",
+        "bciType": "0",
+        "data": "0x",
+        "burnLock": "0",
+        "rate": "0.0"
+      }
+    ],
+    "transactionFee": "1500"
+  },
+  "type": "NonLockTransferTransaction"
+}
+
+### 非锁定转账交易 - 多重签名
+POST {{baseUrl}}/api/nonlocktransfertransaction
+Content-Type: {{contentType}}
+
+{
+  "transaction": {
+    "txid": "0x667890124efabcde67890124efabcde67890124efabcde67890124efabcde6",
+    "txInputs": [
+      {
+        "txid": "0x5567890123defabcd567890123defabcd567890123defabcd567890123defabcd",
+        "voutput": "0",
+        "scriptSig": "0x473044022056789012defabcd567890123defabcd567890123defabcd567890123defabcd",
+        "value": "498500",
+        "address": "0x742d35cc6e66666666666666666666666666666666666666666666666666",
+        "bciType": "0"
+      }
+    ],
+    "txOutputs": [
+      {
+        "address": "0x742d35cc6e77777777777777777777777777777777777777777777777777",
+        "value": "247000",
+        "interest": "0",
+        "proof": "0x",
+        "lockTime": "0",
+        "bciType": "0",
+        "data": "0x6d756c746973696721",
+        "burnLock": "0",
+        "rate": "0.0"
+      },
+      {
+        "address": "0x742d35cc6e88888888888888888888888888888888888888888888888888",
+        "value": "250000",
+        "interest": "0",
+        "proof": "0x",
+        "lockTime": "0",
+        "bciType": "0",
+        "data": "0x",
+        "burnLock": "0",
+        "rate": "0.0"
+      }
+    ],
+    "transactionFee": "1500"
+  },
+  "type": "NonLockTransferTransaction"
+}
+
+###############################################################################
+# 6. 销毁交易测试
+###############################################################################
+
+### 销毁交易 - 基础测试 (包含跨链数据)
+POST {{baseUrl}}/api/devastatetransaction
+Content-Type: {{contentType}}
+
+{
+  "transaction": {
+    "txid": "",
+    "txInputs": [
+      {
+        "txid": "0xa1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456",
+        "voutput": "0",
+        "scriptSig": "0x308201a0300d06092a864886f70d01010105000382018d00308201880282018100c5d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0",
+        "value": "500000",
+        "address": "0x5f41dce11f9b9a19b92c6dad6d2b8b8f00000000000000007695cd781cde492f5254a88066024237129eb549b0864c8f",
+        "bciType": "0"
+      }
+    ],
+    "txOutputs": [
+      {
+        "address": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "value": "0",
+        "interest": "0",
+        "proof": "0x",
+        "lockTime": "0",
+        "bciType": "2",
+        "data": "0x02f86c808504a817c800827530948ba1cf949857e5321d79abb73c24a25b5f12c1e41880de0b6b3a764000080820a96a0c2f5e5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5",
+        "burnLock": "1672531200",
+        "rate": "0.0"
+      }
+    ],
+    "transactionFee": "5000"
+  },
+  "type": "DevastateTransaction"
+}
+
+### 销毁交易 - 大量销毁
+POST {{baseUrl}}/api/devastatetransaction
+Content-Type: {{contentType}}
+
+{
+  "transaction": {
+    "txid": "0x889012345abcdef89012345abcdef89012345abcdef89012345abcdef890123",
+    "txInputs": [
+      {
+        "txid": "0x667890124efabcde67890124efabcde67890124efabcde67890124efabcde6",
+        "voutput": "1",
+        "scriptSig": "0x473044022078901234abcdef89012345abcdef89012345abcdef89012345abcdef890123",
+        "value": "250000",
+        "address": "0x742d35cc6e88888888888888888888888888888888888888888888888888",
+        "bciType": "0"
+      }
+    ],
+    "txOutputs": [
+      {
+        "address": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "value": "0",
+        "interest": "0",
+        "proof": "0x",
+        "lockTime": "0",
+        "bciType": "2",
+        "data": "0x6d61737369766562756721",
+        "burnLock": "1672531200",
+        "rate": "0.0"
+      }
+    ],
+    "transactionFee": "5000"
+  },
+  "type": "DevastateTransaction"
+}
+
+###############################################################################
+# 7. 错误测试用例
+###############################################################################
+
+### 错误测试 - 无效的十六进制格式
+POST {{baseUrl}}/api/createlocktransaction
+Content-Type: {{contentType}}
+
+{
+  "transaction": {
+    "txid": "invalid_hex_string",
+    "txInputs": [
+      {
+        "txid": "also_invalid",
+        "voutput": "0",
+        "scriptSig": "0x4730440220123456789abcdef",
+        "value": "1000000",
+        "address": "not_hex",
+        "bciType": "1"
+      }
+    ],
+    "txOutputs": [
+      {
+        "address": "0x742d35cc6e11111111111111111111111111111111111111111111111111",
+        "value": "999000",
+        "interest": "0",
+        "proof": "0x",
+        "lockTime": "1640995200",
+        "bciType": "1",
+        "data": "0x",
+        "burnLock": "0",
+        "rate": "0.0"
+      }
+    ],
+    "transactionFee": "1000"
+  },
+  "type": "CreateLockTransaction"
+}
+
+### 错误测试 - 无效的 JSON 格式
+POST {{baseUrl}}/api/createlocktransaction
+Content-Type: {{contentType}}
+
+{
+  "transaction": {
+    "txid": "0x1234567890abcdef",
+    "txInputs": [
+      // 这个注释会导致 JSON 解析错误
+      {
+        "txid": "0xabcdef1234567890",
+        "voutput": "0"
+      }
+    ],
+    "txOutputs": []
+  }
+}
+
+### 错误测试 - 缺少必要字段
+POST {{baseUrl}}/api/createlocktransaction
+Content-Type: {{contentType}}
+
+{
+  "transaction": {
+    "txid": "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+    "txInputs": [],
+    "txOutputs": [],
+    "transactionFee": "1000"
+  },
+  "type": "CreateLockTransaction"
+}
+
+### 错误测试 - 数值格式错误
+POST {{baseUrl}}/api/createlocktransaction
+Content-Type: {{contentType}}
+
+{
+  "transaction": {
+    "txid": "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+    "txInputs": [
+      {
+        "txid": "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+        "voutput": "not_a_number",
+        "scriptSig": "0x4730440220123456789abcdef",
+        "value": "invalid_value",
+        "address": "0x742d35cc6e00000000000000000000000000000000000000000000000000",
+        "bciType": "not_number"
+      }
+    ],
+    "txOutputs": [
+      {
+        "address": "0x742d35cc6e11111111111111111111111111111111111111111111111111",
+        "value": "999000",
+        "interest": "0",
+        "proof": "0x",
+        "lockTime": "1640995200",
+        "bciType": "1",
+        "data": "0x",
+        "burnLock": "0",
+        "rate": "invalid_rate"
+      }
+    ],
+    "transactionFee": "1000"
+  },
+  "type": "CreateLockTransaction"
+}
+
+###############################################################################
+# 8. 批量测试序列
+###############################################################################
+
+### 批量测试 - 创建并查询区块高度
+POST {{baseUrl}}/api/createlocktransaction
+Content-Type: {{contentType}}
+
+{
+  "transaction": {
+    "txid": "0x9901234567abcdef901234567abcdef901234567abcdef901234567abcdef9",
+    "txInputs": [
+      {
+        "txid": "0xabcdef901234567abcdef901234567abcdef901234567abcdef901234567abc",
+        "voutput": "0",
+        "scriptSig": "0x473044022090123456abcdef901234567abcdef901234567abcdef901234567abcdef9",
+        "value": "2000000",
+        "address": "0x742d35cc6e99999999999999999999999999999999999999999999999999",
+        "bciType": "1"
+      }
+    ],
+    "txOutputs": [
+      {
+        "address": "0x742d35cc6eaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "value": "1998000",
+        "interest": "0",
+        "proof": "0x",
+        "lockTime": "1640995200",
+        "bciType": "1",
+        "data": "0x62617463687465737421",
+        "burnLock": "0",
+        "rate": "0.0"
+      }
+    ],
+    "transactionFee": "2000"
+  },
+  "type": "CreateLockTransaction"
+}
+
+### 检查创建后的区块高度
+GET {{baseUrl}}/api/getblockheight
+
+###############################################################################
+# 9. 性能测试用例
+###############################################################################
+
+### 性能测试 - 大交易（多输入输出）
+POST {{baseUrl}}/api/createlocktransaction
+Content-Type: {{contentType}}
+
+{
+  "transaction": {
+    "txid": "0xaaa1234567bcdef0aa1234567bcdef0aa1234567bcdef0aa1234567bcdef0a",
+    "txInputs": [
+      {
+        "txid": "0xbcdef0aa1234567bcdef0aa1234567bcdef0aa1234567bcdef0aa1234567b",
+        "voutput": "0",
+        "scriptSig": "0x4730440220a1234567bcdef0aa1234567bcdef0aa1234567bcdef0aa1234567bcdef0a",
+        "value": "1000000",
+        "address": "0x742d35cc6ebbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "bciType": "1"
+      },
+      {
+        "txid": "0xcdef0aa1234567bcdef0aa1234567bcdef0aa1234567bcdef0aa1234567bc",
+        "voutput": "1",
+        "scriptSig": "0x4730440220b1234567cdef0aa1234567bcdef0aa1234567bcdef0aa1234567bcdef0a",
+        "value": "800000",
+        "address": "0x742d35cc6ecccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "bciType": "1"
+      },
+      {
+        "txid": "0xdef0aa1234567bcdef0aa1234567bcdef0aa1234567bcdef0aa1234567bcd",
+        "voutput": "2",
+        "scriptSig": "0x4730440220c1234567def0aa1234567bcdef0aa1234567bcdef0aa1234567bcdef0a",
+        "value": "1200000",
+        "address": "0x742d35cc6edddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "bciType": "1"
+      }
+    ],
+    "txOutputs": [
+      {
+        "address": "0x742d35cc6eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "value": "1000000",
+        "interest": "0",
+        "proof": "0x",
+        "lockTime": "1640995200",
+        "bciType": "1",
+        "data": "0x706572666f726d616e636521",
+        "burnLock": "0",
+        "rate": "0.0"
+      },
+      {
+        "address": "0x742d35cc6effffffffffffffffffffffffffffffffffffffffffffffffff",
+        "value": "1000000",
+        "interest": "0",
+        "proof": "0x",
+        "lockTime": "1640995200",
+        "bciType": "1",
+        "data": "0x",
+        "burnLock": "0",
+        "rate": "0.0"
+      },
+      {
+        "address": "0x742d35cc6e1111111111111111111111111111111111111111111111111111",
+        "value": "995000",
+        "interest": "0",
+        "proof": "0x",
+        "lockTime": "1640995200",
+        "bciType": "1",
+        "data": "0x",
+        "burnLock": "0",
+        "rate": "0.0"
+      }
+    ],
+    "transactionFee": "5000"
+  },
+  "type": "CreateLockTransaction"
+}
+
+###############################################################################
+# 10. 边界测试用例
+###############################################################################
+
+### 边界测试 - 最小交易费
+POST {{baseUrl}}/api/createlocktransaction
+Content-Type: {{contentType}}
+
+{
+  "transaction": {
+    "txid": "0xbbb2345678cdef01bb2345678cdef01bb2345678cdef01bb2345678cdef01b",
+    "txInputs": [
+      {
+        "txid": "0xcdef01bb2345678cdef01bb2345678cdef01bb2345678cdef01bb2345678c",
+        "voutput": "0",
+        "scriptSig": "0x4730440220b2345678cdef01bb2345678cdef01bb2345678cdef01bb2345678cdef01b",
+        "value": "1000",
+        "address": "0x742d35cc6e0101010101010101010101010101010101010101010101010101",
+        "bciType": "1"
+      }
+    ],
+    "txOutputs": [
+      {
+        "address": "0x742d35cc6e0202020202020202020202020202020202020202020202020202",
+        "value": "999",
+        "interest": "0",
+        "proof": "0x",
+        "lockTime": "1640995200",
+        "bciType": "1",
+        "data": "0x",
+        "burnLock": "0",
+        "rate": "0.0"
+      }
+    ],
+    "transactionFee": "1"
+  },
+  "type": "CreateLockTransaction"
+}
+
+### 边界测试 - 零值交易（销毁）
+POST {{baseUrl}}/api/devastatetransaction
+Content-Type: {{contentType}}
+
+{
+  "transaction": {
+    "txid": "0xccc3456789def012cc3456789def012cc3456789def012cc3456789def012c",
+    "txInputs": [
+      {
+        "txid": "0xdef012cc3456789def012cc3456789def012cc3456789def012cc3456789d",
+        "voutput": "0",
+        "scriptSig": "0x4730440220c3456789def012cc3456789def012cc3456789def012cc3456789def012c",
+        "value": "1",
+        "address": "0x742d35cc6e0303030303030303030303030303030303030303030303030303",
+        "bciType": "0"
+      }
+    ],
+    "txOutputs": [
+      {
+        "address": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "value": "0",
+        "interest": "0",
+        "proof": "0x",
+        "lockTime": "0",
+        "bciType": "2",
+        "data": "0x7a65726f76616c756521",
+        "burnLock": "1672531200",
+        "rate": "0.0"
+      }
+    ],
+    "transactionFee": "1"
+  },
+  "type": "DevastateTransaction"
+}
+
+# 测试完成标记
+###############################################################################
+# 测试完成 - 所有用例已执行
+###############################################################################

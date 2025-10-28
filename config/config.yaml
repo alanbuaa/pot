@@ -67,6 +67,7 @@ consensus:
     commiteeSize : 4
     confirmDelay : 6
     slowrate : 6
+    vdfType : "wesolowski_rust"
     bciRpcAddress : 127.0.0.1:9866
     executorAddress: 127.0.0.1:9877
 

@@ -4,6 +4,7 @@ import (
 	"blockchain-crypto/vdf/pietrzak"
 	"blockchain-crypto/vdf/utils"
 	"blockchain-crypto/vdf/wesolowski_rust"
+	"fmt"
 	"runtime"
 )
 
@@ -25,6 +26,7 @@ func init() {
 	for i := 0; i < cpuCount; i++ {
 		cpuList[i] = uint8(i)
 	}
+	fmt.Printf("[Init] VDF instance using %d CPUs\n", cpuCount)
 	cpuCounter = utils.NewCPUCounter(cpuList)
 }
 

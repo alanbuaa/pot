@@ -2,28 +2,7 @@ module github.com/zzz136454872/upgradeable-consensus
 
 go 1.22
 
-replace p2padaptor => ./p2p/p2p-adaptor/p2padaptor
-
-replace network => ./p2p/p2p-adaptor/network
-
-replace blockchain-crypto => ./crypto/blockchain-crypto
-
-require (
-	blockchain-crypto v0.0.0-00010101000000-000000000000
-	github.com/boltdb/bolt v1.3.1
-	github.com/ethereum/go-ethereum v1.12.2
-	github.com/niclabs/tcrsa v0.0.5
-	github.com/shopspring/decimal v1.3.1
-	github.com/sirupsen/logrus v1.9.3
-	github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7
-	github.com/wjbbig/go-hotstuff v0.0.0-20200715143423-ae125c8187f8
-	golang.org/x/exp v0.0.0-20240506185415-9bf2ced13842
-	google.golang.org/grpc v1.65.0
-	google.golang.org/protobuf v1.34.2
-	gopkg.in/yaml.v3 v3.0.1
-	p2padaptor v0.0.0-00010101000000-000000000000
-)
-
+// regular dependencies
 require (
 	github.com/StackExchange/wmi v0.0.0-20180116203802-5d049714c4a6 // indirect
 	github.com/benbjohnson/clock v1.3.5 // indirect
@@ -182,5 +161,26 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240528184218-531527333157 // indirect
 	gopkg.in/natefinch/npipe.v2 v2.0.0-20160621034901-c1b8fa8bdcce // indirect
 	lukechampine.com/blake3 v1.2.1 // indirect
-	network v0.0.0 // indirect
+	github.com/boltdb/bolt v1.3.1
+	github.com/ethereum/go-ethereum v1.12.2
+	github.com/niclabs/tcrsa v0.0.5
+	github.com/shopspring/decimal v1.3.1
+	github.com/sirupsen/logrus v1.9.3
+	github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7
+	github.com/wjbbig/go-hotstuff v0.0.0-20200715143423-ae125c8187f8
+	golang.org/x/exp v0.0.0-20240506185415-9bf2ced13842
+	google.golang.org/grpc v1.65.0
+	google.golang.org/protobuf v1.34.2
+	gopkg.in/yaml.v3 v3.0.1
 )
+
+// punkos extensions
+require (
+	p2padaptor v0.0.0-00010101000000-000000000000
+	network v0.0.0 // indirect
+	blockchain-crypto v0.0.0-00010101000000-000000000000
+)
+
+replace p2padaptor => ./p2p/p2p-adaptor/p2padaptor
+replace network => ./p2p/p2p-adaptor/network
+replace blockchain-crypto => ./crypto/blockchain-crypto

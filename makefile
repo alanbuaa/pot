@@ -69,7 +69,7 @@ run_executor: build-executor
 # Proto / codegen targets
 # --------------------------------------------------
 compile_proto:
-	$(PROTOC) pb/*.proto $(PROTO_FLAGS)
+	$(PROTOC) -I pkg/proto pkg/proto/*.proto $(PROTO_FLAGS)
 
 # --------------------------------------------------
 # Test targets
@@ -106,7 +106,7 @@ win_genkey:
 	$(BIN_DIR)/genkey.exe -p data/keys/ -k 3 -l 4
 
 win_compile_proto:
-	$(PROTOC) --go_out=plugins=grpc:. pb/*.proto
+	$(PROTOC) --go_out=plugins=grpc:. pkg/proto/*.proto
 
 # --------------------------------------------------
 # Misc

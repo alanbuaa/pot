@@ -9,7 +9,7 @@ import (
 	"github.com/zzz136454872/upgradeable-consensus/consensus/model"
 	"github.com/zzz136454872/upgradeable-consensus/consensus/whirly/crWhirly"
 	"github.com/zzz136454872/upgradeable-consensus/consensus/whirly/simpleWhirly"
-	"github.com/zzz136454872/upgradeable-consensus/pb"
+	pb "github.com/zzz136454872/upgradeable-consensus/pkg/proto"
 	"github.com/zzz136454872/upgradeable-consensus/pkg/utils"
 	"github.com/zzz136454872/upgradeable-consensus/types"
 	"google.golang.org/protobuf/proto"

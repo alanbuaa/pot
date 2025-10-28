@@ -12,7 +12,7 @@ import (
 	"github.com/zzz136454872/upgradeable-consensus/config"
 	"github.com/zzz136454872/upgradeable-consensus/executor"
 	"github.com/zzz136454872/upgradeable-consensus/p2p"
-	"github.com/zzz136454872/upgradeable-consensus/pb"
+	pb "github.com/zzz136454872/upgradeable-consensus/pkg/proto"
 	"google.golang.org/protobuf/proto"
 )
 

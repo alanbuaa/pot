@@ -1,7 +1,7 @@
 syntax = "proto3";
 package pb;
 
-option go_package="./pb";
+option go_package="github.com/zzz136454872/upgradeable-consensus/pkg/proto";
 
 message SRS{
   bytes SRSBytes = 1;

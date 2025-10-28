@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/zzz136454872/upgradeable-consensus/config"
-	"github.com/zzz136454872/upgradeable-consensus/pb"
+	pb "github.com/zzz136454872/upgradeable-consensus/pkg/proto"
 	"github.com/zzz136454872/upgradeable-consensus/pkg/logging"
 	"github.com/zzz136454872/upgradeable-consensus/pkg/utils"
 	"google.golang.org/protobuf/proto"

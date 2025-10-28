@@ -25,7 +25,8 @@ import (
 	"github.com/zzz136454872/upgradeable-consensus/consensus/whirly/nodeController"
 	"github.com/zzz136454872/upgradeable-consensus/crypto"
 	storage "github.com/zzz136454872/upgradeable-consensus/internal/storage/pot"
-	"github.com/zzz136454872/upgradeable-consensus/pb"
+	pb "github.com/zzz136454872/upgradeable-consensus/pkg/proto"
+	"github.com/zzz136454872/upgradeable-consensus/pkg/utils"
 	"github.com/zzz136454872/upgradeable-consensus/types"
 	"golang.org/x/exp/rand"
 	"google.golang.org/grpc"
@@ -184,6 +185,8 @@ func NewWorker(id int64, config *config.ConsensusConfig, logger *logrus.Entry, b
 		return nil
 	}
 
+	vdfInstance := vdf.New(potconfig.VdfType, []byte(""), potconfig.Vdf0Iteration, id)
+
 	w := &Worker{
 		abort:         aborts,
 		Engine:        engine,
@@ -207,7 +210,7 @@ func NewWorker(id int64, config *config.ConsensusConfig, logger *logrus.Entry, b
 		mempool:      mempool,
 		blockStorage: bst,
 		//committee:    orderedmap.NewOrderedMap(),
-		vdfChecker:      vdf.New("wesolowski_rust", []byte(""), potconfig.Vdf0Iteration, id),
+		vdfChecker:      vdfInstance,
 		chainReader:     NewChainReader(bst),
 		PeerId:          engine.GetPeerID(),
 		workFlag:        false,
@@ -220,12 +223,9 @@ func NewWorker(id int64, config *config.ConsensusConfig, logger *logrus.Entry, b
 		keyseed:         randseed,
 	}
 	// bci info record
-	fill, err := os.OpenFile("bci", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
-	if err != nil {
-		fmt.Println(err)
+	if err := utils.AppendToFile("bci", "[seed]"+hexutil.Encode(randseed)+"\n"); err != nil {
+		logger.WithError(err).Error("Failed to write seed to bci file")
 	}
-	fill.WriteString(fmt.Sprintf("[seed]%s\n", hexutil.Encode(randseed)))
-	fill.Close()
 	rpcserver := grpc.NewServer()
 	pb.RegisterBciExectorServer(rpcserver, w)
 	w.rpcserver = rpcserver

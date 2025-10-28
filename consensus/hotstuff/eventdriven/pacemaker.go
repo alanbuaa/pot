@@ -3,7 +3,7 @@ package eventdriven
 import (
 	"github.com/sirupsen/logrus"
 	"github.com/zzz136454872/upgradeable-consensus/consensus/hotstuff"
-	"github.com/zzz136454872/upgradeable-consensus/pb"
+	pb "github.com/zzz136454872/upgradeable-consensus/pkg/proto"
 )
 
 type Pacemaker interface {

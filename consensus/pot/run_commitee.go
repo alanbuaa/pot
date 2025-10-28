@@ -11,12 +11,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
-	"os"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/zzz136454872/upgradeable-consensus/config"
 	"github.com/zzz136454872/upgradeable-consensus/consensus/whirly/nodeController"
 	"github.com/zzz136454872/upgradeable-consensus/crypto"
+	"github.com/zzz136454872/upgradeable-consensus/pkg/utils"
 	"github.com/zzz136454872/upgradeable-consensus/types"
 )
 
@@ -204,24 +204,21 @@ func (w *Worker) CommitteeUpdate(height uint64) {
 			return
 		}
 		header := block.GetHeader()
-		fill, err := os.OpenFile("bci", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
-		if err != nil {
-			fmt.Println(err)
-		}
 
 		txs := block.GetRawTx()
 		coinbasetx := txs[0]
 		if coinbasetx.IsCoinBase() {
-			fill.WriteString(fmt.Sprintf("[%d]%s\n", epoch, hexutil.Encode(header.Hash())))
-			fill.WriteString(fmt.Sprintf("[%d]%s\n", epoch, hexutil.Encode(coinbasetx.Txid[:])))
-			fill.WriteString(fmt.Sprintf("[%d]%s\n", epoch, hexutil.Encode(coinbasetx.TxOutput[0].Address)))
-			// test, _ := hexutil.Decode(hexutil.Encode(coinbasetx.TxOutput[0].Address))
-			// fmt.Println(bytes.Equal(test, coinbasetx.TxOutput[0].Address))
-			fill.WriteString(fmt.Sprintf("[%d]%s\n", epoch, hexutil.EncodeBig(big.NewInt(coinbasetx.TxOutput[0].Value))))
-			fill.WriteString(fmt.Sprintf("\n"))
+			lines := []string{
+				fmt.Sprintf("[%d]%s", epoch, hexutil.Encode(header.Hash())),
+				fmt.Sprintf("[%d]%s", epoch, hexutil.Encode(coinbasetx.Txid[:])),
+				fmt.Sprintf("[%d]%s", epoch, hexutil.Encode(coinbasetx.TxOutput[0].Address)),
+				fmt.Sprintf("[%d]%s", epoch, hexutil.EncodeBig(big.NewInt(coinbasetx.TxOutput[0].Value))),
+				"",
+			}
+			if err := utils.AppendLinesToFile("bci", lines); err != nil {
+				w.log.WithError(err).Error("Failed to write to bci file")
+			}
 		}
-
-		fill.Close()
 	}
 }
 

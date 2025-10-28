@@ -9,7 +9,7 @@ import (
 
 	"github.com/zzz136454872/upgradeable-consensus/config"
 	"github.com/zzz136454872/upgradeable-consensus/crypto"
-	"github.com/zzz136454872/upgradeable-consensus/pb"
+	pb "github.com/zzz136454872/upgradeable-consensus/pkg/proto"
 	"github.com/zzz136454872/upgradeable-consensus/pkg/logging"
 	"google.golang.org/grpc"
 )
@@ -149,7 +149,7 @@ type Mockblock struct {
 //	"context"
 //	"fmt"
 //	"github.com/ethereum/go-ethereum/common/hexutil"
-//	"github.com/zzz136454872/upgradeable-consensus/pb"
+//	pb "github.com/zzz136454872/upgradeable-consensus/pkg/proto"
 //	"google.golang.org/grpc"
 //	"log"
 //)

@@ -3,7 +3,7 @@ package model
 import (
 	bc_api "blockchain-crypto/blockchain_api"
 
-	"github.com/zzz136454872/upgradeable-consensus/pb"
+	pb "github.com/zzz136454872/upgradeable-consensus/pkg/proto"
 )
 
 // Consensus defines the interface of a consensus module

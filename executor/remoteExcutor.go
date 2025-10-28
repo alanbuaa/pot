@@ -5,7 +5,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/zzz136454872/upgradeable-consensus/config"
-	"github.com/zzz136454872/upgradeable-consensus/pb"
+	pb "github.com/zzz136454872/upgradeable-consensus/pkg/proto"
 	"github.com/zzz136454872/upgradeable-consensus/types"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"

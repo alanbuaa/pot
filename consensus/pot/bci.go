@@ -15,7 +15,7 @@ import (
 
 	"github.com/zzz136454872/upgradeable-consensus/crypto"
 	storage "github.com/zzz136454872/upgradeable-consensus/internal/storage/pot"
-	"github.com/zzz136454872/upgradeable-consensus/pb"
+	pb "github.com/zzz136454872/upgradeable-consensus/pkg/proto"
 	"github.com/zzz136454872/upgradeable-consensus/types"
 	"golang.org/x/exp/rand"
 	"google.golang.org/grpc"

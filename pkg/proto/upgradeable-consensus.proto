@@ -1,9 +1,9 @@
 syntax = "proto3";
 package pb;
-//import "pb/pot.proto";
-import "pb/common.proto";
+//import "pot.proto";
+import "common.proto";
 
-option go_package = "./pb";
+option go_package = "github.com/zzz136454872/upgradeable-consensus/pkg/proto";
 
 enum PacketType {
   P2PPACKET = 0;
