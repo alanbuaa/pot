@@ -1,53 +1,89 @@
-package pot
+package apis
 
 import (
 	"fmt"
-	"net/http"
-	"strconv"
 
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/gin-gonic/gin"
-	"github.com/zzz136454872/upgradeable-consensus/crypto"
-	pb "github.com/zzz136454872/upgradeable-consensus/pkg/proto"
-	"github.com/zzz136454872/upgradeable-consensus/types"
+	"github.com/sirupsen/logrus"
+	"github.com/zzz136454872/upgradeable-consensus/internal/apis/handlers"
+	"github.com/zzz136454872/upgradeable-consensus/internal/apis/model"
 )
 
-var port = 18025
-
-type requestData struct {
-	Transaction HTTPTransaction `json:"transaction"`
-	Type        string          `json:"type"`
+// Config holds the API server configuration
+type Config struct {
+	Port int
 }
 
-type HTTPTransaction struct {
-	Txid           string         `json:"txid"`
-	TxInputs       []HTTPTxInput  `json:"txInputs"`
-	TxOutputs      []HTTPTxOutput `json:"txOutputs"`
-	TransactionFee string         `json:"transactionFee"`
+// ConsensusHandler defines the interface for consensus-specific HTTP handlers
+type ConsensusHandler interface {
+	RegisterRoutes(group *gin.RouterGroup)
 }
 
-type HTTPTxInput struct {
-	Txid      string `json:"txid"`
-	Voutput   string `json:"voutput"`
-	ScriptSig string `json:"scriptSig"`
-	Value     string `json:"value"`
-	Address   string `json:"address"`
-	BciType   string `json:"bciType"`
+// ApiServer represents the HTTP API server supporting multiple consensus mechanisms
+type ApiServer struct {
+	engine   *gin.Engine
+	config   *Config
+	handlers []ConsensusHandler
+	log      *logrus.Entry
 }
 
-type HTTPTxOutput struct {
-	Address  string `json:"address"`
-	Value    string `json:"value"`
-	Interest string `json:"interest"`
-	Proof    string `json:"proof"`
-	LockTime string `json:"lockTime"`
-	BciType  string `json:"bciType"`
-	Data     string `json:"data"`
-	BurnLock string `json:"burnLock"`
-	Rate     string `json:"rate"`
+// NewApiServer creates a new API server instance
+func NewApiServer(config *Config, log *logrus.Entry) *ApiServer {
+	return &ApiServer{
+		config:   config,
+		handlers: make([]ConsensusHandler, 0),
+		log:      log,
+	}
 }
 
-func HttpTx2Tx(tx *HTTPTransaction) (*types.RawTx, error) {
+// RegisterPotService registers PoT consensus service to the API server
+func (s *ApiServer) RegisterPotService(service model.PotConsensusService) {
+	handler := handlers.NewPotHandler(service, s.log)
+	s.handlers = append(s.handlers, handler)
+}
+
+// RegisterPowService registers PoW consensus service to the API server
+func (s *ApiServer) RegisterPowService(service model.PowConsensusService) {
+	handler := handlers.NewPowHandler(service, s.log)
+	s.handlers = append(s.handlers, handler)
+}
+
+// setupRoutes configures all HTTP routes for registered consensus handlers
+func (s *ApiServer) setupRoutes() *gin.Engine {
+	r := gin.Default()
+	
+	// Create API group
+	apiGroup := r.Group("/api")
+	
+	// Register all consensus handler routes
+	for _, handler := range s.handlers {
+		handler.RegisterRoutes(apiGroup)
+	}
+	
+	return r
+}
+
+// Start starts the HTTP API server
+func (s *ApiServer) Start() error {
+	s.engine = s.setupRoutes()
+	addr := fmt.Sprintf("0.0.0.0:%d", s.config.Port)
+	s.log.Infof("Starting API server on %s", addr)
+	
+	go func() {
+		if err := s.engine.Run(addr); err != nil {
+			s.log.Fatalf("Failed to start API server: %v", err)
+		}
+	}()
+	
+	return nil
+}
+
+// Stop stops the HTTP API server (placeholder for graceful shutdown)
+func (s *ApiServer) Stop() error {
+	s.log.Info("Stopping API server")
+	// TODO: Implement graceful shutdown if needed
+	return nil
+}
 	txInputs := make([]types.TxInput, 0)
 	for i, txInput := range tx.TxInputs {
 		txinput, err := HttpTxInput2TxInput(txInput)

@@ -233,6 +233,8 @@ func NewWorker(id int64, config *config.ConsensusConfig, logger *logrus.Entry, b
 
 	w.Init()
 
+	// add pot worker here
+
 	return w
 }
 
@@ -251,10 +253,6 @@ func (w *Worker) Init() {
 
 	// Initialize block counter
 	w.blockCounter = 0
-
-	// Start HTTP server for web interface and monitoring
-	g := startHTTPserve(w)
-	w.httpserver = g
 }
 
 // startWorking sets the worker's work flag to indicate mining is active.
@@ -1654,7 +1652,7 @@ func (w *Worker) handleBlockRawTx(block *types.Block) error {
 	return nil
 }
 
-func (w *Worker) stop() {
+func (w *Worker) Stop() {
 	fill, err := os.OpenFile(fmt.Sprintf("./logs/blockmyself-%d", w.ID), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
 	if err != nil {
 		fill.WriteString(err.Error())
@@ -1663,4 +1661,26 @@ func (w *Worker) stop() {
 	fill.Close()
 	w.rpcserver.Stop()
 	w.listener.Close()
+}
+
+// GetMempool returns the mempool instance
+func (w *Worker) GetMempool() *Mempool {
+	return w.mempool
+}
+
+// GetChainReader returns the chainReader instance
+func (w *Worker) GetChainReader() *ChainReader {
+	return w.chainReader
+}
+
+// BroadcastClientTransaction broadcasts a client transaction
+// This is a public wrapper for the private broadcastClientTransaction method
+func (w *Worker) BroadcastClientTransaction(rawtx *types.RawTx, txType pb.TxType) error {
+	return w.broadcastClientTransaction(rawtx, txType)
+}
+
+// CheckLockTransaction validates a lock transaction
+// This is a public wrapper for the private checkLockTransaction method
+func (w *Worker) CheckLockTransaction(rawtx *types.RawTx) error {
+	return w.checkLockTransaction(rawtx)
 }

@@ -91,6 +91,7 @@ type P2PConfig struct {
 }
 
 type Config struct {
+	RestServerAddress   string           `yaml:"http_server_address"`
 	AddressStartPort    string           `yaml:"address_start_port"`
 	RpcAddressStartPort string           `yaml:"rpc_address_start_port"`
 	DataDir             string           `yaml:"data_dir"`

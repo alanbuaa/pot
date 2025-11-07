@@ -9,10 +9,12 @@ import (
 	"github.com/zzz136454872/upgradeable-consensus/config"
 	"github.com/zzz136454872/upgradeable-consensus/consensus"
 	"github.com/zzz136454872/upgradeable-consensus/consensus/model"
+	"github.com/zzz136454872/upgradeable-consensus/consensus/pot"
 	"github.com/zzz136454872/upgradeable-consensus/executor"
+	"github.com/zzz136454872/upgradeable-consensus/internal/apis"
 	"github.com/zzz136454872/upgradeable-consensus/p2p"
-	pb "github.com/zzz136454872/upgradeable-consensus/pkg/proto"
 	"github.com/zzz136454872/upgradeable-consensus/pkg/logging"
+	pb "github.com/zzz136454872/upgradeable-consensus/pkg/proto"
 	"github.com/zzz136454872/upgradeable-consensus/pkg/utils"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
@@ -46,8 +48,15 @@ func NewNode(id int64) *Node {
 	utils.PanicOnError(err)
 	log.WithField("nid", nid).Info("get network id")
 	utils.PanicOnError(err)
+
+	// startup api server
+	apiServer := apis.NewApiServer(&apis.Config{Port: 18080}, log)
+
 	e := executor.BuildExecutor(cfg.Executor, log)
 	c := consensus.BuildConsensus(id, 10001, cfg.Consensus, e, p, log)
+
+	RegisterApiServices(apiServer, c, log)
+
 	if c == nil {
 		panic("Initialize consensus failed")
 	}
@@ -70,6 +79,8 @@ func NewNode(id int64) *Node {
 	utils.PanicOnError(err)
 	log.Infof("[UpgradeableConsensus] Server start at %s", listen.Addr().String())
 	go rpcServer.Serve(listen)
+
+	apiServer.Start()
 
 	return node
 }
@@ -130,3 +141,20 @@ func (node *Node) Send(ctx context.Context, in *pb.Packet) (*pb.Empty, error) {
 //		}, nil
 //	}
 // }
+
+func RegisterApiServices(apiServer *apis.ApiServer, c model.Consensus, log *logrus.Entry) {
+	switch c.GetConsensusType() {
+	case "pot":
+		if potEngine, ok := c.(*pot.PoTEngine); ok {
+			apiServer.RegisterPotService(apis.NewPotWorkerAdapter(potEngine.Worker))
+			log.Info("Registered PoT API service")
+		} else {
+			log.Warn("Failed to cast Consensus to PoTEngine for API registration")
+		}
+	// case *pow.PoTEngine:
+	// 	apiServer.RegisterPowService(apis.NewPowWorkerAdapter(cons.worker))
+	// 	log.Info("Registered PoW API service")
+	default:
+		log.Info("No matching consensus API service to register")
+	}
+}

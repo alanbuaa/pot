@@ -362,3 +362,7 @@ func (e *Engine) receiveBlock(block *pb.PoWBlock) {
 	e.remotePending.Add(1)
 	e.blockChan <- block
 }
+
+func (e *Engine) GetConsensusType() string {
+	return "pow"
+}

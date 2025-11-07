@@ -39,7 +39,7 @@ type PoTEngine struct {
 
 	// consensus work
 	Height int64
-	worker *Worker
+	Worker *Worker
 
 	//headerStorage  *types.HeaderStorage
 	blockStorage *storage.BlockStorage
@@ -47,7 +47,7 @@ type PoTEngine struct {
 	UpperConsensus *nodeController.NodeController
 }
 
-func NewEngine(nid int64, cid int64, config *config.ConsensusConfig, exec executor.Executor, adaptor p2p.P2PAdaptor, log *logrus.Entry) *PoTEngine {
+func NewPoTEngine(nid int64, cid int64, config *config.ConsensusConfig, exec executor.Executor, adaptor p2p.P2PAdaptor, log *logrus.Entry) *PoTEngine {
 	ch := make(chan []byte, 1024)
 	//st := types.NewHeaderStorage(nid)
 	bst := storage.NewBlockStorage(nid, config.Nodes[nid].Datadir)
@@ -67,7 +67,7 @@ func NewEngine(nid int64, cid int64, config *config.ConsensusConfig, exec execut
 	}
 	bst.Put(types.DefaultGenesisBlock())
 	worker := NewWorker(nid, config, log, bst, e)
-	e.worker = worker
+	e.Worker = worker
 
 	// adaptor.SetReceiver(e)
 	adaptor.SetReceiver(e.GetMsgByteEntrance())
@@ -88,13 +88,13 @@ func (e *PoTEngine) start() {
 
 	e.log.Infof("[PoT]\tPoT Consensus Engine starts working")
 	whirly := e.StartCommitee()
-	e.worker.SetWhirly(whirly)
+	e.Worker.SetWhirly(whirly)
 
-	go e.worker.OnGetVdf0Response()
-	go e.worker.Work()
-	go e.worker.handleVdfhalf()
+	go e.Worker.OnGetVdf0Response()
+	go e.Worker.Work()
+	go e.Worker.handleVdfhalf()
 	go e.onReceiveMsg()
-	go e.worker.rpcserver.Serve(e.worker.listener)
+	go e.Worker.rpcserver.Serve(e.Worker.listener)
 }
 func (e *PoTEngine) GetRequestEntrance() chan<- *pb.Request {
 	if e.UpperConsensus != nil && e.UpperConsensus.GetRequestEntrance() != nil {
@@ -109,7 +109,7 @@ func (e *PoTEngine) GetMsgByteEntrance() chan<- []byte {
 
 func (e *PoTEngine) Stop() {
 	_ = os.RemoveAll("dbfile/node0-" + strconv.Itoa(int(e.id)))
-	e.worker.stop()
+	e.Worker.Stop()
 	close(e.GetMsgByteEntrance())
 }
 
@@ -199,6 +199,11 @@ func (e *PoTEngine) StartCommitee() *nodeController.NodeController {
 	e.log.Infof("[PoT]\tCommitee consensus whirly get prepared")
 	return s
 }
+
 func (e *PoTEngine) GetPeerID() string {
 	return e.peerId
+}
+
+func (e *PoTEngine) GetConsensusType() string {
+	return "pot"
 }

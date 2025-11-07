@@ -182,7 +182,7 @@ func (e *PoTEngine) handlePoTMsg(message *pb.PoTMessage) error {
 		if err != nil {
 			return err
 		}
-		err = e.worker.handleBlockResponse(response)
+		err = e.Worker.handleBlockResponse(response)
 		if err != nil {
 			return err
 		}
@@ -231,7 +231,7 @@ func (e *PoTEngine) handlePoTMsg(message *pb.PoTMessage) error {
 			return err
 		}
 		//e.log.Infof("[Engine]\treceive pot response from %s ", response.Src)
-		err = e.worker.handlePoTResponse(response)
+		err = e.Worker.handlePoTResponse(response)
 		if err != nil {
 			return err
 		}
@@ -242,7 +242,7 @@ func (e *PoTEngine) handlePoTMsg(message *pb.PoTMessage) error {
 		if err != nil {
 			return err
 		}
-		_, err = e.worker.handleSendBciRequest(request)
+		_, err = e.Worker.handleSendBciRequest(request)
 		e.log.Error("[Engine]Get send Bci request")
 		if err != nil {
 			return err
@@ -254,7 +254,7 @@ func (e *PoTEngine) handlePoTMsg(message *pb.PoTMessage) error {
 	// 	if err != nil {
 	// 		return err
 	// 	}
-	// 	_, err = e.worker.handleDevastateBciRequest(request)
+	// 	_, err = e.Worker.handleDevastateBciRequest(request)
 	// 	if err != nil {
 	// 		return err
 	// 	}
@@ -271,29 +271,29 @@ func (e *PoTEngine) handlePoTMsg(message *pb.PoTMessage) error {
 		txtype := clienttrsaction.GetTxType()
 		switch txtype {
 		case pb.TxType_CreateLockTransaction:
-			err := e.worker.checkLockTransaction(rawtx)
+			err := e.Worker.checkLockTransaction(rawtx)
 			if err != nil {
 				return err
 			}
-			e.worker.mempool.AddRawTx(rawtx)
+			e.Worker.mempool.AddRawTx(rawtx)
 		case pb.TxType_LockTransferTranscation:
-			err := e.worker.CheckLockTransferTransaction(rawtx)
+			err := e.Worker.CheckLockTransferTransaction(rawtx)
 			if err != nil {
 				return err
 			}
-			e.worker.mempool.AddRawTx(rawtx)
+			e.Worker.mempool.AddRawTx(rawtx)
 		case pb.TxType_NonLockTransferTranscation:
-			err := e.worker.CheckNonLockTransferTransaction(rawtx)
+			err := e.Worker.CheckNonLockTransferTransaction(rawtx)
 			if err != nil {
 				return err
 			}
-			e.worker.mempool.AddRawTx(rawtx)
+			e.Worker.mempool.AddRawTx(rawtx)
 		case pb.TxType_DevasteTransaction:
-			err := e.worker.CheckDevastateTransaction(rawtx)
+			err := e.Worker.CheckDevastateTransaction(rawtx)
 			if err != nil {
 				return err
 			}
-			e.worker.mempool.AddRawTx(rawtx)
+			e.Worker.mempool.AddRawTx(rawtx)
 		}
 	}
 	return nil
@@ -301,7 +301,7 @@ func (e *PoTEngine) handlePoTMsg(message *pb.PoTMessage) error {
 
 func (e *PoTEngine) handleblock(b *types.Block) {
 	if b != nil {
-		channel := e.worker.GetPeerQueue()
+		channel := e.Worker.GetPeerQueue()
 		channel <- b
 	}
 

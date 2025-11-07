@@ -49,11 +49,12 @@ func BuildConsensus(
 			log.Warnf("whirly type not supported: %s", cfg.Whirly.Type)
 		}
 	case "pot":
-		c = pot.NewEngine(nid, cid, cfg, exec, p2pAdaptor, log)
+		c = pot.NewPoTEngine(nid, cid, cfg, exec, p2pAdaptor, log)
 	case "pow":
 		c = pow.NewPowEngine(nid, cid, cfg, exec, p2pAdaptor, log)
 	default:
 		log.Warnf("init consensus type not supported: %s", cfg.Type)
 	}
+
 	return c
 }

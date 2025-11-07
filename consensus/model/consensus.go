@@ -18,6 +18,7 @@ type Consensus interface {
 	// The Stop function should return synchronously
 	Stop()
 	GetConsensusID() int64
+	GetConsensusType() string
 	VerifyBlock(block []byte, proof []byte) bool
 
 	UpdateExternalStatus(status ExternalStatus)

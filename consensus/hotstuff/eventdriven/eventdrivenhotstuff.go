@@ -501,3 +501,7 @@ func (ehs *EventDrivenHotStuffImpl) createProposal(txs []types.RawTransaction) *
 func (ehs *EventDrivenHotStuffImpl) VerifyBlock(block []byte, proof []byte) bool {
 	return true
 }
+
+func (ehs *EventDrivenHotStuffImpl) GetConsensusType() string {
+	return "eventdrivenhotstuff"
+}

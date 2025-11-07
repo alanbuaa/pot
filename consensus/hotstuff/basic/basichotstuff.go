@@ -383,3 +383,7 @@ func (bhs *BasicHotStuff) batchEvent(txs []types.RawTransaction) {
 func (bhs *BasicHotStuff) VerifyBlock(block []byte, proof []byte) bool {
 	return true
 }
+
+func (bhs *BasicHotStuff) GetConsensusType() string {
+	return "basichotstuff"
+}

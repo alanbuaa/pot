@@ -8,3 +8,6 @@
 
 ## 问题
 - leveldb、boltdb分别做啥？
+- http的结构
+- bci文件的作用
+- tests中各个测试的作用

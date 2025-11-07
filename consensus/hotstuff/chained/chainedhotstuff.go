@@ -269,3 +269,7 @@ func (chs *ChainedHotStuff) processProposal() {
 func (chs *ChainedHotStuff) VerifyBlock(block []byte, proof []byte) bool {
 	return true
 }
+
+func (ehs *ChainedHotStuff) GetConsensusType() string {
+	return "chainedhotstuff"
+}

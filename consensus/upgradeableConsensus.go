@@ -401,3 +401,7 @@ func (uc *UpgradeableConsensus) startNewConsensus(cc *config.ConsensusConfig) {
 		return
 	}
 }
+
+func (e *UpgradeableConsensus) GetConsensusType() string {
+	return "upgradeable"
+}

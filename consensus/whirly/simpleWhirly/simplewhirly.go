@@ -787,3 +787,7 @@ func (sw *SimpleWhirlyImpl) AdvanceView(viewNum uint64) {
 		sw.Log.Trace("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] advanceView success!")
 	}
 }
+
+func (e *SimpleWhirlyImpl) GetConsensusType() string {
+	return "whirly"
+}

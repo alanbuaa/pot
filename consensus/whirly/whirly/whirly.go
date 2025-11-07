@@ -591,3 +591,7 @@ func (whi *WhirlyImpl) createProposal(txs []types.RawTransaction) *pb.WhirlyBloc
 func (whi *WhirlyImpl) VerifyBlock(block []byte, proof []byte) bool {
 	return true
 }
+
+func (e *WhirlyImpl) GetConsensusType() string {
+	return "whirly"
+}

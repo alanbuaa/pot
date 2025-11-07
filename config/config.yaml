@@ -4,6 +4,7 @@ address_start_port: "6060"
 rpc_address_start_port: "7070"
 data_dir: "data"
 public_key_path: data/keys/pub.key
+http_server_address: "8088"
 
 # ======= Total Number of Replicas =======
 total: 1
