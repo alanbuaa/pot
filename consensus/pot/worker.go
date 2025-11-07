@@ -356,7 +356,7 @@ func (w *Worker) OnGetVdf0Response() {
 		// 	w.simpleLeaderUpdate(parentblock)
 		// }
 
-		//w.CommitteeUpdate(epoch)
+		w.CommitteeUpdate(epoch)
 		difficulty := w.calcDifficulty(parentblock, uncleblock)
 		w.startWorking()
 		w.abort = NewAbortcontrol()

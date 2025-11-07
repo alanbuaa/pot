@@ -170,17 +170,16 @@ func (w *Worker) CommitteeUpdate(height uint64) {
 
 		//w.log.Error(len(committee))
 
-		//sharding2 := simpleWhirly.PoTSharding{
-		//	Name:                "hello_world",
-		//	ParentSharding:      nil,
-		//	LeaderPublicAddress: committee[0],
-		//	Committee:           committee,
-		//	CryptoElements:      nil,
-		//	SubConsensus:        consensus,
-		//}
+		sharding2 := nodeController.PoTSharding{
+			Name:                hexutil.EncodeUint64(2),
+			ParentSharding:      nil,
+			LeaderPublicAddress: committee[0],
+			Committee:           committee,
+			SubConsensus:        consensus,
+		}
 		//shardings := []simpleWhirly.PoTSharding{sharding1, sharding2}
 
-		shardings := []nodeController.PoTSharding{sharding1}
+		shardings := []nodeController.PoTSharding{sharding1,sharding2}
 		potsignal := &nodeController.PoTSignal{
 			Epoch:             int64(height),
 			Proof:             make([]byte, 0),
