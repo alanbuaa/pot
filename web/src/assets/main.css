@@ -1,0 +1,165 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 全局样式 */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: #0a0e27;
+  color: #ffffff;
+}
+
+#app {
+  width: 100%;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* 滚动条样式 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.5);
+}
+
+/* 卡片样式 */
+.card {
+  background: #141d3a;
+  border: 1px solid #1e3a5f;
+  border-radius: 8px;
+  padding: 16px;
+  backdrop-filter: blur(10px);
+}
+
+.card:hover {
+  border-color: #00d4ff;
+  box-shadow: 0 4px 12px rgba(0, 212, 255, 0.2);
+}
+
+/* 状态指示灯 */
+.status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+}
+
+.status-dot.online {
+  background: #00ff00;
+  box-shadow: 0 0 8px #00ff00;
+}
+
+.status-dot.warning {
+  background: #ffff00;
+  box-shadow: 0 0 8px #ffff00;
+}
+
+.status-dot.error {
+  background: #ff0000;
+  box-shadow: 0 0 8px #ff0000;
+}
+
+.status-dot.offline {
+  background: #808080;
+}
+
+/* 动画效果 */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.pulse {
+  animation: pulse 2s infinite;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* Ant Design 样式覆盖 */
+.ant-statistic-title {
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.ant-statistic-content {
+  color: #ffffff;
+}
+
+.ant-card {
+  background: #141d3a;
+  border-color: #1e3a5f;
+}
+
+.ant-card-head {
+  color: #ffffff;
+  border-bottom-color: #1e3a5f;
+}
+
+.ant-table {
+  background: transparent;
+}
+
+.ant-table-thead > tr > th {
+  background: rgba(255, 255, 255, 0.05);
+  color: #ffffff;
+  border-bottom-color: #1e3a5f;
+}
+
+.ant-table-tbody > tr > td {
+  color: rgba(255, 255, 255, 0.85);
+  border-bottom-color: #1e3a5f;
+}
+
+.ant-table-tbody > tr:hover > td {
+  background: rgba(0, 212, 255, 0.1);
+}
+
+.ant-progress-text {
+  color: #ffffff !important;
+}
+
+.ant-descriptions-item-label {
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.ant-descriptions-item-content {
+  color: #ffffff;
+}

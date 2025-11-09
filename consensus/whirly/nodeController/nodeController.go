@@ -3,7 +3,6 @@ package nodeController
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"strconv"
 	"strings"
 	"sync"
@@ -141,14 +140,15 @@ func (nc *NodeController) receiveMsg(ctx context.Context) {
 			}
 
 			if req.Sharding == nil {
-				nc.Log.Warn("Invaild Request")
+				nc.Log.Warn("Invalid Request")
 				continue
 			}
+			nc.Log.Debugf("received request %v", req)
 			shardingName := string(req.Sharding)
 			nc.shardingsLock.Lock()
 			sharding, ok2 := nc.Shardings[shardingName]
 			if !ok2 {
-				//nc.Log.Warn("Receive request error: Invaild sharding name")
+				nc.Log.Errorf("Receive request error: Invalid sharding name")
 			} else {
 				sharding.handleRequest(req)
 			}
@@ -220,7 +220,7 @@ func (nc *NodeController) handleMsg(packet *pb.Packet) {
 	// }).Warn("handleMsg in NodeController")
 
 	if packet.ReceiverShardingName == "" {
-		nc.Log.Warn("Receive message error: Invaild sharding name")
+		nc.Log.Warn("Receive message error: Invalid sharding name")
 		return
 	}
 	nc.shardingsLock.Lock()
@@ -240,7 +240,7 @@ func (nc *NodeController) handlePotSignal(potSignalBytes []byte) {
 	potSignal := &PoTSignal{}
 	err := json.Unmarshal(potSignalBytes, potSignal)
 	if err != nil {
-		nc.Log.WithField("error", err.Error()).Error("Unmarshal potSignal failed.")
+		nc.Log.Error("Unmarshal potSignal failed.")
 		return
 	}
 
@@ -302,8 +302,8 @@ func (nc *NodeController) ShardManage(potSignal *PoTSignal) {
 }
 
 func (nc *NodeController) NodeManage(potSignal *PoTSignal) {
-	fmt.Println("======================== epoch: ", nc.epoch, "========================")
-	fmt.Println("len(SelfPublicAddress): ", len(potSignal.SelfPublicAddress))
+	nc.Log.Info("======================== epoch: ", nc.epoch, "========================")
+	nc.Log.Debug("len(SelfPublicAddress): ", len(potSignal.SelfPublicAddress))
 	// fmt.Printf("%+v\n", potSignal.Shardings)
 	// println(potSignal.Shardings)
 
@@ -318,13 +318,12 @@ func (nc *NodeController) handleStop(address string) {
 	shardingName, _, _ := DecodeAddress(address)
 	nc.shardingsLock.Lock()
 	sharding, ok := nc.Shardings[shardingName]
+	defer nc.shardingsLock.Unlock()
 	if !ok {
 		// create a new sharding
-		nc.Log.Warnf("Stop Node Error: Sharding %x does not exist", shardingName)
-	} else {
-		go sharding.handleStop(address)
+		nc.Log.Errorf("Stop Node Error: Sharding %s does not exist", shardingName)
 	}
-	nc.shardingsLock.Unlock()
+	go sharding.handleStop(address)
 }
 
 // update a committee node
@@ -334,7 +333,7 @@ func (nc *NodeController) handleUpdate(address string) {
 	sharding, ok := nc.Shardings[shardingName]
 	if !ok {
 		// create a new sharding
-		nc.Log.Warn("Stop Node Error: Sharding does not exist")
+		nc.Log.Errorf("Update Node Error: Sharding does not exist")
 	} else {
 		go sharding.handleUpdate(address)
 	}

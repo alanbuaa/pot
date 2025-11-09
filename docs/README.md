@@ -9,6 +9,21 @@
 - **[API 简化文档](./api-documentation.md)** - 快速参考指南
 - **[API 测试指南](./api-testing-guide.md)** - 测试使用指南
 
+### 可视化大屏文档 🎨
+**🎯 开始这里**: [可视化开发总览](./visualize-README.md) - 完整的可视化大屏开发指南
+
+#### 需求和规划
+- [可视化指标规划](./visualize-plan.md) - 定义所有需要可视化的80+指标
+
+#### 前端文档
+- [页面布局设计](./visualize-layout-design.md) - UI/UX设计方案（8个区块 + 顶部底部）
+- [前端开发指南](./visualize-frontend-guide.md) - Vue 3完整实现教程
+
+#### 后端文档
+- [API实现方案](./visualize-api-implementation.md) - 后端API详细设计和实现逻辑
+- [API端点总结](./visualize-api-summary.md) - API快速参考手册
+- [后端开发检查清单](./visualize-backend-checklist.md) - 后端开发详细步骤
+
 ### 测试文件
 - **[Rest Client 测试文件](./rest-client-tests.http)** - VS Code Rest Client 测试用例
 - **[Thunder Client 配置](./thunder-client-collection.json)** - Thunder Client 集合文件

@@ -653,7 +653,7 @@ func (sw *CrWhirlyImpl) OnReceiveVote(whirlyVoteMsg *pb.CrWhirlyVote) {
 		sw.proposalLock.Lock()
 		if whirlyVoteMsg.BlockView >= sw.proposeView {
 			if whirlyVoteMsg.BlockHash == nil {
-				sw.Log.Warn("Invaild vote: BlockHash is null")
+				sw.Log.Warn("Invalid vote: BlockHash is null")
 				sw.proposalLock.Unlock()
 				sw.voteLock.Unlock()
 				return
@@ -662,14 +662,14 @@ func (sw *CrWhirlyImpl) OnReceiveVote(whirlyVoteMsg *pb.CrWhirlyVote) {
 			sw.curYesVote = append(sw.curYesVote, whirlyVoteMsg)
 			if sw.txCRs != nil && len(sw.txCRs) != 0 {
 				if whirlyVoteMsg.DecryptedShares == nil {
-					sw.Log.Warn("Invaild vote: DecryptedShares is null")
+					sw.Log.Warn("Invalid vote: DecryptedShares is null")
 					sw.proposalLock.Unlock()
 					sw.voteLock.Unlock()
 					return
 				}
 
 				if len(whirlyVoteMsg.DecryptedShares) != len(sw.txCRs) {
-					sw.Log.Warn("Invaild vote: The length of decrypted shares is invaild")
+					sw.Log.Warn("Invalid vote: The length of decrypted shares is Invalid")
 					sw.proposalLock.Unlock()
 					sw.voteLock.Unlock()
 					return

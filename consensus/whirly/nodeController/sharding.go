@@ -161,7 +161,7 @@ func (s *Sharding) VerifyTx(tx types.RawTransaction) bool {
 func (s *Sharding) handleMsg(packet *pb.Packet) {
 	s.nodesLock.Lock()
 	if packet.ReceiverPublicAddress == "" {
-		s.controller.Log.Warn("Sharding handle message error: Invaild receiver public address")
+		s.controller.Log.Warn("Sharding handle message error: Invalid receiver public address")
 		fmt.Printf("packet: %+v\n", packet)
 
 		msgByte := packet.GetMsg()

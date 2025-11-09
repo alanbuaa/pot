@@ -13,6 +13,57 @@ This README follows common software engineering conventions: overview, prerequis
 - whirly
 - pos[todo]
 
+## 🎨 可视化大屏 (NEW!)
+
+本项目新增了一个完整的 Web 可视化大屏系统，用于实时监控和展示 POT 共识系统的运行状态。
+
+### 功能特性
+
+- ✅ **实时监控** - POT 共识状态、VDF 计算进度、性能指标
+- ✅ **网络拓扑** - 双层网络结构可视化（委员会层 + POT 节点层）
+- ✅ **交易池监控** - 交易数量、类型分布、确认时间
+- ✅ **BCI 激励** - 奖励分配、锁定状态、利息统计
+- ✅ **存储状态** - 容量使用、区块统计、压缩率
+- ✅ **双重数据源** - HTTP 轮询 + WebSocket 实时推送
+
+### 技术栈
+
+- Vue 3 + TypeScript + Vite
+- Ant Design Vue 4.x
+- @antv/g6 (网络拓扑)
+- ECharts 5.x (数据可视化)
+- TailwindCSS 3.x
+
+### 快速启动
+
+```bash
+# 进入 web 目录
+cd web
+
+# 安装依赖
+npm install
+
+# 启动开发服务器
+npm run dev
+
+# 访问 http://localhost:3000
+```
+
+详细文档：
+- **快速上手**: [web/QUICKSTART.md](web/QUICKSTART.md)
+- **开发指南**: [web/DEVELOPMENT.md](web/DEVELOPMENT.md)
+- **API 文档**: [docs/visualize-api-summary.md](docs/visualize-api-summary.md)
+- **设计方案**: [docs/visualize-layout-design.md](docs/visualize-layout-design.md)
+
+### 预览
+
+可视化大屏包含以下主要模块：
+
+- 🎯 **顶部状态栏** - 系统运行时长、区块高度、TPS、节点状态
+- 📊 **左侧面板** - POT 共识状态、VDF 计算监控、性能指标
+- 🌐 **中心区域** - 网络拓扑图（双层结构）
+- 📈 **右侧面板** - 交易池监控、BCI 激励、存储状态
+
 ## High-level layout
 
 - `cmd/` - entry points for different executables (server, client, genkey, etc.).
