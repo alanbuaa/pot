@@ -1214,7 +1214,7 @@ func (w *Worker) CheckTxWithBlock(rawtx *types.RawTx, block *types.Block) (bool,
 
 			minerout := rawtx.TxOutput[0]
 			if !bytes.Equal(minerout.Address, header.PublicKey) {
-				return fmt.Errorf("coinbase tx miner output does not match to header public key")
+				return fmt.Errorf("coinbase tx miner output does not match to header public key, expect %s but get %s", hexutil.Encode(minerout.Address), hexutil.Encode(header.PublicKey))
 			}
 			if minerout.Value != int64(math.Floor(float64(totalreward)*bcimap[Miner])) {
 				return fmt.Errorf("coinbase tx miner output value is not correct")

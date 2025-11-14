@@ -115,12 +115,12 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 	half, _ := w.blockStorage.GetVDFHalf(header.Height)
 	if len(half) != 0 {
 		if !bytes.Equal(half, header.PoTProof[2]) {
-			return fmt.Errorf("block half vdf0 is error")
+			return fmt.Errorf("block half vdf0 is error, expect %s but get %s", hexutil.Encode(half), hexutil.Encode(header.PoTProof[2]))
 		}
 	} else {
-		flag := wesolowski_rust.Verify(header.PoTProof[0], w.config.PoT.Vdf1Iteration, header.PoTProof[2])
+		flag := wesolowski_rust.Verify(crypto.Hash(header.PoTProof[0]), w.config.PoT.Vdf1Iteration, header.PoTProof[2])
 		if !flag {
-			return fmt.Errorf("block half vdf0 is error")
+			return fmt.Errorf("block half vdf0 is error by verifier, potproof %s but get %s", hexutil.Encode(crypto.Hash(header.PoTProof[0])), hexutil.Encode(header.PoTProof[2]))
 		} else {
 			w.blockStorage.SetVDFHalf(header.Height, header.PoTProof[2])
 		}

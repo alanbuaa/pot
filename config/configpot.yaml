@@ -5,9 +5,9 @@ nodes:
     bcirpcAddress : 127.0.0.1:10157
     private_key_path: keys/r1.key
   # - id: 1
-  #   address: 127.0.0.1:8081
-  #   rpc_address: 127.0.0.1:9081
-  #   bcirpcAddress : 127.0.0.1:9867
+  #   address: 127.0.0.1:8083
+  #   rpc_address: 127.0.0.1:9083
+  #   bcirpcAddress : 127.0.0.1:9866
   #   private_key_path: keys/r2.key
   # - id: 2
   #   address: 127.0.0.1:8082
@@ -36,7 +36,7 @@ p2p:
   type: p2p-adaptor # p2p-adaptor currently only supports simple-whirly # sudo sysctl -w net.core.rmem_max=2500000
   # type: p2p
 
-topic: this-is-consensus-topic-tttaaabbbcccddd-145
+topic: this-is-consensus-topic-tttaaabbbcccddd-146
 
 consensus:  
   type: "pot"

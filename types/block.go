@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/zzz136454872/upgradeable-consensus/crypto"
 	"github.com/zzz136454872/upgradeable-consensus/pb"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -403,6 +404,7 @@ func (b *Header) ToProto() *pb.Header {
 }
 
 func DefaultGenesisHeader() *Header {
+	pubkey, _ := hexutil.Decode("0xa47155b42648816998e576ffbfa045ab00000000000000007662a30d4b5875b73a8768fcf01bf52d2326a7660e24033a")
 	h := &Header{
 		Height:     0,
 		ParentHash: crypto.NilTxsHash,
@@ -415,7 +417,7 @@ func DefaultGenesisHeader() *Header {
 		Address:    0,
 		Hashes:     nil,
 		PeerId:     "0",
-		PublicKey:  []byte("xxx"),
+		PublicKey:  pubkey,
 		TxHash:     crypto.NilTxsHash,
 	}
 	h.Hash()
