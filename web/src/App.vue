@@ -31,18 +31,18 @@
 
           <!-- 右侧面板 (30%) -->
           <div class="col-span-3 flex flex-col gap-3 overflow-y-auto">
-            <div class="h-1/4 min-h-[180px]">
+            <!-- <div class="h-1/3 min-h-[180px]"> -->
               <MempoolMonitor />
-            </div>
-            <div class="h-1/4 min-h-[200px]">
+            <!-- </div> -->
+            <!-- <div class="h-1/3 min-h-[200px]"> -->
               <VDFMonitor />
-            </div>
-            <div class="h-1/4 min-h-[180px]">
+            <!-- </div> -->
+            <!-- <div class="h-1/3 min-h-[180px]"> -->
               <PerformanceMetrics />
-            </div>
-            <div class="h-1/4 min-h-[180px]">
+            <!-- </div> -->
+            <!-- <div class="h-1/4 min-h-[180px]">
               <SystemInfo />
-            </div>
+            </div> -->
           </div>
         </div>
 

@@ -3,7 +3,7 @@
     <div class="box">
 			<div class="tit"><span>POT 共识状态</span><p></p></div>
     </div>
-      
+
     <a-spin :spinning="loading">
       <div class="space-y-4">
         <!-- Epoch 数字显示 -->

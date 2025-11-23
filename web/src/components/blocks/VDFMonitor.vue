@@ -1,9 +1,8 @@
 <template>
   <div class="vdf-monitor card h-full">
-    <h3 class="text-lg font-semibold mb-4 text-vdf flex items-center gap-2">
-      <ClockCircleOutlined />
-      VDF 计算监控
-    </h3>
+     <div class="box">
+			<div class="tit"><span>VDF 计算监控</span><p></p></div>
+    </div>
     
     <a-spin :spinning="loading">
       <div class="space-y-6">

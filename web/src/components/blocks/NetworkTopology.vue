@@ -1,11 +1,11 @@
 <template>
   <div class="network-topology h-full relative">
     <div class="flex items-center justify-between mb-4">
-      <h3 class="text-lg font-semibold flex items-center gap-2">
-        <NodeIndexOutlined />
-        网络拓扑
+      <h3 class="text-sm font-semibold mb-3 flex items-center gap-2">
+        <TeamOutlined />
+        节点网络
       </h3>
-      
+
       <!-- 工具栏 -->
       <div class="flex items-center gap-2">
         <a-tooltip title="重置视角">
@@ -15,12 +15,18 @@
         </a-tooltip>
       </div>
     </div>
-    
+
     <!-- Three.js 容器 -->
-    <div ref="container" class="topology-container" style="height: calc(100% - 60px);"></div>
-    
+    <div
+      ref="container"
+      class="topology-container"
+      style="height: calc(100% - 60px)"
+    ></div>
+
     <!-- 图例 -->
-    <div class="legend absolute bottom-4 right-4 bg-bg-primary bg-opacity-80 p-3 rounded border border-border">
+    <div
+      class="legend absolute bottom-4 right-4 bg-bg-primary bg-opacity-80 p-3 rounded border border-border"
+    >
       <div class="text-xs space-y-2">
         <div class="flex items-center gap-2">
           <span class="w-3 h-3 rounded-full bg-orange-500"></span>
@@ -48,7 +54,7 @@
         </div> -->
       </div>
     </div>
-    
+
     <!-- 节点详情弹窗 -->
     <a-modal
       v-model:open="detailVisible"
@@ -62,12 +68,26 @@
             {{ selectedNode.id }}
           </a-descriptions-item>
           <a-descriptions-item label="类型">
-            <a-tag :color="getNodeTypeColor(selectedNode.layer, selectedNode.isLeader, selectedNode.isLocal)">
-              {{ getNodeTypeName(selectedNode.layer, selectedNode.isLeader, selectedNode.isLocal) }}
+            <a-tag
+              :color="
+                getNodeTypeColor(
+                  selectedNode.layer,
+                  selectedNode.isLeader,
+                  selectedNode.isLocal
+                )
+              "
+            >
+              {{
+                getNodeTypeName(
+                  selectedNode.layer,
+                  selectedNode.isLeader,
+                  selectedNode.isLocal
+                )
+              }}
             </a-tag>
           </a-descriptions-item>
           <a-descriptions-item label="层级">
-            {{ selectedNode.layer === 'committee' ? '委员会层' : 'POT节点层' }}
+            {{ selectedNode.layer === "committee" ? "委员会层" : "POT节点层" }}
           </a-descriptions-item>
           <a-descriptions-item v-if="selectedNode.isLeader" label="角色">
             <a-tag color="orange">领导者</a-tag>
@@ -82,230 +102,228 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from 'vue'
-import { storeToRefs } from 'pinia'
-import {
-  NodeIndexOutlined,
-  FullscreenOutlined
-} from '@ant-design/icons-vue'
-import { useNetworkStore } from '@/stores/network'
-import * as THREE from 'three'
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
+import { ref, onMounted, onUnmounted, watch } from "vue";
+import { storeToRefs } from "pinia";
+import { NodeIndexOutlined, FullscreenOutlined } from "@ant-design/icons-vue";
+import { useNetworkStore } from "@/stores/network";
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
-const container = ref<HTMLDivElement>()
-const networkStore = useNetworkStore()
-const { topology } = storeToRefs(networkStore)
+const container = ref<HTMLDivElement>();
+const networkStore = useNetworkStore();
+const { topology } = storeToRefs(networkStore);
 
-const detailVisible = ref(false)
-const selectedNode = ref<any>(null)
+const detailVisible = ref(false);
+const selectedNode = ref<any>(null);
 
-let scene: THREE.Scene
-let camera: THREE.PerspectiveCamera
-let renderer: THREE.WebGLRenderer
-let controls: OrbitControls
-let animationId: number
-let nodeObjects: Array<{ mesh: THREE.Mesh; data: any; pulsePhase: number }> = []
+let scene: THREE.Scene;
+let camera: THREE.PerspectiveCamera;
+let renderer: THREE.WebGLRenderer;
+let controls: OrbitControls;
+let animationId: number;
+let nodeObjects: Array<{ mesh: THREE.Mesh; data: any; pulsePhase: number }> =
+  [];
 
 // 节点配置
-const NODES_PER_ROW = 6 // 每行节点数量
-const NODES_PER_COL = 4 // 每列节点数量
-const NODE_COUNT = NODES_PER_ROW * NODES_PER_COL // 总节点数
-const LAYER_SPACING = 3 // 层间距
-const POT_Y = 0 // 底层 Y 坐标
-const COMMITTEE_Y = POT_Y + LAYER_SPACING // 上层 Y 坐标
+const NODES_PER_ROW = 6; // 每行节点数量
+const NODES_PER_COL = 4; // 每列节点数量
+const NODE_COUNT = NODES_PER_ROW * NODES_PER_COL; // 总节点数
+const LAYER_SPACING = 3; // 层间距
+const POT_Y = 0; // 底层 Y 坐标
+const COMMITTEE_Y = POT_Y + LAYER_SPACING; // 上层 Y 坐标
 
 function initThreeJS() {
-  if (!container.value) return
+  if (!container.value) return;
 
-  const width = container.value.clientWidth
-  const height = container.value.clientHeight
+  const width = container.value.clientWidth;
+  const height = container.value.clientHeight;
 
   // 创建场景
-  scene = new THREE.Scene()
-  scene.fog = new THREE.Fog(0x0a0e27, 10, 50)
+  scene = new THREE.Scene();
+  scene.fog = new THREE.Fog(0x0a0e27, 10, 50);
 
   // 创建相机
-  camera = new THREE.PerspectiveCamera(60, width / height, 0.1, 1000)
-  camera.position.set(8, 10, 12)
-  camera.lookAt(0, 1.5, 0)
+  camera = new THREE.PerspectiveCamera(60, width / height, 0.1, 1000);
+  camera.position.set(8, 10, 12);
+  camera.lookAt(0, 1.5, 0);
 
   // 创建渲染器
-  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true })
-  renderer.setSize(width, height)
-  renderer.setPixelRatio(window.devicePixelRatio)
-  renderer.setClearColor(0x0a0e27, 0)
-  container.value.appendChild(renderer.domElement)
+  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setSize(width, height);
+  renderer.setPixelRatio(window.devicePixelRatio);
+  renderer.setClearColor(0x0a0e27, 0);
+  container.value.appendChild(renderer.domElement);
 
   // 添加控制器
-  controls = new OrbitControls(camera, renderer.domElement)
-  controls.enableDamping = true
-  controls.dampingFactor = 0.05
-  controls.minDistance = 5
-  controls.maxDistance = 30
-  controls.maxPolarAngle = Math.PI / 2.2
+  controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.05;
+  controls.minDistance = 5;
+  controls.maxDistance = 30;
+  controls.maxPolarAngle = Math.PI / 2.2;
 
   // 添加光源
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.5)
-  scene.add(ambientLight)
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+  scene.add(ambientLight);
 
-  const pointLight1 = new THREE.PointLight(0x00d4ff, 1, 50)
-  pointLight1.position.set(10, 10, 10)
-  scene.add(pointLight1)
+  const pointLight1 = new THREE.PointLight(0x00d4ff, 1, 50);
+  pointLight1.position.set(10, 10, 10);
+  scene.add(pointLight1);
 
-  const pointLight2 = new THREE.PointLight(0xff6b35, 0.8, 50)
-  pointLight2.position.set(-10, 10, -10)
-  scene.add(pointLight2)
+  const pointLight2 = new THREE.PointLight(0xff6b35, 0.8, 50);
+  pointLight2.position.set(-10, 10, -10);
+  scene.add(pointLight2);
 
   // 创建网络拓扑
-  createNetworkTopology()
+  createNetworkTopology();
 
   // 添加点击事件
-  renderer.domElement.addEventListener('click', onCanvasClick)
+  renderer.domElement.addEventListener("click", onCanvasClick);
 
   // 窗口大小调整
-  window.addEventListener('resize', onWindowResize)
+  window.addEventListener("resize", onWindowResize);
 
   // 开始动画
-  animate()
+  animate();
 }
 
 function createNetworkTopology() {
-  nodeObjects = []
+  nodeObjects = [];
 
   // 随机分布的节点位置（带最小距离约束）
-  const areaSize = 10 // 分布区域大小
-  const nodeCount = NODES_PER_ROW * NODES_PER_COL
-  const minDistance = 1.2 // 节点之间的最小距离
-  
+  const areaSize = 10; // 分布区域大小
+  const nodeCount = NODES_PER_ROW * NODES_PER_COL;
+  const minDistance = 1.2; // 节点之间的最小距离
+
   // 存储节点位置用于层内连接
-  const nodePositions: Array<{ x: number; z: number; index: number }> = []
+  const nodePositions: Array<{ x: number; z: number; index: number }> = [];
 
   // 生成随机位置，确保节点之间保持最小距离
   for (let i = 0; i < nodeCount; i++) {
-    let x: number, z: number
-    let attempts = 0
-    const maxAttempts = 100
-    
+    let x: number, z: number;
+    let attempts = 0;
+    const maxAttempts = 100;
+
     do {
-      x = (Math.random() - 0.5) * areaSize
-      z = (Math.random() - 0.5) * areaSize
-      attempts++
-      
+      x = (Math.random() - 0.5) * areaSize;
+      z = (Math.random() - 0.5) * areaSize;
+      attempts++;
+
       // 检查与已有节点的距离
-      const tooClose = nodePositions.some(pos => {
+      const tooClose = nodePositions.some((pos) => {
         const distance = Math.sqrt(
           Math.pow(x - pos.x, 2) + Math.pow(z - pos.z, 2)
-        )
-        return distance < minDistance
-      })
-      
+        );
+        return distance < minDistance;
+      });
+
       if (!tooClose || attempts >= maxAttempts) {
-        break
+        break;
       }
-    } while (true)
-    
-    nodePositions.push({ x, z, index: i })
+    } while (true);
+
+    nodePositions.push({ x, z, index: i });
   }
 
   // === 底层：POT 节点（使用生成的位置）===
   nodePositions.forEach((pos, i) => {
-    const isLocal = i === 5 // 第6个节点是本机节点
+    const isLocal = i === 5; // 第6个节点是本机节点
 
     // 创建节点球体
-    const geometry = new THREE.SphereGeometry(0.2, 32, 32)
+    const geometry = new THREE.SphereGeometry(0.2, 32, 32);
     const material = new THREE.MeshStandardMaterial({
       color: 0x3b82f6, // 蓝色
       emissive: isLocal ? 0x3b82f6 : 0x1e40af,
       emissiveIntensity: isLocal ? 0.5 : 0.2,
       metalness: 0.3,
-      roughness: 0.4
-    })
-    const nodeMesh = new THREE.Mesh(geometry, material)
-    nodeMesh.position.set(pos.x, POT_Y, pos.z)
-    scene.add(nodeMesh)
+      roughness: 0.4,
+    });
+    const nodeMesh = new THREE.Mesh(geometry, material);
+    nodeMesh.position.set(pos.x, POT_Y, pos.z);
+    scene.add(nodeMesh);
 
     // 添加光晕效果（本机节点）
     if (isLocal) {
-      const glowGeometry = new THREE.SphereGeometry(0.3, 32, 32)
+      const glowGeometry = new THREE.SphereGeometry(0.3, 32, 32);
       const glowMaterial = new THREE.MeshBasicMaterial({
         color: 0x3b82f6,
         transparent: true,
-        opacity: 0.3
-      })
-      const glow = new THREE.Mesh(glowGeometry, glowMaterial)
-      nodeMesh.add(glow)
+        opacity: 0.3,
+      });
+      const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+      nodeMesh.add(glow);
     }
 
     nodeObjects.push({
       mesh: nodeMesh,
       data: {
         id: `pot-${i}`,
-        layer: 'pot',
+        layer: "pot",
         index: i,
         isLocal,
-        isLeader: false
+        isLeader: false,
       },
-      pulsePhase: isLocal ? Math.random() * Math.PI * 2 : 0
-    })
-  })
+      pulsePhase: isLocal ? Math.random() * Math.PI * 2 : 0,
+    });
+  });
 
   // === 上层：委员会节点（与底层节点位置一一对应）===
   nodePositions.forEach((pos, i) => {
-    const isLeader = i === 0 // 第一个节点是领导者
+    const isLeader = i === 0; // 第一个节点是领导者
 
     // 创建节点球体（使用相同的x,z坐标，只改变y坐标）
-    const geometry = new THREE.SphereGeometry(0.25, 32, 32)
+    const geometry = new THREE.SphereGeometry(0.25, 32, 32);
     const material = new THREE.MeshStandardMaterial({
       color: isLeader ? 0xf97316 : 0x22c55e, // 橙色/绿色
       emissive: isLeader ? 0xf97316 : 0x22c55e,
       emissiveIntensity: isLeader ? 0.6 : 0.3,
       metalness: 0.4,
-      roughness: 0.3
-    })
-    const nodeMesh = new THREE.Mesh(geometry, material)
-    nodeMesh.position.set(pos.x, COMMITTEE_Y, pos.z)
-    scene.add(nodeMesh)
+      roughness: 0.3,
+    });
+    const nodeMesh = new THREE.Mesh(geometry, material);
+    nodeMesh.position.set(pos.x, COMMITTEE_Y, pos.z);
+    scene.add(nodeMesh);
 
     // 领导者添加外圈标识
     if (isLeader) {
-      const ringGeometry = new THREE.TorusGeometry(0.35, 0.03, 16, 32)
+      const ringGeometry = new THREE.TorusGeometry(0.35, 0.03, 16, 32);
       const ringMaterial = new THREE.MeshBasicMaterial({
         color: 0xfbbf24,
         transparent: true,
-        opacity: 0.8
-      })
-      const ring = new THREE.Mesh(ringGeometry, ringMaterial)
-      ring.rotation.x = Math.PI / 2
-      nodeMesh.add(ring)
+        opacity: 0.8,
+      });
+      const ring = new THREE.Mesh(ringGeometry, ringMaterial);
+      ring.rotation.x = Math.PI / 2;
+      nodeMesh.add(ring);
     }
 
     nodeObjects.push({
       mesh: nodeMesh,
       data: {
         id: `committee-${i}`,
-        layer: 'committee',
+        layer: "committee",
         index: i,
         isLocal: false,
-        isLeader
+        isLeader,
       },
-      pulsePhase: 0
-    })
-  })
+      pulsePhase: 0,
+    });
+  });
 
   // === 层内连接（细实线 - 点对点连接附近节点）===
   // POT 层内连接 - 确保每个节点至少有一个连接
-  const connectionDistance = 3 // 连接距离阈值
-  const potConnected = new Set<number>() // 记录已连接的节点
-  
+  const connectionDistance = 3; // 连接距离阈值
+  const potConnected = new Set<number>(); // 记录已连接的节点
+
   // 第一遍：连接距离较近的节点
   for (let i = 0; i < nodePositions.length; i++) {
     for (let j = i + 1; j < nodePositions.length; j++) {
-      const pos1 = nodePositions[i]
-      const pos2 = nodePositions[j]
+      const pos1 = nodePositions[i];
+      const pos2 = nodePositions[j];
       const distance = Math.sqrt(
         Math.pow(pos1.x - pos2.x, 2) + Math.pow(pos1.z - pos2.z, 2)
-      )
-      
+      );
+
       // 只连接距离较近的节点
       if (distance < connectionDistance) {
         createLine(
@@ -314,61 +332,61 @@ function createNetworkTopology() {
           0x3b82f6,
           0.02,
           false
-        )
-        potConnected.add(i)
-        potConnected.add(j)
+        );
+        potConnected.add(i);
+        potConnected.add(j);
       }
     }
   }
-  
+
   // 第二遍：为未连接的节点找到最近的节点进行连接
   for (let i = 0; i < nodePositions.length; i++) {
     if (!potConnected.has(i)) {
-      let minDist = Infinity
-      let nearestIdx = -1
-      
+      let minDist = Infinity;
+      let nearestIdx = -1;
+
       // 找到最近的节点
       for (let j = 0; j < nodePositions.length; j++) {
-        if (i === j) continue
-        const pos1 = nodePositions[i]
-        const pos2 = nodePositions[j]
+        if (i === j) continue;
+        const pos1 = nodePositions[i];
+        const pos2 = nodePositions[j];
         const distance = Math.sqrt(
           Math.pow(pos1.x - pos2.x, 2) + Math.pow(pos1.z - pos2.z, 2)
-        )
+        );
         if (distance < minDist) {
-          minDist = distance
-          nearestIdx = j
+          minDist = distance;
+          nearestIdx = j;
         }
       }
-      
+
       // 连接到最近的节点
       if (nearestIdx !== -1) {
-        const pos1 = nodePositions[i]
-        const pos2 = nodePositions[nearestIdx]
+        const pos1 = nodePositions[i];
+        const pos2 = nodePositions[nearestIdx];
         createLine(
           new THREE.Vector3(pos1.x, POT_Y, pos1.z),
           new THREE.Vector3(pos2.x, POT_Y, pos2.z),
           0x3b82f6,
           0.02,
           false
-        )
-        potConnected.add(i)
+        );
+        potConnected.add(i);
       }
     }
   }
 
   // 委员会层内连接 - 确保每个节点至少有一个连接（使用相同的位置关系）
-  const committeeConnected = new Set<number>()
-  
+  const committeeConnected = new Set<number>();
+
   // 第一遍：连接距离较近的节点
   for (let i = 0; i < nodePositions.length; i++) {
     for (let j = i + 1; j < nodePositions.length; j++) {
-      const pos1 = nodePositions[i]
-      const pos2 = nodePositions[j]
+      const pos1 = nodePositions[i];
+      const pos2 = nodePositions[j];
       const distance = Math.sqrt(
         Math.pow(pos1.x - pos2.x, 2) + Math.pow(pos1.z - pos2.z, 2)
-      )
-      
+      );
+
       // 只连接距离较近的节点
       if (distance < connectionDistance) {
         createLine(
@@ -377,69 +395,69 @@ function createNetworkTopology() {
           0x22c55e,
           0.02,
           false
-        )
-        committeeConnected.add(i)
-        committeeConnected.add(j)
+        );
+        committeeConnected.add(i);
+        committeeConnected.add(j);
       }
     }
   }
-  
+
   // 第二遍：为未连接的节点找到最近的节点进行连接
   for (let i = 0; i < nodePositions.length; i++) {
     if (!committeeConnected.has(i)) {
-      let minDist = Infinity
-      let nearestIdx = -1
-      
+      let minDist = Infinity;
+      let nearestIdx = -1;
+
       // 找到最近的节点
       for (let j = 0; j < nodePositions.length; j++) {
-        if (i === j) continue
-        const pos1 = nodePositions[i]
-        const pos2 = nodePositions[j]
+        if (i === j) continue;
+        const pos1 = nodePositions[i];
+        const pos2 = nodePositions[j];
         const distance = Math.sqrt(
           Math.pow(pos1.x - pos2.x, 2) + Math.pow(pos1.z - pos2.z, 2)
-        )
+        );
         if (distance < minDist) {
-          minDist = distance
-          nearestIdx = j
+          minDist = distance;
+          nearestIdx = j;
         }
       }
-      
+
       // 连接到最近的节点
       if (nearestIdx !== -1) {
-        const pos1 = nodePositions[i]
-        const pos2 = nodePositions[nearestIdx]
+        const pos1 = nodePositions[i];
+        const pos2 = nodePositions[nearestIdx];
         createLine(
           new THREE.Vector3(pos1.x, COMMITTEE_Y, pos1.z),
           new THREE.Vector3(pos2.x, COMMITTEE_Y, pos2.z),
           0x22c55e,
           0.02,
           false
-        )
-        committeeConnected.add(i)
+        );
+        committeeConnected.add(i);
       }
     }
   }
 
   // === 跨层连接（虚线 - 垂直连接对应节点）===
   for (let i = 0; i < nodePositions.length; i++) {
-    const pos = nodePositions[i]
-    
+    const pos = nodePositions[i];
+
     createLine(
       new THREE.Vector3(pos.x, POT_Y, pos.z),
       new THREE.Vector3(pos.x, COMMITTEE_Y, pos.z),
       0x64748b,
       0.015,
       true // 虚线
-    )
+    );
   }
 
   // === 创建平面网格（增强 3D 感）===
-  const gridSize = areaSize * 1.3
-  const gridHelper = new THREE.GridHelper(gridSize, 20, 0x334155, 0x1e293b)
-  gridHelper.position.y = POT_Y - 0.5
-  gridHelper.material.opacity = 0.3
-  gridHelper.material.transparent = true
-  scene.add(gridHelper)
+  const gridSize = areaSize * 1.3;
+  const gridHelper = new THREE.GridHelper(gridSize, 20, 0x334155, 0x1e293b);
+  gridHelper.position.y = POT_Y - 0.5;
+  gridHelper.material.opacity = 0.3;
+  gridHelper.material.transparent = true;
+  scene.add(gridHelper);
 }
 
 function createLine(
@@ -449,10 +467,10 @@ function createLine(
   lineWidth: number,
   dashed: boolean
 ) {
-  const points = [start, end]
-  const geometry = new THREE.BufferGeometry().setFromPoints(points)
-  
-  let material
+  const points = [start, end];
+  const geometry = new THREE.BufferGeometry().setFromPoints(points);
+
+  let material;
   if (dashed) {
     material = new THREE.LineDashedMaterial({
       color,
@@ -460,122 +478,126 @@ function createLine(
       dashSize: 0.2,
       gapSize: 0.15,
       transparent: true,
-      opacity: 0.4
-    })
+      opacity: 0.4,
+    });
   } else {
     material = new THREE.LineBasicMaterial({
       color,
       linewidth: lineWidth,
       transparent: true,
-      opacity: 0.3
-    })
+      opacity: 0.3,
+    });
   }
-  
-  const line = new THREE.Line(geometry, material)
+
+  const line = new THREE.Line(geometry, material);
   if (dashed) {
-    line.computeLineDistances()
+    line.computeLineDistances();
   }
-  scene.add(line)
+  scene.add(line);
 }
 
 function animate() {
-  animationId = requestAnimationFrame(animate)
+  animationId = requestAnimationFrame(animate);
 
   // 更新本机节点的脉冲效果
   nodeObjects.forEach((obj) => {
     if (obj.data.isLocal) {
-      obj.pulsePhase += 0.05
-      const scale = 1 + Math.sin(obj.pulsePhase) * 0.15
-      obj.mesh.scale.set(scale, scale, scale)
-      
-      // 更新发光强度
-      const material = obj.mesh.material as THREE.MeshStandardMaterial
-      material.emissiveIntensity = 0.5 + Math.sin(obj.pulsePhase) * 0.3
-    }
-  })
+      obj.pulsePhase += 0.05;
+      const scale = 1 + Math.sin(obj.pulsePhase) * 0.15;
+      obj.mesh.scale.set(scale, scale, scale);
 
-  controls.update()
-  renderer.render(scene, camera)
+      // 更新发光强度
+      const material = obj.mesh.material as THREE.MeshStandardMaterial;
+      material.emissiveIntensity = 0.5 + Math.sin(obj.pulsePhase) * 0.3;
+    }
+  });
+
+  controls.update();
+  renderer.render(scene, camera);
 }
 
 function onCanvasClick(event: MouseEvent) {
-  const rect = container.value?.getBoundingClientRect()
-  if (!rect) return
+  const rect = container.value?.getBoundingClientRect();
+  if (!rect) return;
 
-  const mouse = new THREE.Vector2()
-  mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1
-  mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1
+  const mouse = new THREE.Vector2();
+  mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+  mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
-  const raycaster = new THREE.Raycaster()
-  raycaster.setFromCamera(mouse, camera)
+  const raycaster = new THREE.Raycaster();
+  raycaster.setFromCamera(mouse, camera);
 
-  const meshes = nodeObjects.map(obj => obj.mesh)
-  const intersects = raycaster.intersectObjects(meshes)
+  const meshes = nodeObjects.map((obj) => obj.mesh);
+  const intersects = raycaster.intersectObjects(meshes);
 
   if (intersects.length > 0) {
-    const clickedMesh = intersects[0].object as THREE.Mesh
-    const nodeObj = nodeObjects.find(obj => obj.mesh === clickedMesh)
+    const clickedMesh = intersects[0].object as THREE.Mesh;
+    const nodeObj = nodeObjects.find((obj) => obj.mesh === clickedMesh);
     if (nodeObj) {
-      selectedNode.value = nodeObj.data
-      detailVisible.value = true
+      selectedNode.value = nodeObj.data;
+      detailVisible.value = true;
     }
   }
 }
 
 function onWindowResize() {
-  if (!container.value) return
-  
-  const width = container.value.clientWidth
-  const height = container.value.clientHeight
+  if (!container.value) return;
 
-  camera.aspect = width / height
-  camera.updateProjectionMatrix()
-  renderer.setSize(width, height)
+  const width = container.value.clientWidth;
+  const height = container.value.clientHeight;
+
+  camera.aspect = width / height;
+  camera.updateProjectionMatrix();
+  renderer.setSize(width, height);
 }
 
 function resetCamera() {
-  camera.position.set(8, 10, 12)
-  camera.lookAt(0, 1.5, 0)
-  controls.target.set(0, 1.5, 0)
-  controls.update()
+  camera.position.set(8, 10, 12);
+  camera.lookAt(0, 1.5, 0);
+  controls.target.set(0, 1.5, 0);
+  controls.update();
 }
 
 function getNodeTypeColor(layer: string, isLeader: boolean, isLocal: boolean) {
-  if (isLocal) return 'blue'
-  if (layer === 'committee') {
-    return isLeader ? 'orange' : 'green'
+  if (isLocal) return "blue";
+  if (layer === "committee") {
+    return isLeader ? "orange" : "green";
   }
-  return 'blue'
+  return "blue";
 }
 
 function getNodeTypeName(layer: string, isLeader: boolean, isLocal: boolean) {
-  if (isLocal) return '本机POT节点'
-  if (layer === 'committee') {
-    return isLeader ? '委员会领导者' : '委员会成员'
+  if (isLocal) return "本机POT节点";
+  if (layer === "committee") {
+    return isLeader ? "委员会领导者" : "委员会成员";
   }
-  return 'POT节点'
+  return "POT节点";
 }
 
-watch(() => topology.value, () => {
-  // 如果需要根据实时数据更新，可以在这里重新创建拓扑
-}, { deep: true })
+watch(
+  () => topology.value,
+  () => {
+    // 如果需要根据实时数据更新，可以在这里重新创建拓扑
+  },
+  { deep: true }
+);
 
 onMounted(() => {
-  initThreeJS()
-})
+  initThreeJS();
+});
 
 onUnmounted(() => {
   if (animationId) {
-    cancelAnimationFrame(animationId)
+    cancelAnimationFrame(animationId);
   }
   if (renderer) {
-    renderer.dispose()
+    renderer.dispose();
   }
   if (container.value && renderer) {
-    container.value.removeChild(renderer.domElement)
+    container.value.removeChild(renderer.domElement);
   }
-  window.removeEventListener('resize', onWindowResize)
-})
+  window.removeEventListener("resize", onWindowResize);
+});
 </script>
 
 <style scoped>
@@ -619,7 +641,8 @@ onUnmounted(() => {
 }
 
 @keyframes pulse {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 1;
   }
   50% {
