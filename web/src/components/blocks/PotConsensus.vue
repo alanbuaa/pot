@@ -1,10 +1,9 @@
 <template>
   <div class="pot-consensus card h-full">
-    <h3 class="text-lg font-semibold mb-4 text-pot-mining flex items-center gap-2">
-      <ThunderboltOutlined />
-      POT 共识状态
-    </h3>
-    
+    <div class="box">
+			<div class="tit"><span>POT 共识状态</span><p></p></div>
+    </div>
+      
     <a-spin :spinning="loading">
       <div class="space-y-4">
         <!-- Epoch 数字显示 -->
@@ -61,7 +60,7 @@
         </div>
         
         <!-- 挖矿成功率 -->
-        <div>
+        <!-- <div>
           <div class="flex items-center justify-between mb-1">
             <span class="text-sm text-gray-400">成功率</span>
             <span class="text-white">{{ status?.miningSuccessRate?.toFixed(1) || '0.0' }}%</span>
@@ -71,7 +70,7 @@
             :stroke-color="{ '0%': '#00d4ff', '100%': '#00ff88' }"
             :show-info="false"
           />
-        </div>
+        </div> -->
       </div>
     </a-spin>
   </div>

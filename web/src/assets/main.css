@@ -45,7 +45,7 @@ body {
 
 /* 卡片样式 */
 .card {
-  background: #141d3a;
+  background: rgba(20, 29, 58, 0.75);
   border: 1px solid #1e3a5f;
   border-radius: 8px;
   padding: 16px;
@@ -163,3 +163,11 @@ body {
 .ant-descriptions-item-content {
   color: #ffffff;
 }
+
+.tit{ display: flex; align-items: flex-end;}
+.tit span{ background: url(@/assets/images/line1.png) no-repeat bottom right; font-size: 20px; white-space: nowrap; padding-bottom: 10px; padding-right: 20px;}
+.tit p{ background: url(@/assets/images/line2.png) no-repeat bottom right; width: 100%; height: 13px; margin-bottom: 5px; opacity: .5}
+.boxnav{padding: 10px 0 ;}
+
+.box{  margin-bottom: 20px; position: relative;}
+.map{position:absolute; z-index: 10; opacity: .8;top: 5%; width:60%; height: 100%; left: 20%;}

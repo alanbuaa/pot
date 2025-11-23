@@ -10,21 +10,23 @@ import { mockService } from '@/services/mock'
 const containerRef = ref<HTMLElement | null>(null)
 
 let scene: THREE.Scene | null = null
-let camera: THREE.PerspectiveCamera | null = null
+let camera: THREE.OrthographicCamera | null = null
 let renderer: THREE.WebGLRenderer | null = null
 let animationId: number | null = null
 
 interface Block {
   mesh: THREE.Group
+  arrow?: THREE.Group
   height: number
   hash: string
   position: number
 }
 
 const blocks: Block[] = []
-const blockSpacing = 2.8  // 调整间距适配更大的立方体
-const maxBlocks = 20
+const blockSpacing = 5  // 减小区块间距，使更多区块能在屏幕上显示
+let maxBlocks = 15  // 改为let以便动态更新
 let nextPosition = 0
+let initialOffset = 0  // 初始偏移量，用于将第一个区块放在左侧
 
 onMounted(() => {
   if (!containerRef.value) return
@@ -54,12 +56,34 @@ function initScene() {
   
   // 场景
   scene = new THREE.Scene()
-  scene.fog = new THREE.Fog(0x0a0e27, 10, 50)
   
-  // 相机 - 优化视角，减少上下空白，增大FOV使区块更充满画面
-  camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000)
-  camera.position.set(0, 0.8, 5.5)
+  // 正交相机 - 保持二维视角，无透视变形
+  const aspect = width / height
+  const viewSize = 4  // 减小viewSize使区块看起来更大
+  camera = new THREE.OrthographicCamera(
+    -viewSize * aspect,
+    viewSize * aspect,
+    viewSize,
+    -viewSize,
+    0.1,
+    1000
+  )
+  camera.position.set(0, 3, 6)  // 调整相机位置，更接近场景
+  camera.up.set(0, 1, 0)  // 确保Y轴为上方向
   camera.lookAt(0, 0, 0)
+  
+  // 根据屏幕宽度计算最大块数
+  // 相机可见宽度 = 2 * viewSize * aspect
+  // 每个区块占用空间 = blockSpacing (包括区块本身和箭头)
+  const visibleWidth = 2 * viewSize * aspect
+  // 计算可见范围内能容纳的区块数
+  // 使用blockSpacing作为每个区块的实际占用空间
+  maxBlocks = Math.max(6, Math.floor(visibleWidth / blockSpacing))
+  
+  // 计算初始偏移：使第一个区块从左侧边缘开始
+  initialOffset = -visibleWidth / 2 + blockSpacing / 2
+  
+  console.log(`屏幕宽度: ${width}px, 视口宽度: ${visibleWidth.toFixed(2)}, 计算出最大块数: ${maxBlocks}, 初始偏移: ${initialOffset.toFixed(2)}`)
   
   // 渲染器
   renderer = new THREE.WebGLRenderer({ 
@@ -68,101 +92,145 @@ function initScene() {
   })
   renderer.setSize(width, height)
   renderer.setPixelRatio(window.devicePixelRatio)
-  renderer.setClearColor(0x0a0e27, 0.3)
+  renderer.setClearColor(0x000000, 0)
   containerRef.value.appendChild(renderer.domElement)
   
   // 光源
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.5)
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.6)
   scene.add(ambientLight)
   
   const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8)
-  directionalLight.position.set(5, 10, 7)
+  directionalLight.position.set(10, 10, 10)
+  directionalLight.castShadow = true
   scene.add(directionalLight)
   
-  const pointLight = new THREE.PointLight(0x00d4ff, 1, 50)
-  pointLight.position.set(-10, 5, 0)
-  scene.add(pointLight)
+  // 多个点光源增强立体感
+  const pointLight1 = new THREE.PointLight(0x00d4ff, 1.5, 30)
+  pointLight1.position.set(-5, 3, 5)
+  scene.add(pointLight1)
+  
+  const pointLight2 = new THREE.PointLight(0xffd700, 1, 30)
+  pointLight2.position.set(10, 3, 5)
+  scene.add(pointLight2)
 }
 
 function initBlocks() {
-  // 初始化一些区块
+  // 初始化8个区块，不触发场景移动
   for (let i = 0; i < 8; i++) {
     addBlock(i + 12000, generateHash(), false)
+  }
+  
+  // 确保场景位置为原点
+  if (scene) {
+    scene.position.x = 0
   }
 }
 
 function createBlockMesh(height: number, hash: string, isNew: boolean): THREE.Group {
   const group = new THREE.Group()
   
-  // 立方体几何体 - 稍微增大尺寸
-  const geometry = new THREE.BoxGeometry(1.8, 1.8, 1.8)
+  // 设置固定旋转角度，显示三个面
+  group.rotation.y = Math.PI / 6  // 30度
+  group.rotation.x = - Math.PI / 12 // 15度
   
-  // 材质 - 带发光效果
-  const material = new THREE.MeshPhongMaterial({
-    color: 0x00d4ff,
-    emissive: isNew ? 0x00d4ff : 0x004466,
-    emissiveIntensity: isNew ? 0.5 : 0.2,
-    shininess: 100,
+  // 正方体几何体
+  const size = 3  // 减小尺寸以适应更多区块
+  const geometry = new THREE.BoxGeometry(size, size, size)
+  
+  // 材质 - 第一个区块为红色，其他为蓝色
+  let color: THREE.Color
+  const blockIndex = blocks.length
+  if (blockIndex === 0) {
+    // 第一个区块为红色
+    color = new THREE.Color(0xff6b6b)
+  } else {
+    // 其他区块统一为蓝色
+    color = new THREE.Color(0x00d4ff)
+  }
+  
+  const material = new THREE.MeshStandardMaterial({
+    color: color,
+    emissive: isNew ? color : new THREE.Color(0x002244),
+    emissiveIntensity: isNew ? 0.6 : 0.15,
+    metalness: 0.7,
+    roughness: 0.3,
     transparent: true,
-    opacity: 0.9
+    opacity: 0.95
   })
   
   const cube = new THREE.Mesh(geometry, material)
+  cube.castShadow = true
+  cube.receiveShadow = true
   group.add(cube)
   
-  // 边框
+  // 边框线
   const edges = new THREE.EdgesGeometry(geometry)
   const lineMaterial = new THREE.LineBasicMaterial({ 
     color: 0xffffff, 
     transparent: true, 
-    opacity: 0.6 
+    opacity: 0.8,
+    linewidth: 2
   })
   const wireframe = new THREE.LineSegments(edges, lineMaterial)
   group.add(wireframe)
   
-  // 创建文字纹理
+  // 创建文字纹理（多面显示）
   const canvas = document.createElement('canvas')
   const context = canvas.getContext('2d')!
-  canvas.width = 256
-  canvas.height = 256
+  canvas.width = 512
+  canvas.height = 512
   
+  // 背景渐变
+  const gradient = context.createLinearGradient(0, 0, 0, 512)
+  gradient.addColorStop(0, 'rgba(0, 212, 255, 0.1)')
+  gradient.addColorStop(1, 'rgba(0, 100, 150, 0.1)')
+  context.fillStyle = gradient
+  context.fillRect(0, 0, 512, 512)
+  
+  // 绘制区块高度
   context.fillStyle = '#ffffff'
-  context.font = 'bold 32px Arial'
+  context.font = 'bold 64px Arial'
   context.textAlign = 'center'
   context.textBaseline = 'middle'
-  context.fillText(`#${height}`, 128, 80)
+  context.fillText(`#${height}`, 256, 180)
   
-  context.font = '16px monospace'
-  context.fillText(hash.slice(0, 8) + '...', 128, 140)
+  // 绘制哈希
+  context.font = 'bold 28px monospace'
+  context.fillStyle = '#00d4ff'
+  context.fillText(hash.slice(0, 10), 256, 280)
+  context.fillText(hash.slice(10, 20), 256, 320)
   
   const texture = new THREE.CanvasTexture(canvas)
   
-  // 将文字纹理应用到前面 - 调整尺寸和位置
+  // 将文字纹理应用到正面
   const textMaterial = new THREE.MeshBasicMaterial({ 
     map: texture, 
-    transparent: true 
+    transparent: true,
+    opacity: 0.9
   })
-  const textGeometry = new THREE.PlaneGeometry(1.7, 1.7)
+  const textGeometry = new THREE.PlaneGeometry(size * 0.95, size * 0.95)
   const textMesh = new THREE.Mesh(textGeometry, textMaterial)
-  textMesh.position.z = 0.91
+  textMesh.position.z = size / 2 + 0.01
   group.add(textMesh)
   
-  // 新区块发光效果
+  // 新区块特效
   if (isNew) {
-    const glowGeometry = new THREE.SphereGeometry(1.5, 16, 16)
+    // 发光球
+    const glowGeometry = new THREE.SphereGeometry(size * 0.8, 32, 32)
     const glowMaterial = new THREE.MeshBasicMaterial({
       color: 0x00d4ff,
       transparent: true,
-      opacity: 0.3
+      opacity: 0.4,
+      blending: THREE.AdditiveBlending
     })
     const glow = new THREE.Mesh(glowGeometry, glowMaterial)
     group.add(glow)
     
-    // 1秒后移除发光效果
+    // 1.5秒后移除发光效果
     setTimeout(() => {
       group.remove(glow)
-      material.emissiveIntensity = 0.2
-    }, 1000)
+      material.emissiveIntensity = 0.15
+    }, 1500)
   }
   
   return group
@@ -170,14 +238,31 @@ function createBlockMesh(height: number, hash: string, isNew: boolean): THREE.Gr
 
 function addBlock(height: number, hash: string, isNew: boolean) {
   const blockMesh = createBlockMesh(height, hash, isNew)
-  blockMesh.position.x = nextPosition * blockSpacing
+  // 使用initialOffset使第一个区块从左侧开始
+  blockMesh.position.x = initialOffset + nextPosition * blockSpacing
+  blockMesh.position.y = 0
+  blockMesh.position.z = 0
   
   if (scene) {
     scene.add(blockMesh)
   }
   
+  // 创建箭头连接前一个区块
+  let arrow: THREE.Group | undefined
+  if (blocks.length > 0) {
+    arrow = createArrow()
+    arrow.position.x = initialOffset + (nextPosition - 0.5) * blockSpacing
+    arrow.position.y = 0
+    arrow.position.z = 0
+    
+    if (scene) {
+      scene.add(arrow)
+    }
+  }
+  
   blocks.push({
     mesh: blockMesh,
+    arrow,
     height,
     hash,
     position: nextPosition
@@ -185,51 +270,73 @@ function addBlock(height: number, hash: string, isNew: boolean) {
   
   nextPosition++
   
-  // 创建箭头指向下一个区块
-  if (blocks.length > 1) {
-    const arrow = createArrow()
-    arrow.position.x = (nextPosition - 1) * blockSpacing - blockSpacing / 2
-    arrow.position.y = 0
-    if (scene) {
-      scene.add(arrow)
-    }
-  }
-  
-  // 移除过多的区块
+  // 移除过多的区块和箭头
   if (blocks.length > maxBlocks) {
     const removed = blocks.shift()
     if (removed && scene) {
       scene.remove(removed.mesh)
+      if (removed.arrow) {
+        scene.remove(removed.arrow)
+      }
     }
   }
   
-  // 平滑移动相机
-  if (isNew && camera) {
-    const targetX = (nextPosition - 5) * blockSpacing
-    animateCameraTo(targetX)
+  // 移动场景跟随最新区块（而不是移动相机）
+  // 只有当区块链条接近右侧边缘时才开始向左移动
+  if (isNew && scene && camera) {
+    const aspect = camera.right / 4  // viewSize = 4
+    const visibleWidth = 2 * 4 * aspect
+    // 使用blockSpacing计算可见区块数
+    const visibleBlocks = Math.floor(visibleWidth / blockSpacing)
+    
+    // 当区块数量超过可见范围时，开始滚动
+    // 留出2个区块的边距，当最新区块到达右侧边缘附近时开始移动
+    const scrollThreshold = Math.max(6, visibleBlocks - 2)
+    
+    if (nextPosition > scrollThreshold) {
+      // 计算场景偏移，保持最新区块在右侧可见
+      const targetOffset = -(nextPosition - scrollThreshold) * blockSpacing
+      animateSceneTo(targetOffset)
+    }
   }
 }
 
 function createArrow(): THREE.Group {
   const group = new THREE.Group()
   
-  // 箭头杆
-  const shaftGeometry = new THREE.CylinderGeometry(0.05, 0.05, 1, 8)
-  const shaftMaterial = new THREE.MeshPhongMaterial({ 
+  const arrowLength = blockSpacing - 1.2  // 根据新的blockSpacing调整
+  
+  // 箭头杆 - 从左指向右
+  const shaftGeometry = new THREE.CylinderGeometry(0.05, 0.05, arrowLength, 8)
+  const shaftMaterial = new THREE.MeshStandardMaterial({ 
     color: 0xffd700,
-    emissive: 0x886600,
-    emissiveIntensity: 0.3
+    emissive: 0xffaa00,
+    emissiveIntensity: 0.4,
+    metalness: 0.8,
+    roughness: 0.2
   })
   const shaft = new THREE.Mesh(shaftGeometry, shaftMaterial)
   shaft.rotation.z = Math.PI / 2
   group.add(shaft)
   
-  // 箭头头部
+  // 箭头头部（圆锥）
   const headGeometry = new THREE.ConeGeometry(0.15, 0.3, 8)
   const head = new THREE.Mesh(headGeometry, shaftMaterial)
   head.rotation.z = -Math.PI / 2
-  head.position.x = 0.65
+  head.position.x = arrowLength / 2 + 0.15
   group.add(head)
+  
+  // 添加发光效果
+  const glowGeometry = new THREE.CylinderGeometry(0.08, 0.08, arrowLength, 8)
+  const glowMaterial = new THREE.MeshBasicMaterial({
+    color: 0xffd700,
+    transparent: true,
+    opacity: 0.3,
+    blending: THREE.AdditiveBlending
+  })
+  const glow = new THREE.Mesh(glowGeometry, glowMaterial)
+  glow.rotation.z = Math.PI / 2
+  group.add(glow)
   
   return group
 }
@@ -249,11 +356,11 @@ function generateHash(): string {
   ).join('')
 }
 
-function animateCameraTo(targetX: number) {
-  if (!camera) return
+function animateSceneTo(targetX: number) {
+  if (!scene) return
   
-  const startX = camera.position.x
-  const duration = 800
+  const startX = scene.position.x
+  const duration = 1000
   const startTime = Date.now()
   
   function update() {
@@ -261,8 +368,9 @@ function animateCameraTo(targetX: number) {
     const progress = Math.min(elapsed / duration, 1)
     const eased = easeInOutCubic(progress)
     
-    if (camera) {
-      camera.position.x = startX + (targetX - startX) * eased
+    if (scene) {
+      // 移动整个场景，相机保持不动
+      scene.position.x = startX + (targetX - startX) * eased
     }
     
     if (progress < 1) {
@@ -280,9 +388,20 @@ function easeInOutCubic(t: number): number {
 function animate() {
   animationId = requestAnimationFrame(animate)
   
-  // 旋转所有区块
-  blocks.forEach(block => {
-    block.mesh.rotation.y += 0.005
+  const time = Date.now() * 0.001
+  
+  // 确保相机始终看向原点，保持视角稳定
+  if (camera) {
+    camera.up.set(0, 1, 0)  // 确保每帧up向量正确
+    camera.lookAt(0, 0, 0)
+  }
+  
+  // 箭头脉动效果
+  blocks.forEach((block, index) => {
+    if (block.arrow) {
+      const scale = 1 + Math.sin(time * 3 + index) * 0.08
+      block.arrow.scale.set(scale, 1, 1)
+    }
   })
   
   if (renderer && scene && camera) {
@@ -295,10 +414,36 @@ function handleResize() {
   
   const width = containerRef.value.clientWidth
   const height = containerRef.value.clientHeight
+  const aspect = width / height
+  const viewSize = 4
   
-  camera.aspect = width / height
+  camera.left = -viewSize * aspect
+  camera.right = viewSize * aspect
+  camera.top = viewSize
+  camera.bottom = -viewSize
   camera.updateProjectionMatrix()
   renderer.setSize(width, height)
+  
+  // 窗口大小变化时重新计算最大块数
+  const visibleWidth = 2 * viewSize * aspect
+  const newMaxBlocks = Math.max(6, Math.floor(visibleWidth / blockSpacing))
+  
+  // 如果最大块数变化，可能需要移除或保留更多区块
+  if (newMaxBlocks !== maxBlocks) {
+    console.log(`窗口大小变化，最大块数从 ${maxBlocks} 更新为 ${newMaxBlocks}`)
+    maxBlocks = newMaxBlocks
+    
+    // 如果新的最大块数更小，移除多余的旧区块
+    while (blocks.length > maxBlocks) {
+      const removed = blocks.shift()
+      if (removed && scene) {
+        scene.remove(removed.mesh)
+        if (removed.arrow) {
+          scene.remove(removed.arrow)
+        }
+      }
+    }
+  }
 }
 
 function cleanup() {
@@ -320,7 +465,7 @@ function cleanup() {
   width: 100%;
   height: 100%;
   position: relative;
-  background: linear-gradient(135deg, #0a0e27 0%, #141d3a 100%);
+  background: transparent;
   border-radius: 8px;
   overflow: hidden;
 }

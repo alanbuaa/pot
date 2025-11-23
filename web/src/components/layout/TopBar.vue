@@ -1,5 +1,5 @@
 <template>
-  <div class="top-bar bg-bg-secondary border-b border-border px-6 py-3">
+  <div class="top-bar bg-bg-secondary border-b border-border px-6 py-5">
     <div class="flex items-center gap-8">
       <!-- LOGO -->
       <div class="logo flex-shrink-0">
