@@ -1,5 +1,41 @@
 <template>
   <div class="blockchain-3d-container" ref="containerRef"></div>
+  
+  <!-- 区块详情模态框 -->
+  <a-modal 
+    v-model:open="showBlockDetail" 
+    title="区块详情" 
+    :footer="null"
+    :width="600"
+  >
+    <div v-if="selectedBlock" class="space-y-3">
+      <div class="flex justify-between items-center">
+        <span class="text-gray-400">区块高度</span>
+        <span class="text-xl font-bold text-blue-400">#{{ selectedBlock.height }}</span>
+      </div>
+      <a-divider style="margin: 12px 0" />
+      <div class="flex justify-between">
+        <span class="text-gray-400">区块哈希</span>
+        <span class="font-mono text-sm">{{ selectedBlock.hash }}</span>
+      </div>
+      <div class="flex justify-between">
+        <span class="text-gray-400">时间戳</span>
+        <span>{{ formatTimestamp(selectedBlock.timestamp) }}</span>
+      </div>
+      <div class="flex justify-between">
+        <span class="text-gray-400">交易数量</span>
+        <span>{{ selectedBlock.txCount }}</span>
+      </div>
+      <div class="flex justify-between">
+        <span class="text-gray-400">区块大小</span>
+        <span>{{ formatSize(selectedBlock.size) }}</span>
+      </div>
+      <div class="flex justify-between">
+        <span class="text-gray-400">矿工</span>
+        <span class="font-mono text-xs">{{ selectedBlock.miner }}</span>
+      </div>
+    </div>
+  </a-modal>
 </template>
 
 <script setup lang="ts">
@@ -8,11 +44,22 @@ import * as THREE from 'three'
 import { mockService } from '@/services/mock'
 
 const containerRef = ref<HTMLElement | null>(null)
+const showBlockDetail = ref(false)
+const selectedBlock = ref<{
+  height: number
+  hash: string
+  timestamp: number
+  txCount: number
+  size: number
+  miner: string
+} | null>(null)
 
 let scene: THREE.Scene | null = null
 let camera: THREE.OrthographicCamera | null = null
 let renderer: THREE.WebGLRenderer | null = null
 let animationId: number | null = null
+let raycaster: THREE.Raycaster | null = null
+let mouse: THREE.Vector2 | null = null
 
 interface Block {
   mesh: THREE.Group
@@ -20,6 +67,10 @@ interface Block {
   height: number
   hash: string
   position: number
+  timestamp: number
+  txCount: number
+  size: number
+  miner: string
 }
 
 const blocks: Block[] = []
@@ -27,6 +78,18 @@ const blockSpacing = 5  // 减小区块间距，使更多区块能在屏幕上�
 let maxBlocks = 15  // 改为let以便动态更新
 let nextPosition = 0
 let initialOffset = 0  // 初始偏移量，用于将第一个区块放在左侧
+
+// 格式化时间戳
+function formatTimestamp(timestamp: number): string {
+  return new Date(timestamp).toLocaleString('zh-CN')
+}
+
+// 格式化大小
+function formatSize(size: number): string {
+  if (size < 1024) return size + ' B'
+  if (size < 1024 * 1024) return (size / 1024).toFixed(2) + ' KB'
+  return (size / (1024 * 1024)).toFixed(2) + ' MB'
+}
 
 onMounted(() => {
   if (!containerRef.value) return
@@ -112,12 +175,22 @@ function initScene() {
   const pointLight2 = new THREE.PointLight(0xffd700, 1, 30)
   pointLight2.position.set(10, 3, 5)
   scene.add(pointLight2)
+  
+  // 初始化raycaster用于检测点击
+  raycaster = new THREE.Raycaster()
+  mouse = new THREE.Vector2()
+  
+  // 添加鼠标事件监听
+  renderer.domElement.addEventListener('click', onBlockClick)
+  renderer.domElement.addEventListener('mousemove', onMouseMove)
+  renderer.domElement.style.cursor = 'default'
 }
 
 function initBlocks() {
   // 初始化8个区块，不触发场景移动
   for (let i = 0; i < 8; i++) {
-    addBlock(i + 12000, generateHash(), false)
+    const timestamp = Date.now() - (8 - i) * 3000
+    addBlock(i + 12000, generateHash(), false, timestamp)
   }
   
   // 确保场景位置为原点
@@ -236,12 +309,22 @@ function createBlockMesh(height: number, hash: string, isNew: boolean): THREE.Gr
   return group
 }
 
-function addBlock(height: number, hash: string, isNew: boolean) {
+function addBlock(height: number, hash: string, isNew: boolean, timestamp?: number) {
   const blockMesh = createBlockMesh(height, hash, isNew)
   // 使用initialOffset使第一个区块从左侧开始
   blockMesh.position.x = initialOffset + nextPosition * blockSpacing
   blockMesh.position.y = 0
   blockMesh.position.z = 0
+  
+  // 存储区块信息到mesh的userData中，方便点击时获取
+  blockMesh.userData = {
+    height,
+    hash,
+    timestamp: timestamp || Date.now(),
+    txCount: Math.floor(Math.random() * 200) + 10,
+    size: Math.floor(Math.random() * 500000) + 50000,
+    miner: '0x' + Array.from({ length: 40 }, () => Math.floor(Math.random() * 16).toString(16)).join('')
+  }
   
   if (scene) {
     scene.add(blockMesh)
@@ -265,7 +348,11 @@ function addBlock(height: number, hash: string, isNew: boolean) {
     arrow,
     height,
     hash,
-    position: nextPosition
+    position: nextPosition,
+    timestamp: blockMesh.userData.timestamp,
+    txCount: blockMesh.userData.txCount,
+    size: blockMesh.userData.size,
+    miner: blockMesh.userData.miner
   })
   
   nextPosition++
@@ -346,7 +433,7 @@ function addNewBlock() {
   const newHeight = lastBlock ? lastBlock.height + 1 : 12000
   const newHash = generateHash()
   
-  addBlock(newHeight, newHash, true)
+  addBlock(newHeight, newHash, true, Date.now())
   mockService.incrementBlock()
 }
 
@@ -446,12 +533,65 @@ function handleResize() {
   }
 }
 
+function onBlockClick(event: MouseEvent) {
+  if (!containerRef.value || !camera || !raycaster || !mouse || !scene) return
+  
+  const rect = containerRef.value.getBoundingClientRect()
+  mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1
+  mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1
+  
+  raycaster.setFromCamera(mouse, camera)
+  
+  // 只检测区块mesh（不包括箭头）
+  const blockMeshes = blocks.map(b => b.mesh)
+  const intersects = raycaster.intersectObjects(blockMeshes, true)
+  
+  if (intersects.length > 0) {
+    // 找到点击的区块
+    let clickedMesh = intersects[0].object
+    while (clickedMesh.parent && clickedMesh.parent.type !== 'Scene') {
+      clickedMesh = clickedMesh.parent
+    }
+    
+    const blockData = clickedMesh.userData
+    if (blockData && blockData.height) {
+      selectedBlock.value = {
+        height: blockData.height,
+        hash: blockData.hash,
+        timestamp: blockData.timestamp,
+        txCount: blockData.txCount,
+        size: blockData.size,
+        miner: blockData.miner
+      }
+      showBlockDetail.value = true
+    }
+  }
+}
+
+function onMouseMove(event: MouseEvent) {
+  if (!containerRef.value || !camera || !raycaster || !mouse || !renderer) return
+  
+  const rect = containerRef.value.getBoundingClientRect()
+  mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1
+  mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1
+  
+  raycaster.setFromCamera(mouse, camera)
+  
+  const blockMeshes = blocks.map(b => b.mesh)
+  const intersects = raycaster.intersectObjects(blockMeshes, true)
+  
+  // 改变鼠标样式
+  renderer.domElement.style.cursor = intersects.length > 0 ? 'pointer' : 'default'
+}
+
 function cleanup() {
   if (animationId !== null) {
     cancelAnimationFrame(animationId)
   }
   
   if (renderer && containerRef.value) {
+    renderer.domElement.removeEventListener('click', onBlockClick)
+    renderer.domElement.removeEventListener('mousemove', onMouseMove)
     containerRef.value.removeChild(renderer.domElement)
     renderer.dispose()
   }

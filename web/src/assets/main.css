@@ -46,14 +46,13 @@ body {
 /* 卡片样式 */
 .card {
   background: rgba(20, 29, 58, 0.75);
-  border: 1px solid #1e3a5f;
+  border: none;
   border-radius: 8px;
-  padding: 16px;
+  padding: 8px;
   backdrop-filter: blur(10px);
 }
 
 .card:hover {
-  border-color: #00d4ff;
   box-shadow: 0 4px 12px rgba(0, 212, 255, 0.2);
 }
 
@@ -165,9 +164,9 @@ body {
 }
 
 .tit{ display: flex; align-items: flex-end;}
-.tit span{ background: url(@/assets/images/line1.png) no-repeat bottom right; font-size: 20px; white-space: nowrap; padding-bottom: 10px; padding-right: 20px;}
+.tit span{ background: url(@/assets/images/line1.png) no-repeat bottom right; font-size: 16px; color: #00d4ff; white-space: nowrap; padding-bottom: 10px; padding-right: 20px;}
 .tit p{ background: url(@/assets/images/line2.png) no-repeat bottom right; width: 100%; height: 13px; margin-bottom: 5px; opacity: .5}
 .boxnav{padding: 10px 0 ;}
 
-.box{  margin-bottom: 20px; position: relative;}
+.box{  margin-bottom: 10px; position: relative;}
 .map{position:absolute; z-index: 10; opacity: .8;top: 5%; width:60%; height: 100%; left: 20%;}

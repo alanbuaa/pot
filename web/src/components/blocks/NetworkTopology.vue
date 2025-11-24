@@ -2,7 +2,6 @@
   <div class="network-topology h-full relative">
     <div class="flex items-center justify-between mb-4">
       <h3 class="text-sm font-semibold mb-3 flex items-center gap-2">
-        <TeamOutlined />
         节点网络
       </h3>
 
@@ -29,14 +28,6 @@
     >
       <div class="text-xs space-y-2">
         <div class="flex items-center gap-2">
-          <span class="w-3 h-3 rounded-full bg-orange-500"></span>
-          <span>委员会领导者</span>
-        </div>
-        <div class="flex items-center gap-2">
-          <span class="w-3 h-3 rounded-full bg-green-500"></span>
-          <span>委员会成员</span>
-        </div>
-        <div class="flex items-center gap-2">
           <span class="w-3 h-3 rounded-full bg-blue-500"></span>
           <span>POT节点</span>
         </div>
@@ -44,14 +35,6 @@
           <span class="w-3 h-3 rounded-full bg-blue-400 animate-pulse"></span>
           <span>本机节点</span>
         </div>
-        <!-- <div class="flex items-center gap-1 mt-2">
-          <div class="w-8 h-0.5 bg-white opacity-30"></div>
-          <span>层内连接</span>
-        </div>
-        <div class="flex items-center gap-1">
-          <div class="w-8 h-0.5 border-t border-dashed border-white opacity-30"></div>
-          <span>跨层连接</span>
-        </div> -->
       </div>
     </div>
 
@@ -104,10 +87,11 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, watch } from "vue";
 import { storeToRefs } from "pinia";
-import { NodeIndexOutlined, FullscreenOutlined } from "@ant-design/icons-vue";
+import { FullscreenOutlined } from "@ant-design/icons-vue";
 import { useNetworkStore } from "@/stores/network";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import mapImageUrl from "@/assets/images/map.png";
 
 const container = ref<HTMLDivElement>();
 const networkStore = useNetworkStore();
@@ -121,16 +105,45 @@ let camera: THREE.PerspectiveCamera;
 let renderer: THREE.WebGLRenderer;
 let controls: OrbitControls;
 let animationId: number;
-let nodeObjects: Array<{ mesh: THREE.Mesh; data: any; pulsePhase: number }> =
+let nodeObjects: Array<{ mesh: THREE.Mesh; data: any; pulsePhase: number; angle: number }> =
   [];
+let connectionLines: Array<THREE.Line> = [];
 
 // 节点配置
-const NODES_PER_ROW = 6; // 每行节点数量
-const NODES_PER_COL = 4; // 每列节点数量
-const NODE_COUNT = NODES_PER_ROW * NODES_PER_COL; // 总节点数
-const LAYER_SPACING = 3; // 层间距
-const POT_Y = 0; // 底层 Y 坐标
-const COMMITTEE_Y = POT_Y + LAYER_SPACING; // 上层 Y 坐标
+const NODE_COUNT = 40; // 总节点数
+const EARTH_RADIUS = 14; // 地球半径（增大以更好填充视图）
+const NODE_DISTANCE_FROM_CENTER = EARTH_RADIUS * 1.08; // 节点距离地球中心的距离
+const NODE_SIZE = 0.18; // 节点大小
+const EARTH_ROTATION_SPEED = 0.001; // 地球自转速度
+const CONNECTION_THRESHOLD = EARTH_RADIUS * 0.8; // 节点连接距离阈值
+const MESSAGE_SPEED = 0.015; // 信息流速度
+const MESSAGE_INTERVAL = 2000; // 消息发送周期（毫秒）
+
+let earthMesh: THREE.Mesh | null = null;
+let networkGroup: THREE.Group | null = null; // 用于整体旋转节点网络
+let messageParticles: Array<{
+  particle: THREE.Line | THREE.Mesh;
+  glowParticle?: THREE.Line; // 外层发光线段
+  curve: THREE.QuadraticBezierCurve3;
+  progress: number;
+  connection: { from: number; to: number };
+  color: number;
+  level: number;
+}> = [];
+
+// 节点连接关系表（哪些节点相互连接）
+let nodeConnections: Map<number, Set<number>> = new Map();
+
+// 消息颜色池
+const MESSAGE_COLORS = [
+  0x00ffff, // 青色
+  0xff00ff, // 紫红色
+  0xffff00, // 黄色
+  0x00ff00, // 绿色
+  0xff6600, // 橙色
+  0xff0099, // 粉红色
+];
+let currentColorIndex = 0;
 
 function initThreeJS() {
   if (!container.value) return;
@@ -144,8 +157,8 @@ function initThreeJS() {
 
   // 创建相机
   camera = new THREE.PerspectiveCamera(60, width / height, 0.1, 1000);
-  camera.position.set(8, 10, 12);
-  camera.lookAt(0, 1.5, 0);
+  camera.position.set(20, 16, 20); // 斜向视角，距离调整以适应更大的地球
+  camera.lookAt(0, 0, 0);
 
   // 创建渲染器
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -158,19 +171,24 @@ function initThreeJS() {
   controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
   controls.dampingFactor = 0.05;
-  controls.minDistance = 5;
-  controls.maxDistance = 30;
+  controls.minDistance = 15;
+  controls.maxDistance = 50;
   controls.maxPolarAngle = Math.PI / 2.2;
 
   // 添加光源
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
   scene.add(ambientLight);
 
-  const pointLight1 = new THREE.PointLight(0x00d4ff, 1, 50);
+  // 主光源（模拟太阳光）
+  const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+  directionalLight.position.set(5, 3, 5);
+  scene.add(directionalLight);
+
+  const pointLight1 = new THREE.PointLight(0x00d4ff, 0.8, 50);
   pointLight1.position.set(10, 10, 10);
   scene.add(pointLight1);
 
-  const pointLight2 = new THREE.PointLight(0xff6b35, 0.8, 50);
+  const pointLight2 = new THREE.PointLight(0xff6b35, 0.6, 50);
   pointLight2.position.set(-10, 10, -10);
   scene.add(pointLight2);
 
@@ -189,66 +207,106 @@ function initThreeJS() {
 
 function createNetworkTopology() {
   nodeObjects = [];
+  connectionLines = [];
 
-  // 随机分布的节点位置（带最小距离约束）
-  const areaSize = 10; // 分布区域大小
-  const nodeCount = NODES_PER_ROW * NODES_PER_COL;
-  const minDistance = 1.2; // 节点之间的最小距离
+  // 创建网络组用于整体旋转
+  networkGroup = new THREE.Group();
+  scene.add(networkGroup);
 
-  // 存储节点位置用于层内连接
-  const nodePositions: Array<{ x: number; z: number; index: number }> = [];
-
-  // 生成随机位置，确保节点之间保持最小距离
-  for (let i = 0; i < nodeCount; i++) {
-    let x: number, z: number;
-    let attempts = 0;
-    const maxAttempts = 100;
-
-    do {
-      x = (Math.random() - 0.5) * areaSize;
-      z = (Math.random() - 0.5) * areaSize;
-      attempts++;
-
-      // 检查与已有节点的距离
-      const tooClose = nodePositions.some((pos) => {
-        const distance = Math.sqrt(
-          Math.pow(x - pos.x, 2) + Math.pow(z - pos.z, 2)
-        );
-        return distance < minDistance;
+  // === 1. 创建中心 3D 地球 ===
+  const textureLoader = new THREE.TextureLoader();
+  
+  // 创建地球球体
+  const earthGeometry = new THREE.SphereGeometry(EARTH_RADIUS, 64, 64);
+  
+  // 加载地球纹理
+  textureLoader.load(
+    mapImageUrl,
+    (texture) => {
+      const earthMaterial = new THREE.MeshPhongMaterial({
+        map: texture,
+        bumpScale: 0.05,
+        specular: new THREE.Color(0x333333),
+        shininess: 5,
       });
+      
+      earthMesh = new THREE.Mesh(earthGeometry, earthMaterial);
+      earthMesh.position.set(0, 0, 0);
+      scene.add(earthMesh);
+      
+      // 创建节点和连接线（在纹理加载完成后）
+      createNodesAndConnections();
+      
+      // 添加简单的大气光晕效果
+      const glowGeometry = new THREE.SphereGeometry(EARTH_RADIUS * 1.05, 64, 64);
+      const glowMaterial = new THREE.MeshBasicMaterial({
+        color: 0x4488ff,
+        transparent: true,
+        opacity: 0.1,
+        side: THREE.BackSide,
+      });
+      
+      const glowMesh = new THREE.Mesh(glowGeometry, glowMaterial);
+      scene.add(glowMesh);
+    },
+    undefined,
+    (error) => {
+      console.error('Error loading earth texture:', error);
+      // 如果纹理加载失败，使用纯色球体
+      const earthMaterial = new THREE.MeshPhongMaterial({
+        color: 0x2233ff,
+        emissive: 0x112244,
+      });
+      earthMesh = new THREE.Mesh(earthGeometry, earthMaterial);
+      earthMesh.position.set(0, 0, 0);
+      scene.add(earthMesh);
+      
+      // 创建节点和连接线
+      createNodesAndConnections();
+    }
+  );
+}
 
-      if (!tooClose || attempts >= maxAttempts) {
-        break;
-      }
-    } while (true);
+// 创建节点和连接线的函数
+function createNodesAndConnections() {
+  if (!earthMesh) return;
 
-    nodePositions.push({ x, z, index: i });
-  }
+  // === 在球体表面随机分布 POT 节点（使用 Fibonacci 球面分布算法）===
+  const goldenRatio = (1 + Math.sqrt(5)) / 2;
+  const angleIncrement = Math.PI * 2 * goldenRatio;
+  
+  for (let i = 0; i < NODE_COUNT; i++) {
+    // 使用 Fibonacci 球面分布获得均匀分布
+    const t = i / NODE_COUNT;
+    const inclination = Math.acos(1 - 2 * t);
+    const azimuth = angleIncrement * i;
+    
+    const x = Math.sin(inclination) * Math.cos(azimuth) * NODE_DISTANCE_FROM_CENTER;
+    const y = Math.sin(inclination) * Math.sin(azimuth) * NODE_DISTANCE_FROM_CENTER;
+    const z = Math.cos(inclination) * NODE_DISTANCE_FROM_CENTER;
+    
+    const isLocal = i === 8; // 第9个节点是本机节点
 
-  // === 底层：POT 节点（使用生成的位置）===
-  nodePositions.forEach((pos, i) => {
-    const isLocal = i === 5; // 第6个节点是本机节点
-
-    // 创建节点球体
-    const geometry = new THREE.SphereGeometry(0.2, 32, 32);
+    // 创建节点球体（更小）
+    const geometry = new THREE.SphereGeometry(NODE_SIZE, 16, 16);
     const material = new THREE.MeshStandardMaterial({
-      color: 0x3b82f6, // 蓝色
-      emissive: isLocal ? 0x3b82f6 : 0x1e40af,
-      emissiveIntensity: isLocal ? 0.5 : 0.2,
+      color: 0x5ba3ff, // 更亮的蓝色
+      emissive: isLocal ? 0x5ba3ff : 0x3b82f6,
+      emissiveIntensity: isLocal ? 1.2 : 0.6,
       metalness: 0.3,
-      roughness: 0.4,
+      roughness: 0.2,
     });
     const nodeMesh = new THREE.Mesh(geometry, material);
-    nodeMesh.position.set(pos.x, POT_Y, pos.z);
-    scene.add(nodeMesh);
+    nodeMesh.position.set(x, y, z);
+    earthMesh!.add(nodeMesh); // 添加到地球上，随地球一起旋转
 
     // 添加光晕效果（本机节点）
     if (isLocal) {
-      const glowGeometry = new THREE.SphereGeometry(0.3, 32, 32);
+      const glowGeometry = new THREE.SphereGeometry(NODE_SIZE * 1.8, 16, 16);
       const glowMaterial = new THREE.MeshBasicMaterial({
-        color: 0x3b82f6,
+        color: 0x5ba3ff,
         transparent: true,
-        opacity: 0.3,
+        opacity: 0.6,
       });
       const glow = new THREE.Mesh(glowGeometry, glowMaterial);
       nodeMesh.add(glow);
@@ -264,253 +322,267 @@ function createNetworkTopology() {
         isLeader: false,
       },
       pulsePhase: isLocal ? Math.random() * Math.PI * 2 : 0,
+      angle: 0,
     });
-  });
+  }
 
-  // === 上层：委员会节点（与底层节点位置一一对应）===
-  nodePositions.forEach((pos, i) => {
-    const isLeader = i === 0; // 第一个节点是领导者
-
-    // 创建节点球体（使用相同的x,z坐标，只改变y坐标）
-    const geometry = new THREE.SphereGeometry(0.25, 32, 32);
-    const material = new THREE.MeshStandardMaterial({
-      color: isLeader ? 0xf97316 : 0x22c55e, // 橙色/绿色
-      emissive: isLeader ? 0xf97316 : 0x22c55e,
-      emissiveIntensity: isLeader ? 0.6 : 0.3,
-      metalness: 0.4,
-      roughness: 0.3,
-    });
-    const nodeMesh = new THREE.Mesh(geometry, material);
-    nodeMesh.position.set(pos.x, COMMITTEE_Y, pos.z);
-    scene.add(nodeMesh);
-
-    // 领导者添加外圈标识
-    if (isLeader) {
-      const ringGeometry = new THREE.TorusGeometry(0.35, 0.03, 16, 32);
-      const ringMaterial = new THREE.MeshBasicMaterial({
-        color: 0xfbbf24,
-        transparent: true,
-        opacity: 0.8,
-      });
-      const ring = new THREE.Mesh(ringGeometry, ringMaterial);
-      ring.rotation.x = Math.PI / 2;
-      nodeMesh.add(ring);
+  // === 创建节点间的弧线连接（连接距离较近的节点）===
+  for (let i = 0; i < NODE_COUNT; i++) {
+    if (!nodeConnections.has(i)) {
+      nodeConnections.set(i, new Set());
     }
-
-    nodeObjects.push({
-      mesh: nodeMesh,
-      data: {
-        id: `committee-${i}`,
-        layer: "committee",
-        index: i,
-        isLocal: false,
-        isLeader,
-      },
-      pulsePhase: 0,
-    });
-  });
-
-  // === 层内连接（细实线 - 点对点连接附近节点）===
-  // POT 层内连接 - 确保每个节点至少有一个连接
-  const connectionDistance = 3; // 连接距离阈值
-  const potConnected = new Set<number>(); // 记录已连接的节点
-
-  // 第一遍：连接距离较近的节点
-  for (let i = 0; i < nodePositions.length; i++) {
-    for (let j = i + 1; j < nodePositions.length; j++) {
-      const pos1 = nodePositions[i];
-      const pos2 = nodePositions[j];
-      const distance = Math.sqrt(
-        Math.pow(pos1.x - pos2.x, 2) + Math.pow(pos1.z - pos2.z, 2)
-      );
-
-      // 只连接距离较近的节点
-      if (distance < connectionDistance) {
-        createLine(
-          new THREE.Vector3(pos1.x, POT_Y, pos1.z),
-          new THREE.Vector3(pos2.x, POT_Y, pos2.z),
+    
+    for (let j = i + 1; j < NODE_COUNT; j++) {
+      const node1 = nodeObjects[i].mesh;
+      const node2 = nodeObjects[j].mesh;
+      
+      // 计算两个节点之间的距离
+      const distance = node1.position.distanceTo(node2.position);
+      
+      // 只连接距离较近的节点，形成网状结构
+      if (distance < CONNECTION_THRESHOLD) {
+        const arcLine = createArcLine(
+          node1.position.clone(),
+          node2.position.clone(),
           0x3b82f6,
-          0.02,
-          false
+          0.01
         );
-        potConnected.add(i);
-        potConnected.add(j);
-      }
-    }
-  }
-
-  // 第二遍：为未连接的节点找到最近的节点进行连接
-  for (let i = 0; i < nodePositions.length; i++) {
-    if (!potConnected.has(i)) {
-      let minDist = Infinity;
-      let nearestIdx = -1;
-
-      // 找到最近的节点
-      for (let j = 0; j < nodePositions.length; j++) {
-        if (i === j) continue;
-        const pos1 = nodePositions[i];
-        const pos2 = nodePositions[j];
-        const distance = Math.sqrt(
-          Math.pow(pos1.x - pos2.x, 2) + Math.pow(pos1.z - pos2.z, 2)
-        );
-        if (distance < minDist) {
-          minDist = distance;
-          nearestIdx = j;
+        connectionLines.push(arcLine);
+        earthMesh!.add(arcLine); // 添加到地球上，随地球一起旋转
+        
+        // 记录连接关系
+        nodeConnections.get(i)!.add(j);
+        if (!nodeConnections.has(j)) {
+          nodeConnections.set(j, new Set());
         }
-      }
-
-      // 连接到最近的节点
-      if (nearestIdx !== -1) {
-        const pos1 = nodePositions[i];
-        const pos2 = nodePositions[nearestIdx];
-        createLine(
-          new THREE.Vector3(pos1.x, POT_Y, pos1.z),
-          new THREE.Vector3(pos2.x, POT_Y, pos2.z),
-          0x3b82f6,
-          0.02,
-          false
-        );
-        potConnected.add(i);
+        nodeConnections.get(j)!.add(i);
       }
     }
   }
-
-  // 委员会层内连接 - 确保每个节点至少有一个连接（使用相同的位置关系）
-  const committeeConnected = new Set<number>();
-
-  // 第一遍：连接距离较近的节点
-  for (let i = 0; i < nodePositions.length; i++) {
-    for (let j = i + 1; j < nodePositions.length; j++) {
-      const pos1 = nodePositions[i];
-      const pos2 = nodePositions[j];
-      const distance = Math.sqrt(
-        Math.pow(pos1.x - pos2.x, 2) + Math.pow(pos1.z - pos2.z, 2)
-      );
-
-      // 只连接距离较近的节点
-      if (distance < connectionDistance) {
-        createLine(
-          new THREE.Vector3(pos1.x, COMMITTEE_Y, pos1.z),
-          new THREE.Vector3(pos2.x, COMMITTEE_Y, pos2.z),
-          0x22c55e,
-          0.02,
-          false
-        );
-        committeeConnected.add(i);
-        committeeConnected.add(j);
-      }
-    }
-  }
-
-  // 第二遍：为未连接的节点找到最近的节点进行连接
-  for (let i = 0; i < nodePositions.length; i++) {
-    if (!committeeConnected.has(i)) {
-      let minDist = Infinity;
-      let nearestIdx = -1;
-
-      // 找到最近的节点
-      for (let j = 0; j < nodePositions.length; j++) {
-        if (i === j) continue;
-        const pos1 = nodePositions[i];
-        const pos2 = nodePositions[j];
-        const distance = Math.sqrt(
-          Math.pow(pos1.x - pos2.x, 2) + Math.pow(pos1.z - pos2.z, 2)
-        );
-        if (distance < minDist) {
-          minDist = distance;
-          nearestIdx = j;
-        }
-      }
-
-      // 连接到最近的节点
-      if (nearestIdx !== -1) {
-        const pos1 = nodePositions[i];
-        const pos2 = nodePositions[nearestIdx];
-        createLine(
-          new THREE.Vector3(pos1.x, COMMITTEE_Y, pos1.z),
-          new THREE.Vector3(pos2.x, COMMITTEE_Y, pos2.z),
-          0x22c55e,
-          0.02,
-          false
-        );
-        committeeConnected.add(i);
-      }
-    }
-  }
-
-  // === 跨层连接（虚线 - 垂直连接对应节点）===
-  for (let i = 0; i < nodePositions.length; i++) {
-    const pos = nodePositions[i];
-
-    createLine(
-      new THREE.Vector3(pos.x, POT_Y, pos.z),
-      new THREE.Vector3(pos.x, COMMITTEE_Y, pos.z),
-      0x64748b,
-      0.015,
-      true // 虚线
-    );
-  }
-
-  // === 创建平面网格（增强 3D 感）===
-  const gridSize = areaSize * 1.3;
-  const gridHelper = new THREE.GridHelper(gridSize, 20, 0x334155, 0x1e293b);
-  gridHelper.position.y = POT_Y - 0.5;
-  gridHelper.material.opacity = 0.3;
-  gridHelper.material.transparent = true;
-  scene.add(gridHelper);
+  
+  // 启动周期性创建多级传播的信息流
+  startMessageBroadcast();
 }
 
-function createLine(
+// 启动多级消息传播
+function startMessageBroadcast() {
+  setInterval(() => {
+    // 切换颜色
+    currentColorIndex = (currentColorIndex + 1) % MESSAGE_COLORS.length;
+    const messageColor = MESSAGE_COLORS[currentColorIndex];
+    
+    // 随机选择 1/3 的节点作为初始发送者
+    const initiatorCount = Math.ceil(NODE_COUNT / 3);
+    const initiators = new Set<number>();
+    
+    while (initiators.size < initiatorCount) {
+      const randomNode = Math.floor(Math.random() * NODE_COUNT);
+      initiators.add(randomNode);
+    }
+    
+    // 记录哪些节点已经收到消息（避免重复传播）
+    const receivedNodes = new Set<number>(initiators);
+    
+    // 第一级：初始节点发送消息给所有连接的节点
+    const level1Targets = new Set<number>();
+    initiators.forEach(fromNode => {
+      const connections = nodeConnections.get(fromNode);
+      if (connections) {
+        connections.forEach(toNode => {
+          if (!receivedNodes.has(toNode)) {
+            level1Targets.add(toNode);
+            receivedNodes.add(toNode);
+            
+            // 创建消息粒子
+            const delay = Math.random() * 300;
+            setTimeout(() => {
+              createMessageParticleWithColor(fromNode, toNode, messageColor, 1);
+            }, delay);
+          }
+        });
+      }
+    });
+    
+    // 第二级：第一级接收者再向外传播
+    setTimeout(() => {
+      level1Targets.forEach(fromNode => {
+        const connections = nodeConnections.get(fromNode);
+        if (connections) {
+          connections.forEach(toNode => {
+            if (!receivedNodes.has(toNode)) {
+              receivedNodes.add(toNode);
+              
+              // 创建消息粒子
+              const delay = Math.random() * 300;
+              setTimeout(() => {
+                createMessageParticleWithColor(fromNode, toNode, messageColor, 2);
+              }, delay);
+            }
+          });
+        }
+      });
+    }, 800); // 第二级延迟 800ms
+    
+  }, MESSAGE_INTERVAL);
+}
+function createArcLine(
   start: THREE.Vector3,
   end: THREE.Vector3,
   color: number,
-  lineWidth: number,
-  dashed: boolean
+  lineWidth: number
 ) {
-  const points = [start, end];
+  // 计算中点和控制点
+  const midPoint = new THREE.Vector3().addVectors(start, end).multiplyScalar(0.5);
+  
+  // 将中点向外延伸,增加弧度(延伸到节点距离的1.3倍)
+  const controlPoint = midPoint.normalize().multiplyScalar(NODE_DISTANCE_FROM_CENTER * 1.05);
+  
+  // 使用二次贝塞尔曲线创建弧线
+  const curve = new THREE.QuadraticBezierCurve3(start, controlPoint, end);
+  const points = curve.getPoints(30); // 增加到30个点使弧线更平滑
   const geometry = new THREE.BufferGeometry().setFromPoints(points);
-
-  let material;
-  if (dashed) {
-    material = new THREE.LineDashedMaterial({
-      color,
-      linewidth: lineWidth,
-      dashSize: 0.2,
-      gapSize: 0.15,
-      transparent: true,
-      opacity: 0.4,
-    });
-  } else {
-    material = new THREE.LineBasicMaterial({
-      color,
-      linewidth: lineWidth,
-      transparent: true,
-      opacity: 0.3,
-    });
-  }
-
+  
+  const material = new THREE.LineBasicMaterial({
+    color,
+    linewidth: lineWidth,
+    transparent: true,
+    opacity: 0.5,
+  });
+  
   const line = new THREE.Line(geometry, material);
-  if (dashed) {
-    line.computeLineDistances();
-  }
-  scene.add(line);
+  return line;
 }
+
+// 创建带颜色的信息流粒子
+function createMessageParticleWithColor(fromIndex: number, toIndex: number, color: number, level: number) {
+  if (!earthMesh) return;
+  
+  const node1 = nodeObjects[fromIndex].mesh;
+  const node2 = nodeObjects[toIndex].mesh;
+  
+  // 计算曲线
+  const midPoint = new THREE.Vector3().addVectors(node1.position, node2.position).multiplyScalar(0.5);
+  const controlPoint = midPoint.normalize().multiplyScalar(NODE_DISTANCE_FROM_CENTER);
+  const curve = new THREE.QuadraticBezierCurve3(node1.position.clone(), controlPoint, node2.position.clone());
+  
+  // 创建发光的短线段作为信息流
+  const lineGeometry = new THREE.BufferGeometry();
+  const positions = new Float32Array(6); // 两个点，每个点3个坐标
+  lineGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  
+  const lineMaterial = new THREE.LineBasicMaterial({
+    color: color,
+    linewidth: 8, // 增加线宽
+    transparent: true,
+    opacity: 1.0,
+  });
+  
+  const line = new THREE.Line(lineGeometry, lineMaterial);
+  
+  // 添加外层发光效果
+  const glowGeometry = new THREE.BufferGeometry();
+  const glowPositions = new Float32Array(6);
+  glowGeometry.setAttribute('position', new THREE.BufferAttribute(glowPositions, 3));
+  
+  const glowMaterial = new THREE.LineBasicMaterial({
+    color: color,
+    linewidth: 16, // 更粗的外层光晕
+    transparent: true,
+    opacity: 0.4,
+  });
+  
+  const glowLine = new THREE.Line(glowGeometry, glowMaterial);
+  earthMesh.add(glowLine);
+  earthMesh.add(line);
+  
+  messageParticles.push({
+    particle: line as any, // 使用线段代替球体
+    glowParticle: glowLine, // 外层发光线段
+    curve,
+    progress: 0,
+    connection: { from: fromIndex, to: toIndex },
+    color: color,
+    level: level,
+  });
+}
+
+
 
 function animate() {
   animationId = requestAnimationFrame(animate);
 
-  // 更新本机节点的脉冲效果
+  // 地球自转（节点和连接线会随地球一起旋转）
+  if (earthMesh) {
+    earthMesh.rotation.y += EARTH_ROTATION_SPEED;
+  }
+
+  // 更新节点脉冲效果
   nodeObjects.forEach((obj) => {
+    // 本机节点的脉冲效果
     if (obj.data.isLocal) {
       obj.pulsePhase += 0.05;
-      const scale = 1 + Math.sin(obj.pulsePhase) * 0.15;
+      const scale = 1 + Math.sin(obj.pulsePhase) * 0.2;
       obj.mesh.scale.set(scale, scale, scale);
 
       // 更新发光强度
       const material = obj.mesh.material as THREE.MeshStandardMaterial;
-      material.emissiveIntensity = 0.5 + Math.sin(obj.pulsePhase) * 0.3;
+      material.emissiveIntensity = 0.8 + Math.sin(obj.pulsePhase) * 0.6;
     }
   });
+
+  // 更新信息流粒子
+  for (let i = messageParticles.length - 1; i >= 0; i--) {
+    const mp = messageParticles[i];
+    mp.progress += MESSAGE_SPEED;
+    
+    if (mp.progress >= 1) {
+      // 粒子到达终点，移除
+      earthMesh?.remove(mp.particle);
+      if (mp.glowParticle) {
+        earthMesh?.remove(mp.glowParticle);
+      }
+      messageParticles.splice(i, 1);
+    } else {
+      // 更新线段位置
+      const segmentLength = 0.03; // 线段在曲线上占的比例
+      const startProgress = Math.max(0, mp.progress - segmentLength);
+      const endProgress = mp.progress;
+      
+      const startPoint = mp.curve.getPoint(startProgress);
+      const endPoint = mp.curve.getPoint(endProgress);
+      
+      // 更新主线段
+      const line = mp.particle as THREE.Line;
+      const positions = line.geometry.attributes.position.array as Float32Array;
+      positions[0] = startPoint.x;
+      positions[1] = startPoint.y;
+      positions[2] = startPoint.z;
+      positions[3] = endPoint.x;
+      positions[4] = endPoint.y;
+      positions[5] = endPoint.z;
+      line.geometry.attributes.position.needsUpdate = true;
+      
+      // 更新外层发光线段
+      if (mp.glowParticle) {
+        const glowPositions = mp.glowParticle.geometry.attributes.position.array as Float32Array;
+        glowPositions[0] = startPoint.x;
+        glowPositions[1] = startPoint.y;
+        glowPositions[2] = startPoint.z;
+        glowPositions[3] = endPoint.x;
+        glowPositions[4] = endPoint.y;
+        glowPositions[5] = endPoint.z;
+        mp.glowParticle.geometry.attributes.position.needsUpdate = true;
+        
+        // 外层光晕透明度
+        const glowMaterial = mp.glowParticle.material as THREE.LineBasicMaterial;
+        glowMaterial.opacity = 0.4 * (1 - mp.progress * 0.2);
+      }
+      
+      // 渐变透明度效果
+      const material = line.material as THREE.LineBasicMaterial;
+      material.opacity = 1.0 * (1 - mp.progress * 0.2);
+    }
+  }
 
   controls.update();
   renderer.render(scene, camera);
@@ -552,9 +624,9 @@ function onWindowResize() {
 }
 
 function resetCamera() {
-  camera.position.set(8, 10, 12);
-  camera.lookAt(0, 1.5, 0);
-  controls.target.set(0, 1.5, 0);
+  camera.position.set(20, 16, 20);
+  camera.lookAt(0, 0, 0);
+  controls.target.set(0, 0, 0);
   controls.update();
 }
 

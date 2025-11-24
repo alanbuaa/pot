@@ -8,12 +8,12 @@
     </div>
 
     <a-spin :spinning="loading">
-      <div class="space-y-4">
-        <!-- 交易池总大小 -->
+      <div class="space-y-2">
+        <!-- 总大小 -->
         <div>
           <div class="flex items-center justify-between mb-2">
             <div class="flex items-center gap-2">
-              <span class="text-sm text-gray-400">交易池总大小</span>
+              <span class="text-sm text-gray-400">总大小</span>
               <span class="text-white font-semibold">
                 {{ status?.totalSize || 0 }}
               </span>
@@ -63,65 +63,71 @@
           </div>
         </div>
 
-        <!-- 交易类型分布 -->
+        <!-- 类型分布 -->
         <div>
-          <div class="text-sm text-gray-400 mb-1">交易类型分布</div>
-          <div class="flex items-center gap-3">
-            <!-- 3D饼图 -->
-            <div class="flex-shrink-0" style="width: 140px">
-              <TxTypePieChart
-                :normal="status?.txTypes?.normal || 0"
-                :bci="status?.txTypes?.bci || 0"
-                :devastate="status?.txTypes?.devastate || 0"
+          <div class="text-sm text-gray-400 mb-2 mt-3">确认时间与类型分布</div>
+          <div class="grid grid-cols-2 gap-3">
+            <!-- 左侧：平均确认时间 -->
+            <div class="flex items-center justify-center">
+              <CircleProgress
+                :value="normalizeConfirmTime(status?.avgConfirmTime || 0)"
+                :displayValue="(status?.avgConfirmTime || 0).toFixed(2) + 's'"
+                title="平均确认时间"
+                :showPercentSign="false"
+                color="rgba(139, 92, 246, 0.8)"
+                backgroundColor="rgba(139, 92, 246, 0.1)"
+                outerRingColor="rgba(139, 92, 246, 0.3)"
+                width="120px"
+                height="120px"
+                :innerRadius="[40, 48]"
               />
             </div>
-            <!-- 图例 -->
-            <div class="flex-1 flex flex-col justify-center space-y-1 text-sm">
-              <div class="flex items-center gap-2">
-                <div
-                  class="w-2.5 h-2.5 rounded"
-                  style="background-color: #4a9eff"
-                ></div>
-                <span>普通交易</span>
+            
+            <!-- 右侧：类型分布 -->
+            <div class="flex items-center gap-2">
+              <!-- 3D饼图 -->
+              <div class="flex-shrink-0" style="width: 100px">
+                <TxTypePieChart
+                  :normal="status?.txTypes?.normal || 0"
+                  :bci="status?.txTypes?.bci || 0"
+                  :devastate="status?.txTypes?.devastate || 0"
+                />
               </div>
-              <div class="flex items-center gap-2">
-                <div
-                  class="w-2.5 h-2.5 rounded"
-                  style="background-color: #ffd700"
-                ></div>
-                <span>BCI交易</span>
-              </div>
-              <div class="flex items-center gap-2">
-                <div
-                  class="w-2.5 h-2.5 rounded"
-                  style="background-color: #ff4444"
-                ></div>
-                <span>Devastate</span>
+              <!-- 图例 -->
+              <div class="flex-1 flex flex-col justify-center space-y-1 text-xs">
+                <div class="flex items-center gap-1.5">
+                  <div
+                    class="w-2 h-2 rounded"
+                    style="background-color: #4a9eff"
+                  ></div>
+                  <span>普通交易</span>
+                </div>
+                <div class="flex items-center gap-1.5">
+                  <div
+                    class="w-2 h-2 rounded"
+                    style="background-color: #ffd700"
+                  ></div>
+                  <span>BCI交易</span>
+                </div>
+                <div class="flex items-center gap-1.5">
+                  <div
+                    class="w-2 h-2 rounded"
+                    style="background-color: #ff4444"
+                  ></div>
+                  <span>Devastate</span>
+                </div>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- 平均确认时间 -->
+        <!-- 实时 TPS -->
         <div class="flex items-center justify-between">
-          <span class="text-sm text-gray-400">平均确认时间</span>
-          <span class="text-white"
-            >{{ status?.avgConfirmTime?.toFixed(2) || "0.00" }}s</span
-          >
+          <span class="text-sm text-gray-400">实时 TPS</span>
+          <span class="text-2xl font-bold text-pot-mining">
+            {{ overview?.currentTPS?.toFixed(2) || "0.00" }}
+          </span>
         </div>
-
-        <!-- 验证成功率 -->
-        <!-- <div>
-          <div class="flex items-center justify-between mb-1">
-            <span class="text-sm text-gray-400">验证成功率</span>
-            <span class="text-white">{{ status?.verifySuccessRate?.toFixed(1) || '0.0' }}%</span>
-          </div>
-          <a-progress
-            :percent="status?.verifySuccessRate || 0"
-            :stroke-color="{ '0%': '#ffa500', '100%': '#00ff88' }"
-            :show-info="false"
-          />
-        </div> -->
       </div>
     </a-spin>
   </div>
@@ -132,10 +138,14 @@ import { computed } from "vue";
 import { storeToRefs } from "pinia";
 import { DatabaseOutlined } from "@ant-design/icons-vue";
 import { useMempoolStore } from "@/stores/mempool";
+import { useSystemStore } from "@/stores/system";
 import TxTypePieChart from "./TxTypePieChart.vue";
+import CircleProgress from "@/components/CircleProgress.vue";
 
 const mempoolStore = useMempoolStore();
 const { status, loading } = storeToRefs(mempoolStore);
+const systemStore = useSystemStore();
+const { overview } = storeToRefs(systemStore);
 
 // 计算已提议交易的百分比
 const markedPercent = computed(() => {
@@ -152,13 +162,15 @@ const unmarkedPercent = computed(() => {
   const unmarked = status.value?.unmarkedTxs || 0;
   return (unmarked / total) * 100;
 });
+
+// 将确认时间标准化到0-100范围 (假设最大10秒)
+function normalizeConfirmTime(time: number): number {
+  const maxTime = 10;
+  return Math.min(100, Math.max(0, (time / maxTime) * 100));
+}
 </script>
 
 <style scoped>
-.space-y-4 > * + * {
-  margin-top: 1rem;
-}
-
 .space-y-2 > * + * {
   margin-top: 0.5rem;
 }

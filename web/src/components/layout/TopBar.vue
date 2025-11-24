@@ -5,11 +5,11 @@
       <div class="flex items-center gap-8 justify-around">
         <div class="stat-item-large"></div>
 
-        <!-- 运行时长 -->
+        <!-- 平均出块时间 -->
         <div class="stat-item-large">
-          <div class="stat-label">运行时长</div>
+          <div class="stat-label">平均出块时间</div>
           <div class="stat-value">
-            {{ formatDuration(overview?.uptime || 0) }}
+            {{ overview?.avgBlockTime?.toFixed(2) || '0.00' }}s
           </div>
         </div>
 

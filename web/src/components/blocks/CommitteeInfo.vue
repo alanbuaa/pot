@@ -8,7 +8,7 @@
     </div>
 
     <a-spin :spinning="loading">
-      <div class="space-y-2 text-xs">
+      <div class="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
         <div class="flex items-center justify-between">
           <span class="text-gray-400">共识类型</span>
           <a-tag color="blue" size="small">{{

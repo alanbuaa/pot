@@ -1,76 +1,86 @@
 <template>
   <div class="pot-consensus card h-full">
     <div class="box">
-			<div class="tit"><span>POT 共识状态</span><p></p></div>
+			<div class="tit"><span>POT 基本信息</span><p></p></div>
     </div>
 
     <a-spin :spinning="loading">
-      <div class="space-y-4">
-        <!-- Epoch 数字显示 -->
-        <div class="flex items-center justify-between">
-          <span class="text-sm text-gray-400">Epoch</span>
-          <span class="text-white font-semibold text-lg">
-            {{ status?.epoch || 0 }}
-          </span>
-        </div>
+      <div class="progress-grid">
+        <!-- 第一行 -->
+        <CircleProgress 
+          :value="status?.epoch || 0" 
+          title="Epoch"
+          :showPercentSign="false"
+          color="rgba(243, 83, 49, 0.8)"
+          backgroundColor="rgba(243, 83, 49, 0.1)"
+          outerRingColor="rgba(243, 83, 49, 0.3)"
+          width="100%"
+          height="100px"
+          :innerRadius="[35, 42]"
+        />
         
-        <!-- 挖矿难度 -->
-        <div class="flex items-center justify-between">
-          <span class="text-sm text-gray-400">挖矿难度</span>
-          <span class="text-white font-mono text-sm">
-            {{ formatDifficulty(status?.difficulty || '') }}
-          </span>
-        </div>
+        <CircleProgress 
+          :value="normalizeValue(status?.difficulty || '', 0, 1000000000)" 
+          title="挖矿难度"
+          :showPercentSign="false"
+          color="rgba(0, 153, 255, 0.8)"
+          backgroundColor="rgba(0, 153, 255, 0.1)"
+          outerRingColor="rgba(0, 153, 255, 0.3)"
+          width="100%"
+          height="100px"
+          :innerRadius="[35, 42]"
+        />
         
-        <!-- 区块高度 -->
-        <div class="flex items-center justify-between">
-          <span class="text-sm text-gray-400">区块高度</span>
-          <span class="text-white font-semibold">
-            {{ formatNumber(status?.currentHeight || 0) }}
-          </span>
-        </div>
+        <CircleProgress 
+          :value="normalizeValue(status?.currentHeight || 0, 0, 100000)" 
+          :displayValue="Math.floor(status?.currentHeight || 0).toString()"
+          title="区块高度"
+          :showPercentSign="false"
+          color="rgba(255, 215, 0, 0.8)"
+          backgroundColor="rgba(255, 215, 0, 0.1)"
+          outerRingColor="rgba(255, 215, 0, 0.3)"
+          width="100%"
+          height="100px"
+          :innerRadius="[35, 42]"
+        />
         
-        <!-- 挖矿状态 -->
-        <div class="flex items-center justify-between">
-          <span class="text-sm text-gray-400">挖矿状态</span>
-          <a-badge
-            :status="status?.workFlag ? 'processing' : 'default'"
-            :text="status?.workFlag ? '工作中' : '空闲'"
-          />
-        </div>
+        <!-- 第二行 -->
+        <CircleProgress 
+          :value="status?.workFlag ? 100 : 0" 
+          title="挖矿状态"
+          :showPercentSign="false"
+          color="rgba(0, 255, 136, 0.8)"
+          backgroundColor="rgba(0, 255, 136, 0.1)"
+          outerRingColor="rgba(0, 255, 136, 0.3)"
+          width="100%"
+          height="100px"
+          :innerRadius="[35, 42]"
+        />
         
-        <!-- Nonce 值 -->
-        <div class="flex items-center justify-between">
-          <span class="text-sm text-gray-400">Nonce</span>
-          <span class="text-white font-mono text-sm">
-            {{ status?.nonce || 0 }}
-          </span>
-        </div>
+        <CircleProgress 
+          :value="status?.uncleCount || 0" 
+          title="叔块数量"
+          :showPercentSign="false"
+          color="rgba(255, 165, 0, 0.8)"
+          backgroundColor="rgba(255, 165, 0, 0.1)"
+          outerRingColor="rgba(255, 165, 0, 0.3)"
+          width="100%"
+          height="100px"
+          :innerRadius="[35, 42]"
+        />
         
-        <!-- 叔块数量 -->
-        <div class="flex items-center justify-between">
-          <span class="text-sm text-gray-400">叔块数量</span>
-          <a-tag color="orange">{{ status?.uncleCount || 0 }}</a-tag>
-        </div>
-        
-        <!-- 平均挖矿时间 -->
-        <div class="flex items-center justify-between">
-          <span class="text-sm text-gray-400">平均挖矿时间</span>
-          <span class="text-white">{{ status?.avgMiningTime?.toFixed(2) || '0.00' }}s</span>
-        </div>
-        
-        <!-- 挖矿成功率 -->
-        <!-- <div>
-          <div class="flex items-center justify-between mb-1">
-            <span class="text-sm text-gray-400">成功率</span>
-            <span class="text-white">{{ status?.miningSuccessRate?.toFixed(1) || '0.0' }}%</span>
-          </div>
-          <a-progress
-            :percent="status?.miningSuccessRate || 0"
-            :stroke-color="{ '0%': '#00d4ff', '100%': '#00ff88' }"
-            :show-info="false"
-          />
-        </div> -->
+        <CircleProgress 
+          :value="normalizeValue(status?.avgMiningTime || 0, 0, 60)" 
+          :displayValue="(status?.avgMiningTime || 0).toFixed(2)"
+          title="平均出块时间"
+          :showPercentSign="false"
+          color="rgba(138, 43, 226, 0.8)"
+          backgroundColor="rgba(138, 43, 226, 0.1)"
+          outerRingColor="rgba(138, 43, 226, 0.3)"
+          width="100%"
+          height="100px"
+          :innerRadius="[35, 42]"
+        />
       </div>
     </a-spin>
   </div>
@@ -78,16 +88,25 @@
 
 <script setup lang="ts">
 import { storeToRefs } from 'pinia'
-import { ThunderboltOutlined } from '@ant-design/icons-vue'
 import { usePotStore } from '@/stores/pot'
-import { formatNumber, formatDifficulty } from '@/utils/format'
+import CircleProgress from '@/components/CircleProgress.vue'
 
 const potStore = usePotStore()
 const { status, loading } = storeToRefs(potStore)
+
+// 将值标准化到0-100范围用于显示
+function normalizeValue(value: number | string, min: number, max: number): number {
+  const numValue = typeof value === 'string' ? parseInt(value) : value
+  if (isNaN(numValue)) return 0
+  return Math.min(100, Math.max(0, ((numValue - min) / (max - min)) * 100))
+}
 </script>
 
 <style scoped>
-.space-y-4 > * + * {
-  margin-top: 1rem;
+.progress-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+  padding: 0.25rem;
 }
 </style>

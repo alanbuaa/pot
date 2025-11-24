@@ -7,28 +7,12 @@
       </div>
     </div>
 
-    <div class="space-y-4">
-      <!-- TPS -->
-      <div>
-        <div class="text-sm text-gray-400 mb-1">实时 TPS</div>
-        <div class="text-3xl font-bold text-pot-mining">
-          {{ overview?.currentTPS?.toFixed(2) || "0.00" }}
-        </div>
-      </div>
-
-      <!-- 平均出块时间 -->
-      <div class="flex items-center justify-between">
-        <span class="text-sm text-gray-400">平均出块时间</span>
-        <span class="text-white font-semibold">
-          {{ overview?.avgBlockTime?.toFixed(2) || "0.00" }}s
-        </span>
-      </div>
-
+    <div class="space-y-2">
       <!-- 交易池大小 -->
-      <div class="flex items-center justify-between">
+      <!-- <div class="flex items-center justify-between">
         <span class="text-sm text-gray-400">交易池大小</span>
         <a-tag color="blue">{{ overview?.mempoolSize || 0 }}</a-tag>
-      </div>
+      </div> -->
 
       <!-- 网络利用率 -->
       <div>
@@ -52,6 +36,7 @@
 import { storeToRefs } from "pinia";
 import { DashboardOutlined } from "@ant-design/icons-vue";
 import { useSystemStore } from "@/stores/system";
+import { formatDuration } from "@/utils/format";
 
 const systemStore = useSystemStore();
 const { overview } = storeToRefs(systemStore);
@@ -64,7 +49,7 @@ function getUtilizationColor(utilization: number) {
 </script>
 
 <style scoped>
-.space-y-4 > * + * {
-  margin-top: 1rem;
+.space-y-2 > * + * {
+  margin-top: 0.5rem;
 }
 </style>

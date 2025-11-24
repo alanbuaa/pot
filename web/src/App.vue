@@ -7,38 +7,40 @@
     <TopBar />
 
     <!-- 主内容区域 -->
-    <div class="main-content p-3" style="height: calc(100vh - 100px)">
+    <div class="main-content pt-3 px-3" style="height: calc(100vh - 100px)">
       <div class="flex flex-col h-full gap-3">
         <!-- 上半部分：左中右三段对称 -->
         <div class="flex-1 grid grid-cols-10 gap-3 min-h-0">
           <!-- 左侧面板 (30%) -->
-          <div class="col-span-3 flex flex-col gap-3 overflow-y-auto">
+          <div class="col-span-3 flex flex-col gap-2 overflow-y-auto">
             <!-- <div class="h-1/3 min-h-[200px]"> -->
-              <PotConsensus />
+            <PotConsensus />
             <!-- </div> -->
             <!-- <div class="h-1/3 min-h-[250px]"> -->
-              <BCIIncentive />
-            <!-- </div> -->
-            <!-- <div class="h-1/3 min-h-[180px]"> -->
-              <CommitteeInfo />
+            <BCIIncentive />
             <!-- </div> -->
           </div>
 
           <!-- 中心网络拓扑 (40%) -->
-          <div class="col-span-4">
-            <NetworkTopology />
+          <div class="col-span-4 flex flex-col gap-2">
+            <div class="flex-1">
+              <NetworkTopology />
+            </div>
+            <div class="flex-shrink-0">
+              <CommitteeInfo />
+            </div>
           </div>
 
           <!-- 右侧面板 (30%) -->
-          <div class="col-span-3 flex flex-col gap-3 overflow-y-auto">
+          <div class="col-span-3 flex flex-col gap-2 overflow-y-auto">
             <!-- <div class="h-1/3 min-h-[180px]"> -->
-              <MempoolMonitor />
+            <MempoolMonitor />
             <!-- </div> -->
             <!-- <div class="h-1/3 min-h-[200px]"> -->
-              <VDFMonitor />
+            <VDFMonitor />
             <!-- </div> -->
             <!-- <div class="h-1/3 min-h-[180px]"> -->
-              <PerformanceMetrics />
+            <!-- <PerformanceMetrics /> -->
             <!-- </div> -->
             <!-- <div class="h-1/4 min-h-[180px]">
               <SystemInfo />
@@ -47,7 +49,7 @@
         </div>
 
         <!-- 下半部分：区块链可视化 -->
-        <div class="h-24 flex-shrink-0">
+        <div class="h-16 flex-shrink-0 border-4 rounded-none" style="border-color: rgba(59, 130, 246, 0.5);">
           <BlockChain3D />
         </div>
       </div>
