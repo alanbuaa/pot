@@ -315,24 +315,49 @@ func (nc *NodeController) NodeManage(potSignal *PoTSignal) {
 
 // stop a committee node
 func (nc *NodeController) handleStop(address string) {
-	shardingName, _, _ := DecodeAddress(address)
+	shardingName, _, rawAddress := DecodeAddress(address)
+
+	// For DaemonNode, the shardingName might contain PeerId (e.g., "0x1QmbF5...")
+	// We need to find the actual sharding by removing the PeerId suffix
 	nc.shardingsLock.Lock()
 	sharding, ok := nc.Shardings[shardingName]
+
+	// If not found and this is a DaemonNode, try to find by removing PeerId
+	if !ok && rawAddress == DaemonNodePublicAddress && len(nc.PeerId) > 0 {
+		// Try to remove PeerId suffix from shardingName
+		if strings.HasSuffix(shardingName, nc.PeerId) {
+			originalShardingName := strings.TrimSuffix(shardingName, nc.PeerId)
+			sharding, ok = nc.Shardings[originalShardingName]
+		}
+	}
+
 	defer nc.shardingsLock.Unlock()
 	if !ok {
-		// create a new sharding
 		nc.Log.Errorf("Stop Node Error: Sharding %s does not exist", shardingName)
+		return
 	}
 	go sharding.handleStop(address)
 }
 
 // update a committee node
 func (nc *NodeController) handleUpdate(address string) {
-	shardingName, _, _ := DecodeAddress(address)
+	shardingName, _, rawAddress := DecodeAddress(address)
+
+	// For DaemonNode, the shardingName might contain PeerId (e.g., "0x1QmbF5...")
+	// We need to find the actual sharding by removing the PeerId suffix
 	nc.shardingsLock.Lock()
 	sharding, ok := nc.Shardings[shardingName]
+
+	// If not found and this is a DaemonNode, try to find by removing PeerId
+	if !ok && rawAddress == DaemonNodePublicAddress && len(nc.PeerId) > 0 {
+		// Try to remove PeerId suffix from shardingName
+		if strings.HasSuffix(shardingName, nc.PeerId) {
+			originalShardingName := strings.TrimSuffix(shardingName, nc.PeerId)
+			sharding, ok = nc.Shardings[originalShardingName]
+		}
+	}
+
 	if !ok {
-		// create a new sharding
 		nc.Log.Errorf("Update Node Error: Sharding does not exist")
 	} else {
 		go sharding.handleUpdate(address)
@@ -349,17 +374,25 @@ func EncodeAddress(shardingName string, consensusID int64, address string) strin
 // Output: shardingName, consensusID, rawAddress
 func DecodeAddress(address string) (string, int64, string) {
 	res := strings.Split(address, "-")
-	if len(res) != 3 {
+	if len(res) < 3 {
 		println("DecodeAddress Error: Illegal parameter")
 		return "", 0, ""
 	}
-	shardingName := res[0]
-	rawAddress := res[2]
 
-	consensusID, err := strconv.ParseInt(res[1], 10, 64)
+	// Handle the case where shardingName might contain additional parts (like PeerId)
+	// Format: shardingName-consensusID-rawAddress or shardingNameWithPeerId-consensusID-rawAddress
+	// We need to extract consensusID from the second-to-last segment
+	rawAddress := res[len(res)-1]
+	consensusIDStr := res[len(res)-2]
+
+	consensusID, err := strconv.ParseInt(consensusIDStr, 10, 64)
 	if err != nil {
 		println("DecodeAddress Error: Illegal ConsensusID")
 		return "", 0, ""
 	}
+
+	// Everything before consensusID is the shardingName (may include PeerId)
+	shardingName := strings.Join(res[:len(res)-2], "-")
+
 	return shardingName, consensusID, rawAddress
 }

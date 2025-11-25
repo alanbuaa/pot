@@ -22,18 +22,26 @@ func EncodeAddress(shardingName string, consensusID int64, address string) strin
 // Output: shardingName, consensusID, rawAddress
 func DecodeAddress(address string) (string, int64, string) {
 	res := strings.Split(address, "-")
-	if len(res) != 3 {
+	if len(res) < 3 {
 		println("DecodeAddress Error: Illegal parameter")
 		return "", 0, ""
 	}
-	shardingName := res[0]
-	rawAddress := res[2]
 
-	consensusID, err := strconv.ParseInt(res[1], 10, 64)
+	// Handle the case where shardingName might contain additional parts (like PeerId)
+	// Format: shardingName-consensusID-rawAddress or shardingNameWithPeerId-consensusID-rawAddress
+	// We need to extract consensusID from the second-to-last segment
+	rawAddress := res[len(res)-1]
+	consensusIDStr := res[len(res)-2]
+
+	consensusID, err := strconv.ParseInt(consensusIDStr, 10, 64)
 	if err != nil {
 		println("DecodeAddress Error: Illegal ConsensusID")
 		return "", 0, ""
 	}
+
+	// Everything before consensusID is the shardingName (may include PeerId)
+	shardingName := strings.Join(res[:len(res)-2], "-")
+
 	return shardingName, consensusID, rawAddress
 }
 
