@@ -1684,3 +1684,66 @@ func (w *Worker) BroadcastClientTransaction(rawtx *types.RawTx, txType pb.TxType
 func (w *Worker) CheckLockTransaction(rawtx *types.RawTx) error {
 	return w.checkLockTransaction(rawtx)
 }
+
+// GetEpoch returns the current epoch
+func (w *Worker) GetEpoch() uint64 {
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
+	return w.epoch
+}
+
+// GetWorkFlag returns the current work flag status
+func (w *Worker) GetWorkFlag() bool {
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
+	return w.workFlag
+}
+
+// GetVDF0 returns the VDF0 instance
+func (w *Worker) GetVDF0() *types.VDF {
+	return w.vdf0
+}
+
+// GetVDF1 returns the VDF1 instances
+func (w *Worker) GetVDF1() []*types.VDF {
+	return w.vdf1
+}
+
+// GetVDFHalf returns the VDFHalf instance
+func (w *Worker) GetVDFHalf() *types.VDF {
+	return w.vdfhalf
+}
+
+// GetVDF0Chan returns the VDF0 channel
+func (w *Worker) GetVDF0Chan() chan *types.VDF0res {
+	return w.vdf0Chan
+}
+
+// GetVDFHalfChan returns the VDFHalf channel
+func (w *Worker) GetVDFHalfChan() chan *types.VDF0res {
+	return w.vdfhalfchan
+}
+
+// GetAbort returns the abort control
+func (w *Worker) GetAbort() *Abortcontrol {
+	return w.abort
+}
+
+// GetWhirly returns the whirly controller
+func (w *Worker) GetWhirly() *nodeController.NodeController {
+	return w.whirly
+}
+
+// GetExecuteHeight returns the execute height
+func (w *Worker) GetExecuteHeight() uint64 {
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
+	return w.executeheight
+}
+
+// GetIncentiveHeight returns the incentive height
+func (w *Worker) GetIncentiveHeight() uint64 {
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
+	return w.incentiveheight
+}

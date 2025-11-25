@@ -223,7 +223,8 @@ func (n *Network) findTopicPeers(topic string) {
 		}
 
 		count++
-		if anyConnected || count > 2 {
+		// Reduce retries to 1 for faster startup in single-node mode (was: count > 2)
+		if anyConnected || count > 0 {
 			break
 		}
 	}

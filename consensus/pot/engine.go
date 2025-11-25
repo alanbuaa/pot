@@ -207,3 +207,13 @@ func (e *PoTEngine) GetPeerID() string {
 func (e *PoTEngine) GetConsensusType() string {
 	return "pot"
 }
+
+// GetConfig returns the consensus configuration
+func (e *PoTEngine) GetConfig() *config.ConsensusConfig {
+	return e.config
+}
+
+// GetAdaptor returns the P2P adaptor
+func (e *PoTEngine) GetAdaptor() p2p.P2PAdaptor {
+	return e.Adaptor
+}

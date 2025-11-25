@@ -146,8 +146,13 @@ func RegisterApiServices(apiServer *apis.ApiServer, c model.Consensus, log *logr
 	switch c.GetConsensusType() {
 	case "pot":
 		if potEngine, ok := c.(*pot.PoTEngine); ok {
+			// Register transaction API service
 			apiServer.RegisterPotService(apis.NewPotWorkerAdapter(potEngine.Worker))
 			log.Info("Registered PoT API service")
+
+			// Register monitoring API service
+			apiServer.RegisterMonitorService(apis.NewPotMonitorAdapter(potEngine, log))
+			log.Info("Registered PoT Monitor API service")
 		} else {
 			log.Warn("Failed to cast Consensus to PoTEngine for API registration")
 		}

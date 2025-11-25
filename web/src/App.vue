@@ -13,12 +13,8 @@
         <div class="flex-1 grid grid-cols-10 gap-3 min-h-0">
           <!-- 左侧面板 (30%) -->
           <div class="col-span-3 flex flex-col gap-2 overflow-y-auto">
-            <!-- <div class="h-1/3 min-h-[200px]"> -->
             <PotConsensus />
-            <!-- </div> -->
-            <!-- <div class="h-1/3 min-h-[250px]"> -->
             <BCIIncentive />
-            <!-- </div> -->
           </div>
 
           <!-- 中心网络拓扑 (40%) -->
@@ -33,18 +29,8 @@
 
           <!-- 右侧面板 (30%) -->
           <div class="col-span-3 flex flex-col gap-2 overflow-y-auto">
-            <!-- <div class="h-1/3 min-h-[180px]"> -->
             <MempoolMonitor />
-            <!-- </div> -->
-            <!-- <div class="h-1/3 min-h-[200px]"> -->
             <VDFMonitor />
-            <!-- </div> -->
-            <!-- <div class="h-1/3 min-h-[180px]"> -->
-            <!-- <PerformanceMetrics /> -->
-            <!-- </div> -->
-            <!-- <div class="h-1/4 min-h-[180px]">
-              <SystemInfo />
-            </div> -->
           </div>
         </div>
 
@@ -77,7 +63,6 @@ import { useCommitteeStore } from "@/stores/committee";
 import { useNetworkStore } from "@/stores/network";
 import { useMempoolStore } from "@/stores/mempool";
 import { useBCIStore } from "@/stores/bci";
-import { useStorageStore } from "@/stores/storage";
 import { WebSocketService } from "@/services/websocket";
 
 const systemStore = useSystemStore();
@@ -86,7 +71,6 @@ const committeeStore = useCommitteeStore();
 const networkStore = useNetworkStore();
 const mempoolStore = useMempoolStore();
 const bciStore = useBCIStore();
-const storageStore = useStorageStore();
 
 let wsService: WebSocketService | null = null;
 
@@ -103,7 +87,6 @@ onMounted(async () => {
     mempoolStore.fetchStatus(),
     networkStore.fetchTopology(),
     bciStore.fetchStatus(),
-    storageStore.fetchStatus(),
   ]);
 
   // 设置轮询
@@ -130,13 +113,6 @@ onMounted(async () => {
       networkStore.fetchTopology();
       bciStore.fetchStatus();
     }, 10000)
-  );
-
-  // 30秒轮询：存储状态
-  timers.push(
-    window.setInterval(() => {
-      storageStore.fetchStatus();
-    }, 30000)
   );
 
   // 尝试连接 WebSocket

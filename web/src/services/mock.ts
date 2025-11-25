@@ -1,3 +1,9 @@
+/**
+ * POT共识可视化系统 - Mock数据服务
+ * 
+ * 提供模拟数据生成，用于开发和演示
+ */
+
 import type {
   SystemOverview,
   POTStatus,
@@ -5,17 +11,20 @@ import type {
   CommitteeStatus,
   BCIStatus,
   MempoolStatus,
-  NetworkTopology,
-  StorageStatus
+  NetworkTopology
 } from '@/types/api'
 
-// Mock 数据生成器
+/**
+ * Mock数据生成器
+ */
 export class MockDataService {
   private startTime = Date.now()
   private blockHeight = 12345
   private epoch = 89
 
-  // 系统概览
+  /**
+   * 获取系统概览Mock数据
+   */
   getSystemOverview(): SystemOverview {
     const uptime = Math.floor((Date.now() - this.startTime) / 1000)
     return {
@@ -25,21 +34,15 @@ export class MockDataService {
       consensusTypes: ['POT', 'SimpleWhirly'],
       networkStatus: 'healthy',
       networkUtilization: Math.random() * 30 + 40, // 40-70
-      executorStatus: 'normal',
-      storageUsage: {
-        total: 10737418240, // 10GB
-        used: 5368709120, // 5GB
-        percentage: 50
-      },
-      mempoolSize: Math.floor(Math.random() * 50) + 20,
-      currentTPS: Math.random() * 30 + 20, // 20-50
       currentHeight: this.blockHeight,
       avgBlockTime: Math.random() * 2 + 4, // 4-6s
       lastBlockTime: new Date().toISOString()
     }
   }
 
-  // POT 状态
+  /**
+   * 获取POT共识状态Mock数据
+   */
   getPotStatus(): POTStatus {
     return {
       consensusType: 'POT',
@@ -55,23 +58,26 @@ export class MockDataService {
     }
   }
 
-  // VDF 状态
+  /**
+   * 获取VDF计算状态Mock数据
+   */
   getVDFStatus(): VDFStatus {
     return {
       vdf0: {
         progress: Math.random() * 100,
         iterations: Math.floor(Math.random() * 100000),
-        status: ['computing', 'done', 'idle'][Math.floor(Math.random() * 3)],
+        status: ['computing', 'done', 'idle'][Math.floor(Math.random() * 3)] as 'computing' | 'done' | 'idle',
         channelBuffer: Math.floor(Math.random() * 10)
       },
       vdf1: Array.from({ length: 4 }, (_, i) => ({
         workerId: i,
         progress: Math.random() * 100,
-        status: ['computing', 'done', 'idle'][Math.floor(Math.random() * 3)]
+        iterations: Math.floor(Math.random() * 100000),
+        status: ['computing', 'done', 'idle'][Math.floor(Math.random() * 3)] as 'computing' | 'done' | 'idle'
       })),
       vdfHalf: {
         progress: Math.random() * 100,
-        status: ['computing', 'done', 'idle'][Math.floor(Math.random() * 3)],
+        status: ['computing', 'done', 'idle'][Math.floor(Math.random() * 3)] as 'computing' | 'done' | 'idle',
         channelBuffer: Math.floor(Math.random() * 10)
       },
       vdfChecker: {
@@ -85,7 +91,9 @@ export class MockDataService {
     }
   }
 
-  // 委员会状态
+  /**
+   * 获取委员会状态Mock数据
+   */
   getCommitteeStatus(): CommitteeStatus {
     return {
       consensusType: 'SimpleWhirly',
@@ -111,14 +119,16 @@ export class MockDataService {
           status: 'active'
         }
       ],
-      workStage: ['init', 'shuffle', 'draw', 'share', 'consensus'][Math.floor(Math.random() * 5)],
+      workStage: ['init', 'shuffle', 'draw', 'share', 'consensus'][Math.floor(Math.random() * 5)] as CommitteeStatus['workStage'],
       timeout: 5000,
       messageQueueLength: Math.floor(Math.random() * 20),
       electionHeight: this.blockHeight - 100
     }
   }
 
-  // BCI 激励
+  /**
+   * 获取BCI激励状态Mock数据
+   */
   getBCIStatus(): BCIStatus {
     return {
       totalReward: 65536,
@@ -147,7 +157,9 @@ export class MockDataService {
     }
   }
 
-  // 交易池状态
+  /**
+   * 获取交易池状态Mock数据
+   */
   getMempoolStatus(): MempoolStatus {
     const totalSize = Math.floor(Math.random() * 100) + 50
     const markedTxs = Math.floor(totalSize * 0.6)
@@ -166,24 +178,26 @@ export class MockDataService {
       memoryUsage: Math.floor(Math.random() * 10485760) + 5242880, // 5-15MB
       recentTxs: Array.from({ length: 5 }, () => ({
         hash: '0x' + Math.random().toString(16).substr(2, 64),
-        type: ['normal', 'bci', 'devastate'][Math.floor(Math.random() * 3)],
+        type: ['normal', 'bci', 'devastate'][Math.floor(Math.random() * 3)] as 'normal' | 'bci' | 'devastate',
         timestamp: new Date(Date.now() - Math.random() * 60000).toISOString(),
-        status: Math.random() > 0.3 ? 'confirmed' : 'pending'
+        status: (Math.random() > 0.3 ? 'confirmed' : 'pending') as 'confirmed' | 'pending'
       }))
     }
   }
 
-  // 网络拓扑
+  /**
+   * 获取网络拓扑Mock数据
+   */
   getNetworkTopology(): NetworkTopology {
     // 生成委员会节点（4个）
     const committeeNodes = Array.from({ length: 4 }, (_, i) => ({
       id: i,
       peerId: 'peer-committee-' + i,
       address: '0x' + Math.random().toString(16).substr(2, 40),
-      status: 'online',
+      status: 'online' as const,
       connections: Math.floor(Math.random() * 8) + 5,
       latency: Math.floor(Math.random() * 50) + 10,
-      type: 'committee',
+      type: 'committee' as const,
       isLeader: i === 0
     }))
 
@@ -192,10 +206,10 @@ export class MockDataService {
       id: i + 4,
       peerId: 'peer-pot-' + i,
       address: '0x' + Math.random().toString(16).substr(2, 40),
-      status: Math.random() > 0.1 ? 'online' : 'offline',
+      status: (Math.random() > 0.1 ? 'online' : 'offline') as 'online' | 'offline',
       connections: Math.floor(Math.random() * 5) + 2,
       latency: Math.floor(Math.random() * 100) + 20,
-      type: 'pot',
+      type: 'pot' as const,
       isLeader: false
     }))
 
@@ -251,40 +265,9 @@ export class MockDataService {
     }
   }
 
-  // 存储状态
-  getStorageStatus(): StorageStatus {
-    const blocksBucket = Math.floor(Math.random() * 1073741824) + 2147483648 // 2-3GB
-    const utxoBucket = Math.floor(Math.random() * 536870912) + 268435456 // 256-768MB
-    const executedBucket = Math.floor(Math.random() * 268435456) + 134217728 // 128-384MB
-    const clientBucket = Math.floor(Math.random() * 10485760) + 5242880 // 5-15MB
-    
-    return {
-      totalSize: blocksBucket + utxoBucket + executedBucket + clientBucket,
-      buckets: {
-        blocks: {
-          size: blocksBucket,
-          count: Math.floor(Math.random() * 10000) + 10000
-        },
-        executed: {
-          size: executedBucket,
-          count: Math.floor(Math.random() * 10000) + 10000
-        },
-        utxo: {
-          size: utxoBucket,
-          count: Math.floor(Math.random() * 5000) + 2000
-        },
-        client: {
-          size: clientBucket,
-          count: Math.floor(Math.random() * 100) + 50
-        }
-      },
-      compressionRatio: Math.random() * 0.3 + 0.5, // 0.5-0.8
-      vdfHeight: this.blockHeight,
-      blockCount: this.blockHeight
-    }
-  }
-
-  // 模拟区块增长
+  /**
+   * 模拟区块增长（用于测试）
+   */
   incrementBlock() {
     this.blockHeight++
     if (this.blockHeight % 100 === 0) {
@@ -294,3 +277,4 @@ export class MockDataService {
 }
 
 export const mockService = new MockDataService()
+

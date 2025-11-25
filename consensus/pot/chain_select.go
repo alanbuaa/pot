@@ -3,11 +3,12 @@ package pot
 import (
 	"bytes"
 	"fmt"
-	"github.com/zzz136454872/upgradeable-consensus/types"
 	"math/big"
 	"strconv"
 	"sync"
 	time2 "time"
+
+	"github.com/zzz136454872/upgradeable-consensus/types"
 )
 
 type Abortcontrol struct {
@@ -19,6 +20,16 @@ func NewAbortcontrol() *Abortcontrol {
 	return &Abortcontrol{
 		abortchannel: make(chan struct{}),
 		once:         new(sync.Once),
+	}
+}
+
+// GetAbortFlag checks if abort channel is closed (abort signal sent)
+func (a *Abortcontrol) GetAbortFlag() bool {
+	select {
+	case <-a.abortchannel:
+		return true
+	default:
+		return false
 	}
 }
 

@@ -1,0 +1,15 @@
+mode: set
+blockchain-crypto/vdf/vdf_api.go:23.13,26.32 3 1
+blockchain-crypto/vdf/vdf_api.go:26.32,28.3 1 1
+blockchain-crypto/vdf/vdf_api.go:29.2,30.43 2 1
+blockchain-crypto/vdf/vdf_api.go:33.75,40.2 1 1
+blockchain-crypto/vdf/vdf_api.go:42.43,43.18 1 1
+blockchain-crypto/vdf/vdf_api.go:44.18,45.86 1 0
+blockchain-crypto/vdf/vdf_api.go:46.10,47.93 1 1
+blockchain-crypto/vdf/vdf_api.go:51.41,52.18 1 1
+blockchain-crypto/vdf/vdf_api.go:53.18,54.61 1 0
+blockchain-crypto/vdf/vdf_api.go:55.10,56.68 1 1
+blockchain-crypto/vdf/vdf_api.go:60.31,65.22 3 1
+blockchain-crypto/vdf/vdf_api.go:65.22,67.3 1 1
+blockchain-crypto/vdf/vdf_api.go:69.2,69.12 1 1
+blockchain-crypto/vdf/vdf_api.go:72.57,76.2 1 1

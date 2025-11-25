@@ -7,13 +7,6 @@
 | ~~Wesolowski~~ |  `wesolowski_go`  | `https://github.com/harmony-one/vdf` | 不再使用 |
 
 
-
-
-
-
-
-
-
 ## 安装依赖
 
 ```bash

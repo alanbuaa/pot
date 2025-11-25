@@ -423,3 +423,47 @@ func (c *Mempool) GetAllBciRewards() []*BciReward {
 	//c.BciRewardPool = make(map[string]*BciReward)
 	return rewards
 }
+
+// GetSize returns the total size and marked transaction count
+func (c *Mempool) GetSize() (int, int) {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+
+	totalSize := c.raworder.Len()
+	markedCount := 0
+	for e := c.raworder.Front(); e != nil; e = e.Next() {
+		wrappedTx := e.Value.(*WrappedRawTx)
+		if wrappedTx.proposed {
+			markedCount++
+		}
+	}
+	return totalSize, markedCount
+}
+
+// GetRecentTxs returns the most recent N transactions
+func (c *Mempool) GetRecentTxs(n int) []*types.RawTx {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+
+	txs := make([]*types.RawTx, 0, n)
+	count := 0
+	for e := c.raworder.Back(); e != nil && count < n; e = e.Prev() {
+		wrappedTx := e.Value.(*WrappedRawTx)
+		txs = append(txs, wrappedTx.rawtx)
+		count++
+	}
+	return txs
+}
+
+// GetAllTxs returns all transactions in the mempool
+func (c *Mempool) GetAllTxs() []*types.RawTx {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+
+	txs := make([]*types.RawTx, 0, c.raworder.Len())
+	for e := c.raworder.Front(); e != nil; e = e.Next() {
+		wrappedTx := e.Value.(*WrappedRawTx)
+		txs = append(txs, wrappedTx.rawtx)
+	}
+	return txs
+}

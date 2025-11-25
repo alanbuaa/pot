@@ -6,6 +6,8 @@ import (
 
 	"blockchain-crypto/vdf"
 	"blockchain-crypto/vdf/wesolowski_rust"
+
+	log "github.com/zzz136454872/upgradeable-consensus/pkg/logging"
 )
 
 type VDF0res struct {
@@ -35,6 +37,7 @@ func (v *VDF) Exec(epoch uint64) error {
 	//start := time.Now()
 	res, err := v.Vdf.Execute()
 	if err != nil {
+		log.ErrorF("VDF execution failed: %v", err)
 		return err
 	}
 

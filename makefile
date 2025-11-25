@@ -53,9 +53,6 @@ run_server_new: btest
 run_client: build_client
 	$(BIN_DIR)/client
 
-run_bci: build-bci
-	$(BIN_DIR)/bci
-
 run_txtest: build-txtest
 	$(BIN_DIR)/txtest
 

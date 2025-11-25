@@ -21,18 +21,20 @@ type ConsensusHandler interface {
 
 // ApiServer represents the HTTP API server supporting multiple consensus mechanisms
 type ApiServer struct {
-	Engine   *gin.Engine
-	config   *Config
-	handlers []ConsensusHandler
-	log      *logrus.Entry
+	Engine          *gin.Engine
+	config          *Config
+	handlers        []ConsensusHandler
+	monitorHandlers []ConsensusHandler
+	log             *logrus.Entry
 }
 
 // NewApiServer creates a new API server instance
 func NewApiServer(config *Config, log *logrus.Entry) *ApiServer {
 	return &ApiServer{
-		config:   config,
-		handlers: make([]ConsensusHandler, 0),
-		log:      log,
+		config:          config,
+		handlers:        make([]ConsensusHandler, 0),
+		monitorHandlers: make([]ConsensusHandler, 0),
+		log:             log,
 	}
 }
 
@@ -48,15 +50,41 @@ func (s *ApiServer) RegisterPowService(service model.PowConsensusService) {
 	s.handlers = append(s.handlers, handler)
 }
 
+// RegisterMonitorService registers monitoring service to the API server
+func (s *ApiServer) RegisterMonitorService(service model.MonitorService) {
+	handler := handlers.NewMonitorHandler(service, s.log)
+	s.monitorHandlers = append(s.monitorHandlers, handler)
+}
+
 // setupRoutes configures all HTTP routes for registered consensus handlers
 func (s *ApiServer) setupRoutes() *gin.Engine {
 	r := gin.Default()
+
+	// Enable CORS for web frontend
+	r.Use(func(c *gin.Context) {
+		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE")
+
+		if c.Request.Method == "OPTIONS" {
+			c.AbortWithStatus(204)
+			return
+		}
+
+		c.Next()
+	})
 
 	// Create API group
 	apiGroup := r.Group("/api")
 
 	// Register all consensus handler routes
 	for _, handler := range s.handlers {
+		handler.RegisterRoutes(apiGroup)
+	}
+
+	// Register all monitor handler routes
+	for _, handler := range s.monitorHandlers {
 		handler.RegisterRoutes(apiGroup)
 	}
 

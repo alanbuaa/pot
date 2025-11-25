@@ -1,0 +1,1092 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "POT共识可视化系统 API",
+    "version": "1.0.0",
+    "description": "POT (Proof of Time) 共识可视化系统的RESTful API接口文档",
+    "contact": {
+      "name": "POT Team",
+      "email": "contact@pot.io"
+    },
+    "license": {
+      "name": "MIT",
+      "url": "https://opensource.org/licenses/MIT"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8080/api",
+      "description": "本地开发服务器"
+    },
+    {
+      "url": "https://api.pot.io",
+      "description": "生产环境"
+    }
+  ],
+  "tags": [
+    {
+      "name": "System",
+      "description": "系统概览相关接口"
+    },
+    {
+      "name": "POT",
+      "description": "POT共识相关接口"
+    },
+    {
+      "name": "Committee",
+      "description": "委员会相关接口"
+    },
+    {
+      "name": "BCI",
+      "description": "BCI激励相关接口"
+    },
+    {
+      "name": "Mempool",
+      "description": "交易池相关接口"
+    },
+    {
+      "name": "Network",
+      "description": "网络拓扑相关接口"
+    }
+  ],
+  "paths": {
+    "/system/overview": {
+      "get": {
+        "tags": ["System"],
+        "summary": "获取系统概览",
+        "description": "获取系统运行状态的整体概览信息",
+        "operationId": "getSystemOverview",
+        "responses": {
+          "200": {
+            "description": "成功返回系统概览数据",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemOverview"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/pot/status": {
+      "get": {
+        "tags": ["POT"],
+        "summary": "获取POT共识状态",
+        "description": "获取POT共识机制的当前运行状态",
+        "operationId": "getPotStatus",
+        "responses": {
+          "200": {
+            "description": "成功返回POT状态数据",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/POTStatus"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/pot/vdf": {
+      "get": {
+        "tags": ["POT"],
+        "summary": "获取VDF计算状态",
+        "description": "获取可验证延迟函数(VDF)的实时计算状态",
+        "operationId": "getVDFStatus",
+        "responses": {
+          "200": {
+            "description": "成功返回VDF状态数据",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VDFStatus"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/committee/status": {
+      "get": {
+        "tags": ["Committee"],
+        "summary": "获取委员会状态",
+        "description": "获取委员会共识机制的当前状态",
+        "operationId": "getCommitteeStatus",
+        "responses": {
+          "200": {
+            "description": "成功返回委员会状态数据",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommitteeStatus"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/bci/status": {
+      "get": {
+        "tags": ["BCI"],
+        "summary": "获取BCI激励状态",
+        "description": "获取BCI (Blockchain Incentive) 激励系统的状态",
+        "operationId": "getBCIStatus",
+        "responses": {
+          "200": {
+            "description": "成功返回BCI状态数据",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BCIStatus"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/mempool/status": {
+      "get": {
+        "tags": ["Mempool"],
+        "summary": "获取交易池状态",
+        "description": "获取交易池的实时状态信息",
+        "operationId": "getMempoolStatus",
+        "responses": {
+          "200": {
+            "description": "成功返回交易池状态数据",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MempoolStatus"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/network/topology": {
+      "get": {
+        "tags": ["Network"],
+        "summary": "获取网络拓扑",
+        "description": "获取P2P网络的拓扑结构信息",
+        "operationId": "getNetworkTopology",
+        "responses": {
+          "200": {
+            "description": "成功返回网络拓扑数据",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NetworkTopology"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "SystemOverview": {
+        "type": "object",
+        "description": "系统概览信息",
+        "required": [
+          "uptime",
+          "totalNodes",
+          "onlineNodes",
+          "consensusTypes",
+          "networkStatus",
+          "networkUtilization",
+          "currentHeight",
+          "avgBlockTime",
+          "lastBlockTime"
+        ],
+        "properties": {
+          "uptime": {
+            "type": "integer",
+            "description": "系统运行时长（秒）",
+            "example": 86400
+          },
+          "totalNodes": {
+            "type": "integer",
+            "description": "总节点数",
+            "example": 12
+          },
+          "onlineNodes": {
+            "type": "integer",
+            "description": "在线节点数",
+            "example": 10
+          },
+          "consensusTypes": {
+            "type": "array",
+            "description": "支持的共识类型列表",
+            "items": {
+              "type": "string"
+            },
+            "example": ["POT", "SimpleWhirly"]
+          },
+          "networkStatus": {
+            "type": "string",
+            "enum": ["healthy", "warning", "error"],
+            "description": "网络状态",
+            "example": "healthy"
+          },
+          "networkUtilization": {
+            "type": "number",
+            "format": "float",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "网络利用率百分比 (0-100)",
+            "example": 55.5
+          },
+          "currentHeight": {
+            "type": "integer",
+            "description": "当前区块高度",
+            "example": 12345
+          },
+          "avgBlockTime": {
+            "type": "number",
+            "format": "float",
+            "description": "平均出块时间（秒）",
+            "example": 5.2
+          },
+          "lastBlockTime": {
+            "type": "string",
+            "format": "date-time",
+            "description": "最新区块时间（ISO 8601格式）",
+            "example": "2024-01-01T12:00:00Z"
+          }
+        }
+      },
+      "POTStatus": {
+        "type": "object",
+        "description": "POT共识状态",
+        "required": [
+          "consensusType",
+          "epoch",
+          "difficulty",
+          "currentHeight",
+          "workFlag",
+          "timestamp",
+          "nonce",
+          "uncleCount",
+          "avgMiningTime",
+          "miningSuccessRate"
+        ],
+        "properties": {
+          "consensusType": {
+            "type": "string",
+            "enum": ["POT"],
+            "description": "共识类型",
+            "example": "POT"
+          },
+          "epoch": {
+            "type": "integer",
+            "description": "当前epoch",
+            "example": 89
+          },
+          "difficulty": {
+            "type": "string",
+            "pattern": "^0x[0-9a-fA-F]+$",
+            "description": "挖矿难度值（16进制字符串）",
+            "example": "0x1a2b3c"
+          },
+          "currentHeight": {
+            "type": "integer",
+            "description": "当前区块高度",
+            "example": 12345
+          },
+          "workFlag": {
+            "type": "boolean",
+            "description": "挖矿工作状态",
+            "example": true
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "description": "当前时间戳（ISO 8601格式）",
+            "example": "2024-01-01T12:00:00Z"
+          },
+          "nonce": {
+            "type": "integer",
+            "description": "Nonce值",
+            "example": 123456
+          },
+          "uncleCount": {
+            "type": "integer",
+            "description": "叔块数量",
+            "example": 2
+          },
+          "avgMiningTime": {
+            "type": "number",
+            "format": "float",
+            "description": "平均挖矿耗时（秒）",
+            "example": 3.5
+          },
+          "miningSuccessRate": {
+            "type": "number",
+            "format": "float",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "挖矿成功率 (0-100)",
+            "example": 85.5
+          }
+        }
+      },
+      "VDFStatus": {
+        "type": "object",
+        "description": "VDF计算状态",
+        "required": [
+          "vdf0",
+          "vdf1",
+          "vdfHalf",
+          "vdfChecker",
+          "abortStatus",
+          "avgComputeTime",
+          "totalIterations",
+          "cpuCounter"
+        ],
+        "properties": {
+          "vdf0": {
+            "$ref": "#/components/schemas/VDFWorker"
+          },
+          "vdf1": {
+            "type": "array",
+            "description": "VDF1工作线程状态列表",
+            "items": {
+              "$ref": "#/components/schemas/VDFThread"
+            }
+          },
+          "vdfHalf": {
+            "$ref": "#/components/schemas/VDFWorker"
+          },
+          "vdfChecker": {
+            "type": "object",
+            "description": "VDF验证器状态",
+            "required": ["status", "verifyFailCount"],
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": ["active", "inactive"],
+                "description": "验证器状态",
+                "example": "active"
+              },
+              "verifyFailCount": {
+                "type": "integer",
+                "description": "验证失败次数",
+                "example": 0
+              }
+            }
+          },
+          "abortStatus": {
+            "type": "boolean",
+            "description": "中止状态",
+            "example": false
+          },
+          "avgComputeTime": {
+            "type": "number",
+            "format": "float",
+            "description": "平均计算耗时（毫秒）",
+            "example": 45.5
+          },
+          "totalIterations": {
+            "type": "integer",
+            "description": "总迭代次数",
+            "example": 500000
+          },
+          "cpuCounter": {
+            "type": "integer",
+            "description": "并行工作线程数",
+            "example": 4
+          }
+        }
+      },
+      "VDFWorker": {
+        "type": "object",
+        "description": "VDF工作器状态",
+        "required": ["progress", "iterations", "status", "channelBuffer"],
+        "properties": {
+          "progress": {
+            "type": "number",
+            "format": "float",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "进度百分比 (0-100)",
+            "example": 75.5
+          },
+          "iterations": {
+            "type": "integer",
+            "description": "迭代次数",
+            "example": 75000
+          },
+          "status": {
+            "type": "string",
+            "enum": ["computing", "done", "idle"],
+            "description": "计算状态",
+            "example": "computing"
+          },
+          "channelBuffer": {
+            "type": "integer",
+            "description": "通道缓冲区大小",
+            "example": 5
+          }
+        }
+      },
+      "VDFThread": {
+        "type": "object",
+        "description": "VDF线程状态",
+        "required": ["workerId", "progress", "status"],
+        "properties": {
+          "workerId": {
+            "type": "integer",
+            "description": "工作线程ID",
+            "example": 0
+          },
+          "progress": {
+            "type": "number",
+            "format": "float",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "进度百分比 (0-100)",
+            "example": 60.5
+          },
+          "iterations": {
+            "type": "integer",
+            "description": "迭代次数（可选）",
+            "example": 60000
+          },
+          "status": {
+            "type": "string",
+            "enum": ["computing", "done", "idle"],
+            "description": "计算状态",
+            "example": "computing"
+          }
+        }
+      },
+      "CommitteeStatus": {
+        "type": "object",
+        "description": "委员会状态",
+        "required": [
+          "consensusType",
+          "committeeSize",
+          "committeeCount",
+          "confirmDelay",
+          "workHeight",
+          "batchSize",
+          "inCommittee",
+          "role",
+          "committee",
+          "committeePublicKey",
+          "shardings",
+          "workStage",
+          "timeout",
+          "messageQueueLength",
+          "electionHeight"
+        ],
+        "properties": {
+          "consensusType": {
+            "type": "string",
+            "enum": ["SimpleWhirly", "CRWhirly", "Whirly"],
+            "description": "共识类型",
+            "example": "SimpleWhirly"
+          },
+          "committeeSize": {
+            "type": "integer",
+            "description": "委员会大小",
+            "example": 4
+          },
+          "committeeCount": {
+            "type": "integer",
+            "description": "委员会数量",
+            "example": 4
+          },
+          "confirmDelay": {
+            "type": "integer",
+            "description": "确认延迟（区块数）",
+            "example": 6
+          },
+          "workHeight": {
+            "type": "integer",
+            "description": "委员会工作高度",
+            "example": 12339
+          },
+          "batchSize": {
+            "type": "integer",
+            "description": "批处理大小",
+            "example": 5
+          },
+          "inCommittee": {
+            "type": "boolean",
+            "description": "是否在委员会中",
+            "example": true
+          },
+          "role": {
+            "type": "string",
+            "enum": ["leader", "member", "observer"],
+            "description": "节点角色",
+            "example": "member"
+          },
+          "committee": {
+            "type": "array",
+            "description": "委员会成员列表",
+            "items": {
+              "$ref": "#/components/schemas/CommitteeMember"
+            }
+          },
+          "committeePublicKey": {
+            "type": "string",
+            "pattern": "^0x[0-9a-fA-F]+$",
+            "description": "委员会聚合公钥",
+            "example": "0x1234567890abcdef"
+          },
+          "shardings": {
+            "type": "array",
+            "description": "分片列表",
+            "items": {
+              "$ref": "#/components/schemas/Sharding"
+            }
+          },
+          "workStage": {
+            "type": "string",
+            "enum": ["init", "shuffle", "draw", "share", "consensus"],
+            "description": "工作阶段",
+            "example": "consensus"
+          },
+          "timeout": {
+            "type": "integer",
+            "description": "超时配置（毫秒）",
+            "example": 5000
+          },
+          "messageQueueLength": {
+            "type": "integer",
+            "description": "消息队列长度",
+            "example": 10
+          },
+          "electionHeight": {
+            "type": "integer",
+            "description": "选举区块高度",
+            "example": 12245
+          }
+        }
+      },
+      "CommitteeMember": {
+        "type": "object",
+        "description": "委员会成员",
+        "required": ["address", "publicKey", "isLeader"],
+        "properties": {
+          "address": {
+            "type": "string",
+            "pattern": "^0x[0-9a-fA-F]{40}$",
+            "description": "成员地址",
+            "example": "0x1234567890abcdef1234567890abcdef12345678"
+          },
+          "publicKey": {
+            "type": "string",
+            "pattern": "^0x[0-9a-fA-F]+$",
+            "description": "成员公钥",
+            "example": "0xabcdef1234567890"
+          },
+          "isLeader": {
+            "type": "boolean",
+            "description": "是否为Leader",
+            "example": false
+          }
+        }
+      },
+      "Sharding": {
+        "type": "object",
+        "description": "分片信息",
+        "required": ["name", "id", "leaderAddress", "committeeMembers", "status"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "分片名称",
+            "example": "Shard-0"
+          },
+          "id": {
+            "type": "integer",
+            "description": "分片ID",
+            "example": 0
+          },
+          "leaderAddress": {
+            "type": "string",
+            "pattern": "^0x[0-9a-fA-F]{40}$",
+            "description": "Leader地址",
+            "example": "0x1234567890abcdef1234567890abcdef12345678"
+          },
+          "committeeMembers": {
+            "type": "integer",
+            "description": "委员会成员数",
+            "example": 4
+          },
+          "status": {
+            "type": "string",
+            "enum": ["active", "inactive"],
+            "description": "分片状态",
+            "example": "active"
+          }
+        }
+      },
+      "BCIStatus": {
+        "type": "object",
+        "description": "BCI激励状态",
+        "required": [
+          "totalReward",
+          "lockedReward",
+          "totalInterest",
+          "rewardRatio",
+          "lockRates",
+          "coinbaseLock",
+          "executeHeight",
+          "incentiveHeight",
+          "pendingRewards",
+          "utxoCount",
+          "totalDistributed"
+        ],
+        "properties": {
+          "totalReward": {
+            "type": "number",
+            "description": "总奖励金额",
+            "example": 65536
+          },
+          "lockedReward": {
+            "type": "number",
+            "description": "锁定的激励金额",
+            "example": 5000
+          },
+          "totalInterest": {
+            "type": "number",
+            "description": "累计利息总数",
+            "example": 2500
+          },
+          "rewardRatio": {
+            "$ref": "#/components/schemas/RewardRatio"
+          },
+          "lockRates": {
+            "$ref": "#/components/schemas/LockRates"
+          },
+          "coinbaseLock": {
+            "type": "integer",
+            "description": "Coinbase锁定期（区块数）",
+            "example": 6
+          },
+          "executeHeight": {
+            "type": "integer",
+            "description": "执行高度",
+            "example": 12345
+          },
+          "incentiveHeight": {
+            "type": "integer",
+            "description": "激励高度",
+            "example": 12344
+          },
+          "pendingRewards": {
+            "type": "number",
+            "description": "待分配奖励数量",
+            "example": 50
+          },
+          "utxoCount": {
+            "type": "integer",
+            "description": "UTXO总数",
+            "example": 1500
+          },
+          "totalDistributed": {
+            "type": "number",
+            "description": "历史累计分发总额",
+            "example": 50000
+          }
+        }
+      },
+      "RewardRatio": {
+        "type": "object",
+        "description": "奖励分配比例",
+        "required": [
+          "exchequer",
+          "miner",
+          "uncleBlockMiner",
+          "committeeLeader",
+          "committeeMember"
+        ],
+        "properties": {
+          "exchequer": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "国库占比 (0-100)",
+            "example": 30
+          },
+          "miner": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "矿工占比 (0-100)",
+            "example": 50
+          },
+          "uncleBlockMiner": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "叔块矿工占比 (0-100)",
+            "example": 2
+          },
+          "committeeLeader": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "委员会Leader占比 (0-100)",
+            "example": 20
+          },
+          "committeeMember": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "委员会成员占比 (0-100)",
+            "example": 10
+          }
+        }
+      },
+      "LockRates": {
+        "type": "object",
+        "description": "锁定期利率",
+        "required": ["saving", "halfYear", "oneYear", "threeYears", "tenYears"],
+        "properties": {
+          "saving": {
+            "type": "number",
+            "description": "活期利率",
+            "example": 0.1
+          },
+          "halfYear": {
+            "type": "number",
+            "description": "半年期利率",
+            "example": 0.5
+          },
+          "oneYear": {
+            "type": "number",
+            "description": "一年期利率",
+            "example": 1.0
+          },
+          "threeYears": {
+            "type": "number",
+            "description": "三年期利率",
+            "example": 2.0
+          },
+          "tenYears": {
+            "type": "number",
+            "description": "十年期利率",
+            "example": 5.0
+          }
+        }
+      },
+      "MempoolStatus": {
+        "type": "object",
+        "description": "交易池状态",
+        "required": [
+          "totalSize",
+          "markedTxs",
+          "unmarkedTxs",
+          "txTypes",
+          "avgConfirmTime",
+          "verifySuccessRate",
+          "memoryUsage",
+          "recentTxs"
+        ],
+        "properties": {
+          "totalSize": {
+            "type": "integer",
+            "description": "交易池总大小",
+            "example": 100
+          },
+          "markedTxs": {
+            "type": "integer",
+            "description": "已提议交易数",
+            "example": 60
+          },
+          "unmarkedTxs": {
+            "type": "integer",
+            "description": "待提议交易数",
+            "example": 40
+          },
+          "txTypes": {
+            "$ref": "#/components/schemas/TxTypes"
+          },
+          "avgConfirmTime": {
+            "type": "number",
+            "format": "float",
+            "description": "平均确认时间（秒）",
+            "example": 8.5
+          },
+          "verifySuccessRate": {
+            "type": "number",
+            "format": "float",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "验证成功率 (0-100)",
+            "example": 95.5
+          },
+          "memoryUsage": {
+            "type": "integer",
+            "description": "内存占用（字节）",
+            "example": 10485760
+          },
+          "recentTxs": {
+            "type": "array",
+            "description": "最近交易列表",
+            "items": {
+              "$ref": "#/components/schemas/RecentTx"
+            }
+          }
+        }
+      },
+      "TxTypes": {
+        "type": "object",
+        "description": "交易类型统计",
+        "required": ["normal", "bci", "devastate"],
+        "properties": {
+          "normal": {
+            "type": "integer",
+            "description": "普通交易数",
+            "example": 70
+          },
+          "bci": {
+            "type": "integer",
+            "description": "BCI交易数",
+            "example": 20
+          },
+          "devastate": {
+            "type": "integer",
+            "description": "Devastate交易数",
+            "example": 10
+          }
+        }
+      },
+      "RecentTx": {
+        "type": "object",
+        "description": "最近交易信息",
+        "required": ["hash", "type", "timestamp", "status"],
+        "properties": {
+          "hash": {
+            "type": "string",
+            "pattern": "^0x[0-9a-fA-F]{64}$",
+            "description": "交易哈希（64位16进制字符串）",
+            "example": "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["normal", "bci", "devastate"],
+            "description": "交易类型",
+            "example": "normal"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "description": "时间戳（ISO 8601格式）",
+            "example": "2024-01-01T12:00:00Z"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "confirmed"],
+            "description": "交易状态",
+            "example": "confirmed"
+          }
+        }
+      },
+      "NetworkTopology": {
+        "type": "object",
+        "description": "网络拓扑信息",
+        "required": [
+          "nodes",
+          "edges",
+          "p2pAdaptorType",
+          "subscribedTopics",
+          "messageQueueLength",
+          "networkBandwidth"
+        ],
+        "properties": {
+          "nodes": {
+            "type": "array",
+            "description": "网络节点列表",
+            "items": {
+              "$ref": "#/components/schemas/NetworkNode"
+            }
+          },
+          "edges": {
+            "type": "array",
+            "description": "节点连接边列表",
+            "items": {
+              "$ref": "#/components/schemas/NetworkEdge"
+            }
+          },
+          "p2pAdaptorType": {
+            "type": "string",
+            "enum": ["p2p", "libp2p"],
+            "description": "P2P适配器类型",
+            "example": "libp2p"
+          },
+          "subscribedTopics": {
+            "type": "array",
+            "description": "订阅主题列表",
+            "items": {
+              "type": "string"
+            },
+            "example": ["blocks", "transactions", "consensus"]
+          },
+          "messageQueueLength": {
+            "type": "integer",
+            "description": "消息队列长度",
+            "example": 25
+          },
+          "networkBandwidth": {
+            "type": "integer",
+            "description": "网络带宽（字节/秒）",
+            "example": 1048576
+          }
+        }
+      },
+      "NetworkNode": {
+        "type": "object",
+        "description": "网络节点",
+        "required": [
+          "id",
+          "peerId",
+          "address",
+          "status",
+          "connections",
+          "latency"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "节点ID",
+            "example": 0
+          },
+          "peerId": {
+            "type": "string",
+            "description": "PeerID",
+            "example": "peer-committee-0"
+          },
+          "address": {
+            "type": "string",
+            "pattern": "^0x[0-9a-fA-F]{40}$",
+            "description": "节点地址",
+            "example": "0x1234567890abcdef1234567890abcdef12345678"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["online", "offline"],
+            "description": "节点状态",
+            "example": "online"
+          },
+          "connections": {
+            "type": "integer",
+            "description": "连接数",
+            "example": 8
+          },
+          "latency": {
+            "type": "integer",
+            "description": "延迟（毫秒）",
+            "example": 20
+          },
+          "type": {
+            "type": "string",
+            "enum": ["committee", "pot"],
+            "description": "节点类型",
+            "example": "committee"
+          },
+          "isLeader": {
+            "type": "boolean",
+            "description": "是否为Leader（仅committee类型）",
+            "example": true
+          }
+        }
+      },
+      "NetworkEdge": {
+        "type": "object",
+        "description": "网络连接边",
+        "required": ["source", "target", "latency", "messageCount"],
+        "properties": {
+          "source": {
+            "type": "integer",
+            "description": "源节点ID",
+            "example": 0
+          },
+          "target": {
+            "type": "integer",
+            "description": "目标节点ID",
+            "example": 1
+          },
+          "latency": {
+            "type": "integer",
+            "description": "延迟（毫秒）",
+            "example": 15
+          },
+          "messageCount": {
+            "type": "integer",
+            "description": "消息数量",
+            "example": 500
+          }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "description": "错误响应",
+        "required": ["code", "message"],
+        "properties": {
+          "code": {
+            "type": "integer",
+            "description": "错误代码",
+            "example": 500
+          },
+          "message": {
+            "type": "string",
+            "description": "错误消息",
+            "example": "Internal Server Error"
+          },
+          "details": {
+            "type": "string",
+            "description": "详细错误信息",
+            "example": "Database connection failed"
+          }
+        }
+      }
+    },
+    "responses": {
+      "InternalServerError": {
+        "description": "服务器内部错误",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      }
+    }
+  }
+}
