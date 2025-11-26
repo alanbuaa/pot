@@ -2,6 +2,7 @@ package utils
 
 import (
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"os/exec"
@@ -11,12 +12,28 @@ import (
 )
 
 var (
-	FileName = "/vdf-linux"
-	FilePath string
+	FileName     = "/vdf-linux"
+	FilePath     string
+	IsVDFBinExit = false
 )
 
 func init() {
+	// 从相对路径下找
 	FilePath = GetCurrentAbPathByCaller() + FileName
+	_, err := exec.LookPath(FilePath)
+	if err == nil {
+		IsVDFBinExit = true
+		return
+	}
+
+	// 从系统PATH中找
+	vdfPath, err := exec.LookPath("vdf-linux")
+	if err == nil {
+		FilePath = vdfPath
+		IsVDFBinExit = true
+		return
+	}
+
 }
 
 // GetCurrentAbPathByCaller 获取当前执行文件绝对路径;
@@ -32,8 +49,11 @@ func GetCurrentAbPathByCaller() string {
 
 func CheckVDFExists() error {
 	// verify hash
-	_, err := exec.LookPath(FilePath)
-	return err
+	if IsVDFBinExit {
+		return nil
+	}
+	return errors.New("vdf binary does not exist")
+
 }
 
 // closeStdoutPipe 关闭输出管道

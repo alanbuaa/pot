@@ -72,7 +72,7 @@
 <script setup lang="ts">
 import { storeToRefs } from "pinia";
 import { useSystemStore } from "@/stores/system";
-import { formatNumber, formatDuration } from "@/utils/format";
+import { formatNumber } from "@/utils/format";
 import NetworkSignal from "@/components/NetworkSignal.vue";
 
 const systemStore = useSystemStore();

@@ -34,9 +34,7 @@
 
 <script setup lang="ts">
 import { storeToRefs } from "pinia";
-import { DashboardOutlined } from "@ant-design/icons-vue";
 import { useSystemStore } from "@/stores/system";
-import { formatDuration } from "@/utils/format";
 
 const systemStore = useSystemStore();
 const { overview } = storeToRefs(systemStore);

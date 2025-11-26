@@ -54,7 +54,6 @@
 
 <script setup lang="ts">
 import { storeToRefs } from "pinia";
-import { TeamOutlined } from "@ant-design/icons-vue";
 import { useCommitteeStore } from "@/stores/committee";
 
 const committeeStore = useCommitteeStore();

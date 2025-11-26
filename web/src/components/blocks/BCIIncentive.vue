@@ -136,7 +136,6 @@
 
 <script setup lang="ts">
 import { storeToRefs } from "pinia";
-import { DollarOutlined } from "@ant-design/icons-vue";
 import { useBCIStore } from "@/stores/bci";
 import RewardRatioPieChart from "./RewardRatioPieChart.vue";
 import CircleProgress from "@/components/CircleProgress.vue";

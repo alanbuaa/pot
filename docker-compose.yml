@@ -1,0 +1,41 @@
+version: '3.3'
+
+services:
+  executor:
+    build:
+      context: .
+      dockerfile: Dockerfile.executor
+    image: pot-executor:latest
+    container_name: pot-executor
+    volumes:
+      - ./config/config_docker.yaml:/app/config/config.yaml:ro
+      - ./data/keys:/app/data/keys
+    ports:
+      - "9877:9877"
+    networks:
+      - pot-network
+    restart: unless-stopped
+
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    image: pot-server:latest
+    container_name: pot-server
+    volumes:
+      - ./config/config_docker.yaml:/app/config/config.yaml:ro
+      - ./data/keys:/app/data/keys
+      - ./data:/app/data
+    ports:
+      - "6060:6060"   # P2P port
+      - "7070:7070"   # RPC port
+      - "8088:8088"   # HTTP API port
+    networks:
+      - pot-network
+    depends_on:
+      - executor
+    restart: unless-stopped
+
+networks:
+  pot-network:
+    driver: bridge

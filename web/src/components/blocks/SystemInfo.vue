@@ -56,7 +56,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { storeToRefs } from "pinia";
-import { InfoCircleOutlined } from "@ant-design/icons-vue";
 import { useSystemStore } from "@/stores/system";
 import { useStorageStore } from "@/stores/storage";
 

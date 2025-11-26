@@ -77,7 +77,6 @@
 
 <script setup lang="ts">
 import { storeToRefs } from 'pinia'
-import { ClockCircleOutlined } from '@ant-design/icons-vue'
 import { usePotStore } from '@/stores/pot'
 import { useSystemStore } from '@/stores/system'
 import { formatNumber, formatDuration } from '@/utils/format'

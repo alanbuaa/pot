@@ -85,8 +85,41 @@ pot_test: $(BIN_DIR)
 run_genkey: build_genkey
 	$(BIN_DIR)/genkey -p data/keys/ -k 3 -l 4
 
+build_web:
+	@echo "Building web frontend..."
+	cd web && npm run build
+
 docker_build:
 	docker build -t pot:v1.0 .
+
+docker_build_all: build build_web docker_build
+	@echo "Built binaries, web frontend, and Docker image"
+
+docker_build_executor:
+	@echo "Building executor Docker image..."
+	docker build -f Dockerfile.executor -t pot-executor:latest .
+
+docker_build_server:
+	@echo "Building server Docker image..."
+	docker build -f Dockerfile.server -t pot-server:latest .
+
+docker_build_images: docker_build_executor docker_build_server
+	@echo "Built executor and server Docker images"
+
+docker_compose_up: 
+	@echo "Starting services with docker-compose..."
+	docker-compose up -d
+
+docker_compose_down:
+	@echo "Stopping services with docker-compose..."
+	docker-compose down
+
+docker_compose_build:
+	@echo "Building and starting services with docker-compose..."
+	docker-compose up --build -d
+
+docker_compose_logs:
+	docker-compose logs -f
 
 docker_run:
 	docker run -it pot:v1.0

@@ -1,6 +1,5 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { api } from '@/services/api'
 import type { StorageStatus } from '@/types/api'
 
 export const useStorageStore = defineStore('storage', () => {
@@ -12,7 +11,15 @@ export const useStorageStore = defineStore('storage', () => {
     loading.value = true
     error.value = null
     try {
-      status.value = await api.getStorageStatus()
+      // TODO: 实现 getStorageStatus API
+      // status.value = await api.getStorageStatus()
+      // Mock data for now
+      status.value = {
+        totalSize: 1024 * 1024 * 1024 * 100, // 100GB
+        usedSize: 1024 * 1024 * 1024 * 35, // 35GB
+        availableSize: 1024 * 1024 * 1024 * 65, // 65GB
+        utilizationRate: 35
+      }
     } catch (err: any) {
       error.value = err.message || '获取存储状态失败'
       console.error('Failed to fetch storage status:', err)

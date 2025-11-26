@@ -15,6 +15,8 @@ export interface SystemOverview {
   currentHeight: number;       // 当前区块高度
   avgBlockTime: number;        // 平均出块时间（秒）
   lastBlockTime: string;       // 最新区块时间
+  currentTPS?: number;         // 当前TPS（可选）
+  executorStatus?: string;     // 执行器状态（可选）
 }
 
 // ==================== POT共识状态 ====================
@@ -159,6 +161,23 @@ export interface NetworkTopology {
   subscribedTopics: string[];  // 订阅主题列表
   messageQueueLength: number;  // 消息队列长度
   networkBandwidth: number;    // 网络带宽（字节/秒）
+}
+
+// ==================== 存储状态 ====================
+export interface StorageStatus {
+  totalSize: number;           // 总存储大小（字节）
+  usedSize: number;            // 已使用大小（字节）
+  availableSize: number;       // 可用大小（字节）
+  utilizationRate: number;     // 使用率 (0-100)
+  blockCount?: number;         // 区块数量（可选）
+  vdfHeight?: number;          // VDF高度（可选）
+  compressionRatio?: number;   // 压缩率 (0-1)（可选）
+  buckets?: {                  // 存储桶（可选）
+    blocks?: { size: number };
+    utxo?: { size: number };
+    executed?: { size: number };
+    client?: { size: number };
+  };
 }
 
 // ==================== WebSocket消息 ====================

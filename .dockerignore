@@ -1,0 +1,50 @@
+# Git files
+.git
+.gitignore
+
+# IDE files
+.idea
+.vscode
+.VSCodeCounter
+
+# Build artifacts (will be built inside Docker)
+bin/*
+!bin/.gitkeep
+*.exe
+__debug_bin*
+
+# Data directories
+data/
+boltdbfile
+dbfile
+store
+
+# Log files
+*.log
+*.txt
+
+# Web development files (keep only dist/ for final image)
+web/node_modules/
+web/.env.development
+web/.env.production
+
+# Documentation
+docs/
+README.md
+TODO.md
+LICENSE
+DOCKER.md
+
+# Test files
+tests/
+
+# Temporary files
+*.tmp
+*.temp
+/tmp/
+/var/tmp/
+
+# Docker files
+.dockerignore
+docker-compose.yml
+Dockerfile

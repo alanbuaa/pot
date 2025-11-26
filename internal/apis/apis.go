@@ -75,6 +75,11 @@ func (s *ApiServer) setupRoutes() *gin.Engine {
 		c.Next()
 	})
 
+	// Serve static files from web/dist directory
+	r.Static("/assets", "./web/dist/assets")
+	r.StaticFile("/", "./web/dist/index.html")
+	r.StaticFile("/index.html", "./web/dist/index.html")
+
 	// Create API group
 	apiGroup := r.Group("/api")
 

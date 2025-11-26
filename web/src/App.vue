@@ -49,12 +49,10 @@ import ThreeBackground from "@/components/ThreeBackground.vue";
 import TopBar from "@/components/layout/TopBar.vue";
 import PotConsensus from "@/components/blocks/PotConsensus.vue";
 import VDFMonitor from "@/components/blocks/VDFMonitor.vue";
-import PerformanceMetrics from "@/components/blocks/PerformanceMetrics.vue";
 import NetworkTopology from "@/components/blocks/NetworkTopology.vue";
 import MempoolMonitor from "@/components/blocks/MempoolMonitor.vue";
 import BCIIncentive from "@/components/blocks/BCIIncentive.vue";
 import CommitteeInfo from "@/components/blocks/CommitteeInfo.vue";
-import SystemInfo from "@/components/blocks/SystemInfo.vue";
 import BlockChain3D from "@/components/blocks/BlockChain3D.vue";
 
 import { useSystemStore } from "@/stores/system";

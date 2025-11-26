@@ -136,7 +136,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { storeToRefs } from "pinia";
-import { DatabaseOutlined } from "@ant-design/icons-vue";
 import { useMempoolStore } from "@/stores/mempool";
 import { useSystemStore } from "@/stores/system";
 import TxTypePieChart from "./TxTypePieChart.vue";

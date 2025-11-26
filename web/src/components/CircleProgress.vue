@@ -2,72 +2,41 @@
   <div :id="chartId" class="circle-progress" :style="{ width: width, height: height }"></div>
 </template>
 
-<script setup>
-import { ref, onMounted, watch, onBeforeUnmount, defineProps } from 'vue'
+<script setup lang="ts">
+import { ref, onMounted, watch, onBeforeUnmount } from 'vue'
 import * as echarts from 'echarts'
 
-const props = defineProps({
-  // 进度值 (0-100)
-  value: {
-    type: Number,
-    default: 0,
-    validator: (val) => val >= 0 && val <= 100
-  },
-  // 标题
-  title: {
-    type: String,
-    default: '目前进度'
-  },
-  // 进度条颜色
-  color: {
-    type: String,
-    default: 'rgba(0,153,255,0.8)'
-  },
-  // 背景色
-  backgroundColor: {
-    type: String,
-    default: 'rgba(0,153,255,0.1)'
-  },
-  // 外环颜色
-  outerRingColor: {
-    type: String,
-    default: 'rgba(0,153,255,0.3)'
-  },
-  // 文字颜色
-  textColor: {
-    type: String,
-    default: '#B7E1FF'
-  },
-  // 组件宽度
-  width: {
-    type: String,
-    default: '200px'
-  },
-  // 组件高度
-  height: {
-    type: String,
-    default: '200px'
-  },
-  // 内环半径
-  innerRadius: {
-    type: Array,
-    default: () => [75, 90]
-  },
-  // 显示百分号
-  showPercentSign: {
-    type: Boolean,
-    default: true
-  },
-  // 自定义显示值
-  displayValue: {
-    type: String,
-    default: ''
-  }
+interface Props {
+  value?: number
+  title?: string
+  color?: string
+  backgroundColor?: string
+  outerRingColor?: string
+  textColor?: string
+  width?: string
+  height?: string
+  innerRadius?: [number, number]
+  showPercentSign?: boolean
+  displayValue?: string
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  value: 0,
+  title: '目前进度',
+  color: 'rgba(0,153,255,0.8)',
+  backgroundColor: 'rgba(0,153,255,0.1)',
+  outerRingColor: 'rgba(0,153,255,0.3)',
+  textColor: '#B7E1FF',
+  width: '200px',
+  height: '200px',
+  innerRadius: () => [75, 90],
+  showPercentSign: true,
+  displayValue: ''
 })
 
 // 生成唯一ID
 const chartId = ref(`circle-progress-${Math.random().toString(36).substr(2, 9)}`)
-let chartInstance = null
+let chartInstance: echarts.ECharts | null = null
 
 const initChart = () => {
   const chartDom = document.getElementById(chartId.value)

@@ -3,6 +3,7 @@ package node
 import (
 	"context"
 	"net"
+	"strconv"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -50,7 +51,8 @@ func NewNode(id int64) *Node {
 	utils.PanicOnError(err)
 
 	// startup api server
-	apiServer := apis.NewApiServer(&apis.Config{Port: 18080}, log)
+	apiPort, _ := strconv.Atoi(strings.Split(cfg.RestServerAddress, ":")[1])
+	apiServer := apis.NewApiServer(&apis.Config{Port: apiPort}, log)
 
 	e := executor.BuildExecutor(cfg.Executor, log)
 	c := consensus.BuildConsensus(id, 10001, cfg.Consensus, e, p, log)

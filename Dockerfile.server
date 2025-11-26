@@ -9,42 +9,12 @@ WORKDIR /build
 COPY . .
 
 # Build binaries
-RUN make build-genkey build-executor build_server
-
-# =============================================================================
-# Executor runtime image
-# =============================================================================
-FROM debian:bookworm-slim AS executor
-
-USER root
-RUN touch /etc/apt/sources.list &&\
-    sed -i 's/deb.debian.org/mirrors.tuna.tsinghua.edu.cn/' /etc/apt/sources.list && \
-    sed -i 's/security.debian.org/mirrors.tuna.tsinghua.edu.cn/' /etc/apt/sources.list && \
-    sed -i 's/security-cdn.debian.org/mirrors.tuna.tsinghua.edu.cn/' /etc/apt/sources.list && \
-    apt update && \
-    apt upgrade -y && \
-    apt install -y --no-install-recommends ca-certificates libgmp-dev && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* && \
-    rm -f /var/log/lastlog /var/log/faillog
-
-WORKDIR /app
-
-# Copy binaries from builder
-COPY --from=builder /build/bin/genkey ./bin/genkey
-COPY --from=builder /build/bin/executor ./bin/executor
-
-# Create directories for config and data
-RUN mkdir -p config data/keys
-
-EXPOSE 9877
-
-CMD ["./bin/executor","-c", "config/config.yaml"]
+RUN make build-genkey build_server
 
 # =============================================================================
 # Server runtime image
 # =============================================================================
-FROM debian:bookworm-slim AS server
+FROM debian:bookworm-slim
 
 USER root
 RUN touch /etc/apt/sources.list &&\
@@ -63,6 +33,10 @@ WORKDIR /app
 # Copy binaries from builder
 COPY --from=builder /build/bin/genkey ./bin/genkey
 COPY --from=builder /build/bin/server ./bin/server
+
+# Copy VDF binary to system PATH
+COPY ./crypto/blockchain-crypto/vdf/utils/vdf-linux /usr/local/bin/vdf-linux
+RUN chmod +x /usr/local/bin/vdf-linux 
 
 # Copy web static files
 COPY web/dist/ ./web/dist/
