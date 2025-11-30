@@ -55,3 +55,13 @@ func (a *PotMonitorAdapter) GetMempoolStatus() (*model.MempoolStatus, error) {
 func (a *PotMonitorAdapter) GetNetworkTopology() (*model.NetworkTopology, error) {
 	return a.monitor.GetNetworkTopology()
 }
+
+// GetRecentBlocks returns the most recent N blocks
+func (a *PotMonitorAdapter) GetRecentBlocks(count int) ([]model.BlockInfo, error) {
+	return a.monitor.GetRecentBlocks(count)
+}
+
+// GetBlockByHeight returns detailed information about a specific block
+func (a *PotMonitorAdapter) GetBlockByHeight(height uint64) (*model.BlockDetail, error) {
+	return a.monitor.GetBlockByHeight(height)
+}

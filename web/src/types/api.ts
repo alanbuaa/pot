@@ -186,3 +186,29 @@ export interface WSMessage {
   timestamp: string;           // 时间戳（ISO 8601格式）
   data: POTStatus | VDFStatus | CommitteeStatus | MempoolStatus | NetworkTopology | SystemOverview | BCIStatus; // 消息数据
 }
+
+// ==================== 区块信息 ====================
+export interface BlockInfo {
+  height: number;              // 区块高度
+  hash: string;                // 区块哈希（16进制字符串）
+  timestamp: number;           // 时间戳（Unix时间戳，秒）
+  txCount: number;             // 交易数量
+  size: number;                // 区块大小（字节）
+  miner: string;               // 矿工地址/PeerID
+}
+
+export interface BlockDetail {
+  height: number;              // 区块高度
+  hash: string;                // 区块哈希（16进制字符串）
+  parentHash: string;          // 父区块哈希
+  timestamp: number;           // 时间戳（Unix时间戳，秒）
+  txCount: number;             // 交易数量
+  size: number;                // 区块大小（字节）
+  miner: string;               // 矿工地址/PeerID
+  difficulty: string;          // 难度值（16进制字符串）
+  nonce: number;               // Nonce值
+  mixdigest: string;           // Mixdigest（16进制字符串）
+  uncleHashes: string[];       // 叔块哈希列表
+  transactions: string[];      // 交易哈希列表
+  committeePubkey: string;     // 委员会公钥
+}

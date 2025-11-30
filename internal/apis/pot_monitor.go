@@ -79,7 +79,7 @@ func (m *PotMonitor) GetSystemOverview() (*model.SystemOverview, error) {
 		OnlineNodes:        len(m.engine.GetConfig().Nodes), // Simplified: assume all nodes online
 		ConsensusTypes:     []string{"POT", "SimpleWhirly"},
 		NetworkStatus:      "healthy",
-		NetworkUtilization: 65.5, // Placeholder
+		NetworkUtilization: 80, // Placeholder
 		CurrentHeight:      currentHeight,
 		AvgBlockTime:       avgBlockTime,
 		LastBlockTime:      lastBlockTime,
@@ -436,4 +436,118 @@ func getTxType(tx *types.RawTx) string {
 		}
 	}
 	return "normal"
+}
+
+// GetRecentBlocks returns the most recent N blocks
+func (m *PotMonitor) GetRecentBlocks(count int) ([]model.BlockInfo, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	currentHeight := m.worker.GetChainReader().GetCurrentHeight()
+	if count <= 0 {
+		count = 10
+	}
+
+	blocks := make([]model.BlockInfo, 0, count)
+	startHeight := currentHeight
+	if currentHeight >= uint64(count) {
+		startHeight = currentHeight - uint64(count) + 1
+	} else {
+		startHeight = 1 // Skip genesis block at height 0
+	}
+
+	for h := startHeight; h <= currentHeight; h++ {
+		block, err := m.worker.GetChainReader().GetByHeight(h)
+		if err != nil {
+			m.log.Warnf("Failed to get block at height %d: %v", h, err)
+			continue
+		}
+
+		if block == nil || block.GetHeader() == nil {
+			continue
+		}
+
+		header := block.GetHeader()
+		blockInfo := model.BlockInfo{
+			Height:    header.Height,
+			Hash:      hexutil.Encode(header.Hash()),
+			Timestamp: header.Timestamp.Unix(),
+			TxCount:   len(block.GetTxs()),
+			Size:      estimateBlockSize(block),
+			Miner:     header.PeerId,
+		}
+		blocks = append(blocks, blockInfo)
+	}
+
+	return blocks, nil
+}
+
+// GetBlockByHeight returns detailed information about a specific block
+func (m *PotMonitor) GetBlockByHeight(height uint64) (*model.BlockDetail, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	block, err := m.worker.GetChainReader().GetByHeight(height)
+	if err != nil {
+		return nil, fmt.Errorf("block not found at height %d: %w", height, err)
+	}
+
+	if block == nil || block.GetHeader() == nil {
+		return nil, fmt.Errorf("block or header is nil at height %d", height)
+	}
+
+	header := block.GetHeader()
+	txs := block.GetTxs()
+
+	// Convert transactions to hash strings
+	txHashes := make([]string, 0, len(txs))
+	for _, tx := range txs {
+		if tx != nil {
+			// Get RawTx data from Tx
+			rawTx := tx.GetRawTxData()
+			if rawTx != nil {
+				txHashes = append(txHashes, hexutil.Encode(rawTx.Txid[:]))
+			}
+		}
+	}
+
+	// Convert uncle hashes
+	uncleHashes := make([]string, 0, len(header.UncleHash))
+	for _, uncleHash := range header.UncleHash {
+		uncleHashes = append(uncleHashes, hexutil.Encode(uncleHash))
+	}
+
+	detail := &model.BlockDetail{
+		Height:          header.Height,
+		Hash:            hexutil.Encode(header.Hash()),
+		ParentHash:      hexutil.Encode(header.ParentHash),
+		Timestamp:       header.Timestamp.Unix(),
+		TxCount:         len(txs),
+		Size:            estimateBlockSize(block),
+		Miner:           header.PeerId,
+		Difficulty:      hexutil.EncodeBig(header.Difficulty),
+		Nonce:           header.Nonce,
+		Mixdigest:       hexutil.Encode(header.Mixdigest),
+		UncleHashes:     uncleHashes,
+		Transactions:    txHashes,
+		CommitteePubkey: hexutil.Encode(header.CommiteePubkey),
+	}
+
+	return detail, nil
+}
+
+// estimateBlockSize estimates the size of a block in bytes
+func estimateBlockSize(block *types.Block) int {
+	if block == nil {
+		return 0
+	}
+	// Rough estimate: header size + transactions
+	size := 500 // Base header size estimate
+	for _, tx := range block.GetTxs() {
+		if tx != nil {
+			// Each transaction roughly 200 bytes base + data
+			size += 200 + len(tx.Data)
+		}
+	}
+	return size
 }

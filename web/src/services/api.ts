@@ -14,7 +14,9 @@ import type {
   CommitteeStatus,
   BCIStatus,
   MempoolStatus,
-  NetworkTopology
+  NetworkTopology,
+  BlockInfo,
+  BlockDetail
 } from '@/types/api'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api'
@@ -26,6 +28,11 @@ class ApiClient {
 
   constructor() {
     this.useMock = USE_MOCK
+    
+    console.log('[API Client] Initializing with:', {
+      baseURL: API_BASE_URL,
+      useMock: this.useMock
+    })
     
     this.client = axios.create({
       baseURL: API_BASE_URL,
@@ -62,6 +69,7 @@ class ApiClient {
       console.log('[Mock Mode] Using mock data')
       return Promise.resolve(mockFn())
     }
+    console.log('[API Mode] Fetching from backend')
     return apiFn()
   }
 
@@ -151,6 +159,32 @@ class ApiClient {
     return this.mockOrFetch(
       () => mockService.getNetworkTopology(),
       () => this.client.get('/network/topology')
+    )
+  }
+
+  // ==================== 区块API ====================
+  
+  /**
+   * 获取最近的N个区块
+   * @param count 区块数量，默认为10
+   * @returns Promise<BlockInfo[]>
+   */
+  getRecentBlocks(count: number = 10): Promise<BlockInfo[]> {
+    return this.mockOrFetch(
+      () => mockService.getRecentBlocks(count),
+      () => this.client.get('/blocks/recent', { params: { count } })
+    )
+  }
+
+  /**
+   * 根据高度获取区块详情
+   * @param height 区块高度
+   * @returns Promise<BlockDetail>
+   */
+  getBlockByHeight(height: number): Promise<BlockDetail> {
+    return this.mockOrFetch(
+      () => mockService.getBlockByHeight(height),
+      () => this.client.get(`/blocks/${height}`)
     )
   }
 }

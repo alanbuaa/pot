@@ -122,7 +122,7 @@ docker_compose_logs:
 	docker-compose logs -f
 
 docker_run:
-	docker run -it pot:v1.0
+	docker run -it pot-server:latest
 
 # --------------------------------------------------
 # Windows helpers

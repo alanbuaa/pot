@@ -11,7 +11,9 @@ import type {
   CommitteeStatus,
   BCIStatus,
   MempoolStatus,
-  NetworkTopology
+  NetworkTopology,
+  BlockInfo,
+  BlockDetail
 } from '@/types/api'
 
 /**
@@ -272,6 +274,72 @@ export class MockDataService {
     this.blockHeight++
     if (this.blockHeight % 100 === 0) {
       this.epoch++
+    }
+  }
+
+  /**
+   * 获取最近的N个区块Mock数据
+   */
+  getRecentBlocks(count: number = 10): BlockInfo[] {
+    const blocks: BlockInfo[] = []
+    const startHeight = Math.max(1, this.blockHeight - count + 1)
+    
+    for (let i = startHeight; i <= this.blockHeight; i++) {
+      blocks.push({
+        height: i,
+        hash: '0x' + Array.from({ length: 64 }, () => 
+          Math.floor(Math.random() * 16).toString(16)
+        ).join(''),
+        timestamp: Date.now() - (this.blockHeight - i) * 5000, // 每个块相隔5秒
+        txCount: Math.floor(Math.random() * 200) + 10,
+        size: Math.floor(Math.random() * 500000) + 50000,
+        miner: 'peer-' + Math.floor(Math.random() * 10)
+      })
+    }
+    
+    return blocks
+  }
+
+  /**
+   * 根据高度获取区块详情Mock数据
+   */
+  getBlockByHeight(height: number): BlockDetail {
+    const txCount = Math.floor(Math.random() * 200) + 10
+    const transactions = Array.from({ length: txCount }, () =>
+      '0x' + Array.from({ length: 64 }, () =>
+        Math.floor(Math.random() * 16).toString(16)
+      ).join('')
+    )
+
+    const uncleCount = Math.floor(Math.random() * 3)
+    const uncleHashes = Array.from({ length: uncleCount }, () =>
+      '0x' + Array.from({ length: 64 }, () =>
+        Math.floor(Math.random() * 16).toString(16)
+      ).join('')
+    )
+
+    return {
+      height,
+      hash: '0x' + Array.from({ length: 64 }, () =>
+        Math.floor(Math.random() * 16).toString(16)
+      ).join(''),
+      parentHash: '0x' + Array.from({ length: 64 }, () =>
+        Math.floor(Math.random() * 16).toString(16)
+      ).join(''),
+      timestamp: Date.now() - (this.blockHeight - height) * 5000,
+      txCount,
+      size: Math.floor(Math.random() * 500000) + 50000,
+      miner: 'peer-' + Math.floor(Math.random() * 10),
+      difficulty: '0x' + Math.floor(Math.random() * 0xffffff).toString(16).padStart(6, '0'),
+      nonce: Math.floor(Math.random() * 1000000),
+      mixdigest: '0x' + Array.from({ length: 64 }, () =>
+        Math.floor(Math.random() * 16).toString(16)
+      ).join(''),
+      uncleHashes,
+      transactions,
+      committeePubkey: '0x' + Array.from({ length: 128 }, () =>
+        Math.floor(Math.random() * 16).toString(16)
+      ).join('')
     }
   }
 }

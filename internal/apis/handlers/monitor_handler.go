@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
@@ -42,6 +43,10 @@ func (h *MonitorHandler) RegisterRoutes(group *gin.RouterGroup) {
 
 	// Network routes
 	group.GET("/network/topology", h.HandleNetworkTopology)
+
+	// Block routes
+	group.GET("/blocks/recent", h.HandleRecentBlocks)
+	group.GET("/blocks/:height", h.HandleBlockByHeight)
 }
 
 // HandleSystemOverview handles system overview requests
@@ -154,4 +159,55 @@ func (h *MonitorHandler) HandleNetworkTopology(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, topology)
+}
+
+// HandleRecentBlocks handles recent blocks query requests
+func (h *MonitorHandler) HandleRecentBlocks(c *gin.Context) {
+	// Get count parameter from query, default to 10
+	count := 10
+	if countStr := c.Query("count"); countStr != "" {
+		if parsedCount, err := strconv.Atoi(countStr); err == nil && parsedCount > 0 {
+			count = parsedCount
+		}
+	}
+
+	blocks, err := h.service.GetRecentBlocks(count)
+	if err != nil {
+		h.log.Errorf("Failed to get recent blocks: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "Internal Server Error",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, blocks)
+}
+
+// HandleBlockByHeight handles block detail query by height
+func (h *MonitorHandler) HandleBlockByHeight(c *gin.Context) {
+	heightStr := c.Param("height")
+	height, err := strconv.ParseUint(heightStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "Invalid height parameter",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	block, err := h.service.GetBlockByHeight(height)
+	if err != nil {
+		h.log.Errorf("Failed to get block by height %d: %v", height, err)
+		c.JSON(http.StatusNotFound, gin.H{
+			"code":    404,
+			"message": "Block not found",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, block)
 }

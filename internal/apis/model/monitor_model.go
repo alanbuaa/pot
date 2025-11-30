@@ -193,6 +193,33 @@ type NetworkTopology struct {
 	NetworkBandwidth   int64         `json:"networkBandwidth"`
 }
 
+// BlockInfo represents basic block information
+type BlockInfo struct {
+	Height    uint64 `json:"height"`
+	Hash      string `json:"hash"`
+	Timestamp int64  `json:"timestamp"`
+	TxCount   int    `json:"txCount"`
+	Size      int    `json:"size"`
+	Miner     string `json:"miner"`
+}
+
+// BlockDetail represents detailed block information
+type BlockDetail struct {
+	Height          uint64   `json:"height"`
+	Hash            string   `json:"hash"`
+	ParentHash      string   `json:"parentHash"`
+	Timestamp       int64    `json:"timestamp"`
+	TxCount         int      `json:"txCount"`
+	Size            int      `json:"size"`
+	Miner           string   `json:"miner"`
+	Difficulty      string   `json:"difficulty"`
+	Nonce           int64    `json:"nonce"`
+	Mixdigest       string   `json:"mixdigest"`
+	UncleHashes     []string `json:"uncleHashes"`
+	Transactions    []string `json:"transactions"`
+	CommitteePubkey string   `json:"committeePubkey"`
+}
+
 // MonitorService defines the interface for monitoring service
 type MonitorService interface {
 	GetSystemOverview() (*SystemOverview, error)
@@ -202,4 +229,6 @@ type MonitorService interface {
 	GetBCIStatus() (*BCIStatus, error)
 	GetMempoolStatus() (*MempoolStatus, error)
 	GetNetworkTopology() (*NetworkTopology, error)
+	GetRecentBlocks(count int) ([]BlockInfo, error)
+	GetBlockByHeight(height uint64) (*BlockDetail, error)
 }
