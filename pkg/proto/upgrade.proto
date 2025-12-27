@@ -1,0 +1,131 @@
+syntax = "proto3";
+package pb;
+
+option go_package = "github.com/zzz136454872/upgradeable-consensus/pkg/proto";
+
+// 升级阶段枚举
+enum UpgradePhase {
+    PHASE_NONE = 0;
+    PHASE_PROPOSED = 1; // 提案已提交
+    PHASE_PREEXEC = 2; // 预执行中
+    PHASE_SWITCH_READY = 3; // 准备切换
+    PHASE_SWITCHED = 4; // 已切换
+    PHASE_FINALIZED = 5; // 已完成
+    PHASE_ROLLBACK = 6; // 已回退
+}
+
+// 升级配置交易
+message UpgradeConfigTransaction {
+    // 提案标识
+    bytes proposal_id = 1;
+    
+    // 目标共识
+    string target_consensus = 2; // "hotstuff", "pow", "whirly", 或自定义
+    
+    // CDL 描述 (当 target_consensus 为自定义时使用)
+    string cdl_yaml = 3;
+    
+    // 关键高度
+    uint64 fork_height = 4; // 分叉高度
+    uint64 preexec_start_height = 5; // 预执行开始高度
+    uint64 switch_height = 6; // 切换高度
+    
+    // 回退条件
+    RollbackCondition rollback_condition = 7;
+    
+    // 治理委员会签名
+    repeated bytes committee_signatures = 8;
+    repeated bytes committee_pubkeys = 9;
+    uint32 threshold = 10; // 签名阈值
+    
+    // 激励
+    uint64 incentive = 11; // 提案激励金额
+    
+    // 元数据
+    int64 timestamp = 12;
+    bytes proposer = 13;
+    string description = 14;
+    
+    // 新增共识参数 (JSON 格式)
+    string consensus_params = 15;
+    
+    // 共识 ID
+    int64 consensus_id = 16;
+    
+    // 元数据哈希 (用于验证)
+    bytes metadata_hash = 17;
+    
+    uint64 nonce = 18;
+}
+
+// 回退条件
+message RollbackCondition {
+    double max_error_rate = 1; // 最大错误率 (0.05 = 5%)
+    double max_latency_increase = 2; // 最大延迟增加比例 (0.2 = 20%)
+    double min_throughput_ratio = 3; // 最小吞吐量比例 (0.8 = 80%)
+    uint64 timeout_blocks = 4; // 超时区块数
+}
+
+// 升级确认交易
+message UpgradeConfirmTransaction {
+    bytes proposal_id = 1;
+    int64 confirmer_id = 2;
+    bytes signature = 3;
+    bytes public_key = 4;
+    int64 timestamp = 5;
+    uint64 confirmed_height = 6;
+    string comment = 7;
+    bool approved = 8; // true=批准, false=拒绝
+}
+
+// 执行指标
+message ExecutionMetrics {
+    double avg_block_time = 1; // 平均区块时间 (秒)
+    double avg_throughput = 2; // 平均吞吐量 (tx/s)
+    double error_rate = 3; // 错误率
+    uint64 total_blocks = 4; // 总区块数
+    uint64 failed_blocks = 5; // 失败区块数
+    int64 timestamp = 6; // 时间戳
+    repeated BlockMetric block_metrics = 7; // 每个区块的指标
+}
+
+// 单个区块指标
+message BlockMetric {
+    uint64 height = 1;
+    double block_time = 2; // 区块时间 (秒)
+    uint32 tx_count = 3; // 交易数
+    bool success = 4; // 是否成功
+    string error_msg = 5;
+}
+
+// 预执行链区块头
+message PreexecHeader {
+    uint64 height = 1;
+    bytes parent_hash = 2;
+    bytes tx_hash = 3;
+    bytes state_root = 4;
+    int64 timestamp = 5;
+    int64 consensus_id = 6;
+    bytes proposer = 7;
+    uint64 fork_point = 8; // 分叉点高度
+    ExecutionStatus status = 9;
+}
+
+enum ExecutionStatus {
+    STATUS_RUNNING = 0;
+    STATUS_SUCCESS = 1;
+    STATUS_FAILED = 2;
+}
+
+// CDL 共识描述
+message ConsensusDescriptorCDL {
+    string name = 1;
+    string version = 2;
+    string type = 3;
+    bytes components = 4; // YAML 序列化的组件配置
+    bytes parameters = 5; // YAML 序列化的参数
+    bytes phases = 6; // YAML 序列化的阶段定义
+    bytes state_machine = 7; // YAML 序列化的状态机
+    bytes safety_properties = 8; // YAML 序列化的安全属性
+    bytes performance_requirements = 9;
+}

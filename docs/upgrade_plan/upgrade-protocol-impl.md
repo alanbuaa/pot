@@ -28,6 +28,7 @@ consensus/
 │   ├── transaction.go         # 升级配置交易
 │   ├── governance.go          # 治理委员会管理
 │   ├── dual_chain.go          # 双链管理
+│   ├── message_cache.go        # 新增: 消息缓存(bufmsg)与转发
 │   ├── cdl/                   # CDL 引擎
 │   │   ├── parser.go         # CDL 解析器
 │   │   ├── validator.go      # CDL 验证器
@@ -46,6 +47,7 @@ pkg/proto/
 
 internal/storage/
 ├── dual_chain_storage.go      # 新增: 双链存储
+└── message_cache_storage.go    # 新增: bufmsg 持久化存储(LevelDB)
 └── metrics_storage.go         # 新增: 指标存储
 ```
 
@@ -192,12 +194,116 @@ func (uc *UpgradeableConsensus) handleUpgradeTx(tx *pb.Transaction) {
 | `consensus/upgrade/transaction.go` | 升级交易处理 | crypto, types |
 | `consensus/upgrade/governance.go` | 治理委员会 | crypto (门限签名) |
 | `consensus/upgrade/dual_chain.go` | 双链管理 | storage |
+| `consensus/upgrade/message_cache.go` | 消息缓存(bufmsg)与转发 | storage, upgrade state |
 | `consensus/upgrade/cdl/*` | CDL 引擎 | yaml, parser |
 | `consensus/upgrade/metrics.go` | 性能监控 | time, statistics |
 | `consensus/upgrade/switch.go` | 切换逻辑 | consensus |
 | `types/upgrade_tx.go` | 升级交易类型 | proto |
 | `pkg/proto/upgrade.proto` | protobuf 定义 | - |
 | `internal/storage/dual_chain_storage.go` | 双链存储 | leveldb |
+| `internal/storage/message_cache_storage.go` | bufmsg 持久化存储 | leveldb |
+
+## 5.3 消息缓存机制（bufmsg，非同步网络专用）
+
+本节将论文中的“消息缓存机制”落到工程实现：它仅用于**非同步网络**（半同步 + 异步），用于解决“候选共识尚未启动时，属于该共识的普通消息已经到达”的消息可达性问题。
+
+### 5.3.1 设计目标与边界
+
+- **目标**: 确保候选共识启动后，能接收到其启动之前已到达的“未来普通消息”。
+- **边界**:
+  - 仅缓存**普通消息**（共识协议间通信消息）。
+  - 共识切换提议、锁定提议等**控制类消息**不进入 `bufmsg`（仍按原有升级流程处理）。
+  - 仅保留“所属时段 ≥ 当前节点时段”的消息；所属时段 < 当前节点时段的历史消息直接丢弃。
+  - 同步网络模式下：未启动共识的消息直接丢弃，不做缓存。
+
+### 5.3.2 消息必要字段
+
+为保证缓存与转发的精准性，每个“普通消息”必须携带:
+
+- `receiverConsensusID`: 接收者共识 ID
+- `epoch`（或 `term`/`period`）: 消息所属时段
+
+说明：具体字段名可与现有网络消息结构对齐，本机制只依赖“接收者共识 ID + 所属时段”两项语义。
+
+### 5.3.3 处理流程（接收/缓存/转发/清理）
+
+**初始化**:
+
+- 系统启动时初始化 `bufmsg`（空集合），并与 `bufin`、`candi` 协同。
+- 从 `message_cache_storage` 恢复持久化的缓存消息到内存索引（可选：按需惰性加载）。
+
+**消息接收与判断**:
+
+网络模块收到消息后，应交由升级管理器（或共识切换模块）做如下判定：
+
+```go
+// 伪代码：仅表达流程，不限定具体接口
+func (m *UpgradeManager) OnNetworkMessage(msg *NormalMsg) {
+    // 1) 非同步网络才启用 bufmsg
+    if m.networkMode == NetworkSync {
+        if !m.isConsensusRunning(msg.receiverConsensusID) {
+            return // 同步网络：直接丢弃
+        }
+        m.forwardToConsensus(msg.receiverConsensusID, msg)
+        return
+    }
+
+    // 2) 仅普通消息进入缓存逻辑；控制消息走原路径
+    if msg.isControlMessage() {
+        m.handleControlMessage(msg)
+        return
+    }
+
+    // 3) 时段过滤：只保留未来消息
+    if msg.epoch < m.currentEpoch {
+        return
+    }
+
+    // 4) 接收者共识是否已启动
+    if m.isConsensusRunning(msg.receiverConsensusID) {
+        m.forwardToConsensus(msg.receiverConsensusID, msg)
+        return
+    }
+
+    // 5) 未启动：写入 bufmsg（内存 + 持久化）
+    m.bufmsg.Put(msg)               // 内存索引
+    m.bufmsgStorage.Store(msg)      // LevelDB
+}
+```
+
+**候选共识启动后的自动转发**:
+
+- 当共识切换提议被当前共识输出后，系统启动对应候选共识并加入 `candi`。
+- 启动完成后，触发一次“缓存消息冲刷（flush）”：遍历 `bufmsg` 中 `receiverConsensusID == newConsensusID` 的消息并逐条转发。
+
+```go
+func (m *UpgradeManager) OnCandidateConsensusStarted(newConsensusID int64) {
+    cached := m.bufmsg.PopAllForConsensus(newConsensusID)
+    for _, msg := range cached {
+        m.forwardToConsensus(newConsensusID, msg)
+        m.bufmsgStorage.Delete(msg)
+    }
+}
+```
+
+**共识切换完成后的缓存清理**:
+
+- 当锁定交易触发切换（切换到目标候选共识）时：
+  - 清理 `bufmsg` 中“所属时段 = 当前旧时段”的消息；
+  - 保留更高时段的消息，为后续可能的共识切换预留缓存支持。
+
+```go
+func (m *UpgradeManager) OnConsensusSwitched(oldEpoch uint64) {
+    m.bufmsg.DropByEpoch(oldEpoch)
+    m.bufmsgStorage.DeleteByEpoch(oldEpoch)
+}
+```
+
+### 5.3.4 持久化建议（LevelDB）
+
+- **写入策略**: `Put(msg)` 时同时写入 LevelDB，确保节点重启后可恢复。
+- **键设计**: 建议包含 `receiverConsensusID + epoch + messageID/hash`，避免覆盖；并支持按 epoch 扫描删除。
+- **恢复策略**: 启动时加载索引（或按需加载），并在候选共识启动时做定向扫描/冲刷。
 
 ## 3. 核心数据结构实现
 
@@ -4733,12 +4839,24 @@ go test -v ./tests/ -timeout 30m -tags=stress
 
 ## 13. 实现步骤总结
 
-### 13.1 第一阶段:核心基础设施 (1-2周)
+### 13.1 第一阶段:核心基础设施 (1-2周) ✅ 已完成
 
-1. 实现 protobuf 定义 (`pkg/proto/upgrade.proto`)
-2. 实现核心类型 (`consensus/upgrade/types.go`)
-3. 实现双链存储 (`internal/storage/dual_chain_storage.go`)
-4. 编写单元测试
+> **状态**: ✅ 已于 2025-12-27 完成  
+> **详细信息**: 参见 [PHASE1_COMPLETION.md](./PHASE1_COMPLETION.md) 和 [IMPLEMENTATION_PROGRESS.md](./IMPLEMENTATION_PROGRESS.md)
+
+1. ✅ 实现 protobuf 定义 (`pkg/proto/upgrade.proto`)
+2. ✅ 实现核心类型 (`consensus/upgrade/types.go`)
+3. ✅ 实现双链存储 (`internal/storage/dual_chain_storage.go`)
+4. ✅ 实现消息缓存存储（bufmsg，LevelDB 持久化）(`internal/storage/message_cache_storage.go`)
+5. ✅ 编写单元测试（`internal/storage/message_cache_storage_test.go`）
+
+**成果**:
+- 完整的 Protobuf 消息定义
+- 核心数据结构实现
+- 双链并行存储机制
+- 消息缓存系统（支持非同步网络）
+- 13 个单元测试全部通过
+- ~1,583 行高质量代码
 
 ### 13.2 第二阶段:交易与治理 (1-2周)
 
@@ -4766,6 +4884,7 @@ go test -v ./tests/ -timeout 30m -tags=stress
 
 1. 实现切换管理器 (`consensus/upgrade/switch.go`)
 2. 实现回退管理器 (`consensus/upgrade/rollback.go`)
+3. 实现消息缓存机制（bufmsg，非同步网络专用）(`consensus/upgrade/message_cache.go`) 并接入切换生命周期
 3. 实现升级管理器 (`consensus/upgrade/manager.go`)
 4. 编写端到端测试
 
@@ -4779,9 +4898,11 @@ go test -v ./tests/ -timeout 30m -tags=stress
 ### 13.7 第七阶段:测试与优化 (2周)
 
 1. 完善单元测试和集成测试
+2. 增加 bufmsg 场景测试（提前到达消息、重启恢复、切换清理）
 2. 性能基准测试和优化
 3. 安全审计
 4. 文档完善
+
 
 **总计: 约 10-14 周**
 
