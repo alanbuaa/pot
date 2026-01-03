@@ -210,7 +210,7 @@ func (vm *VotingManager) CastVote(proposalID types.TxHash, nodeID int64, option 
 
 // checkQuorum 检查是否达到法定人数
 func (vm *VotingManager) checkQuorum(proposalVote *ProposalVote) {
-	totalNodes := proposalVote.Proposal.Threshold // 使用提案的阈值作为总节点数
+	totalNodes := int64(proposalVote.Proposal.Threshold) // 使用提案的阈值作为总节点数
 	if totalNodes == 0 {
 		totalNodes = 7 // 默认7个节点
 	}
