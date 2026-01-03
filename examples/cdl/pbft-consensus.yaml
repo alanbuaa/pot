@@ -1,0 +1,120 @@
+consensus:
+  name: pbft-like
+  version: 1.0.0
+  type: custom
+  
+  components:
+    crypto:
+      hash: SHA256
+      signature: BLS          # 使用 BLS 签名以支持签名聚合
+      threshold_sig: BLS      # 门限签名
+    
+    network:
+      topology: mesh          # 全连接网络
+      broadcast: reliable     # 可靠广播
+    
+    storage:
+      blockchain: merkle-chain
+      state: merkle-patricia
+  
+  parameters:
+    block_time: 1s
+    max_block_size: 2097152
+    view_change_timeout: 10s
+    checkpoint_interval: 100
+  
+  phases:
+    - name: pre_prepare
+      entry: start
+      exit: prepared
+      actions:
+        - type: function
+          name: primary_propose
+        - type: function
+          name: broadcast_pre_prepare
+    
+    - name: prepare
+      entry: prepared
+      exit: prepared_committed
+      actions:
+        - type: function
+          name: send_prepare
+        - type: function
+          name: collect_prepares
+        - type: condition
+          name: quorum_prepares
+          parameters:
+            threshold: "2f+1"
+    
+    - name: commit
+      entry: prepared_committed
+      exit: committed
+      actions:
+        - type: function
+          name: send_commit
+        - type: function
+          name: collect_commits
+        - type: condition
+          name: quorum_commits
+          parameters:
+            threshold: "2f+1"
+    
+    - name: reply
+      entry: committed
+      exit: replied
+      actions:
+        - type: function
+          name: execute_request
+        - type: function
+          name: send_reply
+  
+  state_machine:
+    states:
+      - normal
+      - pre_prepare
+      - prepare
+      - commit
+      - view_change
+    
+    transitions:
+      - from: normal
+        to: pre_prepare
+        event: new_request
+      
+      - from: pre_prepare
+        to: prepare
+        event: pre_prepare_received
+      
+      - from: prepare
+        to: commit
+        event: prepared
+        condition: "prepares >= 2f+1"
+      
+      - from: commit
+        to: normal
+        event: committed
+        condition: "commits >= 2f+1"
+      
+      - from: normal
+        to: view_change
+        event: timeout
+      
+      - from: view_change
+        to: normal
+        event: new_view
+        condition: "new_view_messages >= 2f+1"
+  
+  safety_properties:
+    - name: agreement
+      formula: "all_correct_nodes_commit_same_sequence"
+    
+    - name: total_order
+      formula: "all_requests_ordered_identically"
+    
+    - name: liveness
+      formula: "eventually_all_requests_committed"
+  
+  performance_requirements:
+    min_throughput: 1000
+    max_latency: 3
+    fault_tolerance: 0.33   # f < n/3

@@ -1,0 +1,132 @@
+consensus:
+  name: raft-like-consensus
+  version: 1.0.0
+  type: custom
+  
+  # 组件配置
+  components:
+    crypto:
+      hash: SHA256           # 哈希算法: SHA256, SHA3, BLAKE2b
+      signature: ECDSA       # 签名算法: ECDSA, EdDSA, BLS
+      vrf: ""                # VRF 算法 (可选)
+      vdf: ""                # VDF 算法 (可选)
+      threshold_sig: ""      # 门限签名 (可选)
+    
+    network:
+      topology: gossip       # 网络拓扑: gossip, mesh, star
+      broadcast: reliable    # 广播方式: reliable, best-effort
+    
+    storage:
+      blockchain: merkle-chain  # 区块链结构: merkle-chain, dag
+      state: simple-map         # 状态存储: merkle-patricia, simple-map
+  
+  # 共识参数
+  parameters:
+    block_time: 2s         # 出块时间
+    max_block_size: 2097152  # 最大区块大小 (2MB)
+    election_timeout: 5s   # 选举超时 (自定义参数)
+    heartbeat_interval: 1s # 心跳间隔 (自定义参数)
+  
+  # 共识阶段定义
+  phases:
+    - name: follower
+      entry: start
+      exit: become_candidate
+      actions:
+        - type: event
+          name: receive_heartbeat
+          parameters:
+            action: reset_timer
+        - type: condition
+          name: timeout
+          parameters:
+            action: trigger_election
+    
+    - name: candidate
+      entry: become_candidate
+      exit: elected_or_timeout
+      actions:
+        - type: function
+          name: request_votes
+        - type: function
+          name: count_votes
+        - type: condition
+          name: majority_votes
+          parameters:
+            action: become_leader
+    
+    - name: leader
+      entry: elected_or_timeout
+      exit: step_down
+      actions:
+        - type: function
+          name: send_heartbeat
+        - type: function
+          name: replicate_log
+        - type: function
+          name: commit_entries
+  
+  # 状态机定义
+  state_machine:
+    states:
+      - follower
+      - candidate
+      - leader
+    
+    transitions:
+      # Follower → Candidate (选举超时)
+      - from: follower
+        to: candidate
+        event: election_timeout
+        condition: "timeout > election_timeout"
+        action: start_election
+      
+      # Candidate → Leader (获得多数票)
+      - from: candidate
+        to: leader
+        event: majority_votes
+        condition: "votes > n/2"
+        action: become_leader
+      
+      # Candidate → Follower (发现更高任期)
+      - from: candidate
+        to: follower
+        event: higher_term
+        condition: "term > current_term"
+        action: step_down
+      
+      # Leader → Follower (发现更高任期)
+      - from: leader
+        to: follower
+        event: higher_term
+        condition: "term > current_term"
+        action: step_down
+      
+      # Candidate → Candidate (选举超时,重新选举)
+      - from: candidate
+        to: candidate
+        event: election_timeout
+        action: restart_election
+  
+  # 安全属性
+  safety_properties:
+    - name: election_safety
+      formula: "at_most_one_leader_per_term"
+    
+    - name: leader_append_only
+      formula: "leader_log_never_decreases"
+    
+    - name: log_matching
+      formula: "same_index_same_term -> same_command"
+    
+    - name: leader_completeness
+      formula: "committed_entry -> in_future_leader_log"
+    
+    - name: state_machine_safety
+      formula: "same_log_index -> same_command"
+  
+  # 性能要求
+  performance_requirements:
+    min_throughput: 100      # 最小吞吐量 (TPS)
+    max_latency: 10          # 最大延迟 (秒)
+    fault_tolerance: 0.33    # 容错率 (33% 节点故障)

@@ -1,0 +1,94 @@
+consensus:
+  name: simple-pow
+  version: 1.0.0
+  type: custom
+  
+  components:
+    crypto:
+      hash: SHA256
+      signature: ECDSA
+    
+    network:
+      topology: gossip
+      broadcast: best-effort
+    
+    storage:
+      blockchain: merkle-chain
+      state: simple-map
+  
+  parameters:
+    block_time: 10s
+    max_block_size: 1048576
+    difficulty: 4           # PoW 难度 (前导零数量)
+    target_adjustment: 100  # 难度调整周期 (区块数)
+  
+  phases:
+    - name: mining
+      entry: start
+      exit: block_found
+      actions:
+        - type: function
+          name: generate_nonce
+        - type: function
+          name: compute_hash
+        - type: condition
+          name: check_difficulty
+          parameters:
+            threshold: difficulty
+    
+    - name: validation
+      entry: block_found
+      exit: validated
+      actions:
+        - type: function
+          name: verify_pow
+        - type: function
+          name: verify_transactions
+        - type: condition
+          name: valid_block
+    
+    - name: propagation
+      entry: validated
+      exit: propagated
+      actions:
+        - type: function
+          name: broadcast_block
+        - type: function
+          name: update_chain
+  
+  state_machine:
+    states:
+      - idle
+      - mining
+      - validating
+      - propagating
+    
+    transitions:
+      - from: idle
+        to: mining
+        event: start_mining
+      
+      - from: mining
+        to: validating
+        event: nonce_found
+        condition: "hash < target"
+      
+      - from: validating
+        to: propagating
+        event: validation_passed
+      
+      - from: propagating
+        to: idle
+        event: block_propagated
+  
+  safety_properties:
+    - name: longest_chain_rule
+      formula: "always_follow_longest_valid_chain"
+    
+    - name: double_spend_prevention
+      formula: "no_transaction_twice_in_chain"
+  
+  performance_requirements:
+    min_throughput: 10
+    max_latency: 600
+    fault_tolerance: 0.49
