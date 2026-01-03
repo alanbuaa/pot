@@ -99,21 +99,21 @@ func (cf *ConsensusFactory) CreateConsensus(
 // CreateConsensusFromCDL 从 CDL 创建共识
 // 用于自定义共识实现
 func (cf *ConsensusFactory) CreateConsensusFromCDL(
-	cdl *CDLDescriptor,
+	cdlDescriptor *CDLDescriptor,
 	baseConfig *config.ConsensusConfig,
 ) (model.Consensus, error) {
-	if cdl == nil {
+	if cdlDescriptor == nil {
 		return nil, fmt.Errorf("CDL descriptor is nil")
 	}
 
 	cf.log.WithFields(logrus.Fields{
-		"name":    cdl.Name,
-		"version": cdl.Version,
-		"type":    cdl.Type,
+		"name":    cdlDescriptor.Name,
+		"version": cdlDescriptor.Version,
+		"type":    cdlDescriptor.Type,
 	}).Info("Creating consensus from CDL")
 
 	// 将旧的 CDLDescriptor 转换为新的 cdl.CDLDescriptor
-	cdlDesc := cf.convertToCDLDescriptor(cdl)
+	cdlDesc := cf.convertToCDLDescriptor(cdlDescriptor)
 
 	// 验证 CDL
 	validator := cdl.NewValidator(cf.log)
@@ -122,7 +122,7 @@ func (cf *ConsensusFactory) CreateConsensusFromCDL(
 	}
 
 	// 构建配置
-	consensusConfig, err := cf.buildConfigFromCDL(cdl, baseConfig)
+	consensusConfig, err := cf.buildConfigFromCDL(cdlDescriptor, baseConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build config from CDL: %w", err)
 	}
@@ -397,7 +397,7 @@ func (cf *ConsensusFactory) buildConfig(
 
 // buildConfigFromCDL 从 CDL 构建配置
 func (cf *ConsensusFactory) buildConfigFromCDL(
-	cdl *CDLDescriptor,
+	cdlDescriptor *CDLDescriptor,
 	baseConfig *config.ConsensusConfig,
 ) (*config.ConsensusConfig, error) {
 	cf.log.Debug("Building config from CDL")
@@ -405,13 +405,13 @@ func (cf *ConsensusFactory) buildConfigFromCDL(
 	// 创建新配置
 	newConfig := &config.ConsensusConfig{
 		ConsensusID: baseConfig.ConsensusID,
-		Type:        cdl.Type,
+		Type:        cdlDescriptor.Type,
 		Keys:        baseConfig.Keys,
 		F:           baseConfig.F,
 	}
 
 	// 从 CDL 参数中提取配置
-	if params, ok := cdl.Parameters.(map[string]interface{}); ok {
+	if params, ok := cdlDescriptor.Parameters.(map[string]interface{}); ok {
 		// 解析 block_time
 		if blockTimeStr, ok := params["block_time"].(string); ok {
 			duration, err := time.ParseDuration(blockTimeStr)
