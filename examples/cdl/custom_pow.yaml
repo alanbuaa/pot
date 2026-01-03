@@ -1,0 +1,70 @@
+consensus:
+  name: "CustomPoW"
+  version: "1.0.0"
+  type: "pow"
+  
+  components:
+    crypto:
+      hash: "SHA256"
+      signature: "ECDSA"
+    network:
+      topology: "gossip"
+      broadcast: "best-effort"
+    storage:
+      blockchain: "merkle-chain"
+      state: "simple-map"
+  
+  parameters:
+    block_time: "10s"
+    max_block_size: 1048576
+    difficulty: 4
+    reward: 50
+  
+  phases:
+    - name: "mining"
+      entry: "start_mining"
+      actions:
+        - type: "function"
+          name: "calculateHash"
+        - type: "condition"
+          name: "checkDifficulty"
+      exit: "block_found"
+    
+    - name: "broadcast"
+      entry: "block_found"
+      actions:
+        - type: "event"
+          name: "broadcastBlock"
+      exit: "mining_complete"
+  
+  state_machine:
+    states: ["IDLE", "MINING", "VALIDATING", "READY"]
+    transitions:
+      - from: "IDLE"
+        to: "MINING"
+        event: "start"
+        action: "initMining()"
+      - from: "MINING"
+        to: "VALIDATING"
+        event: "block_found"
+        condition: "hash < target"
+        action: "validateBlock()"
+      - from: "VALIDATING"
+        to: "READY"
+        event: "valid"
+        action: "addToChain()"
+      - from: "READY"
+        to: "MINING"
+        event: "next"
+        action: "startNextRound()"
+  
+  safety_properties:
+    - name: "chain_validity"
+      formula: "all blocks have valid proof of work"
+    - name: "longest_chain"
+      formula: "nodes follow the longest valid chain"
+  
+  performance_requirements:
+    min_throughput: 10
+    max_latency: 600
+    fault_tolerance: 0.49

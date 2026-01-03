@@ -73,22 +73,6 @@ func (up *UpgradeProposal) Hash() types.TxHash {
 	return hash
 }
 
-// UpgradeState 升级状态
-type UpgradeState struct {
-	CurrentProposal *UpgradeProposal
-	Phase           pb.UpgradePhase
-	ForkHeight      uint64
-	PreexecStarted  bool
-	PreexecHeight   uint64
-	SwitchHeight    uint64
-	SwitchReady     bool
-	Metrics         *PerformanceMetrics
-	RollbackReason  string
-	ActivatedAt     time.Time
-	LastUpdated     time.Time
-	Switched        bool
-}
-
 // ChainState 链状态
 type ChainState struct {
 	ConsensusID     int64

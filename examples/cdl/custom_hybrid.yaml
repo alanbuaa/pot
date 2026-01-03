@@ -1,0 +1,140 @@
+consensus:
+  name: "HybridConsensus"
+  version: "2.0.0"
+  type: "hybrid"
+  
+  components:
+    crypto:
+      hash: "BLAKE2b"
+      signature: "EdDSA"
+      vrf: "VRF-ED25519"
+      vdf: "Wesolowski"
+      threshold_sig: "BLS-TSig"
+    network:
+      topology: "gossip"
+      broadcast: "reliable"
+    storage:
+      blockchain: "dag"
+      state: "merkle-patricia"
+  
+  parameters:
+    block_time: "5s"
+    max_block_size: 4194304
+    epoch_length: 1000
+    committee_size: 200
+    vdf_iterations: 1000000
+  
+  phases:
+    - name: "epoch_setup"
+      entry: "epoch_start"
+      actions:
+        - type: "function"
+          name: "selectCommittee"
+          parameters:
+            method: "vrf"
+        - type: "function"
+          name: "distributeKeys"
+      exit: "committee_ready"
+    
+    - name: "vdf_computation"
+      entry: "committee_ready"
+      actions:
+        - type: "function"
+          name: "computeVDF"
+          parameters:
+            iterations: 1000000
+      exit: "vdf_complete"
+    
+    - name: "block_proposal"
+      entry: "vdf_complete"
+      actions:
+        - type: "function"
+          name: "createBlock"
+        - type: "event"
+          name: "proposeBlock"
+      exit: "proposal_sent"
+    
+    - name: "consensus_round"
+      entry: "proposal_sent"
+      actions:
+        - type: "event"
+          name: "collectVotes"
+        - type: "condition"
+          name: "checkQuorum"
+      exit: "consensus_reached"
+    
+    - name: "finalization"
+      entry: "consensus_reached"
+      actions:
+        - type: "function"
+          name: "finalizeBlock"
+        - type: "event"
+          name: "notifyFinalization"
+      exit: "finalized"
+  
+  state_machine:
+    states: 
+      - "EPOCH_INIT"
+      - "COMMITTEE_SELECTION"
+      - "VDF_COMPUTING"
+      - "PROPOSING"
+      - "VOTING"
+      - "CONSENSUS"
+      - "FINALIZING"
+      - "EPOCH_END"
+    transitions:
+      - from: "EPOCH_INIT"
+        to: "COMMITTEE_SELECTION"
+        event: "epoch_start"
+        action: "initEpoch()"
+      - from: "COMMITTEE_SELECTION"
+        to: "VDF_COMPUTING"
+        event: "committee_selected"
+        action: "startVDF()"
+      - from: "VDF_COMPUTING"
+        to: "PROPOSING"
+        event: "vdf_complete"
+        condition: "vdf_verified"
+        action: "prepareProposal()"
+      - from: "PROPOSING"
+        to: "VOTING"
+        event: "proposal_broadcast"
+        action: "startVoting()"
+      - from: "VOTING"
+        to: "CONSENSUS"
+        event: "votes_collected"
+        condition: "votes >= threshold"
+        action: "reachConsensus()"
+      - from: "CONSENSUS"
+        to: "FINALIZING"
+        event: "consensus_reached"
+        action: "finalizeBlock()"
+      - from: "FINALIZING"
+        to: "EPOCH_END"
+        event: "block_finalized"
+        action: "endRound()"
+      - from: "EPOCH_END"
+        to: "COMMITTEE_SELECTION"
+        event: "continue"
+        condition: "height < epoch_end"
+        action: "nextRound()"
+      - from: "EPOCH_END"
+        to: "EPOCH_INIT"
+        event: "new_epoch"
+        condition: "height >= epoch_end"
+        action: "startNewEpoch()"
+  
+  safety_properties:
+    - name: "vdf_uniqueness"
+      formula: "forall vdf1, vdf2: same_input => vdf1 = vdf2"
+    - name: "committee_randomness"
+      formula: "committee_selection is unpredictable"
+    - name: "finality"
+      formula: "finalized(b) => never_reverted(b)"
+    - name: "liveness"
+      formula: "eventually finalized(b) for all proposed b"
+  
+  performance_requirements:
+    min_throughput: 500
+    max_latency: 15
+    fault_tolerance: 0.33

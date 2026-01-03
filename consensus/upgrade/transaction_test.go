@@ -1,465 +1,413 @@
 package upgrade
 
 import (
-	"crypto/rand"
 	"testing"
+	"time"
 
-	"github.com/niclabs/tcrsa"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"github.com/zzz136454872/upgradeable-consensus/crypto"
 	pb "github.com/zzz136454872/upgradeable-consensus/pkg/proto"
 	"github.com/zzz136454872/upgradeable-consensus/types"
 )
 
-// TestCreateUpgradeProposal 测试创建升级提案
 func TestCreateUpgradeProposal(t *testing.T) {
-	committee := createTestCommittee(t)
-	currentHeight := uint64(1000)
-
-	proposal, err := CreateUpgradeProposal(
-		"pow",
-		nil,
-		currentHeight,
-		committee,
-		1000000,
-	)
-
-	require.NoError(t, err)
-	assert.NotNil(t, proposal)
-	assert.Equal(t, "pow", proposal.TargetConsensus)
-	assert.Equal(t, currentHeight+100, proposal.ForkHeight)
-	assert.Equal(t, currentHeight+150, proposal.PreexecStartHeight)
-	assert.Equal(t, currentHeight+1150, proposal.SwitchHeight)
-	assert.Equal(t, committee.GetThreshold(), proposal.Threshold)
-	assert.Equal(t, uint64(1000000), proposal.Incentive)
-}
-
-// TestValidateProposalParameters 测试提案参数验证
-func TestValidateProposalParameters(t *testing.T) {
-	committee := createTestCommittee(t)
-	currentHeight := uint64(1000)
-
 	tests := []struct {
-		name          string
-		modifyProposal func(*UpgradeProposal)
-		expectError   bool
+		name            string
+		targetConsensus string
+		cdl             *CDLDescriptor
+		currentHeight   uint64
+		threshold       uint32
+		incentive       uint64
+		proposer        []byte
+		description     string
+		wantErr         bool
 	}{
 		{
-			name:          "valid proposal",
-			modifyProposal: func(p *UpgradeProposal) {},
-			expectError:   false,
+			name:            "valid proposal for existing consensus",
+			targetConsensus: "hotstuff",
+			cdl:             nil,
+			currentHeight:   100,
+			threshold:       3,
+			incentive:       1000000,
+			proposer:        []byte("proposer1"),
+			description:     "upgrade to hotstuff",
+			wantErr:         false,
 		},
 		{
-			name: "fork height too low",
-			modifyProposal: func(p *UpgradeProposal) {
-				p.ForkHeight = currentHeight - 10
+			name:            "valid proposal with CDL",
+			targetConsensus: "custom",
+			cdl: &CDLDescriptor{
+				Name:    "CustomPoW",
+				Version: "1.0",
 			},
-			expectError: true,
+			currentHeight: 100,
+			threshold:     2,
+			incentive:     500000,
+			proposer:      []byte("proposer2"),
+			description:   "upgrade to custom PoW",
+			wantErr:       false,
 		},
 		{
-			name: "preexec height before fork",
-			modifyProposal: func(p *UpgradeProposal) {
-				p.PreexecStartHeight = p.ForkHeight - 10
-			},
-			expectError: true,
-		},
-		{
-			name: "switch height before preexec",
-			modifyProposal: func(p *UpgradeProposal) {
-				p.SwitchHeight = p.PreexecStartHeight - 10
-			},
-			expectError: true,
-		},
-		{
-			name: "preexec phase too short",
-			modifyProposal: func(p *UpgradeProposal) {
-				p.SwitchHeight = p.PreexecStartHeight + 50
-			},
-			expectError: true,
-		},
-		{
-			name: "empty target consensus",
-			modifyProposal: func(p *UpgradeProposal) {
-				p.TargetConsensus = ""
-			},
-			expectError: true,
-		},
-		{
-			name: "zero threshold",
-			modifyProposal: func(p *UpgradeProposal) {
-				p.Threshold = 0
-			},
-			expectError: true,
-		},
-		{
-			name: "insufficient committee members",
-			modifyProposal: func(p *UpgradeProposal) {
-				p.Threshold = uint32(len(p.CommitteePubkeys) + 1)
-			},
-			expectError: true,
-		},
-		{
-			name: "nil rollback condition",
-			modifyProposal: func(p *UpgradeProposal) {
-				p.RollbackCondition = nil
-			},
-			expectError: true,
-		},
-		{
-			name: "invalid error rate",
-			modifyProposal: func(p *UpgradeProposal) {
-				p.RollbackCondition.MaxErrorRate = 1.5
-			},
-			expectError: true,
+			name:            "custom consensus without CDL should fail validation",
+			targetConsensus: "custom",
+			cdl:             nil,
+			currentHeight:   100,
+			threshold:       2,
+			incentive:       500000,
+			proposer:        []byte("proposer3"),
+			description:     "invalid custom",
+			wantErr:         true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			proposal, err := CreateUpgradeProposal("pow", nil, currentHeight, committee, 1000000)
-			require.NoError(t, err)
+			proposal, err := CreateUpgradeProposal(
+				tt.targetConsensus,
+				tt.cdl,
+				tt.currentHeight,
+				tt.threshold,
+				tt.incentive,
+				tt.proposer,
+				tt.description,
+			)
 
-			tt.modifyProposal(proposal)
+			if tt.wantErr {
+				if err == nil {
+					// 验证提案参数应该失败
+					err = ValidateProposalParameters(proposal, tt.currentHeight)
+					if err == nil {
+						t.Error("expected error but got none")
+					}
+				}
+				return
+			}
 
-			err = ValidateProposalParameters(proposal, currentHeight)
-			if tt.expectError {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
+			if err != nil {
+				t.Fatalf("CreateUpgradeProposal() error = %v", err)
+			}
+
+			// 验证提案基本字段
+			if proposal.TargetConsensus != tt.targetConsensus {
+				t.Errorf("TargetConsensus = %v, want %v", proposal.TargetConsensus, tt.targetConsensus)
+			}
+
+			if proposal.Threshold != tt.threshold {
+				t.Errorf("Threshold = %v, want %v", proposal.Threshold, tt.threshold)
+			}
+
+			if proposal.Incentive != tt.incentive {
+				t.Errorf("Incentive = %v, want %v", proposal.Incentive, tt.incentive)
+			}
+
+			// 验证高度参数
+			if proposal.ForkHeight <= tt.currentHeight {
+				t.Error("ForkHeight should be greater than current height")
+			}
+
+			if proposal.PreexecStartHeight < proposal.ForkHeight {
+				t.Error("PreexecStartHeight should be >= ForkHeight")
+			}
+
+			if proposal.SwitchHeight <= proposal.PreexecStartHeight {
+				t.Error("SwitchHeight should be > PreexecStartHeight")
+			}
+
+			// 验证 CDL 哈希（如果是自定义共识）
+			if tt.targetConsensus == "custom" && tt.cdl != nil {
+				if proposal.MetadataHash == nil {
+					t.Error("MetadataHash should not be nil for custom consensus")
+				}
+			}
+
+			// 验证提案 ID 不为空
+			if proposal.ProposalID == (types.TxHash{}) {
+				t.Error("ProposalID should not be empty")
 			}
 		})
 	}
 }
 
-// TestProposalSerialization 测试提案序列化
-func TestProposalSerialization(t *testing.T) {
-	committee := createTestCommittee(t)
-	currentHeight := uint64(1000)
+func TestValidateProposalParameters(t *testing.T) {
+	currentHeight := uint64(100)
 
-	original, err := CreateUpgradeProposal("pow", nil, currentHeight, committee, 1000000)
-	require.NoError(t, err)
+	tests := []struct {
+		name     string
+		proposal *UpgradeProposal
+		wantErr  bool
+		errMsg   string
+	}{
+		{
+			name: "valid proposal",
+			proposal: &UpgradeProposal{
+				TargetConsensus:    "hotstuff",
+				ForkHeight:         200,
+				PreexecStartHeight: 200,
+				SwitchHeight:       1200,
+				Threshold:          3,
+			},
+			wantErr: false,
+		},
+		{
+			name: "fork height in the past",
+			proposal: &UpgradeProposal{
+				TargetConsensus:    "hotstuff",
+				ForkHeight:         50,
+				PreexecStartHeight: 150,
+				SwitchHeight:       1150,
+				Threshold:          3,
+			},
+			wantErr: true,
+			errMsg:  "fork height must be in the future",
+		},
+		{
+			name: "preexec start before fork",
+			proposal: &UpgradeProposal{
+				TargetConsensus:    "hotstuff",
+				ForkHeight:         200,
+				PreexecStartHeight: 150,
+				SwitchHeight:       1200,
+				Threshold:          3,
+			},
+			wantErr: true,
+			errMsg:  "preexec start height must be >= fork height",
+		},
+		{
+			name: "switch height not after preexec",
+			proposal: &UpgradeProposal{
+				TargetConsensus:    "hotstuff",
+				ForkHeight:         200,
+				PreexecStartHeight: 200,
+				SwitchHeight:       200,
+				Threshold:          3,
+			},
+			wantErr: true,
+			errMsg:  "switch height must be after preexec start height",
+		},
+		{
+			name: "fork gap too small",
+			proposal: &UpgradeProposal{
+				TargetConsensus:    "hotstuff",
+				ForkHeight:         105,
+				PreexecStartHeight: 105,
+				SwitchHeight:       1105,
+				Threshold:          3,
+			},
+			wantErr: true,
+			errMsg:  "fork gap too small",
+		},
+		{
+			name: "preexec gap too small",
+			proposal: &UpgradeProposal{
+				TargetConsensus:    "hotstuff",
+				ForkHeight:         200,
+				PreexecStartHeight: 200,
+				SwitchHeight:       250,
+				Threshold:          3,
+			},
+			wantErr: true,
+			errMsg:  "preexec gap too small",
+		},
+		{
+			name: "invalid consensus type",
+			proposal: &UpgradeProposal{
+				TargetConsensus:    "invalid_consensus",
+				ForkHeight:         200,
+				PreexecStartHeight: 200,
+				SwitchHeight:       1200,
+				Threshold:          3,
+			},
+			wantErr: true,
+			errMsg:  "invalid consensus type",
+		},
+		{
+			name: "custom consensus without CDL",
+			proposal: &UpgradeProposal{
+				TargetConsensus:    "custom",
+				ForkHeight:         200,
+				PreexecStartHeight: 200,
+				SwitchHeight:       1200,
+				Threshold:          3,
+			},
+			wantErr: true,
+			errMsg:  "custom consensus requires CDL descriptor",
+		},
+		{
+			name: "zero threshold",
+			proposal: &UpgradeProposal{
+				TargetConsensus:    "hotstuff",
+				ForkHeight:         200,
+				PreexecStartHeight: 200,
+				SwitchHeight:       1200,
+				Threshold:          0,
+			},
+			wantErr: true,
+			errMsg:  "threshold must be greater than 0",
+		},
+	}
 
-	// 转换为 protobuf
-	pbProposal := original.ToProto()
-	assert.NotNil(t, pbProposal)
-	assert.Equal(t, original.TargetConsensus, pbProposal.TargetConsensus)
-	assert.Equal(t, original.ForkHeight, pbProposal.ForkHeight)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateProposalParameters(tt.proposal, currentHeight)
 
-	// 从 protobuf 转换回来
-	restored := ProposalFromProto(pbProposal)
-	assert.NotNil(t, restored)
-	assert.Equal(t, original.ProposalID, restored.ProposalID)
-	assert.Equal(t, original.TargetConsensus, restored.TargetConsensus)
-	assert.Equal(t, original.ForkHeight, restored.ForkHeight)
-	assert.Equal(t, original.PreexecStartHeight, restored.PreexecStartHeight)
-	assert.Equal(t, original.SwitchHeight, restored.SwitchHeight)
+			if tt.wantErr {
+				if err == nil {
+					t.Error("expected error but got none")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Errorf("ValidateProposalParameters() error = %v", err)
+			}
+		})
+	}
 }
 
-// TestPackUnpackUpgradeTransaction 测试交易打包和解包
-func TestPackUnpackUpgradeTransaction(t *testing.T) {
-	committee := createTestCommittee(t)
-	currentHeight := uint64(1000)
+func TestPackAndUnpackUpgradeTransaction(t *testing.T) {
+	proposal := &UpgradeProposal{
+		ProposalID:         types.TxHash{1, 2, 3, 4},
+		TargetConsensus:    "hotstuff",
+		ForkHeight:         1000,
+		PreexecStartHeight: 1100,
+		SwitchHeight:       2100,
+		Threshold:          3,
+		Incentive:          1000000,
+		Timestamp:          time.Now(),
+		Proposer:           []byte("proposer1"),
+		Description:        "Test upgrade",
+		ConsensusID:        2,
+		Nonce:              1,
+		RollbackCondition: &pb.RollbackCondition{
+			MaxErrorRate:       0.05,
+			MaxLatencyIncrease: 0.2,
+			MinThroughputRatio: 0.8,
+			TimeoutBlocks:      100,
+		},
+	}
 
-	proposal, err := CreateUpgradeProposal("pow", nil, currentHeight, committee, 1000000)
-	require.NoError(t, err)
-
-	// 打包为交易
+	// 打包
 	tx, err := PackUpgradeTransaction(proposal)
-	require.NoError(t, err)
-	assert.NotNil(t, tx)
-	assert.Equal(t, pb.TransactionType_UPGRADE, tx.Type)
-
-	// 从交易解包
-	restored, err := UnpackUpgradeTransaction(tx)
-	require.NoError(t, err)
-	assert.NotNil(t, restored)
-	assert.Equal(t, proposal.ProposalID, restored.ProposalID)
-	assert.Equal(t, proposal.TargetConsensus, restored.TargetConsensus)
-}
-
-// TestUpgradeConfirmTransaction 测试升级确认交易
-func TestUpgradeConfirmTransaction(t *testing.T) {
-	committee := createTestCommittee(t)
-	member := committee.GetMember(0)
-	require.NotNil(t, member)
-
-	proposalID := types.TxHash{}
-	rand.Read(proposalID[:])
-
-	// 创建一个私钥用于测试
-	privKey := crypto.GenerateKey()
-
-	// 创建确认交易
-	tx, err := CreateUpgradeConfirmTransaction(
-		proposalID,
-		true,
-		member.ID,
-		privKey,
-	)
-
-	require.NoError(t, err)
-	assert.NotNil(t, tx)
-	assert.Equal(t, pb.TransactionType_UPGRADE, tx.Type) // 暂时使用 UPGRADE 类型
-
-	// 注意：验证需要实际的签名实现，这里仅测试创建
-}
-
-// TestGovernanceCommittee 测试治理委员会
-func TestGovernanceCommittee(t *testing.T) {
-	members := createTestMembers(t, 7)
-	threshold := uint32(5)
-
-	committee, err := NewGovernanceCommittee(members, threshold)
-	require.NoError(t, err)
-	assert.NotNil(t, committee)
-	assert.Equal(t, threshold, committee.GetThreshold())
-	assert.Equal(t, 7, committee.GetMemberCount())
-
-	// 测试获取成员
-	member := committee.GetMember(0)
-	assert.NotNil(t, member)
-	assert.Equal(t, int64(0), member.ID)
-
-	// 测试活跃成员
-	activeCount := committee.CountActiveMembers()
-	assert.Equal(t, 7, activeCount)
-
-	// 设置成员为非活跃
-	err = committee.SetMemberActive(0, false)
-	require.NoError(t, err)
-	activeCount = committee.CountActiveMembers()
-	assert.Equal(t, 6, activeCount)
-}
-
-// TestCommitteeThresholdUpdate 测试更新阈值
-func TestCommitteeThresholdUpdate(t *testing.T) {
-	members := createTestMembers(t, 7)
-	committee, err := NewGovernanceCommittee(members, 5)
-	require.NoError(t, err)
-
-	// 有效的阈值更新
-	err = committee.UpdateThreshold(4)
-	assert.NoError(t, err)
-	assert.Equal(t, uint32(4), committee.GetThreshold())
-
-	// 无效的阈值（超过活跃成员数）
-	err = committee.UpdateThreshold(10)
-	assert.Error(t, err)
-
-	// 无效的阈值（零）
-	err = committee.UpdateThreshold(0)
-	assert.Error(t, err)
-}
-
-// TestCommitteeMemberManagement 测试成员管理
-func TestCommitteeMemberManagement(t *testing.T) {
-	members := createTestMembers(t, 5)
-	committee, err := NewGovernanceCommittee(members, 3)
-	require.NoError(t, err)
-
-	// 添加新成员
-	newMember := &CommitteeMember{
-		ID:        100,
-		Name:      "New Member",
-		PublicKey: []byte("new-pubkey"),
-		Weight:    1,
-		Active:    true,
+	if err != nil {
+		t.Fatalf("PackUpgradeTransaction() error = %v", err)
 	}
 
-	err = committee.AddMember(newMember)
-	require.NoError(t, err)
-	assert.Equal(t, 6, committee.GetMemberCount())
-
-	// 重复添加
-	err = committee.AddMember(newMember)
-	assert.Error(t, err)
-
-	// 移除成员
-	err = committee.RemoveMember(100)
-	require.NoError(t, err)
-	assert.Equal(t, 5, committee.GetMemberCount())
-
-	// 移除不存在的成员
-	err = committee.RemoveMember(999)
-	assert.Error(t, err)
-}
-
-// TestCommitteeVoting 测试投票功能
-func TestCommitteeVoting(t *testing.T) {
-	members := createTestMembers(t, 7)
-	committee, err := NewGovernanceCommittee(members, 5)
-	require.NoError(t, err)
-
-	proposal, err := CreateUpgradeProposal("pow", nil, 1000, committee, 1000000)
-	require.NoError(t, err)
-
-	// 成员投票
-	err = committee.VoteProposal(proposal, 0, true)
-	assert.NoError(t, err)
-
-	// 非活跃成员投票
-	committee.SetMemberActive(1, false)
-	err = committee.VoteProposal(proposal, 1, true)
-	assert.Error(t, err)
-
-	// 不存在的成员投票
-	err = committee.VoteProposal(proposal, 999, true)
-	assert.Error(t, err)
-}
-
-// TestCommitteeVoteCalculation 测试投票计算
-func TestCommitteeVoteCalculation(t *testing.T) {
-	members := createTestMembers(t, 7)
-	// 设置不同的权重
-	for i, member := range members {
-		member.Weight = uint32(i + 1)
+	// 验证交易类型
+	if tx.Type != pb.TransactionType_UPGRADE {
+		t.Errorf("Transaction type = %v, want %v", tx.Type, pb.TransactionType_UPGRADE)
 	}
 
-	committee, err := NewGovernanceCommittee(members, 5)
-	require.NoError(t, err)
-
-	// 计算投票结果
-	approvals := []int64{0, 1, 2, 3, 4} // 权重: 1+2+3+4+5 = 15
-	rejections := []int64{5, 6}         // 权重: 6+7 = 13
-
-	approveWeight, rejectWeight, err := committee.CalculateVotes(approvals, rejections)
-	require.NoError(t, err)
-	assert.Equal(t, uint32(15), approveWeight)
-	assert.Equal(t, uint32(13), rejectWeight)
-
-	// 检查是否达到法定人数
-	assert.True(t, committee.IsQuorumReached(approveWeight))
-}
-
-// TestCommitteeHash 测试委员会哈希
-func TestCommitteeHash(t *testing.T) {
-	members := createTestMembers(t, 7)
-	committee1, err := NewGovernanceCommittee(members, 5)
-	require.NoError(t, err)
-
-	committee2, err := NewGovernanceCommittee(members, 5)
-	require.NoError(t, err)
-
-	// 相同配置的委员会应该有相同的哈希
-	hash1 := committee1.Hash()
-	hash2 := committee2.Hash()
-	assert.Equal(t, hash1, hash2)
-
-	// 不同阈值的委员会应该有不同的哈希
-	committee3, err := NewGovernanceCommittee(members, 4)
-	require.NoError(t, err)
-	hash3 := committee3.Hash()
-	assert.NotEqual(t, hash1, hash3)
-}
-
-// TestCommitteeClone 测试委员会克隆
-func TestCommitteeClone(t *testing.T) {
-	members := createTestMembers(t, 7)
-	original, err := NewGovernanceCommittee(members, 5)
-	require.NoError(t, err)
-
-	cloned := original.Clone()
-	assert.NotNil(t, cloned)
-	assert.Equal(t, original.GetThreshold(), cloned.GetThreshold())
-	assert.Equal(t, original.GetMemberCount(), cloned.GetMemberCount())
-
-	// 验证深拷贝
-	cloned.UpdateThreshold(4)
-	assert.NotEqual(t, original.GetThreshold(), cloned.GetThreshold())
-}
-
-// 辅助函数
-
-func createTestCommittee(t *testing.T) *GovernanceCommittee {
-	members := createTestMembers(t, 7)
-	committee, err := NewGovernanceCommittee(members, 5)
-	require.NoError(t, err)
-	return committee
-}
-
-func createTestCommitteeWithKeys(t *testing.T) *GovernanceCommittee {
-	members := createTestMembers(t, 7)
-	committee, err := NewGovernanceCommittee(members, 5)
-	require.NoError(t, err)
-	return committee
-}
-
-func createTestMembers(t *testing.T, count int) []*CommitteeMember {
-	members := make([]*CommitteeMember, count)
-	for i := 0; i < count; i++ {
-		pubkey := make([]byte, 32)
-		rand.Read(pubkey)
-
-		members[i] = &CommitteeMember{
-			ID:        int64(i),
-			Name:      "Member " + string(rune('A'+i)),
-			PublicKey: pubkey,
-			Weight:    1,
-			Active:    true,
-		}
-	}
-	return members
-}
-
-func createTestMembersWithKeys(t *testing.T, count int) []*CommitteeMember {
-	// 简化版本：直接返回基本成员
-	return createTestMembers(t, count)
-}
-
-// TestThresholdSignature 测试门限签名（需要实际的门限签名设置）
-func TestThresholdSignature(t *testing.T) {
-	t.Skip("Threshold signature requires proper key generation setup")
-
-	// 这个测试需要实际的门限签名密钥生成
-	// 留待完整的门限签名集成后实现
-
-	keySize := 2048
-	threshold := uint16(3)
-	totalShares := uint16(5)
-
-	// 生成门限签名密钥
-	keyMeta, keyShares, err := tcrsa.NewKey(keySize, threshold, totalShares, nil)
-	require.NoError(t, err)
-
-	// 创建带门限签名的委员会
-	members := make([]*CommitteeMember, totalShares)
-	for i := uint16(0); i < totalShares; i++ {
-		members[i] = &CommitteeMember{
-			ID:        int64(i),
-			Name:      "Member " + string(rune('A'+int(i))),
-			PublicKey: []byte("pubkey-" + string(rune('A'+int(i)))),
-			Weight:    1,
-			Active:    true,
-			KeyShare:  keyShares[i],
-		}
+	// 解包
+	unpacked, err := UnpackUpgradeTransaction(tx)
+	if err != nil {
+		t.Fatalf("UnpackUpgradeTransaction() error = %v", err)
 	}
 
-	committee, err := NewGovernanceCommitteeWithThresholdSig(members, uint32(threshold), keyMeta)
-	require.NoError(t, err)
-
-	// 创建提案
-	proposal, err := CreateUpgradeProposal("pow", nil, 1000, committee, 1000000)
-	require.NoError(t, err)
-
-	// 收集部分签名
-	partialSigs := make([][]byte, threshold)
-	for i := uint16(0); i < threshold; i++ {
-		sig, err := committee.SignProposal(proposal, int64(i))
-		require.NoError(t, err)
-		partialSigs[i] = sig
-
-		// 验证部分签名
-		err = committee.VerifyPartialSignature(proposal, sig, int64(i))
-		require.NoError(t, err)
+	// 验证字段
+	if unpacked.TargetConsensus != proposal.TargetConsensus {
+		t.Errorf("TargetConsensus = %v, want %v", unpacked.TargetConsensus, proposal.TargetConsensus)
 	}
 
-	// 组合签名
-	fullSig, err := committee.CombineSignatures(proposal, partialSigs)
-	require.NoError(t, err)
-	assert.NotNil(t, fullSig)
+	if unpacked.ForkHeight != proposal.ForkHeight {
+		t.Errorf("ForkHeight = %v, want %v", unpacked.ForkHeight, proposal.ForkHeight)
+	}
 
-	// 验证完整签名
-	err = committee.VerifyFullSignature(proposal, fullSig)
-	require.NoError(t, err)
+	if unpacked.SwitchHeight != proposal.SwitchHeight {
+		t.Errorf("SwitchHeight = %v, want %v", unpacked.SwitchHeight, proposal.SwitchHeight)
+	}
+
+	if unpacked.Threshold != proposal.Threshold {
+		t.Errorf("Threshold = %v, want %v", unpacked.Threshold, proposal.Threshold)
+	}
+}
+
+func TestCreateConfirmTransaction(t *testing.T) {
+	proposalID := types.TxHash{1, 2, 3, 4, 5, 6, 7, 8}
+	signature := []byte("aggregated_signature")
+	confirmerID := int64(1)
+
+	// 创建批准的确认交易
+	confirm, err := CreateConfirmTransaction(proposalID, true, signature, confirmerID)
+	if err != nil {
+		t.Fatalf("CreateConfirmTransaction() error = %v", err)
+	}
+
+	if !confirm.Approved {
+		t.Error("Approved should be true")
+	}
+
+	if len(confirm.Signature) != len(signature) {
+		t.Errorf("Signature length = %v, want %v", len(confirm.Signature), len(signature))
+	}
+
+	// 创建拒绝的确认交易
+	confirmReject, err := CreateConfirmTransaction(proposalID, false, signature, confirmerID)
+	if err != nil {
+		t.Fatalf("CreateConfirmTransaction() error = %v", err)
+	}
+
+	if confirmReject.Approved {
+		t.Error("Approved should be false")
+	}
+}
+
+func TestPackAndUnpackConfirmTransaction(t *testing.T) {
+	proposalID := types.TxHash{1, 2, 3, 4}
+	confirm := &pb.UpgradeConfirmTransaction{
+		ProposalId:  proposalID[:],
+		Signature:   []byte("signature"),
+		ConfirmerId: 1,
+		Timestamp:   time.Now().Unix(),
+		Approved:    true,
+	}
+
+	// 打包
+	tx, err := PackConfirmTransaction(confirm)
+	if err != nil {
+		t.Fatalf("PackConfirmTransaction() error = %v", err)
+	}
+
+	// 验证交易类型
+	if tx.Type != pb.TransactionType_LOCK {
+		t.Errorf("Transaction type = %v, want %v", tx.Type, pb.TransactionType_LOCK)
+	}
+
+	// 解包
+	unpacked, err := UnpackConfirmTransaction(tx)
+	if err != nil {
+		t.Fatalf("UnpackConfirmTransaction() error = %v", err)
+	}
+
+	// 验证字段
+	if unpacked.Approved != confirm.Approved {
+		t.Errorf("Approved = %v, want %v", unpacked.Approved, confirm.Approved)
+	}
+
+	if unpacked.ConfirmerId != confirm.ConfirmerId {
+		t.Errorf("ConfirmerId = %v, want %v", unpacked.ConfirmerId, confirm.ConfirmerId)
+	}
+}
+
+func TestUnpackUpgradeTransaction_InvalidType(t *testing.T) {
+	// 创建一个非升级交易
+	tx := &pb.Transaction{
+		Type:    pb.TransactionType_NORMAL,
+		Payload: []byte("test"),
+	}
+
+	_, err := UnpackUpgradeTransaction(tx)
+	if err == nil {
+		t.Error("expected error for non-upgrade transaction")
+	}
+}
+
+func TestUnpackConfirmTransaction_InvalidType(t *testing.T) {
+	// 创建一个非确认交易
+	tx := &pb.Transaction{
+		Type:    pb.TransactionType_NORMAL,
+		Payload: []byte("test"),
+	}
+
+	_, err := UnpackConfirmTransaction(tx)
+	if err == nil {
+		t.Error("expected error for non-confirm transaction")
+	}
 }

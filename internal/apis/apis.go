@@ -56,6 +56,12 @@ func (s *ApiServer) RegisterMonitorService(service model.MonitorService) {
 	s.monitorHandlers = append(s.monitorHandlers, handler)
 }
 
+// RegisterUpgradeService registers upgrade consensus service to the API server
+func (s *ApiServer) RegisterUpgradeService(service model.UpgradeService) {
+	handler := handlers.NewUpgradeHandler(service, s.log)
+	s.handlers = append(s.handlers, handler)
+}
+
 // setupRoutes configures all HTTP routes for registered consensus handlers
 func (s *ApiServer) setupRoutes() *gin.Engine {
 	r := gin.Default()
