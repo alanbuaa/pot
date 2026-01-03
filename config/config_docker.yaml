@@ -31,6 +31,8 @@ topic: this-is-consensus-topic-tttaaabbbcccddd-043
 
 # ========= Consensus Configuration =========
 consensus:
+  block_time: 1
+  max_block_size: 1048576
   type: "pot"
   consensus_id: 10001
   pot:

@@ -62,17 +62,19 @@ type PoTConfig struct {
 }
 
 type ConsensusConfig struct {
-	Type        string            `yaml:"type"`
-	ConsensusID int64             `yaml:"consensus_id"`
-	HotStuff    *HotStuffConfig   `yaml:"hotstuff"`
-	Pow         *PoWConfig        `yaml:"pow"`
-	Upgradeable *UpgradableConfig `yaml:"upgradeable"`
-	Whirly      *WhirlyConfig     `yaml:"whirly"`
-	PoT         *PoTConfig        `yaml:"pot"`
-	Nodes       []*ReplicaInfo    // no need to have the following fields in config.yaml
-	Keys        *KeySet
-	Topic       string
-	F           int // initialize in NewConsensus if neeeded
+	Type         string            `yaml:"type"`
+	ConsensusID  int64             `yaml:"consensus_id"`
+	HotStuff     *HotStuffConfig   `yaml:"hotstuff"`
+	Pow          *PoWConfig        `yaml:"pow"`
+	Upgradeable  *UpgradableConfig `yaml:"upgradeable"`
+	Whirly       *WhirlyConfig     `yaml:"whirly"`
+	PoT          *PoTConfig        `yaml:"pot"`
+	BlockTime    int               `yaml:"block_time"`     // 区块时间（秒）
+	MaxBlockSize int               `yaml:"max_block_size"` // 最大区块大小（字节）
+	Nodes        []*ReplicaInfo    // no need to have the following fields in config.yaml
+	Keys         *KeySet
+	Topic        string
+	F            int // initialize in NewConsensus if neeeded
 }
 
 type LogConfig struct {

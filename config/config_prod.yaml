@@ -36,6 +36,16 @@ p2p:
 topic: this-is-consensus-topic-128
 
 consensus:
+  block_time: 1
+  max_block_size: 1048576
+  type: "pot"
+  consensus_id: 10001
+  pot:
+    snum : 2
+    sysPara: 2
+    vdf0Iteration: 300000
+    vdf1Iteration: 180000
+
   # type: "upgradeable"
   # consensus_id: 10001
   # upgradeable:
@@ -61,10 +71,3 @@ consensus:
   #     # consensus_id: 1008
   #     # pow:
   #     #   init_difficulty: 0x0010000000000000000000000000000000000000000000000000000000000000
-   type: "pot"
-   consensus_id: 10001
-   pot:
-     snum : 2
-     sysPara: 2
-     vdf0Iteration: 300000
-     vdf1Iteration: 180000

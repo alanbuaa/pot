@@ -2,6 +2,7 @@ package types
 
 import (
 	"crypto/sha256"
+	"encoding/hex"
 
 	pb "github.com/zzz136454872/upgradeable-consensus/pkg/proto"
 	"github.com/zzz136454872/upgradeable-consensus/pkg/utils"
@@ -11,6 +12,10 @@ import (
 type RawTransaction []byte
 
 type TxHash [32]byte
+
+func (h TxHash) String() string {
+	return hex.EncodeToString(h[:])
+}
 
 type RawReceipt []byte
 

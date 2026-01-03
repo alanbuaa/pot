@@ -1,0 +1,94 @@
+consensus:
+  name: "CustomBFT"
+  version: "1.0.0"
+  type: "bft"
+  
+  components:
+    crypto:
+      hash: "SHA3"
+      signature: "BLS"
+      threshold_sig: "BLS-TSig"
+    network:
+      topology: "mesh"
+      broadcast: "reliable"
+    storage:
+      blockchain: "merkle-chain"
+      state: "merkle-patricia"
+  
+  parameters:
+    block_time: "3s"
+    max_block_size: 2097152
+    committee_size: 100
+    quorum_threshold: 67
+  
+  phases:
+    - name: "prepare"
+      entry: "new_view"
+      actions:
+        - type: "function"
+          name: "createProposal"
+        - type: "event"
+          name: "broadcastPrepare"
+      exit: "prepare_sent"
+    
+    - name: "pre_commit"
+      entry: "prepare_quorum"
+      actions:
+        - type: "function"
+          name: "aggregateVotes"
+        - type: "event"
+          name: "broadcastPreCommit"
+      exit: "pre_commit_sent"
+    
+    - name: "commit"
+      entry: "pre_commit_quorum"
+      actions:
+        - type: "function"
+          name: "finalizeBlock"
+        - type: "event"
+          name: "broadcastCommit"
+      exit: "committed"
+  
+  state_machine:
+    states: ["IDLE", "PREPARING", "PRE_COMMITTING", "COMMITTING", "COMMITTED", "FINALIZED"]
+    transitions:
+      - from: "IDLE"
+        to: "PREPARING"
+        event: "new_round"
+        action: "enterPrepare()"
+      - from: "PREPARING"
+        to: "PRE_COMMITTING"
+        event: "prepare_quorum_reached"
+        condition: "votes >= quorum_threshold"
+        action: "enterPreCommit()"
+      - from: "PRE_COMMITTING"
+        to: "COMMITTING"
+        event: "pre_commit_quorum_reached"
+        condition: "votes >= quorum_threshold"
+        action: "enterCommit()"
+      - from: "COMMITTING"
+        to: "COMMITTED"
+        event: "commit_quorum_reached"
+        condition: "votes >= quorum_threshold"
+        action: "commit()"
+      - from: "COMMITTED"
+        to: "FINALIZED"
+        event: "finalize"
+        action: "finalizeBlock()"
+      - from: "FINALIZED"
+        to: "IDLE"
+        event: "next_round"
+        action: "reset()"
+  
+  safety_properties:
+    - name: "agreement"
+      formula: "forall n1, n2: committed(n1, v1) AND committed(n2, v2) => v1 = v2"
+    - name: "validity"
+      formula: "committed(v) => proposed(v)"
+    - name: "termination"
+      formula: "eventually exists v: committed(v)"
+  
+  performance_requirements:
+    min_throughput: 1000
+    max_latency: 10
+    fault_tolerance: 0.33

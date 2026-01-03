@@ -3,9 +3,9 @@ GO ?= go
 PROTOC ?= protoc
 PROTO_FLAGS := --go_out=. --go-grpc_out=require_unimplemented_servers=false:.
 
-CMDS := bci client genkey governance http pot_test executor server txtest
+CMDS := bci client genkey governance http pot_test executor server txtest upgrade-cli
 
-.PHONY: help build build-cmds clean test compile_proto genkey run_server run_client run_executor run_governance run_bci run_http run_txtest run_genkey docker_build docker_run
+.PHONY: help build build-cmds clean test compile_proto genkey run_server run_client run_executor run_governance run_bci run_http run_txtest run_genkey run_upgrade-cli docker_build docker_run
 
 # --------------------------------------------------
 # Build targets
