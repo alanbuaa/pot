@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	crand "crypto/rand"
-	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
@@ -391,12 +390,11 @@ func (w *Worker) mine(epoch uint64, vdf0res []byte, nonce int64, workerid int, a
 	coinbasetx := w.GenerateCoinbaseTxWithoutMinerKey(Bcirewards, privkey, totalreward)
 	coinbaseproofs := coinbasetx.CoinbaseProofs
 	coinbaseProofsbyte := CoinbaseProofToBytes(coinbaseproofs)
-	mixdigest := w.calcMixdigest(epoch, parentblock, uncleblock, difficulty, w.PeerId, pubkeybyte, coinbaseProofsbyte)
+	params := w.prepareMixParams(epoch, parentblock, uncleblock, difficulty, w.PeerId, pubkeybyte, coinbaseProofsbyte, nonce, vdf0res)
+	mixdigest := w.calcMixdigest(params)
 	tmp := new(big.Int)
-	tmp.SetInt64(nonce)
-	noncebyte := tmp.Bytes()
-	input := bytes.Join([][]byte{noncebyte, vdf0res, mixdigest}, []byte(""))
-	hashinput := crypto.Hash(input)
+
+	hashinput := mixdigest
 
 	w.vdf1[workerid] = types.NewVDFwithInput(w.vdf1Chan, hashinput, w.config.PoT.Vdf1Iteration, w.ID)
 	vdfCh := w.vdf1Chan
@@ -427,9 +425,9 @@ func (w *Worker) mine(epoch uint64, vdf0res []byte, nonce int64, workerid int, a
 
 				nonce += 1
 				tmp.SetInt64(nonce)
-				noncebyte2 := tmp.Bytes()
-				input2 := bytes.Join([][]byte{noncebyte2, vdf0res, mixdigest}, []byte(""))
-				hashinput2 := crypto.Hash(input2)
+				params["nonce"] = tmp.Bytes()
+				mixdigest = w.calcMixdigest(params)
+				hashinput2 := mixdigest
 				w.vdf1[workerid] = types.NewVDFwithInput(w.vdf1Chan, hashinput2, w.config.PoT.Vdf1Iteration, w.ID)
 
 				go func() {
@@ -447,16 +445,15 @@ func (w *Worker) mine(epoch uint64, vdf0res []byte, nonce int64, workerid int, a
 			// begin new work
 			nonce = rand.Int63()
 			tmp.SetInt64(nonce)
-			noncebyte := tmp.Bytes()
 			privkey2, _ := crypto.GeneratePqcKey()
 			pubkey2byte := privkey2.PublicKeyBytes()
 			coinbasetx2 := w.GenerateCoinbaseTxWithoutMinerKey(Bcirewards, privkey2, totalreward)
 			coinbaseproofs2 := coinbasetx2.CoinbaseProofs
 			coinbaseProofsbyte2 := CoinbaseProofToBytes(coinbaseproofs2)
-			mix2digest := w.calcMixdigest(epoch, parentblock, uncleblock, difficulty, w.PeerId, pubkey2byte, coinbaseProofsbyte2)
+			params2 := w.prepareMixParams(epoch, parentblock, uncleblock, difficulty, w.PeerId, pubkey2byte, coinbaseProofsbyte2, nonce, vdf0res)
+			mix2digest := w.calcMixdigest(params2)
 
-			in2put := bytes.Join([][]byte{noncebyte, vdf0res, mix2digest}, []byte(""))
-			hash2input := crypto.Hash(in2put)
+			hash2input := mix2digest
 
 			w.vdf1[workerid] = types.NewVDFwithInput(w.vdf1Chan, hash2input, w.config.PoT.Vdf1Iteration, w.ID)
 
@@ -1105,27 +1102,70 @@ func (w *Worker) calcDifficulty(parentblock *types.Block, uncleBlock []*types.Bl
 	return diffculty
 }
 
-func (w *Worker) calcMixdigest(epoch uint64, parentblock *types.Block, uncleblock []*types.Block,
-	difficulty *big.Int, peerid string, pubkeybyte []byte, coinbaseproof []byte) []byte {
-	parentblockhash := make([]byte, 0)
-	if parentblock != nil {
-		parentblockhash = parentblock.Hash()
+func (w *Worker) calcMixdigest(params map[string][]byte) []byte {
+	order := w.config.PoT.ParamOrder
+	if len(order) == 0 {
+		order = []string{"epoch", "parent_hash", "uncle_hashes", "difficulty", "peer_id", "pubkey", "coinbase_proof", "nonce", "vdf0res"}
 	}
-	uncleblockhash := make([]byte, 0)
-	for i := 0; i < len(uncleblock); i++ {
-		hash := uncleblock[i].Hash()
-		uncleblockhash = append(uncleblockhash, hash[:]...)
+	leaves := make([][]byte, 0, len(order))
+	for _, name := range order {
+		if b, ok := params[name]; ok {
+			leaves = append(leaves, crypto.Hash(b))
+		}
 	}
+	return crypto.ComputeMerkleRoot(leaves)
+}
+
+func (w *Worker) prepareMixParams(epoch uint64, parentblock *types.Block, uncleblock []*types.Block,
+	difficulty *big.Int, peerid string, pubkeybyte []byte, coinbaseproof []byte, nonce int64, vdf0res []byte) map[string][]byte {
+	params := make(map[string][]byte)
 	tmp := new(big.Int)
-	tmp.Set(difficulty)
-	difficultyBytes := tmp.Bytes()
-	//tmp.SetInt64(ID)
-	IDBytes := []byte(peerid)
 	tmp.SetInt64(int64(epoch))
-	epochBytes := tmp.Bytes()
-	hashinput := bytes.Join([][]byte{epochBytes, parentblockhash, uncleblockhash, difficultyBytes, IDBytes, pubkeybyte, coinbaseproof}, []byte(""))
-	res := sha256.Sum256(hashinput)
-	return res[:]
+	params["epoch"] = tmp.Bytes()
+	order := w.config.PoT.ParamOrder
+	if len(order) == 0 {
+		order = []string{"epoch", "parent_hash", "uncle_hashes", "difficulty", "peer_id", "pubkey", "coinbase_proof", "nonce", "vdf0res"}
+	}
+	for _, name := range order {
+		switch name {
+		case "epoch":
+			tmp.SetInt64(int64(epoch))
+			b := tmp.Bytes()
+			params["epoch"] = b
+		case "parent_hash":
+			b := make([]byte, 0)
+			if parentblock != nil {
+				b = parentblock.Hash()
+			}
+			params["parent_hash"] = b
+		case "uncle_hashes":
+			for i := 0; i < len(uncleblock); i++ {
+				h := uncleblock[i].Hash()
+				params["uncle_hashes"] = append(params["uncle_hashes"], h[:]...)
+			}
+		case "difficulty":
+			tmp.Set(difficulty)
+			b := tmp.Bytes()
+			params["difficulty"] = b
+		case "peer_id":
+			b := []byte(peerid)
+			params["peer_id"] = b
+		case "pubkey":
+			params["pubkey"] = crypto.Hash(pubkeybyte)
+		case "coinbase_proof":
+			params["coinbase_proof"] = crypto.Hash(coinbaseproof)
+		case "nonce":
+			tmp.SetInt64(nonce)
+			b := tmp.Bytes()
+			params["nonce"] = b
+		case "vdf0res":
+			params["vdf0res"] = crypto.Hash(vdf0res)
+		default:
+			continue
+		}
+
+	}
+	return params
 }
 
 func (w *Worker) caldifficultyExp(parentblock *types.Block, uncleBlock []*types.Block) *big.Int {

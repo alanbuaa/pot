@@ -67,3 +67,13 @@ consensus:
      sysPara: 2
      vdf0Iteration: 300000
      vdf1Iteration: 180000
+     paramOrder:
+       - epoch
+       - parent_hash
+       - uncle_hashes
+       - difficulty
+       - peer_id
+       - pubkey
+       - coinbase_proof
+       - nonce
+       - vdf0res

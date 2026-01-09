@@ -46,18 +46,19 @@ type WhirlyConfig struct {
 }
 
 type PoTConfig struct {
-	Snum           int64  `yaml:"snum"`
-	SysPara        string `yaml:"sysPara"`
-	Vdf0Iteration  int    `yaml:"vdf0Iteration"`
-	Vdf1Iteration  int    `yaml:"vdf1Iteration"`
-	Batchsize      int    `yaml:"batchsize"`
-	ExcutorAddress string `yaml:"excutorAddress"`
-	Timeout        int    `yaml:"timeout"`
-	CommiteeSize   int    `yaml:"commiteeSize"`
-	ConfirmDelay   int    `yaml:"confirmDelay"`
-	Slowrate       int    `yaml:"slowrate"`
-	RpcAddress     string `yaml:"dcirpcAddress"`
-	StorageMode    int    `yaml:"storagemode"`
+	Snum           int64    `yaml:"snum"`
+	SysPara        string   `yaml:"sysPara"`
+	Vdf0Iteration  int      `yaml:"vdf0Iteration"`
+	Vdf1Iteration  int      `yaml:"vdf1Iteration"`
+	Batchsize      int      `yaml:"batchsize"`
+	ExcutorAddress string   `yaml:"excutorAddress"`
+	Timeout        int      `yaml:"timeout"`
+	CommiteeSize   int      `yaml:"commiteeSize"`
+	ConfirmDelay   int      `yaml:"confirmDelay"`
+	Slowrate       int      `yaml:"slowrate"`
+	RpcAddress     string   `yaml:"dcirpcAddress"`
+	StorageMode    int      `yaml:"storagemode"`
+	ParamOrder     []string `yaml:"paramOrder"`
 }
 type ConsensusConfig struct {
 	Type        string            `yaml:"type"`
