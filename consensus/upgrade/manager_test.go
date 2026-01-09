@@ -14,7 +14,7 @@ import (
 func TestUpgradeManagerCreation(t *testing.T) {
 	log := logrus.NewEntry(logrus.New())
 	mc := newMockConsensus()
-	mockStorage := newMockDualChainStorage()
+	mockStorage := newMockMultiChainStorage()
 	cfg := &config.ConsensusConfig{}
 
 	um := NewUpgradeManager(mc, cfg, mockStorage, log)
@@ -30,7 +30,7 @@ func TestUpgradeManagerStartUpgrade(t *testing.T) {
 	mc1 := newMockConsensus()
 	mc2 := newMockConsensus()
 	mc2.consensusID = 2
-	mockStorage := newMockDualChainStorage()
+	mockStorage := newMockMultiChainStorage()
 	cfg := &config.ConsensusConfig{}
 
 	um := NewUpgradeManager(mc1, cfg, mockStorage, log)
@@ -55,7 +55,7 @@ func TestUpgradeManagerGetState(t *testing.T) {
 	mc1 := newMockConsensus()
 	mc2 := newMockConsensus()
 	mc2.consensusID = 2
-	mockStorage := newMockDualChainStorage()
+	mockStorage := newMockMultiChainStorage()
 	cfg := &config.ConsensusConfig{}
 
 	um := NewUpgradeManager(mc1, cfg, mockStorage, log)

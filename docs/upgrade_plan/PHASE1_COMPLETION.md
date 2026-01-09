@@ -27,9 +27,9 @@
 - `PerformanceMetrics` - 性能指标
 - `CDLDescriptor` - CDL 描述符
 
-### 3. 双链存储 ✅
+### 3. 多链存储 ✅
 
-**位置**: [internal/storage/dual_chain_storage.go](../../internal/storage/dual_chain_storage.go)
+**位置**: [internal/storage/multi_chain_storage.go](../../internal/storage/multi_chain_storage.go)
 
 实现了主链和预执行链的独立存储：
 - 主链和预执行链隔离存储
@@ -58,7 +58,7 @@
 
 ## 关键特性
 
-### 双链机制
+### 多链机制
 
 支持主链和预执行链并行运行：
 ```go
@@ -119,7 +119,7 @@ ok := metrics.Evaluate(rollbackCondition)
 | pkg/proto/upgrade.proto | 132 | ✅ | Protobuf 定义 |
 | consensus/upgrade/types.go | 223 | ✅ | 核心类型 |
 | consensus/upgrade/errors.go | - | ✅ | 错误定义（已存在）|
-| internal/storage/dual_chain_storage.go | 192 | ✅ | 双链存储 |
+| internal/storage/multi_chain_storage.go | 192 | ✅ | 多链存储 |
 | internal/storage/message_cache_storage.go | 394 | ✅ | 消息缓存 |
 | internal/storage/message_cache_storage_test.go | 282 | ✅ | 单元测试 |
 | docs/upgrade_plan/IMPLEMENTATION_PROGRESS.md | 360 | ✅ | 进度文档 |
@@ -147,10 +147,10 @@ ok := metrics.Evaluate(rollbackCondition)
 
 ## 使用示例
 
-### 创建双链存储
+### 创建多链存储
 
 ```go
-storage, err := NewLevelDBDualChainStorage("/path/to/db")
+storage, err := NewLevelDBMultiChainStorage("/path/to/db")
 if err != nil {
     log.Fatal(err)
 }

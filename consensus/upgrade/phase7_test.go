@@ -21,7 +21,8 @@ func TestCheckpointPersistence(t *testing.T) {
 	defer upgradeStorage.Close()
 
 	// 创建 RollbackManager
-	rm := NewRollbackManagerWithStorage(nil, nil, upgradeStorage, logrus.NewEntry(logrus.New()))
+	candidateID := "test-candidate"
+	rm := NewRollbackManagerWithStorage(candidateID, nil, nil, upgradeStorage, logrus.NewEntry(logrus.New()))
 
 	// 创建检查点
 	checkpoint := rm.CreateCheckpoint(1000, "hotstuff", []byte("state_hash_1000"))
@@ -49,7 +50,8 @@ func TestCheckpointList(t *testing.T) {
 	require.NoError(t, err)
 	defer upgradeStorage.Close()
 
-	rm := NewRollbackManagerWithStorage(nil, nil, upgradeStorage, logrus.NewEntry(logrus.New()))
+	candidateID := "test-candidate"
+	rm := NewRollbackManagerWithStorage(candidateID, nil, nil, upgradeStorage, logrus.NewEntry(logrus.New()))
 
 	// 创建多个检查点
 	for i := uint64(100); i <= 500; i += 100 {
@@ -73,7 +75,8 @@ func TestCheckpointDeletion(t *testing.T) {
 	require.NoError(t, err)
 	defer upgradeStorage.Close()
 
-	rm := NewRollbackManagerWithStorage(nil, nil, upgradeStorage, logrus.NewEntry(logrus.New()))
+	candidateID := "test-candidate"
+	rm := NewRollbackManagerWithStorage(candidateID, nil, nil, upgradeStorage, logrus.NewEntry(logrus.New()))
 
 	// 创建检查点
 	for i := uint64(100); i <= 500; i += 100 {
@@ -225,7 +228,8 @@ func TestVoteSignatureVerification(t *testing.T) {
 
 // TestCheckpointStrategy 测试检查点创建策略
 func TestCheckpointStrategy(t *testing.T) {
-	rm := NewRollbackManager(nil, nil, logrus.NewEntry(logrus.New()))
+	candidateID := "test-candidate"
+	rm := NewRollbackManager(candidateID, nil, nil, logrus.NewEntry(logrus.New()))
 
 	proposalHeight := uint64(1000)
 
@@ -280,8 +284,8 @@ func TestVotingRejection(t *testing.T) {
 	err := vm.StartVoting(proposal, 1*time.Hour)
 	require.NoError(t, err)
 
-	// 投5票反对
-	for i := int64(1); i <= 5; i++ {
+	// 投4票反对（达到拒绝阈值）
+	for i := int64(1); i <= 4; i++ {
 		err = vm.CastVote(proposal.ProposalID, i, VoteNo, []byte("sig"))
 		require.NoError(t, err)
 	}
@@ -381,7 +385,8 @@ func BenchmarkCheckpointCreation(b *testing.B) {
 	}
 	defer upgradeStorage.Close()
 
-	rm := NewRollbackManagerWithStorage(nil, nil, upgradeStorage, logrus.NewEntry(logrus.New()))
+	candidateID := "test-candidate"
+	rm := NewRollbackManagerWithStorage(candidateID, nil, nil, upgradeStorage, logrus.NewEntry(logrus.New()))
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -403,7 +408,7 @@ func BenchmarkVoteCasting(b *testing.B) {
 	proposal := &UpgradeProposal{
 		ProposalID:      types.TxHash{28, 29, 30},
 		TargetConsensus: "pow",
-		Threshold:       int64(b.N),
+		Threshold:       uint32(b.N),
 	}
 
 	err = vm.StartVoting(proposal, 1*time.Hour)

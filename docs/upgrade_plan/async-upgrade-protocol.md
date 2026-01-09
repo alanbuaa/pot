@@ -227,8 +227,8 @@ when finalized(block_at_round(prepareRound)):
 │     - 最终性证明验证                                          │
 │     - 检查点跨链同步                                          │
 ├─────────────────────────────────────────────────────────────┤
-│  3. Async Dual-Chain Manager (异步双链管理)                  │
-│     - 无时间假设的双链并行                                    │
+│  3. Async Multi-Chain Manager (异步多链管理)                  │
+│     - 无时间假设的多链并行                                    │
 │     - 基于最终性的交易同步                                    │
 │     - 异步状态一致性保证                                      │
 ├─────────────────────────────────────────────────────────────┤
@@ -646,13 +646,15 @@ def trigger_preexecution(proposalID, forkBlock):
     """
     触发预执行阶段 (异步版本)
     """
-    # 1. 创建预执行链适配器
-    new_adapter = create_async_adapter(new_consensus, proposalID)
+    # 1. 为每个候选共识创建适配器
+    candidate_adapters = {}
+    for candidate in proposal.candidateConsensuses:
+        candidate_adapters[candidate.candidateID] = create_async_adapter(candidate.consensus, candidate.candidateID)
     
-    # 2. 启动异步双链管理器
-    async_dual_chain = AsyncDualChainManager(
+    # 2. 启动异步多链管理器
+    async_multi_chain = AsyncMultiChainManager(
         main_adapter = current_adapter,
-        preexec_adapter = new_adapter,
+        candidate_adapters = candidate_adapters,
         fork_round = forkBlock.Round
     )
     
@@ -663,8 +665,8 @@ def trigger_preexecution(proposalID, forkBlock):
         roundsFromNow = R_preexec  # 预执行轮次数
     )
     
-    # 4. 启动双链并行运行
-    async_dual_chain.Start()
+    # 4. 启动多链并行运行
+    async_multi_chain.Start()
     
     # 5. 启动异步性能监控
     metrics_monitor = AsyncMetricsMonitor(
@@ -699,55 +701,57 @@ def wait_for_preexec_complete(proposalID, checkpoint, monitor):
     trigger_confirmation(proposalID, metrics)
 ```
 
-#### 4.3.1 异步双链管理器
+#### 4.3.1 异步多链管理器
 
 ```go
-// AsyncDualChainManager 异步双链管理器
-type AsyncDualChainManager struct {
-    mainAdapter    AsyncConsensusAdapter
-    preexecAdapter AsyncConsensusAdapter
-    forkRound      uint64
+// AsyncMultiChainManager 异步多链管理器
+type AsyncMultiChainManager struct {
+    mainAdapter       AsyncConsensusAdapter
+    candidateAdapters map[types.TxHash]AsyncConsensusAdapter  // candidateID -> adapter
+    forkRound         uint64
     
     // 同步状态
-    syncState      *SyncState
-    txSync         *AsyncTxSynchronizer
+    syncState         *SyncState
+    txSync            *AsyncTxSynchronizer
     
     // 控制
-    running        atomic.Bool
-    stopChan       chan struct{}
-    wg             sync.WaitGroup
-    log            *logrus.Entry
+    running           atomic.Bool
+    stopChan          chan struct{}
+    wg                sync.WaitGroup
+    log               *logrus.Entry
 }
 
-// Start 启动异步双链
-func (adm *AsyncDualChainManager) Start() error {
-    if !adm.running.CompareAndSwap(false, true) {
+// Start 启动异步多链
+func (amm *AsyncMultiChainManager) Start() error {
+    if !amm.running.CompareAndSwap(false, true) {
         return fmt.Errorf("already running")
     }
     
-    adm.stopChan = make(chan struct{})
+    amm.stopChan = make(chan struct{})
     
     // 启动主链监听器
-    adm.wg.Add(1)
-    go adm.mainChainLoop()
+    amm.wg.Add(1)
+    go amm.mainChainLoop()
     
-    // 启动预执行链监听器
-    adm.wg.Add(1)
-    go adm.preexecChainLoop()
+    // 为每个候选链启动监听器
+    for candidateID, adapter := range amm.candidateAdapters {
+        amm.wg.Add(1)
+        go amm.candidateChainLoop(candidateID, adapter)
+    }
     
     // 启动交易同步器
-    adm.wg.Add(1)
-    go adm.txSyncLoop()
+    amm.wg.Add(1)
+    go amm.txSyncLoop()
     
-    adm.log.Info("Async dual-chain started")
+    amm.log.Info("Async multi-chain started")
     return nil
 }
 
 // mainChainLoop 主链监听循环
-func (adm *AsyncDualChainManager) mainChainLoop() {
-    defer adm.wg.Done()
+func (amm *AsyncMultiChainManager) mainChainLoop() {
+    defer amm.wg.Done()
     
-    currentRound := adm.forkRound
+    currentRound := amm.forkRound
     
     for {
         select {
@@ -774,10 +778,10 @@ func (adm *AsyncDualChainManager) mainChainLoop() {
 }
 
 // processMainBlock 处理主链区块
-func (adm *AsyncDualChainManager) processMainBlock(block *Block) error {
+func (amcm *AsyncMultiChainManager) processMainBlock(block *Block) error {
     adm.log.WithField("round", block.Round).Debug("Processing main chain block")
     
-    // 提取交易并同步到预执行链
+    // 提取交易并同步到所有候选链
     txs := extractNormalTransactions(block)
     
     if err := adm.txSync.EnqueueTransactions(block.Round, txs); err != nil {
@@ -790,8 +794,8 @@ func (adm *AsyncDualChainManager) processMainBlock(block *Block) error {
     return nil
 }
 
-// preexecChainLoop 预执行链监听循环
-func (adm *AsyncDualChainManager) preexecChainLoop() {
+// candidateChainLoop 候选链监听循环
+func (adm *AsyncMultiChainManager) candidateChainLoop(candidateID types.TxHash) {
     defer adm.wg.Done()
     
     currentRound := adm.forkRound
@@ -803,14 +807,14 @@ func (adm *AsyncDualChainManager) preexecChainLoop() {
         default:
         }
         
-        // 异步等待预执行链下一个最终性区块
-        eventChan := adm.preexecAdapter.WaitForFinality(currentRound + 1)
+        // 异步等待候选链下一个最终性区块
+        eventChan := adm.candidateAdapter.WaitForFinality(currentRound + 1)
         
         select {
         case event := <-eventChan:
-            // 处理预执行区块
-            if err := adm.processPreexecBlock(event.Block); err != nil {
-                adm.log.WithError(err).Error("Failed to process preexec block")
+            // 处理候选区块
+            if err := adm.processCandidateBlock(candidateID, event.Block); err != nil {
+                adm.log.WithError(err).Error("Failed to process candidate block")
             }
             currentRound = event.Round
             
@@ -821,7 +825,7 @@ func (adm *AsyncDualChainManager) preexecChainLoop() {
 }
 
 // txSyncLoop 交易同步循环
-func (adm *AsyncDualChainManager) txSyncLoop() {
+func (amcm *AsyncMultiChainManager) txSyncLoop() {
     defer adm.wg.Done()
     
     for {
@@ -831,7 +835,7 @@ func (adm *AsyncDualChainManager) txSyncLoop() {
         default:
         }
         
-        // 从队列中取出交易并注入到预执行链
+        // 从队列中取出交易并注入到所有候选链
         batch := adm.txSync.DequeueBatch()
         if len(batch.Txs) == 0 {
             time.Sleep(100 * time.Millisecond)
@@ -853,7 +857,7 @@ func (adm *AsyncDualChainManager) txSyncLoop() {
 type AsyncTxSynchronizer struct {
     queue       *TxQueue
     mainRound   uint64  // 主链当前轮次
-    preexecRound uint64  // 预执行链当前轮次
+    candidateRounds map[types.TxHash]uint64  // 候选链当前轮次
     mu          sync.RWMutex
 }
 
@@ -1183,14 +1187,14 @@ def execute_async_switch(proposalID, switchRound, finalityProof):
         trigger_rollback(proposalID, "INVALID_SWITCH_CONDITIONS")
         return
     
-    # 2. 获取预执行链在切换轮次的状态
-    preexec_block = preexec_adapter.GetBlockAtRound(switchRound)
-    preexec_finality_proof = preexec_adapter.GetFinalityProof(switchRound)
+    # 2. 获取候选链在切换轮次的状态
+    candidate_block = candidate_adapter.GetBlockAtRound(switchRound)
+    candidate_finality_proof = candidate_adapter.GetFinalityProof(switchRound)
     
-    # 3. 验证预执行链最终性
-    if not preexec_adapter.VerifyFinalityProof(switchRound, preexec_finality_proof):
-        log.error("Preexec chain finality proof invalid")
-        trigger_rollback(proposalID, "INVALID_PREEXEC_FINALITY")
+    # 3. 验证候选链最终性
+    if not candidate_adapter.VerifyFinalityProof(switchRound, candidate_finality_proof):
+        log.error("Candidate chain finality proof invalid")
+        trigger_rollback(proposalID, "INVALID_CANDIDATE_FINALITY")
         return
     
     # 4. 原子切换 (不修改任何区块内容)
@@ -1248,11 +1252,11 @@ func (scv *SwitchConditionsValidator) VerifySwitchConditions(
             mainFinalizedRound, switchRound)
     }
     
-    // 2. 验证预执行链已到达切换轮次
-    preexecFinalizedRound := scv.preexecAdapter.GetFinalizedRound()
-    if preexecFinalizedRound < switchRound {
-        return fmt.Errorf("preexec chain not finalized up to switch round: %d < %d",
-            preexecFinalizedRound, switchRound)
+    // 2. 验证候选链已到达切换轮次
+    candidateFinalizedRound := scv.candidateAdapter.GetFinalizedRound()
+    if candidateFinalizedRound < switchRound {
+        return fmt.Errorf("candidate chain not finalized up to switch round: %d < %d",
+            candidateFinalizedRound, switchRound)
     }
     
     // 3. 验证主链最终性证明
@@ -1264,13 +1268,13 @@ func (scv *SwitchConditionsValidator) VerifySwitchConditions(
         return fmt.Errorf("invalid main chain finality proof")
     }
     
-    // 4. 验证预执行链最终性证明
-    preexecProof, err := scv.preexecAdapter.GetFinalityProof(switchRound)
+    // 4. 验证候选链最终性证明
+    candidateProof, err := scv.candidateAdapter.GetFinalityProof(switchRound)
     if err != nil {
-        return fmt.Errorf("failed to get preexec chain finality proof: %w", err)
+        return fmt.Errorf("failed to get candidate chain finality proof: %w", err)
     }
-    if !scv.preexecAdapter.VerifyFinalityProof(switchRound, preexecProof) {
-        return fmt.Errorf("invalid preexec chain finality proof")
+    if !scv.candidateAdapter.VerifyFinalityProof(switchRound, candidateProof) {
+        return fmt.Errorf("invalid candidate chain finality proof")
     }
     
     // 5. 验证确认交易的投票
@@ -1405,13 +1409,13 @@ class AsyncPartitionHandler:
             self.apply_block(block)
 ```
 
-### 5.3 异步预执行链的分区恢复
+### 5.3 异步候选链的分区恢复
 
 ```go
-// AsyncPreexecRecovery 异步预执行链恢复
-type AsyncPreexecRecovery struct {
-    mainAdapter    AsyncConsensusAdapter
-    preexecAdapter AsyncConsensusAdapter
+// AsyncCandidateRecovery 异步候选链恢复
+type AsyncCandidateRecovery struct {
+    mainAdapter      AsyncConsensusAdapter
+    candidateAdapter AsyncConsensusAdapter
     forkRound      uint64
     log            *logrus.Entry
 }
@@ -1438,9 +1442,9 @@ func (apr *AsyncPreexecRecovery) RecoverFromPartition(
         }
     }
     
-    // 2. 根据主链重建预执行链
-    // 关键: 在异步模型中,预执行链可以完全根据主链的最终性区块重建
-    apr.log.Info("Rebuilding preexec chain from main chain")
+    // 2. 根据主链重建候选链
+    // 关键: 在异步模型中,候选链可以完全根据主链的最终性区块重建
+    apr.log.Info("Rebuilding candidate chain from main chain")
     
     for round := apr.forkRound; round <= mainFinalizedRound; round++ {
         // 获取主链的最终性区块
@@ -1452,19 +1456,19 @@ func (apr *AsyncPreexecRecovery) RecoverFromPartition(
         // 提取交易
         txs := extractNormalTransactions(mainBlock)
         
-        // 在预执行链上重新执行
-        // 注意: 这里可能需要等待预执行链的最终性
-        if err := apr.replayOnPreexec(round, txs); err != nil {
-            return fmt.Errorf("failed to replay on preexec at round %d: %w", round, err)
+        // 在候选链上重新执行
+        // 注意: 这里可能需要等待候选链的最终性
+        if err := apr.replayOnCandidate(round, txs); err != nil {
+            return fmt.Errorf("failed to replay on candidate at round %d: %w", round, err)
         }
     }
     
-    apr.log.Info("Async preexec recovery completed")
+    apr.log.Info("Async candidate recovery completed")
     return nil
 }
 
 // catchUpMainChain 追赶主链
-func (apr *AsyncPreexecRecovery) catchUpMainChain(from, to uint64) error {
+func (apr *AsyncCandidateRecovery) catchUpMainChain(from, to uint64) error {
     for round := from + 1; round <= to; round++ {
         // 异步等待该轮次最终化
         eventChan := apr.mainAdapter.WaitForFinality(round)
@@ -1483,23 +1487,23 @@ func (apr *AsyncPreexecRecovery) catchUpMainChain(from, to uint64) error {
     return nil
 }
 
-// replayOnPreexec 在预执行链上重放交易
-func (apr *AsyncPreexecRecovery) replayOnPreexec(round uint64, txs []*Transaction) error {
-    // 将交易注入到预执行共识
-    // 等待预执行链处理并最终化
+// replayOnCandidate 在候选链上重放交易
+func (apr *AsyncCandidateRecovery) replayOnCandidate(round uint64, txs []*Transaction) error {
+    // 将交易注入到候选共识
+    // 等待候选链处理并最终化
     
-    // 简化实现: 直接调用预执行共识的接口
+    // 简化实现: 直接调用候选共识的接口
     for _, tx := range txs {
-        apr.preexecAdapter.ProposeTransaction(tx)
+        apr.candidateAdapter.ProposeTransaction(tx)
     }
     
     // 等待该轮次最终化
-    eventChan := apr.preexecAdapter.WaitForFinality(round)
+    eventChan := apr.candidateAdapter.WaitForFinality(round)
     event := <-eventChan
     
-    // 验证预执行链区块
+    // 验证候选链区块
     if event.Round != round {
-        return fmt.Errorf("preexec round mismatch: expected %d, got %d", round, event.Round)
+        return fmt.Errorf("candidate round mismatch: expected %d, got %d", round, event.Round)
     }
     
     return nil
@@ -1517,7 +1521,7 @@ func (apr *AsyncPreexecRecovery) replayOnPreexec(round uint64, txs []*Transactio
 ```
 定理 1 (异步升级原子性):
 在异步网络模型下,如果:
-1. 主链和预执行链都使用异步安全的共识
+1. 主链和所有候选链都使用异步安全的共识
 2. 切换基于最终性证明触发
 3. 所有诚实节点最终收到确认交易
 
@@ -1563,7 +1567,7 @@ func (apr *AsyncPreexecRecovery) replayOnPreexec(round uint64, txs []*Transactio
 证明:
 安全性部分 (定理 1 已证明):
 - 即使升级永远不完成,主链仍然安全运行
-- 预执行链失败不影响主链
+- 候选链失败不影响主链
 - ∴ 安全性始终满足 ✓
 
 活性部分 (条件性):
@@ -1716,9 +1720,9 @@ func (sdd *SelectiveDelayDetector) Mitigation() {
 ```go
 // ThroughputAnalyzer 吞吐量分析器
 type ThroughputAnalyzer struct {
-    mainThroughput    float64  // 主链吞吐量 (tx/s)
-    preexecThroughput float64  // 预执行链吞吐量 (tx/s)
-    overhead          float64  // 升级开销
+    mainThroughput       float64  // 主链吞吐量 (tx/s)
+    candidateThroughputs map[types.TxHash]float64  // 各候选链吞吐量 (tx/s)
+    overhead             float64  // 升级开销
 }
 
 // AnalyzeUpgradeOverhead 分析升级开销
@@ -1726,17 +1730,17 @@ func (ta *ThroughputAnalyzer) AnalyzeUpgradeOverhead() UpgradeOverhead {
     // 1. 交易同步开销
     syncOverhead := ta.calculateSyncOverhead()
     
-    // 2. 双链运行的资源开销
-    dualChainOverhead := ta.calculateDualChainOverhead()
+    // 2. 多链运行的资源开销
+    multiChainOverhead := ta.calculateMultiChainOverhead()
     
     // 3. 异步通信开销
     asyncCommOverhead := ta.calculateAsyncCommOverhead()
     
     return UpgradeOverhead{
-        TxSyncOverhead:    syncOverhead,      // ~10-15%
-        DualChainOverhead: dualChainOverhead, // ~50-70% (双链并行)
-        AsyncCommOverhead: asyncCommOverhead, // ~5-10%
-        TotalOverhead:     syncOverhead + dualChainOverhead + asyncCommOverhead,
+        TxSyncOverhead:    syncOverhead,        // ~10-15%
+        MultiChainOverhead: multiChainOverhead, // ~50-70% (多链并行)
+        AsyncCommOverhead: asyncCommOverhead,   // ~5-10%
+        TotalOverhead:     syncOverhead + multiChainOverhead + asyncCommOverhead,
     }
 }
 
@@ -1860,7 +1864,7 @@ consensus/
 │   ├── async/                      # 新增: 异步升级模块
 │   │   ├── adapter.go             # 异步共识适配器
 │   │   ├── checkpoint.go          # 基于最终性的检查点
-│   │   ├── dual_chain_async.go    # 异步双链管理
+│   │   ├── multi_chain_async.go   # 异步多链管理
 │   │   ├── voting_async.go        # 异步投票机制
 │   │   ├── switch_async.go        # 异步切换逻辑
 │   │   └── recovery_async.go      # 异步分区恢复
@@ -2138,7 +2142,7 @@ func TestAsyncUpgradeWithAdversary(t *testing.T) {
 1. **异步共识适配器**: 统一了异步和部分同步共识的接口
 2. **最终性驱动机制**: 用最终性轮次代替时间/高度检查点
 3. **轮次投票机制**: 用多轮投票代替超时机制
-4. **异步双链管理**: 无时间假设的双链并行运行
+4. **异步多链管理**: 无时间假设的多链并行运行
 5. **最终性感知切换**: 基于最终性证明的确定性切换
 
 ### 10.2 适用场景

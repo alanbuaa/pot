@@ -7,7 +7,7 @@ option go_package = "github.com/zzz136454872/upgradeable-consensus/pkg/proto";
 enum UpgradePhase {
     PHASE_NONE = 0;
     PHASE_PROPOSED = 1; // 提案已提交
-    PHASE_PREEXEC = 2; // 预执行中
+    PHASE_PREEXEC = 2; // 候选链执行中
     PHASE_SWITCH_READY = 3; // 准备切换
     PHASE_SWITCHED = 4; // 已切换
     PHASE_FINALIZED = 5; // 已完成
@@ -27,7 +27,7 @@ message UpgradeConfigTransaction {
     
     // 关键高度
     uint64 fork_height = 4; // 分叉高度
-    uint64 preexec_start_height = 5; // 预执行开始高度
+    uint64 preexec_start_height = 5; // 候选链开始高度
     uint64 switch_height = 6; // 切换高度
     
     // 回退条件
@@ -98,7 +98,7 @@ message BlockMetric {
     string error_msg = 5;
 }
 
-// 预执行链区块头
+// 候选链区块头
 message PreexecHeader {
     uint64 height = 1;
     bytes parent_hash = 2;

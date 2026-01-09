@@ -75,7 +75,8 @@ type ProposalVoteStatus struct {
 ```go
 // 创建带持久化的 RollbackManager
 rm := NewRollbackManagerWithStorage(
-    dualChainManager,
+    candidateID,
+    multiChainManager,
     preexecMonitor,
     upgradeStorage,
     log,
@@ -474,7 +475,8 @@ go tool cover -html=coverage_phase7.out -o coverage_phase7.html
 
 ### 1. 完善 MessageCache 实现
 - [ ] 根据 bufmsg_test.go 实现 MessageCache
-- [ ] 集成到 DualChainManager
+- [ ] 集成到 MultiChainManager
+- [ ] 支持多候选链检查点
 - [ ] 集成到 SwitchManager
 
 ### 2. 完善签名验证

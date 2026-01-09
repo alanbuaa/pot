@@ -13,7 +13,7 @@ import (
 )
 
 // TestBufferedMessageEarlyArrival 测试消息提前到达场景
-// 场景：预执行链的消息在预执行开始前到达
+// 场景：候选链的消息在候选链开始前到达
 func TestBufferedMessageEarlyArrival(t *testing.T) {
 	tmpDir := t.TempDir()
 
@@ -22,9 +22,9 @@ func TestBufferedMessageEarlyArrival(t *testing.T) {
 	require.NoError(t, err)
 	defer msgStorage.Close()
 
-	dualChainStorage, err := storage.NewLevelDBDualChainStorage(tmpDir + "/dual.db")
+	multiChainStorage, err := storage.NewLevelDBMultiChainStorage(tmpDir + "/multichain.db")
 	require.NoError(t, err)
-	defer dualChainStorage.Close()
+	defer multiChainStorage.Close()
 
 	log := logrus.NewEntry(logrus.New())
 

@@ -96,7 +96,7 @@ Phase 5 实现了共识升级过程中的切换和回退管理机制，确保共
 **功能**: 统一协调整个升级流程，是 Phase 1-5 所有组件的总调度器。
 
 **集成组件**:
-- DualChainManager（Phase 3）
+- MultiChainManager（Phase 3）
 - MetricsCollector（Phase 3）
 - PreexecMonitor（Phase 3）
 - SwitchManager（Phase 5）
@@ -130,7 +130,7 @@ StartUpgrade
     ↓
 设置消息缓存信息
     ↓
-启动预执行链 (DualChainManager)
+启动候选链 (MultiChainManager)
     ↓
 初始化监控器 (PreexecMonitor)
     ↓
@@ -157,7 +157,7 @@ StartUpgrade
 - `switch_test.go` - SwitchManager 和 RollbackManager 测试
 - `message_cache_test.go` - MessageCache 测试
 - `manager_test.go` - UpgradeManager 测试
-- `dual_chain_test.go` - DualChainManager 测试
+- `multi_chain_test.go` - MultiChainManager 测试
 - `cdl/*_test.go` - CDL 相关测试
 
 ### 测试统计
@@ -185,16 +185,16 @@ StartUpgrade
 
 ### 测试用例
 
-#### DualChainManager 测试（9个）
-- ✅ `TestNewDualChainManager` - 创建测试
-- ✅ `TestDualChainManager_StartPreexecution` - 启动预执行测试
-- ✅ `TestDualChainManager_ProcessMainChainBlock` - 主链区块处理测试
-- ✅ `TestDualChainManager_ProcessPreexecBlock` - 预执行区块处理测试
-- ✅ `TestDualChainManager_ProcessPreexecBlock_NotActive` - 未启动状态测试
-- ✅ `TestDualChainManager_MergePreexecChain` - 合并测试
-- ✅ `TestDualChainManager_Rollback` - 回滚测试
-- ✅ `TestDualChainManager_Concurrency` - 并发测试
-- ✅ `TestDualChainManager_ErrorHandling` - 错误处理测试
+#### MultiChainManager 测试（9个）
+- ✅ `TestNewMultiChainManager` - 创建测试
+- ✅ `TestMultiChainManager_StartCandidateChain` - 启动候选链测试
+- ✅ `TestMultiChainManager_ProcessMainChainBlock` - 主链区块处理测试
+- ✅ `TestMultiChainManager_ProcessCandidateBlock` - 候选链区块处理测试
+- ✅ `TestMultiChainManager_MultipleCandidateChains` - 多候选链测试
+- ✅ `TestMultiChainManager_MergeCandidateChain` - 合并测试
+- ✅ `TestMultiChainManager_RollbackCandidateChain` - 回滚测试
+- ✅ `TestMultiChainManager_Concurrency` - 并发测试
+- ✅ `TestMultiChainManager_GetCandidateChainState` - 状态查询测试
 
 #### SwitchManager 测试（10个）
 - ✅ `TestSwitchManagerCreation` - 创建测试

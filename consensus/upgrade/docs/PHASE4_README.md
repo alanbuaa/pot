@@ -381,8 +381,8 @@ CDL 引擎将与之前实现的阶段无缝集成：
    - 治理委员会验证 CDL 合法性
    - CDL 哈希用于提案唯一性
 
-3. **Phase 3 (双链管理)**:
-   - DualChainManager 使用 CDL Runtime 创建新共识实例
+3. **Phase 3 (多链管理)**:
+   - MultiChainManager 使用 CDL Runtime 创建新共识实例
    - PreexecMonitor 监控 CDL 定义的性能指标
 
 ### 未来阶段预览

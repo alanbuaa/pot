@@ -162,12 +162,12 @@ func TestMessageCacheStorage(t *testing.T) {
 	})
 }
 
-func TestDualChainStorage(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "dual_chain_test")
+func TestMultiChainStorage(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "multi_chain_test")
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 
-	storage, err := NewLevelDBDualChainStorage(tmpDir)
+	storage, err := NewLevelDBMultiChainStorage(tmpDir)
 	require.NoError(t, err)
 	defer storage.Close()
 
@@ -187,7 +187,8 @@ func TestDualChainStorage(t *testing.T) {
 		assert.Equal(t, block.Header.Height, retrieved.Header.Height)
 	})
 
-	t.Run("StoreAndGetPreexecBlock", func(t *testing.T) {
+	t.Run("StoreAndGetCandidateBlock", func(t *testing.T) {
+		candidateID := "test-candidate"
 		block := &types.Block{
 			Header: &types.Header{
 				Height: 100,
@@ -195,15 +196,16 @@ func TestDualChainStorage(t *testing.T) {
 			Txs: []*types.Tx{},
 		}
 
-		err := storage.StorePreexecBlock(block)
+		err := storage.StoreCandidateBlock(candidateID, block)
 		require.NoError(t, err)
 
-		retrieved, err := storage.GetPreexecBlock(100)
+		retrieved, err := storage.GetCandidateBlock(candidateID, 100)
 		require.NoError(t, err)
 		assert.Equal(t, block.Header.Height, retrieved.Header.Height)
 	})
 
-	t.Run("GetPreexecBlocks", func(t *testing.T) {
+	t.Run("GetCandidateBlocks", func(t *testing.T) {
+		candidateID := "test-candidate"
 		for i := uint64(200); i < 205; i++ {
 			block := &types.Block{
 				Header: &types.Header{
@@ -211,18 +213,19 @@ func TestDualChainStorage(t *testing.T) {
 				},
 				Txs: []*types.Tx{},
 			}
-			err := storage.StorePreexecBlock(block)
+			err := storage.StoreCandidateBlock(candidateID, block)
 			require.NoError(t, err)
 		}
 
-		blocks, err := storage.GetPreexecBlocks(200, 204)
+		blocks, err := storage.GetCandidateBlocks(candidateID, 200, 204)
 		require.NoError(t, err)
 		assert.Len(t, blocks, 5)
 		assert.Equal(t, uint64(200), blocks[0].Header.Height)
 		assert.Equal(t, uint64(204), blocks[4].Header.Height)
 	})
 
-	t.Run("DeletePreexecBlocks", func(t *testing.T) {
+	t.Run("DeleteCandidateChain", func(t *testing.T) {
+		candidateID := "test-candidate"
 		for i := uint64(300); i < 310; i++ {
 			block := &types.Block{
 				Header: &types.Header{
@@ -230,27 +233,22 @@ func TestDualChainStorage(t *testing.T) {
 				},
 				Txs: []*types.Tx{},
 			}
-			err := storage.StorePreexecBlock(block)
+			err := storage.StoreCandidateBlock(candidateID, block)
 			require.NoError(t, err)
 		}
 
-		err := storage.DeletePreexecBlocks(305)
+		err := storage.DeleteCandidateChain(candidateID)
 		require.NoError(t, err)
 
-		// 305 及以后的区块应该被删除
-		for i := uint64(305); i < 310; i++ {
-			_, err := storage.GetPreexecBlock(i)
+		// 所有区块应该被删除
+		for i := uint64(300); i < 310; i++ {
+			_, err := storage.GetCandidateBlock(candidateID, i)
 			assert.Error(t, err)
-		}
-
-		// 305 之前的区块应该还在
-		for i := uint64(300); i < 305; i++ {
-			_, err := storage.GetPreexecBlock(i)
-			assert.NoError(t, err)
 		}
 	})
 
 	t.Run("PromoteToMainChain", func(t *testing.T) {
+		candidateID := "test-candidate"
 		block := &types.Block{
 			Header: &types.Header{
 				Height: 400,
@@ -258,20 +256,19 @@ func TestDualChainStorage(t *testing.T) {
 			Txs: []*types.Tx{},
 		}
 
-		// 先存储为预执行链区块
-		err := storage.StorePreexecBlock(block)
+		// 先存储为候选链区块
+		err := storage.StoreCandidateBlock(candidateID, block)
 		require.NoError(t, err)
 
 		// 提升到主链
-		err = storage.PromoteToMainChain(block)
-		require.NoError(t, err)
+		err = storage.PromoteToMainChain(candidateID, block)
 
 		// 应该能从主链获取
 		_, err = storage.GetMainBlock(400)
 		assert.NoError(t, err)
 
-		// 应该从预执行链删除
-		_, err = storage.GetPreexecBlock(400)
+		// 应该从候选链删除
+		_, err = storage.GetCandidateBlock(candidateID, 400)
 		assert.Error(t, err)
 	})
 

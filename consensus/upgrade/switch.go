@@ -12,9 +12,10 @@ import (
 // SwitchManager 切换管理器
 // 负责管理从旧共识到新共识的平滑切换过程
 type SwitchManager struct {
-	dualChainManager *DualChainManager
-	preexecMonitor   *PreexecMonitor
-	log              *logrus.Entry
+	candidateID       string // 候选链ID
+	multiChainManager *MultiChainManager
+	preexecMonitor    *PreexecMonitor
+	log               *logrus.Entry
 
 	// 切换状态
 	switchHeight uint64
@@ -31,7 +32,8 @@ type SwitchManager struct {
 
 // NewSwitchManager 创建切换管理器
 func NewSwitchManager(
-	dualChainManager *DualChainManager,
+	candidateID string,
+	multiChainManager *MultiChainManager,
 	preexecMonitor *PreexecMonitor,
 	log *logrus.Entry,
 ) *SwitchManager {
@@ -40,11 +42,12 @@ func NewSwitchManager(
 	}
 
 	return &SwitchManager{
-		dualChainManager: dualChainManager,
-		preexecMonitor:   preexecMonitor,
-		log:              log,
-		switchReadyChan:  make(chan struct{}, 1),
-		switchDoneChan:   make(chan struct{}, 1),
+		candidateID:       candidateID,
+		multiChainManager: multiChainManager,
+		preexecMonitor:    preexecMonitor,
+		log:               log,
+		switchReadyChan:   make(chan struct{}, 1),
+		switchDoneChan:    make(chan struct{}, 1),
 	}
 }
 
@@ -103,9 +106,9 @@ func (sm *SwitchManager) ExecuteSwitch() error {
 		return fmt.Errorf("rollback signal received: %s", reason)
 	}
 
-	// 3. 执行双链合并
-	sm.log.Info("Merging preexecution chain into main chain")
-	mergeErr := sm.dualChainManager.MergePreexecChain(sm.switchHeight)
+	// 3. 执行候选链合并
+	sm.log.WithField("candidate_id", sm.candidateID).Info("Merging candidate chain into main chain")
+	mergeErr := sm.multiChainManager.MergeCandidateChain(sm.candidateID, sm.switchHeight)
 	if mergeErr != nil {
 		sm.mu.Lock()
 		sm.switching = false
@@ -174,12 +177,12 @@ func (sm *SwitchManager) GetSwitchTime() time.Time {
 
 // GetNewConsensus 获取新共识实例
 func (sm *SwitchManager) GetNewConsensus() model.Consensus {
-	return sm.dualChainManager.GetPreexecConsensus()
+	return sm.multiChainManager.GetCandidateConsensus(sm.candidateID)
 }
 
 // GetOldConsensus 获取旧共识实例
 func (sm *SwitchManager) GetOldConsensus() model.Consensus {
-	return sm.dualChainManager.GetMainConsensus()
+	return sm.multiChainManager.GetMainConsensus()
 }
 
 // Reset 重置切换管理器（用于测试）
@@ -212,9 +215,9 @@ func (sm *SwitchManager) ValidateSwitch() error {
 		return fmt.Errorf("already switched")
 	}
 
-	// 检查预执行链是否激活
-	if !sm.dualChainManager.IsPreexecActive() {
-		return fmt.Errorf("preexec chain not active")
+	// 检查候选链是否激活
+	if !sm.multiChainManager.IsCandidateActive(sm.candidateID) {
+		return fmt.Errorf("candidate chain not active")
 	}
 
 	// 检查监控器状态
@@ -235,7 +238,7 @@ func (sm *SwitchManager) GetSwitchStatus() *SwitchStatus {
 		Switched:      sm.switched,
 		Switching:     sm.switching,
 		SwitchTime:    sm.switchTime,
-		PreexecActive: sm.dualChainManager.IsPreexecActive(),
+		PreexecActive: sm.multiChainManager.IsCandidateActive(sm.candidateID),
 	}
 }
 

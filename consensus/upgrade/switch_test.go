@@ -12,12 +12,13 @@ import (
 func TestSwitchManagerCreation(t *testing.T) {
 	log := logrus.NewEntry(logrus.New())
 	mockConsensus := newMockConsensus()
-	mockStorage := &mockDualChainStorage{}
+	mockStorage := newMockMultiChainStorage()
 
-	dualChain := NewDualChainManager(mockConsensus, mockStorage, log)
+	multiChain := NewMultiChainManager(mockConsensus, mockStorage, log)
 	monitor := &PreexecMonitor{}
+	candidateID := "test-candidate"
 
-	sm := NewSwitchManager(dualChain, monitor, log)
+	sm := NewSwitchManager(candidateID, multiChain, monitor, log)
 
 	assert.NotNil(t, sm)
 	assert.False(t, sm.IsSwitched())
@@ -29,12 +30,13 @@ func TestSwitchManagerCreation(t *testing.T) {
 func TestSwitchManagerPrepare(t *testing.T) {
 	log := logrus.NewEntry(logrus.New())
 	mockConsensus := newMockConsensus()
-	mockStorage := &mockDualChainStorage{}
+	mockStorage := newMockMultiChainStorage()
 
-	dualChain := NewDualChainManager(mockConsensus, mockStorage, log)
+	multiChain := NewMultiChainManager(mockConsensus, mockStorage, log)
 	monitor := &PreexecMonitor{}
+	candidateID := "test-candidate"
 
-	sm := NewSwitchManager(dualChain, monitor, log)
+	sm := NewSwitchManager(candidateID, multiChain, monitor, log)
 
 	switchHeight := uint64(100)
 	err := sm.PrepareSwitch(switchHeight)
@@ -49,12 +51,14 @@ func TestSwitchManagerPrepare(t *testing.T) {
 func TestSwitchManagerValidate(t *testing.T) {
 	log := logrus.NewEntry(logrus.New())
 	mockConsensus := newMockConsensus()
-	mockStorage := &mockDualChainStorage{}
+	mockStorage := newMockMultiChainStorage()
 
-	dualChain := NewDualChainManager(mockConsensus, mockStorage, log)
-	monitor := NewPreexecMonitor(&UpgradeProposal{}, dualChain, log)
+	candidateID := "test-candidate"
+	multiChain := NewMultiChainManager(mockConsensus, mockStorage, log)
+	proposal := &UpgradeProposal{}
+	monitor := NewPreexecMonitor(proposal, candidateID, multiChain, log)
 
-	sm := NewSwitchManager(dualChain, monitor, log)
+	sm := NewSwitchManager(candidateID, multiChain, monitor, log)
 	sm.PrepareSwitch(100)
 
 	err := sm.ValidateSwitch()
@@ -67,12 +71,13 @@ func TestSwitchManagerValidate(t *testing.T) {
 func TestSwitchManagerAlreadySwitched(t *testing.T) {
 	log := logrus.NewEntry(logrus.New())
 	mockConsensus := newMockConsensus()
-	mockStorage := &mockDualChainStorage{}
+	mockStorage := newMockMultiChainStorage()
 
-	dualChain := NewDualChainManager(mockConsensus, mockStorage, log)
+	candidateID := "test-candidate"
+	multiChain := NewMultiChainManager(mockConsensus, mockStorage, log)
 	monitor := &PreexecMonitor{}
 
-	sm := NewSwitchManager(dualChain, monitor, log)
+	sm := NewSwitchManager(candidateID, multiChain, monitor, log)
 	sm.PrepareSwitch(100)
 
 	// 手动设置为已切换状态
@@ -89,12 +94,13 @@ func TestSwitchManagerAlreadySwitched(t *testing.T) {
 func TestSwitchManagerStatus(t *testing.T) {
 	log := logrus.NewEntry(logrus.New())
 	mockConsensus := newMockConsensus()
-	mockStorage := &mockDualChainStorage{}
+	mockStorage := newMockMultiChainStorage()
 
-	dualChain := NewDualChainManager(mockConsensus, mockStorage, log)
+	candidateID := "test-candidate"
+	multiChain := NewMultiChainManager(mockConsensus, mockStorage, log)
 	monitor := &PreexecMonitor{}
 
-	sm := NewSwitchManager(dualChain, monitor, log)
+	sm := NewSwitchManager(candidateID, multiChain, monitor, log)
 	sm.PrepareSwitch(100)
 
 	status := sm.GetSwitchStatus()
@@ -109,12 +115,13 @@ func TestSwitchManagerStatus(t *testing.T) {
 func TestSwitchManagerReset(t *testing.T) {
 	log := logrus.NewEntry(logrus.New())
 	mockConsensus := newMockConsensus()
-	mockStorage := &mockDualChainStorage{}
+	mockStorage := newMockMultiChainStorage()
 
-	dualChain := NewDualChainManager(mockConsensus, mockStorage, log)
+	candidateID := "test-candidate"
+	multiChain := NewMultiChainManager(mockConsensus, mockStorage, log)
 	monitor := &PreexecMonitor{}
 
-	sm := NewSwitchManager(dualChain, monitor, log)
+	sm := NewSwitchManager(candidateID, multiChain, monitor, log)
 	sm.PrepareSwitch(100)
 
 	// 手动设置为已切换状态
@@ -134,12 +141,13 @@ func TestSwitchManagerReset(t *testing.T) {
 func TestRollbackManagerCreation(t *testing.T) {
 	log := logrus.NewEntry(logrus.New())
 	mockConsensus := newMockConsensus()
-	mockStorage := &mockDualChainStorage{}
+	mockStorage := newMockMultiChainStorage()
 
-	dualChain := NewDualChainManager(mockConsensus, mockStorage, log)
+	candidateID := "test-candidate"
+	multiChain := NewMultiChainManager(mockConsensus, mockStorage, log)
 	monitor := &PreexecMonitor{}
 
-	rm := NewRollbackManager(dualChain, monitor, log)
+	rm := NewRollbackManager(candidateID, multiChain, monitor, log)
 
 	assert.NotNil(t, rm)
 	assert.False(t, rm.IsRolledBack())
@@ -151,19 +159,20 @@ func TestRollbackManagerExecute(t *testing.T) {
 	log := logrus.NewEntry(logrus.New())
 	mockConsensus := newMockConsensus()
 	newConsensus := newMockConsensus()
-	mockStorage := newMockDualChainStorage()
+	mockStorage := newMockMultiChainStorage()
 
-	dualChain := NewDualChainManager(mockConsensus, mockStorage, log)
+	candidateID := "test-candidate"
+	multiChain := NewMultiChainManager(mockConsensus, mockStorage, log)
 
 	// 先启动预执行，这样才能回退
 	forkBlock := newTestBlock(100)
 	mockStorage.StoreMainBlock(forkBlock)
-	dualChain.StartPreexecution(100, newConsensus)
+	multiChain.StartCandidateChain(candidateID, 100, newConsensus)
 
 	proposal := &UpgradeProposal{PreexecStartHeight: 100, SwitchHeight: 200}
-	monitor := NewPreexecMonitor(proposal, dualChain, log)
+	monitor := NewPreexecMonitor(proposal, candidateID, multiChain, log)
 
-	rm := NewRollbackManager(dualChain, monitor, log)
+	rm := NewRollbackManager(candidateID, multiChain, monitor, log)
 
 	err := rm.ExecuteRollback("test rollback")
 
@@ -178,19 +187,20 @@ func TestRollbackManagerAlreadyRolledBack(t *testing.T) {
 	log := logrus.NewEntry(logrus.New())
 	mockConsensus := newMockConsensus()
 	newConsensus := newMockConsensus()
-	mockStorage := newMockDualChainStorage()
+	mockStorage := newMockMultiChainStorage()
 
-	dualChain := NewDualChainManager(mockConsensus, mockStorage, log)
+	candidateID := "test-candidate"
+	multiChain := NewMultiChainManager(mockConsensus, mockStorage, log)
 
 	// 启动预执行
 	forkBlock := newTestBlock(100)
 	mockStorage.StoreMainBlock(forkBlock)
-	dualChain.StartPreexecution(100, newConsensus)
+	multiChain.StartCandidateChain(candidateID, 100, newConsensus)
 
 	proposal := &UpgradeProposal{PreexecStartHeight: 100, SwitchHeight: 200}
-	monitor := NewPreexecMonitor(proposal, dualChain, log)
+	monitor := NewPreexecMonitor(proposal, candidateID, multiChain, log)
 
-	rm := NewRollbackManager(dualChain, monitor, log)
+	rm := NewRollbackManager(candidateID, multiChain, monitor, log)
 
 	// 第一次回退
 	err := rm.ExecuteRollback("first rollback")
@@ -207,19 +217,20 @@ func TestRollbackManagerForce(t *testing.T) {
 	log := logrus.NewEntry(logrus.New())
 	mockConsensus := newMockConsensus()
 	newConsensus := newMockConsensus()
-	mockStorage := newMockDualChainStorage()
+	mockStorage := newMockMultiChainStorage()
 
-	dualChain := NewDualChainManager(mockConsensus, mockStorage, log)
+	candidateID := "test-candidate"
+	multiChain := NewMultiChainManager(mockConsensus, mockStorage, log)
 
 	// 启动预执行
 	forkBlock := newTestBlock(100)
 	mockStorage.StoreMainBlock(forkBlock)
-	dualChain.StartPreexecution(100, newConsensus)
+	multiChain.StartCandidateChain(candidateID, 100, newConsensus)
 
 	proposal := &UpgradeProposal{PreexecStartHeight: 100, SwitchHeight: 200}
-	monitor := NewPreexecMonitor(proposal, dualChain, log)
+	monitor := NewPreexecMonitor(proposal, candidateID, multiChain, log)
 
-	rm := NewRollbackManager(dualChain, monitor, log)
+	rm := NewRollbackManager(candidateID, multiChain, monitor, log)
 
 	err := rm.ForceRollback("emergency rollback")
 
@@ -233,19 +244,20 @@ func TestRollbackManagerStatus(t *testing.T) {
 	log := logrus.NewEntry(logrus.New())
 	mockConsensus := newMockConsensus()
 	newConsensus := newMockConsensus()
-	mockStorage := newMockDualChainStorage()
+	mockStorage := newMockMultiChainStorage()
 
-	dualChain := NewDualChainManager(mockConsensus, mockStorage, log)
+	candidateID := "test-candidate"
+	multiChain := NewMultiChainManager(mockConsensus, mockStorage, log)
 
 	// 启动预执行
 	forkBlock := newTestBlock(100)
 	mockStorage.StoreMainBlock(forkBlock)
-	dualChain.StartPreexecution(100, newConsensus)
+	multiChain.StartCandidateChain(candidateID, 100, newConsensus)
 
 	proposal := &UpgradeProposal{PreexecStartHeight: 100, SwitchHeight: 200}
-	monitor := NewPreexecMonitor(proposal, dualChain, log)
+	monitor := NewPreexecMonitor(proposal, candidateID, multiChain, log)
 
-	rm := NewRollbackManager(dualChain, monitor, log)
+	rm := NewRollbackManager(candidateID, multiChain, monitor, log)
 
 	status := rm.GetRollbackStatus()
 
@@ -268,19 +280,20 @@ func TestRollbackManagerReset(t *testing.T) {
 	log := logrus.NewEntry(logrus.New())
 	mockConsensus := newMockConsensus()
 	newConsensus := newMockConsensus()
-	mockStorage := newMockDualChainStorage()
+	mockStorage := newMockMultiChainStorage()
 
-	dualChain := NewDualChainManager(mockConsensus, mockStorage, log)
+	candidateID := "test-candidate"
+	multiChain := NewMultiChainManager(mockConsensus, mockStorage, log)
 
 	// 启动预执行
 	forkBlock := newTestBlock(100)
 	mockStorage.StoreMainBlock(forkBlock)
-	dualChain.StartPreexecution(100, newConsensus)
+	multiChain.StartCandidateChain(candidateID, 100, newConsensus)
 
 	proposal := &UpgradeProposal{PreexecStartHeight: 100, SwitchHeight: 200}
-	monitor := NewPreexecMonitor(proposal, dualChain, log)
+	monitor := NewPreexecMonitor(proposal, candidateID, multiChain, log)
 
-	rm := NewRollbackManager(dualChain, monitor, log)
+	rm := NewRollbackManager(candidateID, multiChain, monitor, log)
 
 	// 执行回退
 	rm.ExecuteRollback("test rollback")
@@ -290,7 +303,7 @@ func TestRollbackManagerReset(t *testing.T) {
 	rm.Reset()
 
 	assert.False(t, rm.IsRolledBack())
-	// 注意：回退后预执行链已停止，所以 CanRollback 为 false
+	// 注意：回退后候选链已停止，所以 CanRollback 为 false
 	assert.False(t, rm.CanRollback())
 	assert.Equal(t, "", rm.GetRollbackReason())
 }

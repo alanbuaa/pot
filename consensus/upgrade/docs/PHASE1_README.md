@@ -70,21 +70,23 @@
 - ErrInvalidBlock
 - ErrMetricsFailure
 
-### 5. 双链存储实现 (`internal/storage/dual_chain_storage.go`)
+### 5. 多链存储实现 (`internal/storage/multi_chain_storage.go`)
 
-实现了基于 LevelDB 的双链存储系统：
+实现了基于 LevelDB 的多链存储系统：
 
-- **接口定义 (DualChainStorage)**:
+- **接口定义 (MultiChainStorage)**:
   - 主链操作: StoreMainBlock, GetMainBlock, DeleteMainBlocksFrom
-  - 预执行链操作: StorePreexecBlock, GetPreexecBlock, GetPreexecBlocks, DeletePreexecBlocks
+  - 候选链操作: StoreCandidateBlock, GetCandidateBlock, GetCandidateBlocks, DeleteCandidateChain
+  - 列表操作: ListCandidateChains
   - 提升操作: PromoteToMainChain
   - 关闭操作: Close
 
-- **实现 (LevelDBDualChainStorage)**:
-  - 使用键前缀区分主链和预执行链 ("main:", "preexec:")
+- **实现 (LevelDBMultiChainStorage)**:
+  - 使用键前缀区分主链和候选链 ("main:", "candidate:{candidateID}:")
   - JSON 序列化区块数据
   - 批量操作支持
   - 高效的范围查询
+  - 支持多个独立的候选链
 
 ### 6. 单元测试
 
@@ -99,13 +101,14 @@
 - ✅ TestUpgradeState
 - ✅ TestChainState
 
-#### 存储测试 (`internal/storage/dual_chain_storage_test.go`)
-- ✅ TestNewLevelDBDualChainStorage
+#### 存储测试 (`internal/storage/multi_chain_storage_test.go`)
+- ✅ TestNewLevelDBMultiChainStorage
 - ✅ TestStoreAndGetMainBlock
-- ✅ TestStoreAndGetPreexecBlock
-- ✅ TestGetPreexecBlocks
+- ✅ TestStoreAndGetCandidateBlock
+- ✅ TestGetCandidateBlocks
+- ✅ TestListCandidateChains
 - ✅ TestDeleteMainBlocksFrom
-- ✅ TestDeletePreexecBlocks
+- ✅ TestDeleteCandidateChain
 - ✅ TestPromoteToMainChain
 - ✅ TestMakeKey
 - ✅ TestSerializeDeserializeBlock
@@ -120,7 +123,7 @@ $ go test ./consensus/upgrade/...
 ok  github.com/zzz136454872/upgradeable-consensus/consensus/upgrade 0.007s
 
 # 存储测试  
-$ go test ./internal/storage/dual_chain_storage_test.go ./internal/storage/dual_chain_storage.go
+$ go test ./internal/storage/multi_chain_storage_test.go ./internal/storage/multi_chain_storage.go
 ok  command-line-arguments  0.057s
 ```
 
@@ -132,7 +135,7 @@ ok  command-line-arguments  0.057s
 |------|------|---------|
 | 核心类型 | types.go | 100% |
 | 错误定义 | errors.go | 100% |
-| 双链存储 | dual_chain_storage.go | 100% |
+| 多链存储 | multi_chain_storage.go | 100% |
 
 ## 文件清单
 
@@ -147,11 +150,11 @@ pkg/proto/
 └── upgrade.pb.go     (143 行) - Protobuf Go 代码
 
 internal/storage/
-├── dual_chain_storage.go      (190 行) - 双链存储实现
-└── dual_chain_storage_test.go (327 行) - 存储单元测试
+├── multi_chain_storage.go      (270 行) - 多链存储实现
+└── multi_chain_storage_test.go (350 行) - 存储单元测试
 ```
 
-**总代码行数**: ~1297 行 (含注释)
+**总代码行数**: ~1400 行 (含注释)
 
 ## 技术亮点
 
@@ -160,6 +163,7 @@ internal/storage/
 3. **性能优化**: 使用批量操作和高效的键值存储
 4. **错误处理**: 完善的错误定义和传播机制
 5. **接口设计**: 清晰的存储接口，便于未来扩展
+6. **多链支持**: 可同时管理多个候选链，提供更灵活的升级策略
 
 ## 依赖关系
 
@@ -170,7 +174,7 @@ consensus/upgrade/types.go
 ├── pkg/proto (protobuf)
 └── types (基础类型)
 
-internal/storage/dual_chain_storage.go
+internal/storage/multi_chain_storage.go
 ├── syndtr/goleveldb (存储引擎)
 ├── encoding/json (序列化)
 └── types (区块类型)

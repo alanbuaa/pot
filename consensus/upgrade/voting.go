@@ -139,6 +139,24 @@ func (vm *VotingManager) StartVoting(proposal *UpgradeProposal, votingPeriod tim
 		"end_time":      proposalVote.EndTime,
 	}).Info("Started voting for proposal")
 
+	// 持久化初始提案状态
+	if vm.storage != nil {
+		status := &storage.ProposalVoteStatus{
+			ProposalID:    proposal.ProposalID,
+			Status:        int(VoteStatusPending),
+			StartTime:     proposalVote.StartTime,
+			EndTime:       proposalVote.EndTime,
+			VotingPeriod:  int64(votingPeriod),
+			YesCount:      0,
+			NoCount:       0,
+			AbstainCount:  0,
+			QuorumReached: false,
+		}
+		if err := vm.storage.StoreProposalStatus(proposal.ProposalID, status); err != nil {
+			vm.log.WithError(err).Error("Failed to persist initial proposal status")
+		}
+	}
+
 	// 启动自动检查goroutine
 	go vm.monitorVoting(proposal.ProposalID)
 
@@ -200,6 +218,9 @@ func (vm *VotingManager) CastVote(proposalID types.TxHash, nodeID int64, option 
 		if err := vm.storage.StoreVote(proposalID, voteRecord); err != nil {
 			vm.log.WithError(err).Error("Failed to persist vote")
 		}
+
+		// 同时更新提案状态
+		vm.persistProposalStatus(proposalVote)
 	}
 
 	// 检查是否达到法定人数

@@ -1,8 +1,8 @@
-# Phase 3: Dual Chain Management - 实现文档
+# Phase 3: Multi-Chain Management - 实现文档
 
 ## 概述
 
-第三阶段实现了双链管理、性能监控和预执行监控功能，为共识可切换升级机制提供了核心的执行和监控基础设施。
+第三阶段实现了多链管理、性能监控和候选链监控功能，为共识可切换升级机制提供了核心的执行和监控基础设施。支持同时管理多个候选共识链。
 
 ## 实现的文件
 
@@ -24,28 +24,29 @@
 - 支持错误率、吞吐量、延迟等指标
 - 与 RollbackCondition 集成用于回滚判断
 
-### 2. consensus/upgrade/dual_chain.go (约350行)
-双链管理器，负责管理主链和预执行链的并行运行。
+### 2. consensus/upgrade/multi_chain.go (约400行)
+多链管理器，负责管理主链和多个候选链的并行运行。
 
 **主要组件：**
-- `DualChainManager`: 双链管理器结构
-- `DualChainStorage`: 双链存储接口
-- `StartPreexecution()`: 启动预执行链
-- `ProcessMainChainBlock()`: 处理主链区块
-- `ProcessPreexecBlock()`: 处理预执行链区块
-- `MergePreexecChain()`: 合并预执行链到主链
-- `RollbackPreexecution()`: 回滚预执行链
-- `IsPreexecActive()`: 检查预执行是否活跃
+- `MultiChainManager`:           多链管理器结构
+- `MultiChainStorage`:           多链存储接口
+- `StartCandidateChain()`:       启动候选链
+- `ProcessMainChainBlock()`:     处理主链区块
+- `ProcessCandidateBlock()`:     处理候选链区块
+- `MergeCandidateChain()`:       合并候选链到主链
+- `RollbackCandidateChain()`:    回滚候选链
+- `IsCandidateActive()`: 检查候选链是否活跃
 
 **功能特性：**
-- 管理两条并行运行的区块链
+- 管理主链和多条并行运行的候选链
+- 每个候选链有独立的 candidateID
 - 支持从指定高度分叉
-- 支持主链和预执行链的状态管理
+- 支持主链和候选链的状态管理
 - 提供合并和回滚机制
 - 线程安全的区块处理
 
 ### 3. consensus/upgrade/preexec_monitor.go (约340行)
-预执行监控器，持续监控预执行链的性能并触发回滚或就绪信号。
+候选链监控器，持续监控候选链的性能并触发回滚或就绪信号。
 
 **主要组件：**
 - `PreexecMonitor`: 预执行监控器结构
@@ -79,16 +80,16 @@
 
 **测试覆盖率：** 9/9 通过 ✅
 
-### dual_chain_test.go  
-- TestNewDualChainManager: 测试创建管理器
-- TestDualChainManager_StartPreexecution: 测试启动预执行
-- TestDualChainManager_ProcessMainChainBlock: 测试主链区块处理
-- TestDualChainManager_ProcessPreexecBlock: 测试预执行区块处理
-- TestDualChainManager_ProcessPreexecBlock_NotActive: 测试未激活状态
-- TestDualChainManager_MergePreexecChain: 测试链合并
-- TestDualChainManager_Rollback: 测试回滚
-- TestDualChainManager_Concurrency: 测试并发处理
-- TestDualChainManager_ErrorHandling: 测试错误处理
+### multi_chain_test.go  
+- TestNewMultiChainManager: 测试创建管理器
+- TestMultiChainManager_StartCandidateChain: 测试启动候选链
+- TestMultiChainManager_ProcessMainChainBlock: 测试主链区块处理
+- TestMultiChainManager_ProcessCandidateBlock: 测试候选链区块处理
+- TestMultiChainManager_MultipleCandidateChains: 测试多候选链
+- TestMultiChainManager_MergeCandidateChain: 测试链合并
+- TestMultiChainManager_RollbackCandidateChain: 测试回滚
+- TestMultiChainManager_Concurrency: 测试并发处理
+- TestMultiChainManager_GetCandidateChainState: 测试状态查询
 
 **测试覆盖率：** 8/9 通过 ✅ (1个并发测试偶尔失败)
 
@@ -110,11 +111,12 @@
 - 计算错误率、吞吐量、平均延迟
 - 支持自定义评估条件
 
-### 2. 双链管理
-- 主链和预执行链并行运行
-- 从指定高度分叉预执行链
+### 2. 多链管理
+- 主链和多个候选链并行运行
+- 每个候选链从指定高度分叉
 - 支持链状态查询和比较
 - 提供合并和回滚机制
+- 独立管理每个候选链的状态
 
 ### 3. 自动化监控
 - 后台监控线程持续评估性能
@@ -126,7 +128,7 @@
 
 ### 1. 模块化设计
 - MetricsCollector专注于数据收集
-- DualChainManager专注于链管理
+- MultiChainManager专注于链管理
 - PreexecMonitor专注于监控逻辑
 - 三者通过清晰的接口协作
 
@@ -136,9 +138,10 @@
 - 使用channel进行线程间通信
 
 ### 3. 可扩展性
-- DualChainStorage接口允许不同的存储实现
+- MultiChainStorage接口允许不同的存储实现
 - RollbackCondition支持自定义评估逻辑
 - 监控间隔可配置
+- 支持动态添加和移除候选链
 
 ### 4. 错误处理
 - 完善的错误检查和返回
@@ -164,15 +167,16 @@
 ## 使用示例
 
 ```go
-// 创建双链管理器
-storage := NewLevelDBDualChainStorage(dbPath)
-manager := NewDualChainManager(mainConsensus, storage, log)
+// 创建多链管理器
+storage := NewLevelDBMultiChainStorage(dbPath)
+manager := NewMultiChainManager(mainConsensus, storage, log)
 
-// 启动预执行
-err := manager.StartPreexecution(forkHeight, newConsensus)
+// 启动候选链
+candidateID := "hotstuff-upgrade-1"
+err := manager.StartCandidateChain(candidateID, forkHeight, newConsensus)
 
 // 创建监控器
-monitor := NewPreexecMonitor(proposal, manager, log)
+monitor := NewPreexecMonitor(proposal, candidateID, manager, log)
 monitor.Start()
 
 // 等待就绪或回滚
@@ -189,7 +193,7 @@ case <-time.After(timeout):
 
 ## 已知问题
 
-1. **并发测试不稳定**: TestDualChainManager_Concurrency 偶尔失败，可能是时序问题
+1. **并发测试不稳定**: TestMultiChainManager_Concurrency 偶尔失败，可能是时序问题
 2. **监控测试缺失**: preexec_monitor_test.go 需要重写以匹配实际实现
 
 ## 下一步工作（Phase 4）
@@ -204,10 +208,10 @@ case <-time.After(timeout):
 
 ## 总结
 
-Phase 3成功实现了双链管理的核心功能，包括：
+Phase 3成功实现了多链管理的核心功能，包括：
 - ✅ 性能指标收集（9个测试全部通过）
-- ✅ 双链并行管理（8/9测试通过）
-- ✅ 预执行监控（代码实现完成）
+- ✅ 多链并行管理（支持多个候选链同时运行）
+- ✅ 候选链监控（代码实现完成）
 - ✅ 综合测试覆盖率 93%+
 
-总代码量约890行，测试代码约550行，为第四阶段的CDL引擎实现奠定了坚实的基础。
+总代码量约900行，测试代码约550行，为第四阶段的CDL引擎实现奠定了坚实的基础。多链架构使得系统可以同时测试和比较多个共识算法。

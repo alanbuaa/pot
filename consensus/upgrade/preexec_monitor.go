@@ -12,10 +12,11 @@ import (
 
 // PreexecMonitor 预执行监控器
 type PreexecMonitor struct {
-	proposalID types.TxHash
-	proposal   *UpgradeProposal
+	proposalID  types.TxHash
+	proposal    *UpgradeProposal
+	candidateID string // 候选链ID
 
-	dualChainMgr     *DualChainManager
+	multiChainMgr    *MultiChainManager
 	metricsCollector *MetricsCollector
 
 	startHeight      uint64
@@ -33,13 +34,15 @@ type PreexecMonitor struct {
 // NewPreexecMonitor 创建预执行监控器
 func NewPreexecMonitor(
 	proposal *UpgradeProposal,
-	dualChainMgr *DualChainManager,
+	candidateID string,
+	multiChainMgr *MultiChainManager,
 	log *logrus.Entry,
 ) *PreexecMonitor {
 	return &PreexecMonitor{
 		proposalID:       proposal.ProposalID,
 		proposal:         proposal,
-		dualChainMgr:     dualChainMgr,
+		candidateID:      candidateID,
+		multiChainMgr:    multiChainMgr,
 		metricsCollector: NewMetricsCollector(proposal.ProposalID, proposal.PreexecStartHeight, log),
 		startHeight:      proposal.PreexecStartHeight,
 		targetHeight:     proposal.SwitchHeight,
@@ -113,12 +116,12 @@ func (pm *PreexecMonitor) checkStatus() {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
 
-	if !pm.dualChainMgr.IsPreexecActive() {
+	if !pm.multiChainMgr.IsCandidateActive(pm.candidateID) {
 		return
 	}
 
-	// 获取当前预执行链高度
-	currentHeight := pm.dualChainMgr.GetPreexecChainHeight()
+	// 获取当前候选链高度
+	currentHeight := pm.multiChainMgr.GetCandidateChainHeight(pm.candidateID)
 
 	// 检查是否超时
 	if time.Since(pm.lastBlockTime) > time.Duration(pm.proposal.RollbackCondition.TimeoutBlocks)*10*time.Second {
@@ -202,11 +205,11 @@ func (pm *PreexecMonitor) IsReady() bool {
 	pm.mu.RLock()
 	defer pm.mu.RUnlock()
 
-	if !pm.dualChainMgr.IsPreexecActive() {
+	if !pm.multiChainMgr.IsCandidateActive(pm.candidateID) {
 		return false
 	}
 
-	currentHeight := pm.dualChainMgr.GetPreexecChainHeight()
+	currentHeight := pm.multiChainMgr.GetCandidateChainHeight(pm.candidateID)
 	if currentHeight < pm.targetHeight {
 		return false
 	}
@@ -243,11 +246,11 @@ func (pm *PreexecMonitor) GetProgress() float64 {
 	pm.mu.RLock()
 	defer pm.mu.RUnlock()
 
-	if !pm.dualChainMgr.IsPreexecActive() {
+	if !pm.multiChainMgr.IsCandidateActive(pm.candidateID) {
 		return 0
 	}
 
-	currentHeight := pm.dualChainMgr.GetPreexecChainHeight()
+	currentHeight := pm.multiChainMgr.GetCandidateChainHeight(pm.candidateID)
 	if currentHeight <= pm.startHeight {
 		return 0
 	}
@@ -268,8 +271,8 @@ func (pm *PreexecMonitor) GetStatus() *MonitorStatus {
 	defer pm.mu.RUnlock()
 
 	currentHeight := uint64(0)
-	if pm.dualChainMgr.IsPreexecActive() {
-		currentHeight = pm.dualChainMgr.GetPreexecChainHeight()
+	if pm.multiChainMgr.IsCandidateActive(pm.candidateID) {
+		currentHeight = pm.multiChainMgr.GetCandidateChainHeight(pm.candidateID)
 	}
 
 	return &MonitorStatus{

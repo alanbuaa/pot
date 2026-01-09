@@ -73,18 +73,18 @@
 - ✅ `Validate()` - 数据验证
 - ✅ `ProposalFromProto()` - Protobuf 解析
 
-### 1.3 双链存储
+### 1.3 多链存储
 
-**文件**: `internal/storage/dual_chain_storage.go`
+**文件**: `internal/storage/multi_chain_storage.go`
 
 **状态**: ✅ 已完成
 
 **实现内容**:
-- ✅ `DualChainStorage` 接口定义
+- ✅ `MultiChainStorage` 接口定义
   - 主链操作（存储、获取、删除）
   - 预执行链操作（存储、获取、批量获取、删除）
   - 链提升操作（预执行链 → 主链）
-- ✅ `LevelDBDualChainStorage` - LevelDB 实现
+- ✅ `LevelDBMultiChainStorage` - LevelDB 实现
   - 基于键前缀的链隔离（`main:`, `preexec:`）
   - 高效的批量操作
   - JSON 序列化/反序列化
@@ -153,7 +153,7 @@
   - ✅ 清理旧消息（按纪元）
   - ✅ 清理提案消息
   - ✅ 缓存统计
-- ✅ 双链存储测试
+- ✅ 多链存储测试
   - ✅ 主链区块存储和获取
   - ✅ 预执行链区块存储和获取
   - ✅ 批量获取预执行链区块
@@ -165,8 +165,8 @@
 ```
 === RUN   TestMessageCacheStorage
     --- PASS: TestMessageCacheStorage (0.01s)
-=== RUN   TestDualChainStorage
-    --- PASS: TestDualChainStorage (0.01s)
+=== RUN   TestMultiChainStorage
+    --- PASS: TestMultiChainStorage (0.01s)
 PASS
 ok      command-line-arguments  0.023s
 ```
@@ -187,12 +187,12 @@ ok      command-line-arguments  0.023s
 - ⏳ 集成门限签名
 - ⏳ 编写单元测试
 
-## 第三阶段：双链管理 (2-3周)
+## 第三阶段：多链管理 (2-3周)
 
 **状态**: ⏳ 待开始
 
 **计划任务**:
-- ⏳ 实现双链管理器 (`consensus/upgrade/dual_chain.go`)
+- ⏳ 实现多链管理器 (`consensus/upgrade/multi_chain.go`)
 - ⏳ 实现预执行监控 (`consensus/upgrade/preexec_monitor.go`)
 - ⏳ 实现指标收集 (`consensus/upgrade/metrics.go`)
 - ⏳ 编写集成测试
@@ -249,13 +249,13 @@ ok      command-line-arguments  0.023s
 完成了第一阶段的所有核心组件：
 - Protobuf 消息定义完整
 - 核心数据类型实现
-- 双链存储机制
+- 多链存储机制
 - 消息缓存系统
 - 完整的单元测试覆盖
 
 **关键成果**:
 - 建立了升级协议的数据模型基础
-- 实现了双链并行运行的存储支持
+- 实现了多链并行运行的存储支持
 - 提供了消息缓存机制支持非同步网络场景
 - 所有测试通过，代码质量良好
 

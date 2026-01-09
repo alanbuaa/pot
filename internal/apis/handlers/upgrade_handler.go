@@ -45,6 +45,13 @@ func (h *UpgradeHandler) RegisterRoutes(group *gin.RouterGroup) {
 	group.POST("/cdl/validate", h.ValidateCDL)
 	group.POST("/cdl/compile", h.CompileCDL)
 
+	// Candidate chain management
+	group.POST("/candidate/start", h.StartCandidateChain)
+	group.GET("/candidate/list", h.ListCandidateChains)
+	group.GET("/candidate/:id/state", h.GetCandidateState)
+	group.POST("/candidate/merge", h.MergeCandidateChain)
+	group.POST("/candidate/rollback", h.RollbackCandidateChain)
+
 	// Metrics and monitoring
 	group.GET("/metrics/current", h.GetCurrentMetrics)
 	group.GET("/metrics/history", h.GetMetricsHistory)
@@ -97,7 +104,7 @@ func (h *UpgradeHandler) ProposeUpgrade(c *gin.Context) {
 		TargetConsensus:    req.TargetConsensus,
 		CDLDescriptor:      cdlDescriptor,
 		ForkHeight:         req.ForkHeight,
-		PreexecStartHeight: req.PreexecStartHeight,
+		PreexecStartHeight: req.CandidateStartHeight,
 		SwitchHeight:       req.SwitchHeight,
 		Incentive:          req.Incentive,
 		Description:        req.Description,

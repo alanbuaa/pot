@@ -19,24 +19,25 @@ type UpgradeManager struct {
 	currentConsensus model.Consensus
 
 	// 升级组件
-	dualChainManager *DualChainManager
-	metricsCollector *MetricsCollector
-	preexecMonitor   *PreexecMonitor
-	switchManager    *SwitchManager
-	rollbackManager  *RollbackManager
-	messageCache     *MessageCache
-	consensusFactory *ConsensusFactory
+	multiChainManager *MultiChainManager
+	metricsCollector  *MetricsCollector
+	preexecMonitor    *PreexecMonitor
+	switchManager     *SwitchManager
+	rollbackManager   *RollbackManager
+	messageCache      *MessageCache
+	consensusFactory  *ConsensusFactory
 
 	// 持久化
 	persistence UpgradePersistence
 
 	// 升级提案
-	currentProposal *UpgradeProposal
-	upgradeState    *UpgradeState
+	currentProposal    *UpgradeProposal
+	currentCandidateID string // 当前活跃的候选链ID
+	upgradeState       *UpgradeState
 
 	// 配置
 	config  *config.ConsensusConfig
-	storage storage.DualChainStorage
+	storage storage.MultiChainStorage
 
 	log *logrus.Entry
 	mu  sync.RWMutex
@@ -97,7 +98,7 @@ func (p UpgradePhase) String() string {
 func NewUpgradeManager(
 	currentConsensus model.Consensus,
 	config *config.ConsensusConfig,
-	dualChainStorage storage.DualChainStorage,
+	multiChainStorage storage.MultiChainStorage,
 	log *logrus.Entry,
 ) *UpgradeManager {
 	if log == nil {
@@ -107,7 +108,7 @@ func NewUpgradeManager(
 	um := &UpgradeManager{
 		currentConsensus: currentConsensus,
 		config:           config,
-		storage:          dualChainStorage,
+		storage:          multiChainStorage,
 		log:              log,
 		upgradeState: &UpgradeState{
 			Phase: PhaseIdle,
@@ -115,7 +116,7 @@ func NewUpgradeManager(
 	}
 
 	// 初始化组件
-	um.dualChainManager = NewDualChainManager(currentConsensus, dualChainStorage, log)
+	um.multiChainManager = NewMultiChainManager(currentConsensus, multiChainStorage, log)
 	um.messageCache = NewMessageCache(log)
 
 	return um
@@ -125,11 +126,11 @@ func NewUpgradeManager(
 func NewUpgradeManagerWithPersistence(
 	currentConsensus model.Consensus,
 	config *config.ConsensusConfig,
-	dualChainStorage storage.DualChainStorage,
+	multiChainStorage storage.MultiChainStorage,
 	persistence UpgradePersistence,
 	log *logrus.Entry,
 ) (*UpgradeManager, error) {
-	um := NewUpgradeManager(currentConsensus, config, dualChainStorage, log)
+	um := NewUpgradeManager(currentConsensus, config, multiChainStorage, log)
 	um.persistence = persistence
 
 	// 尝试恢复状态
@@ -211,20 +212,24 @@ func (um *UpgradeManager) StartUpgrade(proposal *UpgradeProposal, newConsensus m
 		newConsensus.GetConsensusID(),
 	)
 
-	// 启动预执行
-	um.log.Info("Starting preexecution chain")
-	err := um.dualChainManager.StartPreexecution(proposal.PreexecStartHeight, newConsensus)
+	// 生成候选链ID
+	um.currentCandidateID = fmt.Sprintf("%s-upgrade-%x", proposal.TargetConsensus, proposal.ProposalID)
+
+	// 启动候选链
+	um.log.WithField("candidate_id", um.currentCandidateID).Info("Starting candidate chain")
+	err := um.multiChainManager.StartCandidateChain(um.currentCandidateID, proposal.PreexecStartHeight, newConsensus)
 	if err != nil {
 		um.upgradeState.Phase = PhaseFailed
 		um.upgradeState.Failed = true
-		um.upgradeState.FailureReason = fmt.Sprintf("Failed to start preexecution: %v", err)
+		um.upgradeState.FailureReason = fmt.Sprintf("Failed to start candidate chain: %v", err)
 		return err
 	}
 
 	// 初始化预执行监控器
 	um.preexecMonitor = NewPreexecMonitor(
 		proposal,
-		um.dualChainManager,
+		um.currentCandidateID,
+		um.multiChainManager,
 		um.log,
 	)
 
@@ -232,8 +237,8 @@ func (um *UpgradeManager) StartUpgrade(proposal *UpgradeProposal, newConsensus m
 	um.metricsCollector = um.preexecMonitor.metricsCollector
 
 	// 初始化切换和回退管理器
-	um.switchManager = NewSwitchManager(um.dualChainManager, um.preexecMonitor, um.log)
-	um.rollbackManager = NewRollbackManager(um.dualChainManager, um.preexecMonitor, um.log)
+	um.switchManager = NewSwitchManager(um.currentCandidateID, um.multiChainManager, um.preexecMonitor, um.log)
+	um.rollbackManager = NewRollbackManager(um.currentCandidateID, um.multiChainManager, um.preexecMonitor, um.log)
 
 	// 准备切换
 	err = um.switchManager.PrepareSwitch(proposal.SwitchHeight)
@@ -279,7 +284,7 @@ func (um *UpgradeManager) ProcessBlock(block *pb.Block, isMainChain bool) error 
 			go um.executeSwitch()
 		}
 	} else {
-		// 处理预执行链区块
+		// 处理候选链区块
 		// 注意：类型转换问题同上
 
 		// 通知监控器
@@ -456,7 +461,7 @@ func (um *UpgradeManager) Close() error {
 func NewUpgradeManagerWithFactory(
 	currentConsensus model.Consensus,
 	config *config.ConsensusConfig,
-	dualChainStorage storage.DualChainStorage,
+	multiChainStorage storage.MultiChainStorage,
 	persistence UpgradePersistence,
 	nid int64,
 	executor interface{},
@@ -466,7 +471,7 @@ func NewUpgradeManagerWithFactory(
 	um, err := NewUpgradeManagerWithPersistence(
 		currentConsensus,
 		config,
-		dualChainStorage,
+		multiChainStorage,
 		persistence,
 		log,
 	)

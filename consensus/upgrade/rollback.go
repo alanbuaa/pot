@@ -12,10 +12,11 @@ import (
 // RollbackManager 回退管理器
 // 负责在预执行出现问题时回退到原共识
 type RollbackManager struct {
-	dualChainManager *DualChainManager
-	preexecMonitor   *PreexecMonitor
-	storage          storage.UpgradeStorage
-	log              *logrus.Entry
+	candidateID       string // 候选链ID
+	multiChainManager *MultiChainManager
+	preexecMonitor    *PreexecMonitor
+	storage           storage.UpgradeStorage
+	log               *logrus.Entry
 
 	// 回退状态
 	rolledBack     bool
@@ -30,16 +31,18 @@ type RollbackManager struct {
 
 // NewRollbackManager 创建回退管理器
 func NewRollbackManager(
-	dualChainManager *DualChainManager,
+	candidateID string,
+	multiChainManager *MultiChainManager,
 	preexecMonitor *PreexecMonitor,
 	log *logrus.Entry,
 ) *RollbackManager {
-	return NewRollbackManagerWithStorage(dualChainManager, preexecMonitor, nil, log)
+	return NewRollbackManagerWithStorage(candidateID, multiChainManager, preexecMonitor, nil, log)
 }
 
 // NewRollbackManagerWithStorage 创建带存储的回退管理器
 func NewRollbackManagerWithStorage(
-	dualChainManager *DualChainManager,
+	candidateID string,
+	multiChainManager *MultiChainManager,
 	preexecMonitor *PreexecMonitor,
 	upgradeStorage storage.UpgradeStorage,
 	log *logrus.Entry,
@@ -49,11 +52,12 @@ func NewRollbackManagerWithStorage(
 	}
 
 	return &RollbackManager{
-		dualChainManager: dualChainManager,
-		preexecMonitor:   preexecMonitor,
-		storage:          upgradeStorage,
-		log:              log,
-		rollbackDoneChan: make(chan struct{}, 1),
+		candidateID:       candidateID,
+		multiChainManager: multiChainManager,
+		preexecMonitor:    preexecMonitor,
+		storage:           upgradeStorage,
+		log:               log,
+		rollbackDoneChan:  make(chan struct{}, 1),
 	}
 }
 
@@ -74,9 +78,9 @@ func (rm *RollbackManager) ExecuteRollback(reason string) error {
 		rm.preexecMonitor.Stop()
 	}
 
-	// 2. 执行双链回退
-	rm.log.Info("Rolling back preexecution chain")
-	err := rm.dualChainManager.RollbackPreexecution()
+	// 2. 执行候选链回退
+	rm.log.WithField("candidate_id", rm.candidateID).Info("Rolling back candidate chain")
+	err := rm.multiChainManager.RollbackCandidateChain(rm.candidateID)
 	if err != nil {
 		return fmt.Errorf("failed to rollback preexec chain: %w", err)
 	}
@@ -187,9 +191,9 @@ func (rm *RollbackManager) ValidateRollback() error {
 		return fmt.Errorf("already rolled back")
 	}
 
-	// 检查预执行链是否激活
-	if !rm.dualChainManager.IsPreexecActive() {
-		return fmt.Errorf("preexec chain not active, nothing to rollback")
+	// 检查候选链是否激活
+	if !rm.multiChainManager.IsCandidateActive(rm.candidateID) {
+		return fmt.Errorf("candidate chain not active, nothing to rollback")
 	}
 
 	return nil
@@ -204,7 +208,7 @@ func (rm *RollbackManager) GetRollbackStatus() *RollbackStatus {
 		RolledBack:     rm.rolledBack,
 		RollbackTime:   rm.rollbackTime,
 		RollbackReason: rm.rollbackReason,
-		PreexecActive:  rm.dualChainManager.IsPreexecActive(),
+		PreexecActive:  rm.multiChainManager.IsCandidateActive(rm.candidateID),
 	}
 }
 
@@ -238,8 +242,8 @@ func (rm *RollbackManager) CanRollback() bool {
 	rm.mu.RLock()
 	defer rm.mu.RUnlock()
 
-	// 未回退且预执行链激活
-	return !rm.rolledBack && rm.dualChainManager.IsPreexecActive()
+	// 未回退且候选链激活
+	return !rm.rolledBack && rm.multiChainManager.IsCandidateActive(rm.candidateID)
 }
 
 // RollbackCheckpoint 回退检查点
@@ -310,8 +314,8 @@ func (rm *RollbackManager) ExecuteRollbackWithCheckpoint(reason string, checkpoi
 		rm.preexecMonitor.Stop()
 	}
 
-	// 3. 执行双链回退
-	err := rm.dualChainManager.RollbackPreexecution()
+	// 3. 执行候选链回退
+	err := rm.multiChainManager.RollbackCandidateChain(rm.candidateID)
 	if err != nil {
 		return fmt.Errorf("failed to rollback preexec chain: %w", err)
 	}

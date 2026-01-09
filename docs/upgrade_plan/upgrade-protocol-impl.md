@@ -6,7 +6,7 @@
 - [2. 项目架构改动](#2-项目架构改动)
 - [3. 核心数据结构实现](#3-核心数据结构实现)
 - [4. 升级配置交易实现](#4-升级配置交易实现)
-- [5. 双链管理机制](#5-双链管理机制)
+- [5. 多链管理机制](#5-多链管理机制)
 - [6. 治理委员会与多签验证](#6-治理委员会与多签验证)
 - [7. CDL 引擎实现](#7-cdl-引擎实现)
 - [8. 预执行与性能监控](#8-预执行与性能监控)
@@ -27,7 +27,7 @@ consensus/
 │   ├── types.go               # 升级相关类型定义
 │   ├── transaction.go         # 升级配置交易
 │   ├── governance.go          # 治理委员会管理
-│   ├── dual_chain.go          # 双链管理
+│   ├── multi_chain.go         # 多链管理
 │   ├── message_cache.go        # 新增: 消息缓存(bufmsg)与转发
 │   ├── cdl/                   # CDL 引擎
 │   │   ├── parser.go         # CDL 解析器
@@ -40,13 +40,13 @@ consensus/
 
 types/
 ├── upgrade_tx.go              # 新增: 升级交易类型
-└── block.go                   # 修改: 支持双链区块
+└── block.go                   # 修改: 支持多链区块
 
 pkg/proto/
 └── upgrade.proto              # 新增: 升级相关 protobuf 定义
 
 internal/storage/
-├── dual_chain_storage.go      # 新增: 双链存储
+├── multi_chain_storage.go     # 新增: 多链存储
 └── message_cache_storage.go    # 新增: bufmsg 持久化存储(LevelDB)
 └── metrics_storage.go         # 新增: 指标存储
 ```
@@ -99,7 +99,7 @@ type Header struct {
     
     // 新增: 升级相关字段
     ConsensusID         int64   // 当前使用的共识 ID
-    PreexecChainRef     []byte  // 预执行链引用 (如果存在)
+    CandidateChainRefs  []byte  // 候选链引用 (如果存在)
     UpgradePhase        uint8   // 升级阶段标识
 }
 ```
@@ -193,14 +193,14 @@ func (uc *UpgradeableConsensus) handleUpgradeTx(tx *pb.Transaction) {
 | `consensus/upgrade/types.go` | 升级类型定义 | protobuf |
 | `consensus/upgrade/transaction.go` | 升级交易处理 | crypto, types |
 | `consensus/upgrade/governance.go` | 治理委员会 | crypto (门限签名) |
-| `consensus/upgrade/dual_chain.go` | 双链管理 | storage |
+| `consensus/upgrade/multi_chain.go` | 多链管理 | storage |
 | `consensus/upgrade/message_cache.go` | 消息缓存(bufmsg)与转发 | storage, upgrade state |
 | `consensus/upgrade/cdl/*` | CDL 引擎 | yaml, parser |
 | `consensus/upgrade/metrics.go` | 性能监控 | time, statistics |
 | `consensus/upgrade/switch.go` | 切换逻辑 | consensus |
 | `types/upgrade_tx.go` | 升级交易类型 | proto |
 | `pkg/proto/upgrade.proto` | protobuf 定义 | - |
-| `internal/storage/dual_chain_storage.go` | 双链存储 | leveldb |
+| `internal/storage/multi_chain_storage.go` | 多链存储 | leveldb |
 | `internal/storage/message_cache_storage.go` | bufmsg 持久化存储 | leveldb |
 
 ## 5.3 消息缓存机制（bufmsg，非同步网络专用）
@@ -333,36 +333,51 @@ message UpgradeConfigTransaction {
     // 提案标识
     bytes proposal_id = 1;
     
-    // 目标共识
-    string target_consensus = 2;           // "pot" | "pow" | "hotstuff" | "custom"
-    bytes consensus_descriptor_hash = 3;   // 自定义共识的 CDL 哈希
-    string consensus_descriptor_cdl = 4;   // CDL YAML 内容
+    // 多候选共识支持
+    repeated CandidateConsensus candidate_consensuses = 2;
     
     // 高度检查点
-    uint64 prepare_height = 5;
-    uint64 preexec_height = 6;
+    uint64 prepare_height = 3;
+    uint64 preexec_height = 4;
     
     // 升级阶段
-    UpgradePhase phase = 7;
+    UpgradePhase phase = 5;
     
     // 治理
-    repeated bytes committee_signatures = 8;  // 门限签名
-    repeated bytes committee_pubkeys = 9;     // 委员会公钥列表
-    uint32 threshold = 10;                     // 签名阈值
+    repeated bytes committee_signatures = 6;  // 门限签名
+    repeated bytes committee_pubkeys = 7;     // 委员会公钥列表
+    uint32 threshold = 8;                     // 签名阈值
     
     // 激励
-    uint64 incentive_amount = 11;
-    repeated bytes incentive_recipients = 12;
+    uint64 incentive_amount = 9;
+    repeated bytes incentive_recipients = 10;
     
     // 安全参数
-    RollbackCondition rollback_condition = 13;
-    double safety_threshold = 14;
+    RollbackCondition rollback_condition = 11;
+    double safety_threshold = 12;
     
     // 元数据
-    int64 timestamp = 15;
-    uint32 version = 16;
-    bytes proposer = 17;
-    uint64 nonce = 18;
+    int64 timestamp = 13;
+    uint32 version = 14;
+    bytes proposer = 15;
+    uint64 nonce = 16;
+}
+
+// 候选共识结构
+message CandidateConsensus {
+    bytes candidate_id = 1;                        // 候选共识 ID
+    string consensus_name = 2;                     // 共识名称
+    string consensus_descriptor_cdl = 3;           // CDL YAML 内容 (可选)
+    bytes consensus_descriptor_hash = 4;           // 描述符哈希
+    uint64 fork_id = 5;                            // 分叉 ID
+    PerformanceExpectation expected_performance = 6; // 期望性能
+}
+
+// 期望性能指标
+message PerformanceExpectation {
+    double min_throughput = 1;      // 最小吞吐量 (tx/s)
+    double max_latency = 2;         // 最大延迟 (ms)
+    double max_error_rate = 3;      // 最大错误率
 }
 
 // 回退条件
@@ -376,12 +391,22 @@ message RollbackCondition {
 // 升级确认交易
 message UpgradeConfirmTransaction {
     bytes proposal_id = 1;
-    bytes preexec_chain_head = 2;
-    ExecutionMetrics preexec_metrics = 3;
+    bytes selected_candidate_id = 2;              // 选中的候选共识 ID
+    repeated CandidateChainHead candidate_chain_heads = 3;  // 所有候选链头
     repeated bytes committee_approvals = 4;
     uint64 finalize_height = 5;
     int64 timestamp = 6;
     bool approved = 7;  // true=批准, false=拒绝
+    string selection_reason = 8;  // 选择理由
+}
+
+// 候选链头信息
+message CandidateChainHead {
+    bytes candidate_id = 1;
+    bytes chain_head = 2;
+    uint64 final_height = 3;
+    double performance_score = 4;  // 性能评分 (0-1)
+    ExecutionMetrics metrics = 5;  // 执行指标
 }
 
 // 执行指标
@@ -404,8 +429,8 @@ message BlockMetric {
     string error_msg = 5;
 }
 
-// 预执行链区块头
-message PreexecHeader {
+// 候选链区块头
+message CandidateHeader {
     uint64 height = 1;
     bytes parent_hash = 2;
     uint64 fork_point = 3;           // 分叉点高度
@@ -524,8 +549,8 @@ type UpgradeState struct {
     // 主链状态
     MainChain        *ChainState
     
-    // 预执行链状态
-    PreexecChain     *ChainState
+    // 候选链状态
+    CandidateChains  map[types.TxHash]*CandidateChainState
     
     // 性能指标
     Metrics          *PerformanceMetrics
@@ -836,11 +861,11 @@ func ValidateProposalParameters(
 }
 ```
 
-## 5. 双链管理机制
+## 5. 多链管理机制
 
-### 5.1 双链管理器
+### 5.1 多链管理器
 
-**文件**: `consensus/upgrade/dual_chain.go`
+**文件**: `consensus/upgrade/multi_chain.go`
 
 ```go
 package upgrade
@@ -854,114 +879,178 @@ import (
     "github.com/zzz136454872/upgradeable-consensus/types"
 )
 
-// DualChainManager 双链管理器
-type DualChainManager struct {
-    mainChain    *ChainState
-    preexecChain *ChainState
+// MultiChainManager 多链管理器
+type MultiChainManager struct {
+    mainChain       *ChainState
+    candidateChains map[types.TxHash]*CandidateChainState  // candidateID -> CandidateChainState
     
-    forkPoint    uint64
-    active       bool
+    forkPoint       uint64
+    active          bool
     
-    storage      DualChainStorage
-    log          *logrus.Entry
-    mu           sync.RWMutex
+    storage         MultiChainStorage
+    log             *logrus.Entry
+    mu              sync.RWMutex
 }
 
-// NewDualChainManager 创建双链管理器
-func NewDualChainManager(
+// CandidateChainState 候选链状态
+type CandidateChainState struct {
+    CandidateID     types.TxHash
+    ConsensusID     int64
+    ForkID          uint64
+    Chain           *ChainState
+    Consensus       model.Consensus
+    Metrics         *PerformanceMetrics
+}
+
+// NewMultiChainManager 创建多链管理器
+func NewMultiChainManager(
     mainConsensus model.Consensus,
-    storage DualChainStorage,
+    storage MultiChainStorage,
     log *logrus.Entry,
-) *DualChainManager {
-    return &DualChainManager{
+) *MultiChainManager {
+    return &MultiChainManager{
         mainChain: &ChainState{
             ConsensusID:   mainConsensus.GetConsensusID(),
             CurrentHeight: 0,
             Consensus:     mainConsensus,
         },
-        storage: storage,
-        log:     log,
-        active:  false,
+        candidateChains: make(map[types.TxHash]*CandidateChainState),
+        storage:         storage,
+        log:             log,
+        active:          false,
     }
 }
 
-// StartPreexecution 启动预执行链
-func (dcm *DualChainManager) StartPreexecution(
+// StartCandidateChains 启动多个候选链
+func (mcm *MultiChainManager) StartCandidateChains(
     forkHeight uint64,
-    newConsensus model.Consensus,
+    candidates []CandidateConsensus,
 ) error {
-    dcm.mu.Lock()
-    defer dcm.mu.Unlock()
+    mcm.mu.Lock()
+    defer mcm.mu.Unlock()
     
-    if dcm.active {
-        return fmt.Errorf("preexecution already active")
+    if mcm.active {
+        return fmt.Errorf("candidate chains already active")
     }
     
     // 获取分叉点状态
-    forkBlock, err := dcm.storage.GetBlock(forkHeight)
+    forkBlock, err := mcm.storage.GetBlock(forkHeight)
     if err != nil {
         return fmt.Errorf("failed to get fork block: %w", err)
     }
     
-    // 创建预执行链状态
-    dcm.preexecChain = &ChainState{
-        ConsensusID:   newConsensus.GetConsensusID(),
-        CurrentHeight: forkHeight,
-        Head:          forkBlock,
-        Consensus:     newConsensus,
+    // 为每个候选共识创建独立分叉
+    for _, candidate := range candidates {
+        consensus, err := loadConsensus(candidate)
+        if err != nil {
+            mcm.log.WithError(err).Warnf("Failed to load candidate %x", candidate.CandidateID)
+            continue
+        }
+        
+        candidateChain := &CandidateChainState{
+            CandidateID:   candidate.CandidateID,
+            ConsensusID:   consensus.GetConsensusID(),
+            ForkID:        candidate.ForkID,
+            Chain: &ChainState{
+                ConsensusID:   consensus.GetConsensusID(),
+                CurrentHeight: forkHeight,
+                Head:          forkBlock,
+                Consensus:     consensus,
+            },
+            Consensus: consensus,
+            Metrics:   NewPerformanceMetrics(),
+        }
+        
+        mcm.candidateChains[candidate.CandidateID] = candidateChain
+        
+        mcm.log.WithFields(logrus.Fields{
+            "candidate_id": fmt.Sprintf("%x", candidate.CandidateID[:8]),
+            "fork_id":      candidate.ForkID,
+            "consensus":    candidate.ConsensusName,
+        }).Info("Started candidate chain")
     }
     
-    dcm.forkPoint = forkHeight
-    dcm.active = true
-    
-    dcm.log.WithFields(logrus.Fields{
-        "fork_height": forkHeight,
-        "new_consensus": newConsensus.GetConsensusType(),
-    }).Info("Started preexecution chain")
+    mcm.forkPoint = forkHeight
+    mcm.active = true
     
     return nil
 }
 
 // ProcessMainChainBlock 处理主链区块
-func (dcm *DualChainManager) ProcessMainChainBlock(block *types.Block) error {
-    dcm.mu.Lock()
-    defer dcm.mu.Unlock()
+func (mcm *MultiChainManager) ProcessMainChainBlock(block *types.Block) error {
+    mcm.mu.Lock()
+    defer mcm.mu.Unlock()
     
     // 验证区块
-    if err := dcm.validateBlock(dcm.mainChain, block); err != nil {
+    if err := mcm.validateBlock(mcm.mainChain, block); err != nil {
         return fmt.Errorf("invalid main chain block: %w", err)
     }
     
     // 存储区块
-    if err := dcm.storage.StoreMainBlock(block); err != nil {
+    if err := mcm.storage.StoreMainBlock(block); err != nil {
         return fmt.Errorf("failed to store main block: %w", err)
     }
     
     // 更新状态
-    dcm.mainChain.CurrentHeight = block.Header.Height
-    dcm.mainChain.Head = block
+    mcm.mainChain.CurrentHeight = block.Header.Height
+    mcm.mainChain.Head = block
     
-    // 如果预执行链活跃,同步交易
-    if dcm.active {
-        if err := dcm.syncTransactionsToPreexec(block); err != nil {
-            dcm.log.WithError(err).Warn("Failed to sync transactions to preexec chain")
+    // 如果候选链活跃,同步交易到所有候选链
+    if mcm.active {
+        if err := mcm.syncTransactionsToCandidates(block); err != nil {
+            mcm.log.WithError(err).Warn("Failed to sync transactions to candidate chains")
         }
     }
     
     return nil
 }
 
-// syncTransactionsToPreexec 同步交易到预执行链
-func (dcm *DualChainManager) syncTransactionsToPreexec(mainBlock *types.Block) error {
-    if !dcm.active || dcm.preexecChain == nil {
+// syncTransactionsToCandidates 同步交易到所有候选链
+func (mcm *MultiChainManager) syncTransactionsToCandidates(mainBlock *types.Block) error {
+    if !mcm.active || len(mcm.candidateChains) == 0 {
         return nil
     }
     
-    // 过滤掉升级相关交易 (不在预执行链上执行)
-    txs := dcm.filterNormalTransactions(mainBlock.Txs)
+    // 过滤掉升级相关交易 (不在候选链上执行)
+    txs := mcm.filterNormalTransactions(mainBlock.Txs)
     
-    // 在预执行链上处理这些交易
-    // 注意: 这里需要调用新共识的出块逻辑
+    // 在每个候选链上处理这些交易
+    for candidateID, candidateState := range mcm.candidateChains {
+        // 注意: 这里需要调用候选共识的出块逻辑
+        // 实际实现中,新共识会异步产生区块,这里只是触发交易同步
+        candidateBlock, err := candidateState.Consensus.ProposeBlock(txs)
+        if err != nil {
+            mcm.log.WithError(err).Warnf("Candidate %x failed to produce block", candidateID[:8])
+            continue
+        }
+        
+        // 设置区块的升级元数据
+        candidateBlock.Header.UpgradeMetadata = &types.UpgradeMetadata{
+            IsPreexec:    true,
+            ProposalID:   mainBlock.Header.UpgradeMetadata.ProposalID,
+            CandidateID:  candidateID,
+            ForkID:       candidateState.ForkID,
+            ForkPoint:    mcm.forkPoint,
+            MainChainRef: mainBlock.Hash(),
+            PreexecStatus: types.StatusRunning,
+        }
+        
+        // 存储候选链区块
+        if err := mcm.storage.StoreCandidateBlock(candidateID, candidateBlock); err != nil {
+            mcm.log.WithError(err).Warnf("Failed to store candidate block for %x", candidateID[:8])
+            continue
+        }
+        
+        // 更新候选链状态
+        candidateState.Chain.CurrentHeight = candidateBlock.Header.Height
+        candidateState.Chain.Head = candidateBlock
+        
+        // 收集性能指标
+        candidateState.Metrics.RecordBlock(candidateBlock)
+    }
+    
+    return nil
+}
     // 具体实现取决于新共识的接口
     
     dcm.log.WithFields(logrus.Fields{
@@ -973,7 +1062,7 @@ func (dcm *DualChainManager) syncTransactionsToPreexec(mainBlock *types.Block) e
 }
 
 // ProcessPreexecBlock 处理预执行链区块
-func (dcm *DualChainManager) ProcessPreexecBlock(block *types.Block) error {
+func (mcm *MultiChainManager) ProcessCandidateBlock(candidateID types.TxHash, block *types.Block) error {
     dcm.mu.Lock()
     defer dcm.mu.Unlock()
     
@@ -982,24 +1071,24 @@ func (dcm *DualChainManager) ProcessPreexecBlock(block *types.Block) error {
     }
     
     // 验证区块
-    if err := dcm.validateBlock(dcm.preexecChain, block); err != nil {
-        return fmt.Errorf("invalid preexec block: %w", err)
+    if err := dcm.validateBlock(dcm.candidateChains[candidateID], block); err != nil {
+        return fmt.Errorf("invalid candidate block: %w", err)
     }
     
-    // 存储预执行区块
-    if err := dcm.storage.StorePreexecBlock(block); err != nil {
-        return fmt.Errorf("failed to store preexec block: %w", err)
+    // 存储候选区块
+    if err := dcm.storage.StoreCandidateBlock(candidateID, block); err != nil {
+        return fmt.Errorf("failed to store candidate block: %w", err)
     }
     
     // 更新状态
-    dcm.preexecChain.CurrentHeight = block.Header.Height
-    dcm.preexecChain.Head = block
+    dcm.candidateChains[candidateID].CurrentHeight = block.Header.Height
+    dcm.candidateChains[candidateID].Head = block
     
     return nil
 }
 
 // validateBlock 验证区块
-func (dcm *DualChainManager) validateBlock(chain *ChainState, block *types.Block) error {
+func (mcm *MultiChainManager) validateBlock(chain *ChainState, block *types.Block) error {
     // 高度检查
     if block.Header.Height != chain.CurrentHeight + 1 {
         return fmt.Errorf("invalid block height: expected %d, got %d",
@@ -1019,110 +1108,124 @@ func (dcm *DualChainManager) validateBlock(chain *ChainState, block *types.Block
     return nil
 }
 
-// MergePreexecChain 合并预执行链到主链
-func (dcm *DualChainManager) MergePreexecChain(switchHeight uint64) error {
-    dcm.mu.Lock()
-    defer dcm.mu.Unlock()
+// MergeSelectedCandidateChain 合并选中的候选链到主链
+func (mcm *MultiChainManager) MergeSelectedCandidateChain(candidateID types.TxHash, switchHeight uint64) error {
+    mcm.mu.Lock()
+    defer mcm.mu.Unlock()
     
-    if !dcm.active {
-        return fmt.Errorf("no active preexecution")
+    if !mcm.active {
+        return fmt.Errorf("no active candidate chains")
     }
     
-    dcm.log.WithFields(logrus.Fields{
-        "fork_point":    dcm.forkPoint,
+    candidateState, exists := mcm.candidateChains[candidateID]
+    if !exists {
+        return fmt.Errorf("candidate chain %x not found", candidateID)
+    }
+    
+    mcm.log.WithFields(logrus.Fields{
+        "fork_point":    mcm.forkPoint,
         "switch_height": switchHeight,
-    }).Info("Merging preexec chain to main chain")
+        "candidate_id":  fmt.Sprintf("%x", candidateID[:8]),
+    }).Info("Merging selected candidate chain to main chain")
     
-    // 获取预执行链从分叉点到切换点的所有区块
-    preexecBlocks, err := dcm.storage.GetPreexecBlocks(dcm.forkPoint, switchHeight)
+    // 获取候选链从分叉点到切换点的所有区块
+    candidateBlocks, err := mcm.storage.GetCandidateBlocks(candidateID, mcm.forkPoint, switchHeight)
     if err != nil {
-        return fmt.Errorf("failed to get preexec blocks: %w", err)
+        return fmt.Errorf("failed to get candidate blocks: %w", err)
     }
     
-    // 删除主链上从分叉点之后的区块 (它们将被预执行链替换)
-    if err := dcm.storage.DeleteMainBlocksFrom(dcm.forkPoint + 1); err != nil {
+    // 删除主链上从分叉点之后的区块 (它们将被候选链替换)
+    if err := mcm.storage.DeleteMainBlocksFrom(mcm.forkPoint + 1); err != nil {
         return fmt.Errorf("failed to delete old main blocks: %w", err)
     }
     
-    // 将预执行链区块标记为主链区块
-    for _, block := range preexecBlocks {
-        if err := dcm.storage.PromoteToMainChain(block); err != nil {
+    // 将候选链区块标记为主链区块
+    for _, block := range candidateBlocks {
+        if err := mcm.storage.PromoteToMainChain(block); err != nil {
             return fmt.Errorf("failed to promote block %d: %w", block.Header.Height, err)
         }
     }
     
     // 更新主链状态
-    dcm.mainChain.ConsensusID = dcm.preexecChain.ConsensusID
-    dcm.mainChain.CurrentHeight = switchHeight
-    dcm.mainChain.Head = preexecBlocks[len(preexecBlocks)-1]
-    dcm.mainChain.Consensus = dcm.preexecChain.Consensus
+    mcm.mainChain.ConsensusID = candidateState.ConsensusID
+    mcm.mainChain.CurrentHeight = switchHeight
+    mcm.mainChain.Head = candidateBlocks[len(candidateBlocks)-1]
+    mcm.mainChain.Consensus = candidateState.Consensus
     
-    // 清理预执行链
-    dcm.preexecChain = nil
-    dcm.active = false
+    // 清理所有候选链
+    for cid := range mcm.candidateChains {
+        if err := mcm.storage.DeleteCandidateChain(cid); err != nil {
+            mcm.log.WithError(err).Warnf("Failed to delete candidate chain %x", cid[:8])
+        }
+    }
+    mcm.candidateChains = make(map[types.TxHash]*CandidateChainState)
+    mcm.active = false
     
-    dcm.log.Info("Preexec chain merged successfully")
+    mcm.log.Info("Selected candidate chain merged successfully")
     
     return nil
 }
 
-// RollbackPreexecution 回退预执行
-func (dcm *DualChainManager) RollbackPreexecution() error {
-    dcm.mu.Lock()
-    defer dcm.mu.Unlock()
+// RollbackAllCandidates 回退所有候选链
+func (mcm *MultiChainManager) RollbackAllCandidates() error {
+    mcm.mu.Lock()
+    defer mcm.mu.Unlock()
     
-    if !dcm.active {
-        return fmt.Errorf("no active preexecution to rollback")
+    if !mcm.active {
+        return fmt.Errorf("no active candidates to rollback")
     }
     
-    dcm.log.Info("Rolling back preexecution")
+    mcm.log.Info("Rolling back all candidate chains")
     
-    // 停止预执行链共识
-    if dcm.preexecChain != nil && dcm.preexecChain.Consensus != nil {
-        dcm.preexecChain.Consensus.Stop()
-    }
-    
-    // 删除预执行链数据
-    if err := dcm.storage.DeletePreexecBlocks(dcm.forkPoint); err != nil {
-        dcm.log.WithError(err).Warn("Failed to delete preexec blocks")
+    // 停止所有候选链共识
+    for candidateID, candidateState := range mcm.candidateChains {
+        if candidateState.Consensus != nil {
+            candidateState.Consensus.Stop()
+        }
+        
+        // 删除候选链数据
+        if err := mcm.storage.DeleteCandidateChain(candidateID); err != nil {
+            mcm.log.WithError(err).Warnf("Failed to delete candidate chain %x", candidateID[:8])
+        }
     }
     
     // 清理状态
-    dcm.preexecChain = nil
-    dcm.active = false
-    dcm.forkPoint = 0
+    mcm.candidateChains = make(map[types.TxHash]*CandidateChainState)
+    mcm.active = false
+    mcm.forkPoint = 0
     
-    dcm.log.Info("Preexecution rolled back successfully")
+    mcm.log.Info("All candidates rolled back successfully")
     
     return nil
 }
 
 // GetMainChainHeight 获取主链高度
-func (dcm *DualChainManager) GetMainChainHeight() uint64 {
-    dcm.mu.RLock()
-    defer dcm.mu.RUnlock()
-    return dcm.mainChain.CurrentHeight
+func (mcm *MultiChainManager) GetMainChainHeight() uint64 {
+    mcm.mu.RLock()
+    defer mcm.mu.RUnlock()
+    return mcm.mainChain.CurrentHeight
 }
 
-// GetPreexecChainHeight 获取预执行链高度
-func (dcm *DualChainManager) GetPreexecChainHeight() uint64 {
-    dcm.mu.RLock()
-    defer dcm.mu.RUnlock()
-    if dcm.preexecChain == nil {
+// GetCandidateChainHeight 获取候选链高度
+func (mcm *MultiChainManager) GetCandidateChainHeight(candidateID types.TxHash) uint64 {
+    mcm.mu.RLock()
+    defer mcm.mu.RUnlock()
+    candidateState, exists := mcm.candidateChains[candidateID]
+    if !exists {
         return 0
     }
-    return dcm.preexecChain.CurrentHeight
+    return candidateState.Chain.CurrentHeight
 }
 
-// IsPreexecActive 预执行是否活跃
-func (dcm *DualChainManager) IsPreexecActive() bool {
-    dcm.mu.RLock()
-    defer dcm.mu.RUnlock()
-    return dcm.active
+// IsCandidatesActive 候选链是否活跃
+func (mcm *MultiChainManager) IsCandidatesActive() bool {
+    mcm.mu.RLock()
+    defer mcm.mu.RUnlock()
+    return mcm.active
 }
 
 // filterNormalTransactions 过滤普通交易 (排除升级交易)
-func (dcm *DualChainManager) filterNormalTransactions(txs []*types.Tx) []*types.Tx {
+func (mcm *MultiChainManager) filterNormalTransactions(txs []*types.Tx) []*types.Tx {
     filtered := make([]*types.Tx, 0, len(txs))
     for _, tx := range txs {
         // 解析交易类型
@@ -1140,9 +1243,9 @@ func (dcm *DualChainManager) filterNormalTransactions(txs []*types.Tx) []*types.
 }
 ```
 
-### 5.2 双链存储接口
+### 5.2 多链存储接口
 
-**文件**: `internal/storage/dual_chain_storage.go`
+**文件**: `internal/storage/multi_chain_storage.go`
 
 ```go
 package storage
@@ -1155,14 +1258,14 @@ import (
     "github.com/zzz136454872/upgradeable-consensus/types"
 )
 
-// DualChainStorage 双链存储接口
-type DualChainStorage interface {
+// MultiChainStorage 多链存储接口
+type MultiChainStorage interface {
     // 主链操作
     StoreMainBlock(block *types.Block) error
     GetBlock(height uint64) (*types.Block, error)
     DeleteMainBlocksFrom(height uint64) error
     
-    // 预执行链操作
+    // 候选链操作
     StorePreexecBlock(block *types.Block) error
     GetPreexecBlock(height uint64) (*types.Block, error)
     GetPreexecBlocks(from, to uint64) ([]*types.Block, error)
@@ -1172,28 +1275,28 @@ type DualChainStorage interface {
     PromoteToMainChain(block *types.Block) error
 }
 
-// LevelDBDualChainStorage LevelDB 实现
-type LevelDBDualChainStorage struct {
+// LevelDBMultiChainStorage LevelDB 实现
+type LevelDBMultiChainStorage struct {
     db *leveldb.DB
 }
 
-// NewLevelDBDualChainStorage 创建存储
-func NewLevelDBDualChainStorage(dbPath string) (*LevelDBDualChainStorage, error) {
+// NewLevelDBMultiChainStorage 创建存储
+func NewLevelDBMultiChainStorage(dbPath string) (*LevelDBMultiChainStorage, error) {
     db, err := leveldb.OpenFile(dbPath, nil)
     if err != nil {
         return nil, err
     }
-    return &LevelDBDualChainStorage{db: db}, nil
+    return &LevelDBMultiChainStorage{db: db}, nil
 }
 
 // 键前缀
 const (
-    mainChainPrefix   = "main:"
-    preexecChainPrefix = "preexec:"
+    mainChainPrefix      = "main:"
+    candidateChainPrefix = "candidate:"  // 候选链前缀: candidate:{candidateID}:
 )
 
 // StoreMainBlock 存储主链区块
-func (s *LevelDBDualChainStorage) StoreMainBlock(block *types.Block) error {
+func (s *LevelDBMultiChainStorage) StoreMainBlock(block *types.Block) error {
     key := makeKey(mainChainPrefix, block.Header.Height)
     value, err := serializeBlock(block)
     if err != nil {
@@ -1203,7 +1306,7 @@ func (s *LevelDBDualChainStorage) StoreMainBlock(block *types.Block) error {
 }
 
 // GetBlock 获取主链区块
-func (s *LevelDBDualChainStorage) GetBlock(height uint64) (*types.Block, error) {
+func (s *LevelDBMultiChainStorage) GetBlock(height uint64) (*types.Block, error) {
     key := makeKey(mainChainPrefix, height)
     value, err := s.db.Get(key, nil)
     if err != nil {
@@ -1213,7 +1316,7 @@ func (s *LevelDBDualChainStorage) GetBlock(height uint64) (*types.Block, error) 
 }
 
 // DeleteMainBlocksFrom 删除指定高度之后的主链区块
-func (s *LevelDBDualChainStorage) DeleteMainBlocksFrom(height uint64) error {
+func (s *LevelDBMultiChainStorage) DeleteMainBlocksFrom(height uint64) error {
     iter := s.db.NewIterator(nil, nil)
     defer iter.Release()
     
@@ -1239,9 +1342,10 @@ func (s *LevelDBDualChainStorage) DeleteMainBlocksFrom(height uint64) error {
     return s.db.Write(batch, nil)
 }
 
-// StorePreexecBlock 存储预执行链区块
-func (s *LevelDBDualChainStorage) StorePreexecBlock(block *types.Block) error {
-    key := makeKey(preexecChainPrefix, block.Header.Height)
+// StoreCandidateBlock 存储候选链区块
+func (s *LevelDBMultiChainStorage) StoreCandidateBlock(candidateID types.TxHash, block *types.Block) error {
+    prefix := fmt.Sprintf("%s%x:", candidateChainPrefix, candidateID)
+    key := makeKey(prefix, block.Header.Height)
     value, err := serializeBlock(block)
     if err != nil {
         return err
@@ -1249,9 +1353,10 @@ func (s *LevelDBDualChainStorage) StorePreexecBlock(block *types.Block) error {
     return s.db.Put(key, value, nil)
 }
 
-// GetPreexecBlock 获取预执行链区块
-func (s *LevelDBDualChainStorage) GetPreexecBlock(height uint64) (*types.Block, error) {
-    key := makeKey(preexecChainPrefix, height)
+// GetCandidateBlock 获取候选链区块
+func (s *LevelDBMultiChainStorage) GetCandidateBlock(candidateID types.TxHash, height uint64) (*types.Block, error) {
+    prefix := fmt.Sprintf("%s%x:", candidateChainPrefix, candidateID)
+    key := makeKey(prefix, height)
     value, err := s.db.Get(key, nil)
     if err != nil {
         return nil, err
@@ -1259,25 +1364,25 @@ func (s *LevelDBDualChainStorage) GetPreexecBlock(height uint64) (*types.Block, 
     return deserializeBlock(value)
 }
 
-// GetPreexecBlocks 获取预执行链区块范围
-func (s *LevelDBDualChainStorage) GetPreexecBlocks(from, to uint64) ([]*types.Block, error) {
+// GetCandidateBlocks 获取候选链区块范围
+func (s *LevelDBMultiChainStorage) GetCandidateBlocks(candidateID types.TxHash, from, to uint64) ([]*types.Block, error) {
     blocks := make([]*types.Block, 0, to-from+1)
     for h := from; h <= to; h++ {
-        block, err := s.GetPreexecBlock(h)
+        block, err := s.GetCandidateBlock(candidateID, h)
         if err != nil {
-            return nil, fmt.Errorf("failed to get block at height %d: %w", h, err)
+            return nil, err
         }
         blocks = append(blocks, block)
     }
     return blocks, nil
 }
 
-// DeletePreexecBlocks 删除预执行链
-func (s *LevelDBDualChainStorage) DeletePreexecBlocks(forkPoint uint64) error {
+// DeleteCandidateChain 删除候选链
+func (s *LevelDBMultiChainStorage) DeleteCandidateChain(candidateID types.TxHash) error {
+    prefix := fmt.Sprintf("%s%x:", candidateChainPrefix, candidateID)
     iter := s.db.NewIterator(nil, nil)
     defer iter.Release()
     
-    prefix := []byte(preexecChainPrefix)
     batch := new(leveldb.Batch)
     
     for iter.Next() {
@@ -1286,7 +1391,7 @@ func (s *LevelDBDualChainStorage) DeletePreexecBlocks(forkPoint uint64) error {
             continue
         }
         
-        if string(key[:len(prefix)]) == preexecChainPrefix {
+        if string(key[:len(prefix)]) == prefix {
             batch.Delete(key)
         }
     }
@@ -1294,10 +1399,15 @@ func (s *LevelDBDualChainStorage) DeletePreexecBlocks(forkPoint uint64) error {
     return s.db.Write(batch, nil)
 }
 
-// PromoteToMainChain 将预执行链区块提升为主链区块
-func (s *LevelDBDualChainStorage) PromoteToMainChain(block *types.Block) error {
-    // 从预执行链删除
-    preexecKey := makeKey(preexecChainPrefix, block.Header.Height)
+// PromoteToMainChain 将候选链区块提升为主链区块
+    
+    return s.db.Write(batch, nil)
+}
+
+// PromoteToMainChain 将候选链区块提升为主链区块
+func (s *LevelDBMultiChainStorage) PromoteToMainChain(block *types.Block) error {
+    // 从候选链删除
+    candidateKey := makeKey(candidateChainPrefix, block.Header.Height)
     
     // 添加到主链
     mainKey := makeKey(mainChainPrefix, block.Header.Height)
@@ -1334,7 +1444,7 @@ func deserializeBlock(data []byte) (*types.Block, error) {
 }
 
 // Close 关闭数据库
-func (s *LevelDBDualChainStorage) Close() error {
+func (s *LevelDBMultiChainStorage) Close() error {
     return s.db.Close()
 }
 ```
@@ -2580,7 +2690,7 @@ import (
 // PreexecMonitor 预执行监控器
 type PreexecMonitor struct {
     proposal       *UpgradeProposal
-    dualChain      *DualChainManager
+    multiChain     *MultiChainManager
     collector      *MetricsCollector
     
     // 基准指标 (来自主链)
@@ -2601,12 +2711,12 @@ type PreexecMonitor struct {
 // NewPreexecMonitor 创建预执行监控器
 func NewPreexecMonitor(
     proposal *UpgradeProposal,
-    dualChain *DualChainManager,
+    multiChain *MultiChainManager,
     log *logrus.Entry,
 ) *PreexecMonitor {
     return &PreexecMonitor{
         proposal:      proposal,
-        dualChain:     dualChain,
+        multiChain:    multiChain,
         collector:     NewMetricsCollector(proposal.ProposalID, proposal.PrepareHeight, log),
         checkInterval: 10 * time.Second,
         log:           log,
@@ -2709,8 +2819,8 @@ func (pm *PreexecMonitor) checkMetrics() {
     }).Debug("Preexecution metrics report")
 }
 
-// RecordPreexecBlock 记录预执行链区块
-func (pm *PreexecMonitor) RecordPreexecBlock(
+// RecordCandidateBlock 记录候选链区块
+func (pm *CandidateMonitor) RecordCandidateBlock(
     height uint64,
     blockTime time.Duration,
     txCount int,
@@ -2755,7 +2865,7 @@ import (
 
 // SwitchManager 切换管理器
 type SwitchManager struct {
-    dualChain     *DualChainManager
+    multiChain    *MultiChainManager
     monitor       *PreexecMonitor
     
     switchHeight  uint64
@@ -2767,12 +2877,12 @@ type SwitchManager struct {
 
 // NewSwitchManager 创建切换管理器
 func NewSwitchManager(
-    dualChain *DualChainManager,
+    multiChain *MultiChainManager,
     monitor *PreexecMonitor,
     log *logrus.Entry,
 ) *SwitchManager {
     return &SwitchManager{
-        dualChain: dualChain,
+        multiChain: multiChain,
         monitor:   monitor,
         log:       log,
     }
@@ -2788,15 +2898,15 @@ func (sm *SwitchManager) PrepareSwitch(switchHeight uint64) error {
     }
     
     // 验证切换高度
-    mainHeight := sm.dualChain.GetMainChainHeight()
-    preexecHeight := sm.dualChain.GetPreexecChainHeight()
+    mainHeight := sm.multiChain.GetMainChainHeight()
+    candidateHeight := sm.multiChain.GetCandidateChainHeight(selectedCandidateID)
     
     if switchHeight <= mainHeight {
         return fmt.Errorf("switch height must be in the future")
     }
     
-    if switchHeight > preexecHeight {
-        return fmt.Errorf("preexec chain hasn't reached switch height")
+    if switchHeight > candidateHeight {
+        return fmt.Errorf("candidate chain hasn't reached switch height")
     }
     
     // 检查预执行链健康状态
@@ -2826,7 +2936,7 @@ func (sm *SwitchManager) ExecuteSwitch() error {
     
     // 步骤 1: 等待达到切换高度
     for {
-        mainHeight := sm.dualChain.GetMainChainHeight()
+        mainHeight := sm.multiChain.GetMainChainHeight()
         if mainHeight >= sm.switchHeight {
             break
         }
@@ -2836,11 +2946,11 @@ func (sm *SwitchManager) ExecuteSwitch() error {
     sm.log.Info("Reached switch height, starting atomic switch")
     
     // 步骤 2: 停止旧共识
-    // (这部分由 DualChainManager 内部处理)
+    // (这部分由 MultiChainManager 内部处理)
     
-    // 步骤 3: 合并预执行链
-    if err := sm.dualChain.MergePreexecChain(sm.switchHeight); err != nil {
-        return fmt.Errorf("failed to merge preexec chain: %w", err)
+    // 步骤 3: 合并候选链
+    if err := sm.multiChain.MergeCandidateChain(selectedCandidateID, sm.switchHeight); err != nil {
+        return fmt.Errorf("failed to merge candidate chain: %w", err)
     }
     
     // 步骤 4: 标记切换完成
@@ -2905,7 +3015,7 @@ import (
 
 // RollbackManager 回退管理器
 type RollbackManager struct {
-    dualChain    *DualChainManager
+    multiChain   *MultiChainManager
     monitor      *PreexecMonitor
     
     rollbackExecuted bool
@@ -2917,12 +3027,12 @@ type RollbackManager struct {
 
 // NewRollbackManager 创建回退管理器
 func NewRollbackManager(
-    dualChain *DualChainManager,
+    multiChain *MultiChainManager,
     monitor *PreexecMonitor,
     log *logrus.Entry,
 ) *RollbackManager {
     return &RollbackManager{
-        dualChain: dualChain,
+        multiChain: multiChain,
         monitor:   monitor,
         log:       log,
     }
@@ -2960,7 +3070,7 @@ func (rm *RollbackManager) ExecuteRollback(reason string) error {
     rm.monitor.Stop()
     
     // 步骤 2: 回退预执行链
-    if err := rm.dualChain.RollbackPreexecution(); err != nil {
+    if err := rm.multiChain.RollbackPreexecution(); err != nil {
         return fmt.Errorf("failed to rollback preexecution: %w", err)
     }
     
@@ -3059,7 +3169,7 @@ type UpgradeManager struct {
     upgradeState    *UpgradeState
     
     // 子管理器
-    dualChain       *DualChainManager
+    multiChain      *MultiChainManager
     monitor         *PreexecMonitor
     switchMgr       *SwitchManager
     rollbackMgr     *RollbackManager
@@ -3077,16 +3187,16 @@ func NewUpgradeManager(
     // (这里简化,实际应从配置读取)
     committee := initializeCommittee(cfg)
     
-    // 初始化双链管理器
+    // 初始化多链管理器
     storage := initializeStorage(cfg)
-    dualChain := NewDualChainManager(uc.GetWorkingConsensus(), storage, log)
+    multiChain := NewMultiChainManager(uc.GetWorkingConsensus(), storage, log)
     
     return &UpgradeManager{
-        uc:        uc,
-        cfg:       cfg,
-        log:       log,
-        committee: committee,
-        dualChain: dualChain,
+        uc:         uc,
+        cfg:        cfg,
+        log:        log,
+        committee:  committee,
+        multiChain: multiChain,
     }
 }
 
@@ -3136,7 +3246,7 @@ func (um *UpgradeManager) validateProposal(proposal *UpgradeProposal) error {
     }
     
     // 验证参数
-    currentHeight := um.dualChain.GetMainChainHeight()
+    currentHeight := um.multiChain.GetMainChainHeight()
     if err := ValidateProposalParameters(proposal, currentHeight); err != nil {
         return fmt.Errorf("parameter validation failed: %w", err)
     }
@@ -3174,7 +3284,7 @@ func (um *UpgradeManager) handleProposalPhase(proposal *UpgradeProposal) error {
 func (um *UpgradeManager) handlePreparePhase(proposal *UpgradeProposal) error {
     um.log.Info("Entering prepare phase")
     
-    currentHeight := um.dualChain.GetMainChainHeight()
+    currentHeight := um.multiChain.GetMainChainHeight()
     
     // 检查是否达到预备高度
     if currentHeight < proposal.PrepareHeight {
@@ -3214,17 +3324,17 @@ func (um *UpgradeManager) handlePreparePhase(proposal *UpgradeProposal) error {
     }
     
     // 启动预执行链
-    if err := um.dualChain.StartPreexecution(proposal.PrepareHeight, newConsensus); err != nil {
+    if err := um.multiChain.StartPreexecution(proposal.PrepareHeight, newConsensus); err != nil {
         return fmt.Errorf("failed to start preexecution: %w", err)
     }
     
     // 初始化监控器
-    um.monitor = NewPreexecMonitor(proposal, um.dualChain, um.log)
+    um.monitor = NewPreexecMonitor(proposal, um.multiChain, um.log)
     um.monitor.SetBaseline(10*time.Second, 100.0)  // 示例基准值
     um.monitor.Start()
     
     // 初始化回退管理器并启用自动回退
-    um.rollbackMgr = NewRollbackManager(um.dualChain, um.monitor, um.log)
+    um.rollbackMgr = NewRollbackManager(um.multiChain, um.monitor, um.log)
     um.rollbackMgr.AutoRollbackOnAnomaly()
     
     um.upgradeState.Phase = pb.UpgradePhase_PHASE_PREEXECUTION
@@ -3245,14 +3355,14 @@ func (um *UpgradeManager) handlePreexecutionPhase(proposal *UpgradeProposal) err
 func (um *UpgradeManager) handleConfirmationPhase(proposal *UpgradeProposal) error {
     um.log.Info("Processing upgrade confirmation")
     
-    // 检查预执行是否完成
-    currentHeight := um.dualChain.GetPreexecChainHeight()
+    // 检查候选链是否完成
+    currentHeight := um.multiChain.GetCandidateChainHeight(selectedCandidateID)
     if currentHeight < proposal.PreexecHeight {
-        return fmt.Errorf("preexecution not complete: current=%d, required=%d",
+        return fmt.Errorf("candidate execution not complete: current=%d, required=%d",
             currentHeight, proposal.PreexecHeight)
     }
     
-    // 获取预执行指标
+    // 获取候选链指标
     metrics := um.monitor.GetMetrics()
     
     // 评估指标
@@ -3262,7 +3372,7 @@ func (um *UpgradeManager) handleConfirmationPhase(proposal *UpgradeProposal) err
     }
     
     // 准备切换
-    um.switchMgr = NewSwitchManager(um.dualChain, um.monitor, um.log)
+    um.switchMgr = NewSwitchManager(um.multiChain, um.monitor, um.log)
     switchHeight := proposal.PreexecHeight + 10  // 给一些缓冲区块
     
     if err := um.switchMgr.PrepareSwitch(switchHeight); err != nil {
@@ -3327,9 +3437,9 @@ func initializeCommittee(cfg *config.ConsensusConfig) *GovernanceCommittee {
     return NewGovernanceCommittee(nil, 5)
 }
 
-func initializeStorage(cfg *config.ConsensusConfig) DualChainStorage {
+func initializeStorage(cfg *config.ConsensusConfig) MultiChainStorage {
     // 实际应创建真实的存储
-    storage, _ := storage.NewLevelDBDualChainStorage("./data/dual_chain")
+    storage, _ := storage.NewLevelDBMultiChainStorage("./data/multi_chain")
     return storage
 }
 ```
@@ -3967,11 +4077,12 @@ func (api *UpgradeAPI) GetUpgradeStatus(c *gin.Context) {
         "proposal_id": state.CurrentProposal.ProposalID.Hex(),
         "phase": state.Phase.String(),
         "main_chain_height": state.MainChain.CurrentHeight,
-        "preexec_chain_height": func() uint64 {
-            if state.PreexecChain != nil {
-                return state.PreexecChain.CurrentHeight
+        "candidate_chains": func() map[string]uint64 {
+            heights := make(map[string]uint64)
+            for id, chain := range state.CandidateChains {
+                heights[id.Hex()] = chain.CurrentHeight
             }
-            return 0
+            return heights
         }(),
         "switched": state.Switched,
     })
@@ -4263,13 +4374,13 @@ func TestCommitteeSignature(t *testing.T) {
     assert.NoError(t, err)
 }
 
-// TestDualChainManagement 测试双链管理
-func TestDualChainManagement(t *testing.T) {
+// TestMultiChainManagement 测试多链管理
+func TestMultiChainManagement(t *testing.T) {
     storage := createTestStorage(t)
     mainConsensus := createTestConsensus(t)
     newConsensus := createTestConsensus(t)
     
-    dcm := upgrade.NewDualChainManager(mainConsensus, storage, testLog)
+    mcm := upgrade.NewMultiChainManager(mainConsensus, storage, testLog)
     
     // 启动预执行
     err := dcm.StartPreexecution(100, newConsensus)
@@ -4281,7 +4392,7 @@ func TestDualChainManagement(t *testing.T) {
     err = dcm.ProcessMainChainBlock(mainBlock)
     assert.NoError(t, err)
     
-    // 模拟预执行链区块
+    // 模拟候选链区块
     preexecBlock := createTestBlock(101)
     err = dcm.ProcessPreexecBlock(preexecBlock)
     assert.NoError(t, err)
@@ -4380,10 +4491,10 @@ func TestCDLValidation(t *testing.T) {
 
 // TestSwitchProcess 测试切换流程
 func TestSwitchProcess(t *testing.T) {
-    dcm := createTestDualChainManager(t)
+    mcm := createTestMultiChainManager(t)
     monitor := createTestMonitor(t)
     
-    switchMgr := upgrade.NewSwitchManager(dcm, monitor, testLog)
+    switchMgr := upgrade.NewSwitchManager(mcm, monitor, testLog)
     
     // 准备切换
     err := switchMgr.PrepareSwitch(200)
@@ -4403,10 +4514,10 @@ func TestSwitchProcess(t *testing.T) {
 
 // TestRollbackProcess 测试回退流程
 func TestRollbackProcess(t *testing.T) {
-    dcm := createTestDualChainManager(t)
+    mcm := createTestMultiChainManager(t)
     monitor := createTestMonitor(t)
     
-    rollbackMgr := upgrade.NewRollbackManager(dcm, monitor, testLog)
+    rollbackMgr := upgrade.NewRollbackManager(mcm, monitor, testLog)
     
     // 执行回退
     err := rollbackMgr.ExecuteRollback("Test rollback")
@@ -4426,8 +4537,8 @@ func createTestCommittee(t *testing.T) *upgrade.GovernanceCommittee {
     return committee
 }
 
-func createTestStorage(t *testing.T) upgrade.DualChainStorage {
-    storage, err := storage.NewLevelDBDualChainStorage(t.TempDir())
+func createTestStorage(t *testing.T) upgrade.MultiChainStorage {
+    storage, err := storage.NewLevelDBMultiChainStorage(t.TempDir())
     require.NoError(t, err)
     return storage
 }
@@ -4482,7 +4593,7 @@ func TestFullUpgradeFlow(t *testing.T) {
     // 5. 等待达到预备高度
     env.WaitForHeight(proposal.PrepareHeight)
     
-    // 6. 验证预执行链启动
+    // 6. 验证候选链启动
     assert.True(t, env.IsPreexecActive())
     
     // 7. 运行预执行阶段
@@ -4705,9 +4816,9 @@ func BenchmarkCDLParsing(b *testing.B) {
     }
 }
 
-// BenchmarkBlockProcessing 基准测试:双链区块处理
+// BenchmarkBlockProcessing 基准测试:多链区块处理
 func BenchmarkBlockProcessing(b *testing.B) {
-    dcm := createTestDualChainManager()
+    mcm := createTestMultiChainManager()
     
     b.ResetTimer()
     for i := 0; i < b.N; i++ {
@@ -4846,14 +4957,14 @@ go test -v ./tests/ -timeout 30m -tags=stress
 
 1. ✅ 实现 protobuf 定义 (`pkg/proto/upgrade.proto`)
 2. ✅ 实现核心类型 (`consensus/upgrade/types.go`)
-3. ✅ 实现双链存储 (`internal/storage/dual_chain_storage.go`)
+3. ✅ 实现多链存储 (`internal/storage/multi_chain_storage.go`)
 4. ✅ 实现消息缓存存储（bufmsg，LevelDB 持久化）(`internal/storage/message_cache_storage.go`)
 5. ✅ 编写单元测试（`internal/storage/message_cache_storage_test.go`）
 
 **成果**:
 - 完整的 Protobuf 消息定义
 - 核心数据结构实现
-- 双链并行存储机制
+- 多链并行存储机制
 - 消息缓存系统（支持非同步网络）
 - 13 个单元测试全部通过
 - ~1,583 行高质量代码
@@ -4865,9 +4976,9 @@ go test -v ./tests/ -timeout 30m -tags=stress
 3. 集成门限签名
 4. 编写单元测试
 
-### 13.3 第三阶段:双链管理 (2-3周)
+### 13.3 第三阶段:多链管理 (2-3周)
 
-1. 实现双链管理器 (`consensus/upgrade/dual_chain.go`)
+1. 实现多链管理器 (`consensus/upgrade/multi_chain.go`)
 2. 实现预执行监控 (`consensus/upgrade/preexec_monitor.go`)
 3. 实现指标收集 (`consensus/upgrade/metrics.go`)
 4. 编写集成测试
@@ -4914,12 +5025,12 @@ go test -v ./tests/ -timeout 30m -tags=stress
 
 1. **门限签名密钥管理**: 确保密钥分发和存储的安全性
 2. **CDL 验证**: 严格验证自定义 CDL,防止恶意代码注入
-3. **双链隔离**: 确保预执行链故障不影响主链
+3. **多链隔离**: 确保候选链故障不影响主链
 4. **回退安全**: 确保回退操作的原子性和一致性
 
 ### 14.2 性能优化
 
-1. **并行处理**: 主链和预执行链的区块处理可以并行
+1. **并行处理**: 主链和多个候选链的区块处理可以并行
 2. **缓存策略**: 缓存频繁访问的数据(如区块、状态)
 3. **存储优化**: 使用高效的存储格式,定期清理过期数据
 4. **网络优化**: 批量传输交易,压缩消息
@@ -4948,4 +5059,3 @@ go test -v ./tests/ -timeout 30m -tags=stress
 - [门限签名标准 RFC](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-threshold-bls-signature)
 
 ---
-

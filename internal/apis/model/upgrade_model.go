@@ -14,11 +14,11 @@ type UpgradeService interface {
 
 // ProposeUpgradeRequest represents the request to propose an upgrade
 type ProposeUpgradeRequest struct {
-	TargetConsensus    string                 `json:"target_consensus" binding:"required"`
-	CDLYaml            string                 `json:"cdl_yaml"`
-	ForkHeight         uint64                 `json:"fork_height"`
-	PreexecStartHeight uint64                 `json:"preexec_start_height" binding:"required"`
-	SwitchHeight       uint64                 `json:"switch_height" binding:"required"`
+	TargetConsensus      string                 `json:"target_consensus" binding:"required"`
+	CDLYaml              string                 `json:"cdl_yaml"`
+	ForkHeight           uint64                 `json:"fork_height"`
+	CandidateStartHeight uint64                 `json:"candidate_start_height" binding:"required"`
+	SwitchHeight         uint64                 `json:"switch_height" binding:"required"`
 	Incentive          uint64                 `json:"incentive"`
 	Description        string                 `json:"description"`
 	ConsensusParams    map[string]interface{} `json:"consensus_params"`
@@ -67,11 +67,11 @@ type UpgradeStatusResponse struct {
 
 // ProposalSummary represents a summary of an upgrade proposal
 type ProposalSummary struct {
-	ProposalID         string `json:"proposal_id"`
-	TargetConsensus    string `json:"target_consensus"`
-	PreexecStartHeight uint64 `json:"preexec_start_height"`
-	SwitchHeight       uint64 `json:"switch_height"`
-	Description        string `json:"description,omitempty"`
+	ProposalID           string `json:"proposal_id"`
+	TargetConsensus      string `json:"target_consensus"`
+	CandidateStartHeight uint64 `json:"candidate_start_height"`
+	SwitchHeight         uint64 `json:"switch_height"`
+	Description          string `json:"description,omitempty"`
 }
 
 // PerformanceMetrics represents performance metrics
@@ -123,11 +123,11 @@ func ConvertUpgradeStateToResponse(state *upgrade.UpgradeState, metrics *upgrade
 
 	if state.CurrentProposal != nil {
 		response.CurrentProposal = &ProposalSummary{
-			ProposalID:         state.CurrentProposal.ProposalID.String(),
-			TargetConsensus:    state.CurrentProposal.TargetConsensus,
-			PreexecStartHeight: state.CurrentProposal.PreexecStartHeight,
-			SwitchHeight:       state.CurrentProposal.SwitchHeight,
-			Description:        state.CurrentProposal.Description,
+			ProposalID:           state.CurrentProposal.ProposalID.String(),
+			TargetConsensus:      state.CurrentProposal.TargetConsensus,
+			CandidateStartHeight: state.CurrentProposal.PreexecStartHeight,
+			SwitchHeight:         state.CurrentProposal.SwitchHeight,
+			Description:          state.CurrentProposal.Description,
 		}
 	}
 

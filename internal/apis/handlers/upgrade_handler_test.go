@@ -141,9 +141,9 @@ func TestProposeUpgrade(t *testing.T) {
 
 	// Prepare request
 	reqData := model.ProposeUpgradeRequest{
-		TargetConsensus:    "hotstuff",
-		PreexecStartHeight: 100,
-		SwitchHeight:       200,
+		TargetConsensus:      "hotstuff",
+		CandidateStartHeight: 100,
+		SwitchHeight:         200,
 		Description:        "Test upgrade to HotStuff",
 		CDLYaml: `name: hotstuff
 type: consensus
@@ -178,7 +178,7 @@ func TestProposeUpgrade_InvalidRequest(t *testing.T) {
 	// Missing required fields
 	reqData := model.ProposeUpgradeRequest{
 		Description: "Test upgrade",
-		// Missing TargetConsensus, PreexecStartHeight, SwitchHeight
+		// Missing TargetConsensus, CandidateStartHeight, SwitchHeight
 	}
 
 	body, _ := json.Marshal(reqData)
@@ -201,10 +201,10 @@ func TestListProposals(t *testing.T) {
 
 	// Create a proposal first
 	reqData := model.ProposeUpgradeRequest{
-		TargetConsensus:    "hotstuff",
-		PreexecStartHeight: 100,
-		SwitchHeight:       200,
-		Description:        "Test proposal",
+		TargetConsensus:      "hotstuff",
+		CandidateStartHeight: 100,
+		SwitchHeight:         200,
+		Description:          "Test proposal",
 	}
 	body, _ := json.Marshal(reqData)
 	w := httptest.NewRecorder()
