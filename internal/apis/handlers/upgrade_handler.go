@@ -677,3 +677,177 @@ func (h *UpgradeHandler) HealthCheck(c *gin.Context) {
 		Data: health,
 	})
 }
+
+// StartCandidateChain starts a new candidate chain
+// @Summary Start candidate chain
+// @Accept json
+// @Produce json
+// @Param request body model.StartCandidateChainRequest true "Start candidate chain request"
+// @Success 200 {object} model.ResponseData{data=model.CandidateChainResponse}
+// @Router /api/candidate/start [post]
+func (h *UpgradeHandler) StartCandidateChain(c *gin.Context) {
+	var req model.StartCandidateChainRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.log.Errorf("Invalid request: %v", err)
+		c.JSON(http.StatusBadRequest, model.ResponseData{
+			Code: 400,
+			Msg:  fmt.Sprintf("Invalid request: %v", err),
+		})
+		return
+	}
+
+	mgr := h.service.GetUpgradeManager()
+	multiChainMgr := mgr.GetMultiChainManager()
+	if multiChainMgr == nil {
+		c.JSON(http.StatusServiceUnavailable, model.ResponseData{
+			Code: 503,
+			Msg:  "Multi-chain manager not available",
+		})
+		return
+	}
+
+	h.log.WithFields(logrus.Fields{
+		"candidate_id": req.CandidateID,
+		"proposal_id":  req.ProposalID,
+	}).Info("Candidate chain start requested (feature in development)")
+
+	response := model.CandidateChainResponse{
+		CandidateID: req.CandidateID,
+		ProposalID:  req.ProposalID,
+		Status:      "pending",
+	}
+
+	c.JSON(http.StatusOK, model.ResponseData{
+		Code: 200,
+		Msg:  "Candidate chain start requested (feature requires full consensus factory setup)",
+		Data: response,
+	})
+}
+
+// ListCandidateChains lists all candidate chains
+// @Summary List all candidate chains
+// @Produce json
+// @Success 200 {object} model.ResponseData{data=model.ListCandidateChainsResponse}
+// @Router /api/candidate/list [get]
+func (h *UpgradeHandler) ListCandidateChains(c *gin.Context) {
+	mgr := h.service.GetUpgradeManager()
+	multiChainMgr := mgr.GetMultiChainManager()
+
+	chains := []model.CandidateChainResponse{}
+	count := 0
+
+	if multiChainMgr != nil {
+		// Note: ListCandidateChains returns map[string]*CandidateChainState
+		// This is a simplified implementation
+		h.log.Debug("Listing candidate chains")
+	}
+
+	c.JSON(http.StatusOK, model.ResponseData{
+		Code: 200,
+		Msg:  "success",
+		Data: model.ListCandidateChainsResponse{
+			Chains: chains,
+			Count:  count,
+		},
+	})
+}
+
+// GetCandidateState retrieves the state of a specific candidate chain
+// @Summary Get candidate chain state
+// @Produce json
+// @Param id path string true "Candidate ID"
+// @Success 200 {object} model.ResponseData{data=model.CandidateChainResponse}
+// @Router /api/candidate/{id}/state [get]
+func (h *UpgradeHandler) GetCandidateState(c *gin.Context) {
+	candidateID := c.Param("id")
+
+	mgr := h.service.GetUpgradeManager()
+	multiChainMgr := mgr.GetMultiChainManager()
+	if multiChainMgr == nil {
+		c.JSON(http.StatusServiceUnavailable, model.ResponseData{
+			Code: 503,
+			Msg:  "Multi-chain manager not available",
+		})
+		return
+	}
+
+	c.JSON(http.StatusNotFound, model.ResponseData{
+		Code: 404,
+		Msg:  fmt.Sprintf("Candidate chain %s not found", candidateID),
+	})
+}
+
+// MergeCandidateChain merges a candidate chain to main chain
+// @Summary Merge candidate chain
+// @Accept json
+// @Produce json
+// @Param request body model.MergeCandidateChainRequest true "Merge request"
+// @Success 200 {object} model.ResponseData
+// @Router /api/candidate/merge [post]
+func (h *UpgradeHandler) MergeCandidateChain(c *gin.Context) {
+	var req model.MergeCandidateChainRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.log.Errorf("Invalid request: %v", err)
+		c.JSON(http.StatusBadRequest, model.ResponseData{
+			Code: 400,
+			Msg:  fmt.Sprintf("Invalid request: %v", err),
+		})
+		return
+	}
+
+	mgr := h.service.GetUpgradeManager()
+	multiChainMgr := mgr.GetMultiChainManager()
+	if multiChainMgr == nil {
+		c.JSON(http.StatusServiceUnavailable, model.ResponseData{
+			Code: 503,
+			Msg:  "Multi-chain manager not available",
+		})
+		return
+	}
+
+	h.log.WithField("candidate_id", req.CandidateID).Info("Candidate chain merge requested (feature in development)")
+
+	c.JSON(http.StatusOK, model.ResponseData{
+		Code: 200,
+		Msg:  "Candidate chain merge requested (feature requires full implementation)",
+	})
+}
+
+// RollbackCandidateChain rolls back a candidate chain
+// @Summary Rollback candidate chain
+// @Accept json
+// @Produce json
+// @Param request body model.RollbackCandidateChainRequest true "Rollback request"
+// @Success 200 {object} model.ResponseData
+// @Router /api/candidate/rollback [post]
+func (h *UpgradeHandler) RollbackCandidateChain(c *gin.Context) {
+	var req model.RollbackCandidateChainRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.log.Errorf("Invalid request: %v", err)
+		c.JSON(http.StatusBadRequest, model.ResponseData{
+			Code: 400,
+			Msg:  fmt.Sprintf("Invalid request: %v", err),
+		})
+		return
+	}
+
+	mgr := h.service.GetUpgradeManager()
+	multiChainMgr := mgr.GetMultiChainManager()
+	if multiChainMgr == nil {
+		c.JSON(http.StatusServiceUnavailable, model.ResponseData{
+			Code: 503,
+			Msg:  "Multi-chain manager not available",
+		})
+		return
+	}
+
+	h.log.WithFields(logrus.Fields{
+		"candidate_id": req.CandidateID,
+		"reason":       req.Reason,
+	}).Info("Candidate chain rollback requested (feature in development)")
+
+	c.JSON(http.StatusOK, model.ResponseData{
+		Code: 200,
+		Msg:  "Candidate chain rollback requested (feature requires full implementation)",
+	})
+}

@@ -73,14 +73,27 @@ func main() {
 		// fmt.Printf("Response: %d\n", resp.IsSuccess)
 		// break
 
-		height := uint64(0)
+		// 使用高度 1 而不是 0，因为高度 0 可能是创世块且没有关联的 PQC 密钥
+		height := uint64(1)
 		keyreq := &pb.GetPqcKeyRequest{
-			Height: height, // todo 这里的前置条件是什么？
+			Height: height,
 		}
 		keyresp, err := client.GetPqcKey(context.Background(), keyreq)
 		if err != nil {
-			fmt.Println(err)
-			return
+			fmt.Printf("❌ Failed to get PQC key at height %d: %v\n", height, err)
+			// 尝试使用更高的高度
+			for tryHeight := uint64(2); tryHeight <= 100; tryHeight++ {
+				keyreq.Height = tryHeight
+				keyresp, err = client.GetPqcKey(context.Background(), keyreq)
+				if err == nil {
+					fmt.Printf("✓ Successfully got PQC key at height %d\n", tryHeight)
+					break
+				}
+			}
+			if err != nil {
+				fmt.Printf("❌ Failed to find valid PQC key in heights 1-100\n")
+				return
+			}
 		}
 		addr := keyresp.PublicKey
 
@@ -94,19 +107,27 @@ func main() {
 
 		resp, err := client.GetBalance(context.Background(), req)
 		if err != nil {
-			fmt.Println(err)
+			fmt.Printf("❌ Failed to get balance: %v\n", err)
+			return
 		}
-		fmt.Println(resp.Balance)
 
-		fmt.Println(len(resp.GetUtxos()))
-		fmt.Println(resp.GetBalance())
+		fmt.Printf("📊 Balance: %d\n", resp.Balance)
+		fmt.Printf("📦 UTXO count: %d\n", len(resp.GetUtxos()))
+
+		// 检查是否有可用的 UTXO
+		if len(resp.GetUtxos()) == 0 {
+			fmt.Printf("⚠️  No UTXOs available for address %s\n", hexutil.Encode(addr))
+			fmt.Printf("💡 Tip: This address may need to receive some coins first\n")
+			return
+		}
+
 		utxo := resp.Utxos[0]
 		utxoOutput := types.ToTxOutput(utxo.GetTxOutput())
 		amount := utxoOutput.Value
 
 		utxokey := fmt.Sprintf("%s:%d", hexutil.Encode(utxo.GetTxid()), utxo.GetVoutput())
-		fmt.Println(utxokey)
-		txid := resp.GetUtxos()[0].GetTxid()
+		fmt.Printf("🔑 UTXO key: %s\n", utxokey)
+		txid := utxo.GetTxid()
 		pqckey := &crypto.PqcKey{
 			Privkey: keyresp.SecretKey,
 			Pubkey:  keyresp.PublicKey,

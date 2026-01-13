@@ -26,12 +26,12 @@ type RollbackCandidateChainRequest struct {
 
 // CandidateChainResponse represents candidate chain state response
 type CandidateChainResponse struct {
-	CandidateID  string `json:"candidate_id"`
-	ProposalID   string `json:"proposal_id"`
-	ForkHeight   uint64 `json:"fork_height"`
+	CandidateID   string `json:"candidate_id"`
+	ProposalID    string `json:"proposal_id"`
+	ForkHeight    uint64 `json:"fork_height"`
 	CurrentHeight uint64 `json:"current_height"`
-	Status       string `json:"status"` // running, merged, rolled_back
-	BlockCount   uint64 `json:"block_count"`
+	Status        string `json:"status"` // running, merged, rolled_back
+	BlockCount    uint64 `json:"block_count"`
 }
 
 // ListCandidateChainsResponse represents list of all candidate chains

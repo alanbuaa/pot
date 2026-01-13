@@ -10,6 +10,7 @@ import (
 	"github.com/zzz136454872/upgradeable-consensus/consensus/model"
 	"github.com/zzz136454872/upgradeable-consensus/internal/storage"
 	pb "github.com/zzz136454872/upgradeable-consensus/pkg/proto"
+	"google.golang.org/protobuf/proto"
 )
 
 // UpgradeManager 升级管理器
@@ -34,6 +35,7 @@ type UpgradeManager struct {
 	currentProposal    *UpgradeProposal
 	currentCandidateID string // 当前活跃的候选链ID
 	upgradeState       *UpgradeState
+	currentEpoch       uint64 // 当前处理的epoch
 
 	// 配置
 	config  *config.ConsensusConfig
@@ -46,6 +48,11 @@ type UpgradeManager struct {
 // GetPersistence returns the persistence layer
 func (m *UpgradeManager) GetPersistence() UpgradePersistence {
 	return m.persistence
+}
+
+// GetMultiChainManager returns the multi-chain manager
+func (m *UpgradeManager) GetMultiChainManager() *MultiChainManager {
+	return m.multiChainManager
 }
 
 // UpgradeState 升级状态
@@ -173,6 +180,36 @@ func (um *UpgradeManager) recoverState() error {
 	return nil
 }
 
+// ValidateProposal 验证提案
+func (um *UpgradeManager) ValidateProposal(proposal *UpgradeProposal) error {
+	if proposal == nil {
+		return fmt.Errorf("proposal is nil")
+	}
+
+	// 验证目标共识类型
+	if proposal.TargetConsensus == "" {
+		return fmt.Errorf("target consensus type is empty")
+	}
+
+	// 验证高度参数
+	if proposal.PreexecStartHeight == 0 {
+		return fmt.Errorf("preexec start height is zero")
+	}
+	if proposal.SwitchHeight == 0 {
+		return fmt.Errorf("switch height is zero")
+	}
+	if proposal.SwitchHeight <= proposal.PreexecStartHeight {
+		return fmt.Errorf("switch height must be greater than preexec start height")
+	}
+
+	// 验证阈值
+	if proposal.Threshold == 0 {
+		return fmt.Errorf("threshold is zero")
+	}
+
+	return nil
+}
+
 // StartUpgrade 启动升级流程
 func (um *UpgradeManager) StartUpgrade(proposal *UpgradeProposal, newConsensus model.Consensus) error {
 	um.mu.Lock()
@@ -180,6 +217,11 @@ func (um *UpgradeManager) StartUpgrade(proposal *UpgradeProposal, newConsensus m
 
 	if um.upgradeState.Started {
 		return fmt.Errorf("upgrade already in progress")
+	}
+
+	// 验证提案
+	if err := um.ValidateProposal(proposal); err != nil {
+		return fmt.Errorf("proposal validation failed: %w", err)
 	}
 
 	um.log.WithFields(logrus.Fields{
@@ -223,6 +265,11 @@ func (um *UpgradeManager) StartUpgrade(proposal *UpgradeProposal, newConsensus m
 		um.upgradeState.Failed = true
 		um.upgradeState.FailureReason = fmt.Sprintf("Failed to start candidate chain: %v", err)
 		return err
+	}
+
+	// 候选共识启动后，冲刷缓存的消息（内部调用，不加锁）
+	if err := um.onCandidateConsensusStartedNoLock(newConsensus.GetConsensusID()); err != nil {
+		um.log.WithError(err).Warn("Failed to flush cached messages to candidate consensus")
 	}
 
 	// 初始化预执行监控器
@@ -335,6 +382,277 @@ func (um *UpgradeManager) executeSwitch() {
 	um.log.Info("Upgrade completed successfully")
 }
 
+// OnNetworkMessage 处理网络消息（核心入口）
+// 当节点收到消息时，判断是否需要缓存或直接转发
+func (um *UpgradeManager) OnNetworkMessage(msg interface{}, senderConsensusID, receiverConsensusID int64, epoch uint64) error {
+	um.mu.RLock()
+	defer um.mu.RUnlock()
+
+	// 1) 判断是否为控制消息（升级相关消息）
+	if um.isControlMessage(msg) {
+		return um.handleControlMessage(msg)
+	}
+
+	// 2) 判断epoch：如果消息的epoch比当前epoch低，直接丢弃
+	if epoch < um.currentEpoch {
+		um.log.WithFields(logrus.Fields{
+			"msg_epoch":     epoch,
+			"current_epoch": um.currentEpoch,
+		}).Debug("Dropping outdated message")
+		return nil
+	}
+
+	// 3) 判断接收者共识是否已启动
+	if um.isConsensusRunning(receiverConsensusID) {
+		// 共识已启动，直接转发
+		return um.forwardToConsensus(receiverConsensusID, msg)
+	}
+
+	// 4) 共识未启动：如果epoch比当前高，缓存消息
+	if epoch >= um.currentEpoch {
+		um.log.WithFields(logrus.Fields{
+			"receiver_consensus": receiverConsensusID,
+			"epoch":              epoch,
+			"current_epoch":      um.currentEpoch,
+		}).Info("Caching message for future epoch")
+
+		// 写入内存缓存
+		if err := um.messageCache.CacheMessage(msg, senderConsensusID, receiverConsensusID, epoch); err != nil {
+			return fmt.Errorf("failed to cache message: %w", err)
+		}
+
+		// 写入持久化存储（如果需要，可以在MessageCache中实现）
+		// 注意：UpgradePersistence接口不直接支持消息缓存持久化
+		// 消息缓存的持久化应通过MessageCache自身管理
+	}
+
+	return nil
+}
+
+// OnCandidateConsensusStarted 当候选共识启动时调用
+// 冲刷该共识的所有缓存消息
+func (um *UpgradeManager) OnCandidateConsensusStarted(newConsensusID int64) error {
+	um.mu.Lock()
+	defer um.mu.Unlock()
+
+	return um.onCandidateConsensusStartedNoLock(newConsensusID)
+}
+
+// onCandidateConsensusStartedNoLock 内部实现，不加锁
+func (um *UpgradeManager) onCandidateConsensusStartedNoLock(newConsensusID int64) error {
+	um.log.WithField("consensus_id", newConsensusID).Info("Candidate consensus started, flushing cached messages")
+
+	// 从缓存中取出所有属于该共识的消息
+	cached := um.messageCache.PopAllForConsensus(newConsensusID)
+
+	// 逐个转发
+	forwardCount := 0
+	for _, msg := range cached {
+		if err := um.forwardToConsensus(newConsensusID, msg.Message); err != nil {
+			um.log.WithError(err).Warn("Failed to forward cached message")
+			continue
+		}
+		forwardCount++
+
+		// 从持久化存储中删除（如果需要）
+		// 注意：消息缓存持久化应由MessageCache管理
+	}
+
+	um.log.WithField("forwarded_count", forwardCount).Info("Cached messages flushed to consensus")
+	return nil
+}
+
+// OnConsensusSwitched 当共识切换完成时调用
+// 清理旧epoch的消息
+func (um *UpgradeManager) OnConsensusSwitched(oldEpoch uint64) error {
+	um.mu.Lock()
+	defer um.mu.Unlock()
+
+	um.log.WithField("old_epoch", oldEpoch).Info("Consensus switched, cleaning old epoch messages")
+
+	// 清理内存缓存
+	cleaned := um.messageCache.DropByEpoch(oldEpoch)
+
+	// 清理持久化存储（如果需要）
+	// 注意：消息缓存持久化应由MessageCache管理
+
+	um.log.WithField("cleaned_count", cleaned).Info("Old epoch messages cleaned")
+	return nil
+}
+
+// SetCurrentEpoch 设置当前epoch
+func (um *UpgradeManager) SetCurrentEpoch(epoch uint64) {
+	um.mu.Lock()
+	defer um.mu.Unlock()
+
+	oldEpoch := um.currentEpoch
+	um.currentEpoch = epoch
+
+	um.log.WithFields(logrus.Fields{
+		"old_epoch": oldEpoch,
+		"new_epoch": epoch,
+	}).Debug("Current epoch updated")
+
+	// 处理缓存的消息：将属于当前epoch的消息取出并转发
+	go um.processCachedMessagesForEpoch(epoch)
+}
+
+// processCachedMessagesForEpoch 处理缓存的指定epoch消息
+func (um *UpgradeManager) processCachedMessagesForEpoch(epoch uint64) {
+	messages := um.messageCache.GetMessagesByEpoch(epoch)
+
+	if len(messages) == 0 {
+		return
+	}
+
+	um.log.WithFields(logrus.Fields{
+		"epoch": epoch,
+		"count": len(messages),
+	}).Info("Processing cached messages for current epoch")
+
+	for _, msg := range messages {
+		if err := um.forwardToConsensus(msg.ReceiverConsensusID, msg.Message); err != nil {
+			um.log.WithError(err).Warn("Failed to forward cached message")
+		}
+	}
+}
+
+// isControlMessage 判断是否为控制消息
+func (um *UpgradeManager) isControlMessage(msg interface{}) bool {
+	// 检查是否为升级相关的pb消息
+	switch m := msg.(type) {
+	case *pb.Request:
+		// 检查Request中是否包含升级配置交易
+		if m.Tx != nil {
+			if tx, err := RawTransaction(m.Tx).ToTx(); err == nil {
+				// 检查交易类型是否为升级相关
+				return isUpgradeTransaction(tx)
+			}
+		}
+	case *pb.Block:
+		// 检查区块中是否包含升级配置交易
+		for _, tx := range m.Txs {
+			if tx != nil && len(tx.Data) > 0 {
+				if pbTx, err := RawTransaction(tx.Data).ToTx(); err == nil {
+					if isUpgradeTransaction(pbTx) {
+						return true
+					}
+				}
+			}
+		}
+	}
+	return false
+}
+
+// handleControlMessage 处理控制消息
+func (um *UpgradeManager) handleControlMessage(msg interface{}) error {
+	um.log.Debug("Handling control message")
+
+	switch m := msg.(type) {
+	case *pb.Request:
+		// 处理升级配置交易
+		if m.Tx != nil {
+			if tx, err := RawTransaction(m.Tx).ToTx(); err == nil {
+				return um.processUpgradeTransaction(tx)
+			}
+		}
+	case *pb.Block:
+		// 处理包含升级交易的区块
+		for _, tx := range m.Txs {
+			if tx != nil && len(tx.Data) > 0 {
+				if pbTx, err := RawTransaction(tx.Data).ToTx(); err == nil {
+					if err := um.processUpgradeTransaction(pbTx); err != nil {
+						um.log.WithError(err).Warn("Failed to process upgrade transaction")
+					}
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+// isConsensusRunning 判断共识是否已启动
+func (um *UpgradeManager) isConsensusRunning(consensusID int64) bool {
+	// 检查是否为当前主链共识
+	if um.currentConsensus != nil && um.currentConsensus.GetConsensusID() == consensusID {
+		return true
+	}
+
+	// 检查是否为已启动的候选共识
+	if um.multiChainManager != nil {
+		// 获取所有候选链
+		candidates := um.multiChainManager.ListCandidateChains()
+		for _, candidateID := range candidates {
+			candidate := um.multiChainManager.GetCandidateConsensus(candidateID)
+			if candidate != nil && candidate.GetConsensusID() == consensusID {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+// forwardToConsensus 转发消息到指定共识
+func (um *UpgradeManager) forwardToConsensus(consensusID int64, msg interface{}) error {
+	um.log.WithFields(logrus.Fields{
+		"consensus_id": consensusID,
+	}).Debug("Forwarding message to consensus")
+
+	var targetConsensus model.Consensus
+
+	// 查找目标共识实例
+	if um.currentConsensus != nil && um.currentConsensus.GetConsensusID() == consensusID {
+		targetConsensus = um.currentConsensus
+	} else if um.multiChainManager != nil {
+		// 在候选链中查找
+		candidates := um.multiChainManager.ListCandidateChains()
+		for _, candidateID := range candidates {
+			candidate := um.multiChainManager.GetCandidateConsensus(candidateID)
+			if candidate != nil && candidate.GetConsensusID() == consensusID {
+				targetConsensus = candidate
+				break
+			}
+		}
+	}
+
+	if targetConsensus == nil {
+		return fmt.Errorf("consensus %d not found", consensusID)
+	}
+
+	// 根据消息类型转发
+	switch m := msg.(type) {
+	case []byte:
+		// 字节消息，使用MsgByteEntrance
+		select {
+		case targetConsensus.GetMsgByteEntrance() <- m:
+			return nil
+		default:
+			return fmt.Errorf("consensus message channel is full")
+		}
+	case *pb.Request:
+		// Request消息
+		select {
+		case targetConsensus.GetRequestEntrance() <- m:
+			return nil
+		default:
+			return fmt.Errorf("consensus request channel is full")
+		}
+	default:
+		// 尝试转换为字节后发送
+		if msgBytes, ok := msg.([]byte); ok {
+			select {
+			case targetConsensus.GetMsgByteEntrance() <- msgBytes:
+				return nil
+			default:
+				return fmt.Errorf("consensus message channel is full")
+			}
+		}
+		return fmt.Errorf("unsupported message type: %T", msg)
+	}
+}
+
 // GetUpgradeState 获取升级状态
 func (um *UpgradeManager) GetUpgradeState() *UpgradeState {
 	um.mu.RLock()
@@ -413,7 +731,11 @@ func (um *UpgradeManager) persistState() error {
 	if um.persistence == nil {
 		return nil
 	}
-	return um.persistence.SaveState(um.upgradeState)
+	err := um.persistence.SaveState(um.upgradeState)
+	if err != nil {
+		um.log.WithError(err).Error("Failed to persist state")
+	}
+	return err
 }
 
 // persistProposal 持久化提案
@@ -421,7 +743,25 @@ func (um *UpgradeManager) persistProposal(proposal *UpgradeProposal) error {
 	if um.persistence == nil {
 		return nil
 	}
-	return um.persistence.SaveProposal(proposal)
+	err := um.persistence.SaveProposal(proposal)
+	if err != nil {
+		um.log.WithError(err).Error("Failed to persist proposal")
+	}
+	return err
+}
+
+// GetCurrentProposal 获取当前提案
+func (um *UpgradeManager) GetCurrentProposal() *UpgradeProposal {
+	um.mu.RLock()
+	defer um.mu.RUnlock()
+	return um.currentProposal
+}
+
+// GetMessageCache 获取消息缓存（用于测试）
+func (um *UpgradeManager) GetMessageCache() *MessageCache {
+	um.mu.RLock()
+	defer um.mu.RUnlock()
+	return um.messageCache
 }
 
 // recordEvent 记录事件
@@ -524,4 +864,55 @@ func (um *UpgradeManager) StartUpgradeWithFactory(proposal *UpgradeProposal) err
 
 	// 调用原有的 StartUpgrade
 	return um.StartUpgrade(proposal, newConsensus)
+}
+
+// RawTransaction 类型别名，用于消息处理
+type RawTransaction []byte
+
+// ToTx 将原始交易转换为pb.Transaction
+func (rtx RawTransaction) ToTx() (*pb.Transaction, error) {
+	tx := new(pb.Transaction)
+	err := proto.Unmarshal([]byte(rtx), tx)
+	if err != nil {
+		return nil, err
+	}
+	return tx, nil
+}
+
+// isUpgradeTransaction 判断交易是否为升级配置交易
+func isUpgradeTransaction(tx *pb.Transaction) bool {
+	// 检查交易Payload字段，判断是否包含升级配置
+	// 这里使用简单的前缀匹配
+	if len(tx.Payload) > 0 {
+		// 假设升级交易以特定前缀标识
+		prefix := []byte("UPGRADE:")
+		if len(tx.Payload) >= len(prefix) {
+			for i := range prefix {
+				if tx.Payload[i] != prefix[i] {
+					return false
+				}
+			}
+			return true
+		}
+	}
+	return false
+}
+
+// processUpgradeTransaction 处理升级配置交易
+func (um *UpgradeManager) processUpgradeTransaction(tx *pb.Transaction) error {
+	um.log.WithField("tx_payload_len", len(tx.Payload)).Info("Processing upgrade transaction")
+
+	// 解析升级配置
+	// 实际实现中需要反序列化tx.Payload获取UpgradeProposal
+	// 这里简化处理
+
+	// 验证交易签名
+	// if !um.verifyUpgradeTransactionSignature(tx) {
+	//     return fmt.Errorf("invalid upgrade transaction signature")
+	// }
+
+	// 记录事件
+	um.recordEvent(EventUpgradeStarted, fmt.Sprintf("Received upgrade transaction: %d bytes", len(tx.Payload)))
+
+	return nil
 }

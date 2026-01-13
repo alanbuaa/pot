@@ -7,15 +7,6 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func DecodePacket(packet []byte) (*pb.Packet, error) {
-	p := new(pb.Packet)
-	err := proto.Unmarshal(packet, p)
-	if err != nil {
-		return nil, err
-	}
-	return p, nil
-}
-
 func (e *PoTEngine) onReceiveMsg() {
 	for {
 		select {
@@ -305,4 +296,13 @@ func (e *PoTEngine) handleblock(b *types.Block) {
 		channel <- b
 	}
 
+}
+
+func DecodePacket(packet []byte) (*pb.Packet, error) {
+	p := new(pb.Packet)
+	err := proto.Unmarshal(packet, p)
+	if err != nil {
+		return nil, err
+	}
+	return p, nil
 }

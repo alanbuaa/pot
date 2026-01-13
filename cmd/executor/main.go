@@ -9,46 +9,58 @@ import (
 
 	"github.com/zzz136454872/upgradeable-consensus/config"
 	"github.com/zzz136454872/upgradeable-consensus/crypto"
-	pb "github.com/zzz136454872/upgradeable-consensus/pkg/proto"
 	"github.com/zzz136454872/upgradeable-consensus/pkg/logging"
+	pb "github.com/zzz136454872/upgradeable-consensus/pkg/proto"
 	"google.golang.org/grpc"
 )
 
 func main() {
-
+	// 加载配置文件
 	cfg, err := config.NewConfig("config/config.yaml", 0)
 	if err != nil {
 		fmt.Println("read config.yaml failed: ", err)
 	}
 
+	// 初始化日志系统
 	logging.Setup("config/config.yaml")
 	logger := logging.GetLogger()
 
+	// 创建 TCP 监听器，监听配置文件中指定的执行器地址
 	listen, err := net.Listen("tcp", cfg.Consensus.PoT.ExecutorAddress)
-	logger.Infof("listening on address: %s", cfg.Consensus.PoT.ExecutorAddress)
+	logger.Infof("executor is running on: %s", cfg.Consensus.PoT.ExecutorAddress)
 	if err != nil {
-		logger.Error("failed to listen: ", err)
+		logger.Error("failed to runn executor: ", err)
 		return
 	}
+	// 创建 gRPC 服务器
 	rpcserver := grpc.NewServer()
+	// 创建 PoT 执行器实例
 	exec := NewExec()
+	// 注册 PoT 执行器服务
 	pb.RegisterPoTExecutorServer(rpcserver, exec)
+	// 在后台启动 gRPC 服务
 	go rpcserver.Serve(listen)
 	defer rpcserver.Stop()
 	defer listen.Close()
+	// 主循环：持续生成测试交易数据
 	for {
-		time.Sleep(1000 * time.Second)
+		time.Sleep(1 * time.Second)
+		logger.Info("Generating test blocks for height ", exec.height)
+		// 为当前高度生成测试区块
 		block := exec.GenerateTxsForHeight(exec.height)
 		exec.blocks = append(exec.blocks, block)
 		exec.height += 1
 	}
 }
 
+// PoTExecutor 是 PoT 共识的执行器实现
+// 维护当前区块高度和已生成的模拟区块列表
 type PoTExecutor struct {
-	height uint64
-	blocks []*Mockblock
+	height uint64       // 当前区块高度
+	blocks []*Mockblock // 已生成的模拟区块列表
 }
 
+// NewExec 创建并返回一个新的 PoTExecutor 实例
 func NewExec() *PoTExecutor {
 	return &PoTExecutor{
 		height: 0,
@@ -56,15 +68,27 @@ func NewExec() *PoTExecutor {
 	}
 }
 
+// GetTxs 获取指定高度范围内的交易数据，由远程调用
+// 参数:
+//   - ctx: 上下文
+//   - request: 包含起始高度的请求
+//
+// 返回:
+//   - GetTxResponse: 包含交易区块列表的响应
+//   - error: 错误信息
 func (p *PoTExecutor) GetTxs(ctx context.Context, request *pb.GetTxRequest) (*pb.GetTxResponse, error) {
 
 	logger := logging.GetLogger()
 	logger.Infof("receive request, start %d, end %d\n", request.StartHeight, p.height)
+	// 获取请求的起始高度
 	start := request.GetStartHeight()
+	// 如果请求的起始高度超过当前高度，返回空响应
 	if start > p.height {
 		return &pb.GetTxResponse{}, nil
 	}
+	// 构造执行区块列表
 	execblock := make([]*pb.ExecuteBlock, 0)
+	// 遍历指定范围内的区块
 	for i := start; i < uint64(len(p.blocks)); i++ {
 		header := &pb.ExecuteHeader{Height: i}
 		txs := make([]*pb.ExecutedTx, 0)
@@ -91,7 +115,16 @@ func (p *PoTExecutor) GetTxs(ctx context.Context, request *pb.GetTxRequest) (*pb
 
 }
 
+// VerifyTxs 验证交易列表的有效性
+// 参数:
+//   - ctx: 上下文
+//   - request: 包含待验证交易列表的请求
+//
+// 返回:
+//   - VerifyTxResponse: 包含验证结果的响应
+//   - error: 错误信息
 func (p *PoTExecutor) VerifyTxs(ctx context.Context, request *pb.VerifyTxRequest) (*pb.VerifyTxResponse, error) {
+	// 创建验证结果数组，默认所有交易都通过验证
 	flag := make([]bool, len(request.GetTxs()))
 	for i := 0; i < len(flag); i++ {
 		flag[i] = true
@@ -103,8 +136,16 @@ func (p *PoTExecutor) VerifyTxs(ctx context.Context, request *pb.VerifyTxRequest
 	return reponse, nil
 }
 
+// ExecuteTxs 执行单个交易
+// 参数:
+//   - ctx: 上下文
+//   - request: 包含待执行交易的请求
+//
+// 返回:
+//   - ExecuteTxResponse: 包含执行结果的响应
+//   - error: 错误信息
 func (p *PoTExecutor) ExecuteTxs(ctx context.Context, request *pb.ExecuteTxRequest) (*pb.ExecuteTxResponse, error) {
-
+	// 返回执行成功的响应（测试实现，始终返回成功）
 	return &pb.ExecuteTxResponse{
 		Tx:   request.Tx,
 		Flag: true,
@@ -113,21 +154,43 @@ func (p *PoTExecutor) ExecuteTxs(ctx context.Context, request *pb.ExecuteTxReque
 
 }
 
+// VerifyIncensentive 验证激励数据的有效性
+// 参数:
+//   - ctx: 上下文
+//   - request: 包含待验证激励数据的请求
+//
+// 返回:
+//   - IncensentiveVerifyResponse: 包含验证结果的响应
+//   - error: 错误信息
 func (p *PoTExecutor) VerifyIncensentive(ctx context.Context, request *pb.IncensentiveVerifyRequest) (*pb.IncensentiveVerifyResponse, error) {
-
+	// 返回验证成功的响应（测试实现，始终返回成功）
 	return &pb.IncensentiveVerifyResponse{
 		VerifyRes: []bool{true},
 	}, nil
 }
 
+// GetIncentive 获取激励数据
+// 参数:
+//   - ctx: 上下文
+//   - request: 获取激励数据的请求
+//
+// 返回:
+//   - GetIncentiveResponse: 包含激励数据的响应
+//   - error: 错误信息
 func (p *PoTExecutor) GetIncentive(ctx context.Context, request *pb.GetIncentiveRequest) (*pb.GetIncentiveResponse, error) {
-
+	// 返回空的激励响应（测试实现）
 	return &pb.GetIncentiveResponse{}, nil
 }
 
+// GenerateTxsForHeight 为指定高度生成模拟交易数据
+// 参数:
+//   - height: 区块高度
+//
+// 返回:
+//   - Mockblock: 包含生成的交易列表的模拟区块
 func (p *PoTExecutor) GenerateTxsForHeight(height uint64) *Mockblock {
 	txs := make([][]byte, 0)
-	for i := 0; i < 1000; i++ {
+	for i := 0; i < 100; i++ {
 		bigint := big.NewInt(int64(i))
 		tx := crypto.Hash(bigint.Bytes())
 		txs = append(txs, tx)
@@ -138,124 +201,9 @@ func (p *PoTExecutor) GenerateTxsForHeight(height uint64) *Mockblock {
 	}
 }
 
+// Mockblock 表示一个模拟区块
+// 用于测试目的，包含区块高度和交易列表
 type Mockblock struct {
-	Height uint64
-	Txs    [][]byte
+	Height uint64   // 区块高度
+	Txs    [][]byte // 交易数据列表
 }
-
-//package main
-//
-//import (
-//	"context"
-//	"fmt"
-//	"github.com/ethereum/go-ethereum/common/hexutil"
-//	pb "github.com/zzz136454872/upgradeable-consensus/pkg/proto"
-//	"google.golang.org/grpc"
-//	"log"
-//)
-//
-//// 连接到gRPC服务器
-//func connectToServer(addr string) (*grpc.ClientConn, error) {
-//	conn, err := grpc.Dial(addr, grpc.WithInsecure())
-//	if err != nil {
-//		return nil, fmt.Errorf("did not connect: %v", err)
-//	}
-//	return conn, nil
-//}
-//
-//// 创建客户端并调用服务
-//func main() {
-//	//假设服务器地址为localhost:50051
-//	serverAddr := "127.0.0.1:9869"
-//
-//	// 连接到服务器
-//	conn, err := connectToServer(serverAddr)
-//	if err != nil {
-//		log.Fatalf("Failed to connect: %v", err)
-//	}
-//	defer conn.Close()
-//
-//	// 创建客户端
-//	client := pb.NewDciExectorClient(conn)
-//
-//	for true {
-//
-//		//str := "0x13017a8cdc8a5a3929fdd814c925c9db2ff9875fc0b9fd30250f9126af04d5d1decfa524d9226d5f529c0dc708dc3e2f0dcb254c75848f4f16f972712231602f04165df4a72bc8bceaf4effcc62dc59461eba9801cb66c99a9666553f1ba42d1"
-//		//addr, err := hexutil.Decode(str)
-//		////fmt.Println(addr)
-//		//str1 := "0xd9a26bd283cc41e6bbefea02bbb646e4f4055ab0bd1bf040f485a64f1cc1915f"
-//		//str2 := "0x4479d3eb7ced7d6da57cfda3897d3437fb52cb7a6805ae1935905a77dec23c67"
-//		//blockhash, err := hexutil.Decode(str1)
-//		//txhash, err := hexutil.Decode(str2)
-//		//dcireward := &pb.DciReward{
-//		//	Address: addr,
-//		//	Amount:  100,
-//		//	ChainID: 1,
-//		//	DciProof: &pb.DciProof{
-//		//		Height:    37,
-//		//		BlockHash: blockhash,
-//		//		TxHash:    txhash,
-//		//	},
-//		//}
-//		//
-//		//req := &pb.SendDciRequest{DciReward: []*pb.DciReward{dcireward}}
-//		//
-//		//resp, err := client.SendDci(context.Background(), req)
-//		//if err != nil {
-//		//	fmt.Println(err)
-//		//}
-//		//fmt.Printf("Response: %d\n", resp.IsSuccess)
-//		//break
-//
-//		str := "0x13017a8cdc8a5a3929fdd814c925c9db2ff9875fc0b9fd30250f9126af04d5d1decfa524d9226d5f529c0dc708dc3e2f0dcb254c75848f4f16f972712231602f04165df4a72bc8bceaf4effcc62dc59461eba9801cb66c99a9666553f1ba42d1"
-//		addr, err := hexutil.Decode(str)
-//		//fmt.Println(addr)
-//
-//		req := &pb.GetBalanceRequest{
-//			Address: addr,
-//		}
-//
-//		resp, err := client.GetBalance(context.Background(), req)
-//		if err != nil {
-//			fmt.Println(err)
-//		}
-//		fmt.Println(resp.Balance)
-//		//txid := resp.GetUtxos()[0].GetTxid()
-//		//txinput := types.TxInput{
-//		//	IsCoinbase: false,
-//		//	Txid:       crypto.Convert(txid),
-//		//	Voutput:    1,
-//		//	Scriptsig:  addr,
-//		//	Value:      2000,
-//		//	Address:    addr,
-//		//}
-//		//
-//		//txoutput := types.TxOutput{
-//		//	Address:  nil,
-//		//	Value:    2000,
-//		//	IsSpent:  false,
-//		//	ScriptPk: addr,
-//		//	Proof:    addr,
-//		//}
-//		//tx := types.RawTx{
-//		//	Txid:           [32]byte{},
-//		//	TxInput:        []types.TxInput{txinput},
-//		//	TxOutput:       []types.TxOutput{txoutput},
-//		//	CoinbaseProofs: nil,
-//		//}
-//		//request := &pb.DevastateDciRequest{
-//		//	Amount:      2000,
-//		//	Tx:          tx.ToProto(),
-//		//	To:          addr,
-//		//	Transaction: types.RandByte(),
-//		//}
-//		//
-//		//response, err := client.DevastateDci(context.Background(), request)
-//		//fmt.Println(response.Flag)
-//		break
-//	}
-//
-//	//privkey := crypto.GenerateKey()
-//	////pubkey := privkey.PublicKey()
-//	//fmt.Println(hexutil.Encode(privkey.PublicKeyBytes()))CommitBlock
-//}

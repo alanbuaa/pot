@@ -73,7 +73,7 @@ type Mempool struct {
 	mutex         *sync.RWMutex
 	BciRewardPool map[string]*WrappedBciReward
 	execorder     *list.List
-	execset       map[[crypto.Hashlen]byte]*list.Element
+	execset       map[[crypto.Hashlen]byte]*list.Element // 存放已执行的区块
 	raworder      *list.List
 	rawset        map[[crypto.Hashlen]byte]*list.Element
 	rawmap        map[[crypto.Hashlen]byte][]byte

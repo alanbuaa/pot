@@ -591,7 +591,7 @@ func (w *Worker) GetPqcKey(ctx context.Context, request *pb.GetPqcKeyRequest) (*
 	if request.Height != 0 {
 		b, err := w.chainReader.GetByHeight(request.Height)
 		if err != nil {
-			return &pb.GetPqcKeyResponse{Flag: false}, err
+			return &pb.GetPqcKeyResponse{Flag: false}, fmt.Errorf("[GetPqcKey] failed to get block at height %d: %w", request.Height, err)
 		}
 		bhash := b.GetHeader().Hash()
 
@@ -607,7 +607,7 @@ func (w *Worker) GetPqcKey(ctx context.Context, request *pb.GetPqcKeyRequest) (*
 	} else {
 		b, err := w.blockStorage.Get(request.BlockHash)
 		if err != nil {
-			return &pb.GetPqcKeyResponse{Flag: false}, err
+			return &pb.GetPqcKeyResponse{Flag: false}, fmt.Errorf("[GetPqcKey] failed to get block by hash %s: %w", hexutil.Encode(request.BlockHash), err)
 		}
 		bhash := b.GetHeader().Hash()
 

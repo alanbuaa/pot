@@ -19,9 +19,9 @@ type ProposeUpgradeRequest struct {
 	ForkHeight           uint64                 `json:"fork_height"`
 	CandidateStartHeight uint64                 `json:"candidate_start_height" binding:"required"`
 	SwitchHeight         uint64                 `json:"switch_height" binding:"required"`
-	Incentive          uint64                 `json:"incentive"`
-	Description        string                 `json:"description"`
-	ConsensusParams    map[string]interface{} `json:"consensus_params"`
+	Incentive            uint64                 `json:"incentive"`
+	Description          string                 `json:"description"`
+	ConsensusParams      map[string]interface{} `json:"consensus_params"`
 }
 
 // StartUpgradeRequest represents the request to start an upgrade

@@ -36,7 +36,9 @@ type MessageCache struct {
 // CachedMessage 缓存的消息
 type CachedMessage struct {
 	Message              interface{} // 通用消息类型，可以是任何共识消息
-	ConsensusID          int64
+	ConsensusID          int64       // 发送者共识ID
+	ReceiverConsensusID  int64       // 接收者共识ID（关键字段）
+	Epoch                uint64      // 消息所属epoch/时段（关键字段）
 	ReceivedTime         time.Time
 	ProcessedAfterSwitch bool
 }
@@ -73,37 +75,49 @@ func (mc *MessageCache) SetSwitchInfo(switchHeight uint64, oldConsensusID, newCo
 }
 
 // CacheMessage 缓存消息
-func (mc *MessageCache) CacheMessage(msg interface{}, consensusID int64) error {
+// receiverConsensusID: 接收者共识ID
+// epoch: 消息所属epoch
+func (mc *MessageCache) CacheMessage(msg interface{}, senderConsensusID, receiverConsensusID int64, epoch uint64) error {
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
 
-	// 生成消息键
-	key := mc.generateMessageKey(msg)
+	// 生成消息键（包含epoch信息）
+	key := fmt.Sprintf("%d_%d_%d", receiverConsensusID, epoch, time.Now().UnixNano())
 
 	cached := &CachedMessage{
-		Message:      msg,
-		ConsensusID:  consensusID,
-		ReceivedTime: time.Now(),
+		Message:             msg,
+		ConsensusID:         senderConsensusID,
+		ReceiverConsensusID: receiverConsensusID,
+		Epoch:               epoch,
+		ReceivedTime:        time.Now(),
 	}
 
 	// 根据切换状态决定缓存位置
 	if !mc.switched {
 		// 切换前：如果是新共识的消息，缓存起来
-		if consensusID == mc.newConsensusID {
+		if receiverConsensusID == mc.newConsensusID {
 			if len(mc.newConsensusMessages) >= mc.maxCacheSize {
 				return fmt.Errorf("new consensus message cache full")
 			}
 			mc.newConsensusMessages[key] = cached
-			mc.log.WithField("key", key).Debug("Cached new consensus message (pre-switch)")
+			mc.log.WithFields(logrus.Fields{
+				"key":                key,
+				"receiver_consensus": receiverConsensusID,
+				"epoch":              epoch,
+			}).Debug("Cached new consensus message (pre-switch)")
 		}
 	} else {
 		// 切换后：如果是旧共识的消息，缓存起来（可能是延迟到达的）
-		if consensusID == mc.oldConsensusID {
+		if receiverConsensusID == mc.oldConsensusID {
 			if len(mc.oldConsensusMessages) >= mc.maxCacheSize {
 				return fmt.Errorf("old consensus message cache full")
 			}
 			mc.oldConsensusMessages[key] = cached
-			mc.log.WithField("key", key).Debug("Cached old consensus message (post-switch)")
+			mc.log.WithFields(logrus.Fields{
+				"key":                key,
+				"receiver_consensus": receiverConsensusID,
+				"epoch":              epoch,
+			}).Debug("Cached old consensus message (post-switch)")
 		}
 	}
 
@@ -129,6 +143,43 @@ func (mc *MessageCache) OnSwitch() []*CachedMessage {
 
 	// 清空新共识消息缓存
 	mc.newConsensusMessages = make(map[string]*CachedMessage)
+
+	return messages
+}
+
+// PopAllForConsensus 获取并移除特定共识的所有缓存消息（用于候选共识启动时）
+func (mc *MessageCache) PopAllForConsensus(consensusID int64) []*CachedMessage {
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+
+	var messages []*CachedMessage
+
+	if !mc.switched {
+		// 切换前：从新共识缓存中取出
+		if consensusID == mc.newConsensusID {
+			for key, msg := range mc.newConsensusMessages {
+				if msg.ReceiverConsensusID == consensusID {
+					messages = append(messages, msg)
+					delete(mc.newConsensusMessages, key)
+				}
+			}
+		}
+	} else {
+		// 切换后：从旧共识缓存中取出
+		if consensusID == mc.oldConsensusID {
+			for key, msg := range mc.oldConsensusMessages {
+				if msg.ReceiverConsensusID == consensusID {
+					messages = append(messages, msg)
+					delete(mc.oldConsensusMessages, key)
+				}
+			}
+		}
+	}
+
+	mc.log.WithFields(logrus.Fields{
+		"consensus_id": consensusID,
+		"count":        len(messages),
+	}).Info("Popped cached messages for consensus")
 
 	return messages
 }
@@ -219,6 +270,63 @@ type CacheStats struct {
 	MaxCacheSize             int
 	Switched                 bool
 	SwitchHeight             uint64
+}
+
+// DropByEpoch 清理指定epoch的消息
+func (mc *MessageCache) DropByEpoch(epoch uint64) int {
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+
+	cleaned := 0
+
+	// 清理新共识消息缓存
+	for key, msg := range mc.newConsensusMessages {
+		if msg.Epoch == epoch {
+			delete(mc.newConsensusMessages, key)
+			cleaned++
+		}
+	}
+
+	// 清理旧共识消息缓存
+	for key, msg := range mc.oldConsensusMessages {
+		if msg.Epoch == epoch {
+			delete(mc.oldConsensusMessages, key)
+			cleaned++
+		}
+	}
+
+	if cleaned > 0 {
+		mc.log.WithFields(logrus.Fields{
+			"epoch": epoch,
+			"count": cleaned,
+		}).Info("Dropped messages by epoch")
+	}
+
+	return cleaned
+}
+
+// GetMessagesByEpoch 获取指定epoch的所有消息
+func (mc *MessageCache) GetMessagesByEpoch(epoch uint64) []*CachedMessage {
+	mc.mu.RLock()
+	defer mc.mu.RUnlock()
+
+	var messages []*CachedMessage
+
+	// 从新共识缓存中查找
+	for _, msg := range mc.newConsensusMessages {
+		if msg.Epoch == epoch {
+			messages = append(messages, msg)
+		}
+	}
+
+	// 从旧共识缓存中查找
+	for _, msg := range mc.oldConsensusMessages {
+		if msg.Epoch == epoch {
+			messages = append(messages, msg)
+		}
+	}
+
+	return messages
 }
 
 // generateMessageKey 生成消息键

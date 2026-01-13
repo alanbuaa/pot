@@ -1,202 +1,557 @@
 
-## Project overview
+# POT 可升级共识框架
 
-This repository contains a reference implementation of an Upgradeable Consensus framework. It is intended for research and demonstration of upgradeable consensus designs, interactions between consensus components, and integration with executors. The codebase is written in Go and includes consensus cores, networking, p2p layers, protobuf definitions, and example commands.
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![Go Version](https://img.shields.io/badge/go-1.20+-00ADD8.svg)](https://go.dev)
 
-This README follows common software engineering conventions: overview, prerequisites, quick start (build/generate keys/run/test), development instructions (proto generation, debugging), directory notes, and troubleshooting.
+## 📖 项目简介
 
-## Featchers
-以pot共识为基础，支持共识热切换。当前已支持共识包括：
-- hotstuff[basic,event-driven,chained]
-- pow
-- pot
-- whirly
-- pos[todo]
+本项目是一个可升级共识框架的参考实现，用于研究和演示可升级共识的设计、共识组件之间的交互以及与执行器的集成。项目采用 Go 语言开发，包含共识核心、网络层、P2P 层、Protobuf 定义和示例命令。
 
-## 🎨 可视化大屏 (NEW!)
+### 核心特性
 
-本项目新增了一个完整的 Web 可视化大屏系统，用于实时监控和展示 POT 共识系统的运行状态。
+基于 POT 共识，支持共识热切换。当前已支持的共识算法包括：
 
-### 功能特性
+- **HotStuff** - 支持 Basic、Event-Driven、Chained 三种模式
+- **POW** - 工作量证明
+- **POT** - Proof of Time 时间证明
+- **Whirly** - 轻量级共识
+- **POS** - 权益证明（开发中）
 
-- ✅ **实时监控** - POT 共识状态、VDF 计算进度、性能指标
-- ✅ **网络拓扑** - 双层网络结构可视化（委员会层 + POT 节点层）
-- ✅ **交易池监控** - 交易数量、类型分布、确认时间
-- ✅ **BCI 激励** - 奖励分配、锁定状态、利息统计
-- ✅ **存储状态** - 容量使用、区块统计、压缩率
-- ✅ **双重数据源** - HTTP 轮询 + WebSocket 实时推送
+## 📁 项目结构
 
-### 技术栈
-
-- Vue 3 + TypeScript + Vite
-- Ant Design Vue 4.x
-- @antv/g6 (网络拓扑)
-- ECharts 5.x (数据可视化)
-- TailwindCSS 3.x
-
-### 快速启动
-
-```bash
-# 进入 web 目录
-cd web
-
-# 安装依赖
-npm install
-
-# 启动开发服务器
-npm run dev
-
-# 访问 http://localhost:3000
+```
+pot/
+├── cmd/                    # 可执行程序入口
+│   ├── server/            # 共识节点服务器
+│   ├── executor/          # 交易执行器
+│   ├── client/            # 客户端工具
+│   └── genkey/            # 密钥生成工具
+├── consensus/             # 共识算法实现
+│   ├── hotstuff/         # HotStuff 共识
+│   ├── pot/              # POT 共识
+│   ├── pow/              # POW 共识
+│   └── whirly/           # Whirly 共识
+├── pkg/proto/            # Protobuf 定义和生成文件
+├── p2p/                  # P2P 网络层
+├── config/               # 配置文件
+├── data/keys/            # 密钥文件目录
+├── bin/                  # 编译输出目录
+└── web/                  # 可视化前端
 ```
 
-详细文档：
-- **快速上手**: [web/QUICKSTART.md](web/QUICKSTART.md)
-- **开发指南**: [web/DEVELOPMENT.md](web/DEVELOPMENT.md)
-- **API 文档**: [docs/visualize-api-summary.md](docs/visualize-api-summary.md)
-- **设计方案**: [docs/visualize-layout-design.md](docs/visualize-layout-design.md)
+## 🔧 环境准备
 
-### 预览
+在开始之前，请确保已安装以下工具：
 
-可视化大屏包含以下主要模块：
+- **Go 1.20+** - [安装指南](https://go.dev/doc/install)
+- **Make** - 构建工具
+- **Protocol Buffers** - protoc 编译器
+- **Go Protobuf 插件** - protoc-gen-go 和 protoc-gen-go-grpc
 
-- 🎯 **顶部状态栏** - 系统运行时长、区块高度、TPS、节点状态
-- 📊 **左侧面板** - POT 共识状态、VDF 计算监控、性能指标
-- 🌐 **中心区域** - 网络拓扑图（双层结构）
-- 📈 **右侧面板** - 交易池监控、BCI 激励、存储状态
-
-## High-level layout
-
-- `cmd/` - entry points for different executables (server, client, genkey, etc.).
-- `pkg/proto/` - protobuf definitions and generated Go files.
-- `consensus/`, `model/`, `types/`, `utils/` - consensus implementations, data models and utility code.
-- `p2p/`, `node/` - networking and node-level code.
-- `keys/` - runtime/test key files (created by `make genkey`).
-- `bin/` - default output directory for binaries produced by `make`.
-
-(See repository root for the full structure.)
-
-## Prerequisites
-
-Before you start, ensure the following tools are installed and available on your PATH:
-
-- Go 1.20+ (recommended)
-- make
-- protoc (Protocol Buffers compiler)
-- protoc-gen-go and protoc-gen-go-grpc (protobuf/grpc code generators for Go)
-
-To install the Go protobuf plugins:
+### 安装 Protobuf 插件
 
 ```bash
 go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
 go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
 ```
 
-Confirm that `go`, `protoc`, `protoc-gen-go` and `protoc-gen-go-grpc` are accessible from your PATH.
-
-## Quick start (local example)
-
-Run these commands from the repository root.
-
-1) Build all binaries (output to `bin/`):
+验证安装：
 
 ```bash
+go version
+protoc --version
+which protoc-gen-go
+which protoc-gen-go-grpc
+```
+
+## 🚀 快速开始
+
+### 方法一：本地单节点开发
+
+适用于本地开发和调试，运行单个共识节点。
+
+#### 1. 构建项目
+
+```bash
+# 构建所有核心二进制文件
 make build
+
+# 或构建所有 cmd/ 下的程序
+make build-cmds
 ```
 
-2) Generate example keys (written into `keys/`):
+#### 2. 生成密钥
 
 ```bash
-make genkey
+# 生成密钥文件到 data/keys/ 目录
+make run_genkey
 ```
 
-3) Run tests:
+#### 3. 配置节点
 
-```bash
-make test
+编辑 [config/config.yaml](config/config.yaml) 文件，确认配置：
+
+```yaml
+address_ip: "127.0.0.1"
+address_start_port: "6060"
+total: 1  # 单节点
+executor:
+  type: remote
+  address: 127.0.0.1:9877
 ```
 
-4) Start the example server (open a terminal for this):
+#### 4. 启动服务
 
-```bash
-make run_server
-```
-
-5) Start the mock executor or remote executor (open another terminal):
+**终端 1 - 启动执行器：**
 
 ```bash
 make run_executor
 ```
 
-Note: some commands log to `logs/`. You can also run binaries directly from `bin/` with arguments for more targeted testing.
+**终端 2 - 启动共识节点：**
 
-## Protobuf code generation
+```bash
+make run_server
+```
 
-If you modify `pkg/proto/*.proto`, regenerate the Go sources:
+#### 5. 访问可视化界面
+
+打开浏览器访问：http://localhost:8088
+
+#### 6. 运行测试
+
+```bash
+# 运行所有测试
+make test
+
+# 清理构建产物
+make clean
+```
+
+### 方法二：本地多节点容器测试
+
+适用于在本地模拟多节点集群环境，使用 Docker Compose 部署。
+
+#### 1. 准备环境
+
+```bash
+# 确保已安装 Docker 和 Docker Compose
+docker --version
+docker-compose --version
+
+# 生成密钥（如果还未生成）
+make run_genkey
+```
+
+#### 2. 构建前端资源
+
+```bash
+# 编译 Web 可视化界面
+make build_web
+```
+
+#### 3. 配置多节点
+
+编辑 [config/config_docker.yaml](config/config_docker.yaml)，配置多节点：
+
+```yaml
+address_ip: "0.0.0.0"
+total: 4  # 节点数量
+executor:
+  address: executor:9877  # 使用容器名称
+consensus:
+  pot:
+    executorAddress: executor:9877
+```
+
+对于多节点部署，需要修改 [docker-compose.yml](docker-compose.yml) 添加更多节点：
+
+```yaml
+services:
+  executor:
+    # ... executor 配置
+  
+  server-1:
+    # ... server 配置
+  
+  server-2:
+    # ... 复制并修改端口
+  
+  server-3:
+    # ... 复制并修改端口
+  
+  server-4:
+    # ... 复制并修改端口
+```
+
+#### 4. 启动集群
+
+```bash
+# 一键构建并启动所有服务
+make docker_compose_build
+
+# 或分步执行
+docker-compose build
+docker-compose up -d
+```
+
+#### 5. 查看运行状态
+
+```bash
+# 查看所有容器状态
+docker-compose ps
+
+# 查看日志
+make docker_compose_logs
+
+# 查看特定服务日志
+docker-compose logs -f server
+```
+
+#### 6. 访问服务
+
+- **Web 界面**: http://localhost:8088
+- **HTTP API**: http://localhost:8088/api/
+- **Executor RPC**: localhost:9877
+- **Server P2P**: localhost:6060
+- **Server RPC**: localhost:7070
+
+#### 7. 停止集群
+
+```bash
+# 停止所有服务
+make docker_compose_down
+
+# 或完全清理（包括数据卷）
+docker-compose down -v
+```
+
+#### 故障排查
+
+```bash
+# 查看容器日志
+docker-compose logs -f
+
+# 进入容器调试
+docker exec -it pot-server /bin/bash
+docker exec -it pot-executor /bin/bash
+
+# 重新构建（清除缓存）
+docker-compose build --no-cache
+docker-compose up --build -d
+```
+
+详细的 Docker 部署文档请参考：[docs/deploy/DOCKER.md](docs/deploy/DOCKER.md)
+
+### 方法三：广域网集群测试（Ansible 部署）
+
+适用于在多台物理服务器或云主机上部署分布式集群，测试真实网络环境下的性能。
+
+#### 1. 准备服务器环境
+
+确保所有目标服务器满足以下条件：
+
+- **操作系统**: Ubuntu 20.04+ / CentOS 7+ / Debian 10+
+- **SSH 访问**: 配置免密登录
+- **必要软件**: Docker、Docker Compose
+- **网络**: 服务器之间可以互相访问指定端口（6060, 7070, 8088, 9877）
+
+#### 2. 安装 Ansible
+
+在控制机上安装 Ansible：
+
+```bash
+# Ubuntu/Debian
+sudo apt update
+sudo apt install ansible -y
+
+# macOS
+brew install ansible
+
+# 验证安装
+ansible --version
+```
+
+#### 3. 配置 Ansible Inventory
+
+创建 `ansible/inventory.ini` 文件，定义服务器清单：
+
+```ini
+[pot_servers]
+node1 ansible_host=192.168.1.101 ansible_user=ubuntu node_id=0
+node2 ansible_host=192.168.1.102 ansible_user=ubuntu node_id=1
+node3 ansible_host=192.168.1.103 ansible_user=ubuntu node_id=2
+node4 ansible_host=192.168.1.104 ansible_user=ubuntu node_id=3
+
+[pot_executor]
+executor ansible_host=192.168.1.105 ansible_user=ubuntu
+
+[all:vars]
+ansible_python_interpreter=/usr/bin/python3
+```
+
+#### 4. 创建 Ansible Playbook
+
+创建 `ansible/deploy.yml` 部署脚本：
+
+```yaml
+---
+- name: 部署 POT 共识集群
+  hosts: all
+  become: yes
+  vars:
+    project_dir: /opt/pot
+    config_file: config_prod.yaml
+    
+  tasks:
+    - name: 安装 Docker
+      include_role:
+        name: docker
+    
+    - name: 创建项目目录
+      file:
+        path: "{{ project_dir }}"
+        state: directory
+        mode: '0755'
+    
+    - name: 复制项目文件
+      synchronize:
+        src: ../
+        dest: "{{ project_dir }}"
+        delete: yes
+        rsync_opts:
+          - "--exclude=.git"
+          - "--exclude=node_modules"
+          - "--exclude=bin"
+    
+    - name: 生成密钥
+      command: "{{ project_dir }}/bin/genkey -p {{ project_dir }}/data/keys/ -k 3 -l 4"
+      args:
+        creates: "{{ project_dir }}/data/keys/pub.key"
+
+- name: 部署 Executor 节点
+  hosts: pot_executor
+  become: yes
+  vars:
+    project_dir: /opt/pot
+  
+  tasks:
+    - name: 启动 Executor 容器
+      docker_container:
+        name: pot-executor
+        image: pot-executor:latest
+        state: started
+        restart_policy: unless-stopped
+        ports:
+          - "9877:9877"
+        volumes:
+          - "{{ project_dir }}/config/{{ config_file }}:/app/config/config.yaml:ro"
+          - "{{ project_dir }}/data/keys:/app/data/keys"
+
+- name: 部署 Server 节点
+  hosts: pot_servers
+  become: yes
+  vars:
+    project_dir: /opt/pot
+  
+  tasks:
+    - name: 生成节点配置
+      template:
+        src: config_template.yaml.j2
+        dest: "{{ project_dir }}/config/node_{{ node_id }}.yaml"
+    
+    - name: 启动 Server 容器
+      docker_container:
+        name: "pot-server-{{ node_id }}"
+        image: pot-server:latest
+        state: started
+        restart_policy: unless-stopped
+        network_mode: host
+        volumes:
+          - "{{ project_dir }}/config/node_{{ node_id }}.yaml:/app/config/config.yaml:ro"
+          - "{{ project_dir }}/data/keys:/app/data/keys"
+          - "{{ project_dir }}/data/node-{{ node_id }}:/app/data"
+```
+
+#### 5. 配置模板
+
+创建 `ansible/templates/config_template.yaml.j2`：
+
+```yaml
+address_ip: "{{ ansible_host }}"
+address_start_port: "6060"
+rpc_address_start_port: "7070"
+http_server_address: "0.0.0.0:8088"
+total: {{ groups['pot_servers'] | length }}
+executor:
+  type: remote
+  address: "{{ hostvars[groups['pot_executor'][0]]['ansible_host'] }}:9877"
+# ... 其他配置
+```
+
+#### 6. 执行部署
+
+```bash
+# 测试连接
+ansible -i ansible/inventory.ini all -m ping
+
+# 执行部署
+ansible-playbook -i ansible/inventory.ini ansible/deploy.yml
+
+# 或使用 tags 分步部署
+ansible-playbook -i ansible/inventory.ini ansible/deploy.yml --tags "docker"
+ansible-playbook -i ansible/inventory.ini ansible/deploy.yml --tags "deploy"
+```
+
+#### 7. 监控集群状态
+
+```bash
+# 查看所有节点状态
+ansible -i ansible/inventory.ini pot_servers -a "docker ps"
+
+# 查看日志
+ansible -i ansible/inventory.ini pot_servers -a "docker logs pot-server-{{ node_id }}"
+
+# 检查服务健康状态
+ansible -i ansible/inventory.ini pot_servers -m uri -a "url=http://localhost:8088/health"
+```
+
+#### 8. 更新和维护
+
+```bash
+# 滚动更新
+ansible-playbook -i ansible/inventory.ini ansible/update.yml --limit node1
+ansible-playbook -i ansible/inventory.ini ansible/update.yml --limit node2
+# ... 依次更新
+
+# 停止集群
+ansible-playbook -i ansible/inventory.ini ansible/stop.yml
+
+# 清理数据
+ansible -i ansible/inventory.ini all -a "rm -rf /opt/pot/data/node-*"
+```
+
+#### 性能测试
+
+部署完成后，可以使用压测工具：
+
+```bash
+# 在本地机器执行压测
+./bin/upgrade-cli benchmark \
+  --endpoints http://node1:8088,http://node2:8088,http://node3:8088,http://node4:8088 \
+  --tps 1000 \
+  --duration 300s
+```
+
+#### 注意事项
+
+- 确保防火墙开放必要端口：6060（P2P）、7070（RPC）、8088（HTTP）、9877（Executor）
+- 生产环境建议使用 TLS 加密通信
+- 定期备份 `data/keys/` 目录
+- 监控磁盘空间，区块数据会持续增长
+- 建议使用日志聚合工具（如 ELK）收集分析日志
+
+## 🛠️ 开发指南
+
+### Protobuf 代码生成
+
+修改 `pkg/proto/*.proto` 文件后，重新生成 Go 代码：
 
 ```bash
 make compile_proto
 ```
 
-The Makefile embeds plugin options into `--go-grpc_out`. If you prefer to run `protoc` manually, for example:
+### 常用 Makefile 命令
+
+| 命令 | 说明 |
+|------|------|
+| `make build` | 构建核心二进制文件 |
+| `make build-cmds` | 构建所有 cmd/ 下的程序 |
+| `make run_genkey` | 生成密钥文件 |
+| `make test` | 运行测试 |
+| `make compile_proto` | 生成 Protobuf 代码 |
+| `make run_server` | 启动服务器 |
+| `make run_executor` | 启动执行器 |
+| `make build_web` | 编译前端资源 |
+| `make docker_build_images` | 构建 Docker 镜像 |
+| `make docker_compose_build` | Docker Compose 一键部署 |
+| `make clean` | 清理构建产物 |
+
+### 调试
+
+使用 VS Code 调试：
+
+1. 在 `.vscode/launch.json` 中配置调试项
+2. 在代码中设置断点
+3. 按 F5 启动调试
+
+## 🔍 故障排查
+
+### 常见问题
+
+**1. `make: go: No such file or directory`**
+
+解决：安装 Go 并确保在 PATH 中
 
 ```bash
-protoc --go_out=. --go-grpc_out=. -I pkg/proto pkg/proto/*.proto
+go version
 ```
 
-Make sure `protoc-gen-go` and `protoc-gen-go-grpc` are available in your PATH.
+**2. Protobuf 生成失败**
 
-## Development and debugging
+解决：检查 protoc 和插件是否正确安装
 
-- Use the `.vscode/launch.json` configurations (located in the repo root) for debugging in VS Code. Those configurations set `cwd` to the project root.
-- Select a configuration in the Run & Debug panel (for example, "Launch server") and start debugging.
-- To step through a specific package, place breakpoints in the relevant `cmd/*` `main.go` and launch the associated debug configuration.
+```bash
+protoc --version
+which protoc-gen-go
+which protoc-gen-go-grpc
+```
 
-## Useful Makefile targets
+**3. 运行时找不到密钥**
 
-- `make build` — build primary binaries into `bin/`.
-- `make build-cmds` — build all commands under `cmd/`.
-- `make genkey` — build and run key generator; writes keys to `keys/`.
-- `make test` — run Go tests.
-- `make compile_proto` — generate Go code from `pkg/proto/*.proto`.
-- `make run_server` — run the server binary (demo).
-- `make run_remote` — run a mock remote executor/client.
-- `make clean` — remove built binaries, keys and logs (see Makefile).
+解决：生成密钥文件
 
-## Example run sequence (recommended)
+```bash
+make run_genkey
+ls data/keys/
+```
 
-1. `make buiild` to build.
-2. `make genkey` (only once or when regenerating keys).
-3. In terminal A: `make run_server`.
-4. In terminal B: `make run_remote` or `bin/remote`.
+**4. Docker 容器无法通信**
 
-## Key files and important sources
+解决：检查网络配置和容器名称
 
-- `main.go` (repo root): top-level entry or demo launcher; it may call into different commands.
-- `cmd/`: individual CLI entrypoints (server, client, genkey, ...).
-- `pkg/proto/`: proto definitions and generated artifacts (keep generator versions compatible with `go.mod`).
-- `consensus/`: consensus implementations (hotstuff, pot, pow, etc.).
+```bash
+docker network ls
+docker network inspect pot-network
+```
 
-## Troubleshooting
+**5. 端口被占用**
 
-- "make: go: No such file or directory": install Go and ensure `go` is on PATH (`go version`).
-- "ERROR: Invalid or corrupt Go version": your Go installation may be corrupted. Reinstall following https://go.dev/doc/install and confirm `go version`.
-- Protobuf generation fails: verify `protoc` and `protoc-gen-go`/`protoc-gen-go-grpc` are installed and their binaries are on PATH; ensure plugin versions are compatible with `go.mod`.
-- Runtime cannot find keys: check `keys/` contains the expected `.key` files or run `make genkey`.
+解决：修改配置文件中的端口或停止占用端口的进程
 
-If you'd like, I can:
+```bash
+lsof -i :8088
+```
 
-- run `make -n help` and print the Makefile targets (this just prints commands without executing them), so you can confirm available targets;
-- or create a focused developer guide for a submodule (for example, `consensus/pot`).
+## 📚 相关文档
 
-## License
+- [API 文档](web/API.md)
+- [Docker 部署指南](docs/deploy/DOCKER.md)
+- [可视化快速上手](web/QUICKSTART.md)
+- [开发指南](web/DEVELOPMENT.md)
+- [升级计划](docs/upgrade_plan/)
+- [模块文档](docs/modules/)
 
-This project is licensed under the terms in the `LICENSE` file at the repository root.
+## 📄 许可证
 
-## Acknowledgements
+本项目采用 Apache 2.0 许可证，详见 [LICENSE](LICENSE) 文件。
 
-Thanks to contributors and the open-source projects that provided tools and reference implementations.
+## 🙏 致谢
+
+感谢所有贡献者以及提供工具和参考实现的开源项目。
 
 ---
 
-If you want me to run `make -n help` now or generate per-module documentation, tell me which target or module and I'll proceed.
+如需帮助，请提交 Issue 或查看文档。
 

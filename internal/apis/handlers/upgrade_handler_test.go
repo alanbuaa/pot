@@ -144,7 +144,7 @@ func TestProposeUpgrade(t *testing.T) {
 		TargetConsensus:      "hotstuff",
 		CandidateStartHeight: 100,
 		SwitchHeight:         200,
-		Description:        "Test upgrade to HotStuff",
+		Description:          "Test upgrade to HotStuff",
 		CDLYaml: `name: hotstuff
 type: consensus
 version: 1.0.0`,
@@ -270,6 +270,206 @@ func TestRollback(t *testing.T) {
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("POST", "/api/upgrade/rollback", bytes.NewBuffer(body))
 	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var response model.ResponseData
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	assert.NoError(t, err)
+	assert.Equal(t, 200, response.Code)
+}
+
+func TestListCandidateChains(t *testing.T) {
+	router, _, cleanup := setupTestRouter(t)
+	defer cleanup()
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/api/candidate/list", nil)
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var response model.ResponseData
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	assert.NoError(t, err)
+	assert.Equal(t, 200, response.Code)
+}
+
+func TestGetCandidateState_NotFound(t *testing.T) {
+	router, _, cleanup := setupTestRouter(t)
+	defer cleanup()
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/api/candidate/test-candidate/state", nil)
+	router.ServeHTTP(w, req)
+
+	// Should return 503 as MultiChainManager is not available in test setup
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
+}
+
+func TestValidateCDL_Invalid(t *testing.T) {
+	router, _, cleanup := setupTestRouter(t)
+	defer cleanup()
+
+	reqData := model.ValidateCDLRequest{
+		CDLYaml: "invalid: yaml: syntax",
+	}
+
+	body, _ := json.Marshal(reqData)
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/api/cdl/validate", bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(w, req)
+
+	// Even invalid YAML should return OK with valid=false
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestCompileCDL(t *testing.T) {
+	router, _, cleanup := setupTestRouter(t)
+	defer cleanup()
+
+	reqData := model.CompileCDLRequest{
+		CDLYaml: `name: hotstuff
+type: consensus
+version: 1.0.0`,
+	}
+
+	body, _ := json.Marshal(reqData)
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/api/cdl/compile", bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var response model.ResponseData
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	assert.NoError(t, err)
+	assert.Equal(t, 200, response.Code)
+}
+
+func TestGetCurrentMetrics(t *testing.T) {
+	router, _, cleanup := setupTestRouter(t)
+	defer cleanup()
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/api/metrics/current", nil)
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var response model.ResponseData
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	assert.NoError(t, err)
+	assert.Equal(t, 200, response.Code)
+}
+
+func TestGetMetricsHistory(t *testing.T) {
+	router, _, cleanup := setupTestRouter(t)
+	defer cleanup()
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/api/metrics/history?start=0&end=100", nil)
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var response model.ResponseData
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	assert.NoError(t, err)
+	assert.Equal(t, 200, response.Code)
+}
+
+func TestQueryEvents(t *testing.T) {
+	router, _, cleanup := setupTestRouter(t)
+	defer cleanup()
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/api/events?limit=10", nil)
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var response model.ResponseData
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	assert.NoError(t, err)
+	assert.Equal(t, 200, response.Code)
+}
+
+func TestStartUpgrade(t *testing.T) {
+	router, _, cleanup := setupTestRouter(t)
+	defer cleanup()
+
+	// First create a proposal
+	proposeData := model.ProposeUpgradeRequest{
+		TargetConsensus:      "hotstuff",
+		CandidateStartHeight: 100,
+		SwitchHeight:         200,
+		Description:          "Test upgrade",
+	}
+	proposeBody, _ := json.Marshal(proposeData)
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/api/upgrade/propose", bytes.NewBuffer(proposeBody))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var proposeResponse model.ResponseData
+	err := json.Unmarshal(w.Body.Bytes(), &proposeResponse)
+	assert.NoError(t, err)
+
+	proposalData := proposeResponse.Data.(map[string]interface{})
+	proposalID := proposalData["proposal_id"].(string)
+
+	// Now start the upgrade
+	startData := model.StartUpgradeRequest{
+		ProposalID: proposalID,
+	}
+
+	startBody, _ := json.Marshal(startData)
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest("POST", "/api/upgrade/start", bytes.NewBuffer(startBody))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(w, req)
+
+	// Note: This might fail because ConsensusFactory is not set up
+	// But we're testing the API handler logic
+	if w.Code != http.StatusOK {
+		var response model.ResponseData
+		json.Unmarshal(w.Body.Bytes(), &response)
+		// It's ok if it fails due to missing factory
+		assert.Contains(t, response.Msg, "factory")
+	}
+}
+
+func TestGetProposal(t *testing.T) {
+	router, _, cleanup := setupTestRouter(t)
+	defer cleanup()
+
+	// Create a proposal first
+	proposeData := model.ProposeUpgradeRequest{
+		TargetConsensus:      "hotstuff",
+		CandidateStartHeight: 100,
+		SwitchHeight:         200,
+		Description:          "Test",
+	}
+	body, _ := json.Marshal(proposeData)
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/api/upgrade/propose", bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(w, req)
+
+	var proposeResponse model.ResponseData
+	json.Unmarshal(w.Body.Bytes(), &proposeResponse)
+	proposalData := proposeResponse.Data.(map[string]interface{})
+	proposalID := proposalData["proposal_id"].(string)
+
+	// Get the proposal
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest("GET", "/api/upgrade/proposals/"+proposalID, nil)
 	router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)

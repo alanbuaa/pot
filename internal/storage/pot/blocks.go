@@ -168,11 +168,11 @@ func (s *BlockStorage) Get(hash []byte) (*Block, error) {
 	err := s.boltdb.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(BlocksBucket))
 		if b == nil {
-			return fmt.Errorf("bucket %s not found", BlocksBucket)
+			return fmt.Errorf("[BlockStorage.Get] bucket %s not found", BlocksBucket)
 		}
 		blockbyte := b.Get(hash)
 		if blockbyte == nil {
-			return fmt.Errorf("get block error for block %s is not found", hash)
+			return fmt.Errorf("[BlockStorage.Get] block with hash %s is not found in bucket %s", hexutil.Encode(hash), BlocksBucket)
 		}
 
 		err := proto.Unmarshal(blockbyte, block)
@@ -194,11 +194,11 @@ func (s *BlockStorage) HasBlock(hash []byte) bool {
 	err := s.boltdb.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(BlocksBucket))
 		if b == nil {
-			return fmt.Errorf("bucket %s not found", BlocksBucket)
+			return fmt.Errorf("[BlockStorage.HasBlock] bucket %s not found", BlocksBucket)
 		}
 		blockbyte := b.Get(hash)
 		if blockbyte == nil {
-			return fmt.Errorf("get block error for block %s is not found", hash)
+			return fmt.Errorf("[BlockStorage.HasBlock] block with hash %s is not found", hexutil.Encode(hash))
 		}
 		return nil
 	})
@@ -386,11 +386,11 @@ func (s *BlockStorage) GetExcutedBlock(hash []byte) (*ExecutedBlock, error) {
 	err := s.boltdb.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(ExecutedBucket))
 		if b == nil {
-			return fmt.Errorf("bucket %s not found", ExecutedBucket)
+			return fmt.Errorf("[BlockStorage.GetExecutedBlock] bucket %s not found", ExecutedBucket)
 		}
 		blockbyte := b.Get(hash)
 		if blockbyte == nil {
-			return fmt.Errorf("get block error for block %s is not found", hexutil.Encode(hash))
+			return fmt.Errorf("[BlockStorage.GetExecutedBlock] executed block with hash %s is not found in bucket %s", hexutil.Encode(hash), ExecutedBucket)
 		}
 		//fmt.Println(hexutil.Encode(blockbyte))
 		err := proto.Unmarshal(blockbyte, block)
