@@ -1360,7 +1360,7 @@ func (w *Worker) handleBlockRawTx(block *types.Block) error {
 		return nil
 	}
 
-	err := w.chainReader.UpdateTxForBlock(block)
+	err := w.chainReader.UpdateTxForBlock(block, nil)
 	if err != nil {
 		return err
 	}

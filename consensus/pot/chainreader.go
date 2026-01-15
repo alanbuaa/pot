@@ -309,12 +309,12 @@ func (c *ChainReader) Reindex() error {
 }
 
 // ResetTxForBlock reset utxo bucket for block reset, need to happen after UpdateBlock
-func (c *ChainReader) ResetTxForBlock(block *types.Block) error {
+func (c *ChainReader) ResetTxForBlock(block *types.Block, tx *bolt.Tx) error {
 	c.sync.Lock()
 	defer c.sync.Unlock()
 	txs := block.GetRawTx()
-	db := c.GetBoltDb()
-	err := db.Update(func(tx *bolt.Tx) error {
+
+	resetFunc := func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(types.UTXOBucket))
 
 		for _, rawTx := range txs {
@@ -368,6 +368,9 @@ func (c *ChainReader) ResetTxForBlock(block *types.Block) error {
 										return err
 									}
 								} else {
+									if _, exist := c.lockUTXO[height+out.LockTime]; !exist {
+										c.lockUTXO[height+out.LockTime] = make(map[string]*types.TxOutput)
+									}
 									if _, exist := c.lockUTXO[height+out.LockTime][utxokey]; !exist {
 										c.lockUTXO[height+out.LockTime][utxokey] = &out
 									}
@@ -386,13 +389,14 @@ func (c *ChainReader) ResetTxForBlock(block *types.Block) error {
 		}
 
 		return nil
-	})
-
-	if err != nil {
-		return err
-	} else {
-		return nil
 	}
+
+	if tx != nil {
+		return resetFunc(tx)
+	}
+
+	db := c.GetBoltDb()
+	return db.Update(resetFunc)
 }
 
 func (c *ChainReader) TryResetTxForBlock(block *types.Block) error {
@@ -400,7 +404,7 @@ func (c *ChainReader) TryResetTxForBlock(block *types.Block) error {
 	defer c.sync.Unlock()
 	txs := block.GetRawTx()
 	db := c.GetBoltDb()
-	err := db.Update(func(tx *bolt.Tx) error {
+	err := db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(types.UTXOBucket))
 		for _, rawtx := range txs {
 			for i, output := range rawtx.TxOutput {
@@ -411,9 +415,9 @@ func (c *ChainReader) TryResetTxForBlock(block *types.Block) error {
 				if outputbyte == nil && !exist {
 					return fmt.Errorf("utxo %s not exist", utxokey)
 				}
-				if outputbyte != nil {
-					b.Put([]byte(utxokey), output.EncodeToByte())
-				}
+				// if outputbyte != nil {
+				// 	b.Put([]byte(utxokey), output.EncodeToByte())
+				// }
 			}
 
 			if !rawtx.IsCoinBase() {
@@ -433,19 +437,19 @@ func (c *ChainReader) TryResetTxForBlock(block *types.Block) error {
 								if len(t.TxOutput) < int(voutput) {
 									return fmt.Errorf("reset block for could not find tx output")
 								}
-								out := t.TxOutput[voutput]
-								_ = fmt.Sprintf("%s:%d", hexutil.Encode(txid[:]), voutput)
+								// out := t.TxOutput[voutput]
+								// _ = fmt.Sprintf("%s:%d", hexutil.Encode(txid[:]), voutput)
 								//out.BlockHeight = height
-								if block.GetHeader().Height >= height+out.LockTime {
-									// err = b.Put([]byte(utxokey), out.EncodeToByte())
-									// if err != nil {
-									// 	return err
-									// }
-								} else {
-									// if _, exist := c.lockUTXO[height+out.LockTime][utxokey]; !exist {
-									// 	c.lockUTXO[height+out.LockTime][utxokey] = &out
-									// }
-								}
+								// if block.GetHeader().Height >= height+out.LockTime {
+								// err = b.Put([]byte(utxokey), out.EncodeToByte())
+								// if err != nil {
+								// 	return err
+								// }
+								// } else {
+								// if _, exist := c.lockUTXO[height+out.LockTime][utxokey]; !exist {
+								// 	c.lockUTXO[height+out.LockTime][utxokey] = &out
+								// }
+								// }
 								findflag = true
 								break
 							}
@@ -481,13 +485,36 @@ func (c *ChainReader) TryResetTxForBlock(block *types.Block) error {
 //
 //}
 
-func (c *ChainReader) UpdateTxForBlock(block *types.Block) error {
+func (c *ChainReader) BackupLockUTXO() map[uint64]map[string]*types.TxOutput {
+	c.sync.RLock()
+	defer c.sync.RUnlock()
+	backup := make(map[uint64]map[string]*types.TxOutput)
+	for h, m := range c.lockUTXO {
+		backup[h] = make(map[string]*types.TxOutput)
+		for k, v := range m {
+			// Deep copy TxOutput if necessary, but pointer might be enough if TxOutput is immutable in this context
+			// Assuming TxOutput struct content doesn't change, just the map structure
+			val := *v
+			backup[h][k] = &val
+		}
+	}
+	return backup
+}
+
+func (c *ChainReader) RestoreLockUTXO(backup map[uint64]map[string]*types.TxOutput) {
+	c.sync.Lock()
+	defer c.sync.Unlock()
+	c.lockUTXO = backup
+}
+
+func (c *ChainReader) UpdateTxForBlock(block *types.Block, tx *bolt.Tx) error {
 	db := c.GetBoltDb()
 	txs := block.GetRawTx()
 	height := block.GetHeader().Height
 	c.sync.Lock()
 	defer c.sync.Unlock()
-	err := db.Update(func(tx *bolt.Tx) error {
+
+	updateFunc := func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(types.UTXOBucket))
 		for _, rawTx := range txs {
 			if !rawTx.IsCoinBase() {
@@ -535,11 +562,12 @@ func (c *ChainReader) UpdateTxForBlock(block *types.Block) error {
 		delete(c.lockUTXO, block.Header.Height)
 
 		return nil
-	})
-	if err != nil {
-		return err
 	}
-	return nil
+
+	if tx != nil {
+		return updateFunc(tx)
+	}
+	return db.Update(updateFunc)
 }
 
 func (c *ChainReader) TryUpdateTxForBlock(block *types.Block) error {
@@ -548,7 +576,7 @@ func (c *ChainReader) TryUpdateTxForBlock(block *types.Block) error {
 	//height := block.GetHeader().Height
 	c.sync.Lock()
 	defer c.sync.Unlock()
-	err := db.Update(func(tx *bolt.Tx) error {
+	err := db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(types.UTXOBucket))
 		for _, rawTx := range txs {
 			if !rawTx.IsCoinBase() {

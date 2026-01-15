@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/boltdb/bolt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/zzz136454872/upgradeable-consensus/crypto"
@@ -658,83 +659,47 @@ func (w *Worker) CheckBlockNumEnough(block *types.Block) bool {
 }
 
 func (w *Worker) handleForkTx(current []*types.Block, fork []*types.Block) (bool, error) {
+	// Backup memory state
+	backup := w.chainReader.BackupLockUTXO()
 
-	for i := 0; i < len(current); i++ {
-		curblock := current[i]
-		if flag, _ := w.chainReader.IsBlockOnChain(curblock); flag {
-			err := w.chainReader.TryResetTxForBlock(curblock)
-			w.log.Info("reset tx for block", "height", curblock.GetHeader().Height)
-			if err != nil {
-				w.log.Info("try reset error at height ", curblock.GetHeader().Height, " for ", err)
-				return false, err
-			}
-			err = w.chainReader.ResetTxForBlock(curblock)
-			if err != nil {
-				w.log.Info("reset error at height ", curblock.GetHeader().Height)
-				for j := i; j >= 0; j-- {
-					block := current[j]
-					err := w.chainReader.TryUpdateTxForBlock(block)
-					if err != nil {
-						return false, err
-					}
-					w.log.Infof("reset error and back to height %d", block.Header.Height)
-					err = w.chainReader.UpdateTxForBlock(block)
-					if err != nil {
-						return false, err
-					}
+	// Start DB transaction
+	err := w.blockStorage.GetBoltdb().Update(func(tx *bolt.Tx) error {
+		// 1. Reset current chain
+		for i := 0; i < len(current); i++ {
+			curblock := current[i]
+			// We can skip TryResetTxForBlock check if we trust the transaction atomicity
+			if flag, _ := w.chainReader.IsBlockOnChain(curblock); flag {
+				w.log.Info("reset tx for block", "height", curblock.GetHeader().Height)
+				err := w.chainReader.ResetTxForBlock(curblock, tx)
+				if err != nil {
+					w.log.Info("reset error at height ", curblock.GetHeader().Height, " for ", err)
+					return err
 				}
-				return false, err
 			}
 		}
+
+		// 2. Update fork chain
+		for i := len(fork) - 1; i >= 1; i-- {
+			updateblock := fork[i]
+			_, err := w.CheckBlockTxs(updateblock)
+			if err != nil {
+				return err
+			}
+
+			err = w.chainReader.UpdateTxForBlock(updateblock, tx)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+
+	if err != nil {
+		w.log.Errorf("[PoT] handleForkTx failed, rolling back: %s", err)
+		// Restore memory state
+		w.chainReader.RestoreLockUTXO(backup)
+		return false, err
 	}
 
-	for i := len(fork) - 1; i >= 1; i-- {
-		updateblock := fork[i]
-		_, err := w.CheckBlockTxs(updateblock)
-		if err != nil {
-			for j := i + 1; j < len(fork); j++ {
-				err = w.chainReader.ResetTxForBlock(fork[j])
-				if err != nil {
-					return false, err
-				}
-			}
-			for j := len(current) - 1; j >= 0; j-- {
-
-			}
-
-			return false, err
-		}
-
-		err = w.chainReader.TryUpdateTxForBlock(updateblock)
-		if err != nil {
-			for j := i + 1; j < len(fork); j++ {
-				err = w.chainReader.ResetTxForBlock(fork[j])
-				if err != nil {
-					return false, err
-				}
-			}
-
-			for j := len(current) - 1; j >= 0; j-- {
-				_ = w.chainReader.UpdateTxForBlock(current[j])
-
-			}
-			return false, err
-		}
-		err = w.chainReader.UpdateTxForBlock(updateblock)
-		if err != nil {
-			for j := i + 1; j < len(fork); j++ {
-				err = w.chainReader.ResetTxForBlock(fork[j])
-				if err != nil {
-					return false, err
-				}
-			}
-
-			for j := len(current) - 1; j >= 0; j-- {
-				_ = w.chainReader.UpdateTxForBlock(current[j])
-
-			}
-			return false, err
-		}
-	}
 	return true, nil
 }
