@@ -12,6 +12,7 @@ import (
 
 	"github.com/boltdb/bolt"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/sirupsen/logrus"
 
 	"github.com/zzz136454872/upgradeable-consensus/crypto"
 	storage "github.com/zzz136454872/upgradeable-consensus/internal/storage/pot"
@@ -73,57 +74,69 @@ func (w *Worker) VerifyBciReward(reward *BciReward) (bool, *types.ExecutedTx, er
 
 	exeheight := proof.Height
 	if exeheight > w.executeheight {
+		w.log.WithFields(logrus.Fields{
+			"proof_height":   exeheight,
+			"execute_height": w.executeheight,
+		}).Warn("BCI reward proof height beyond execute height")
 		return false, nil, fmt.Errorf("height is beyond execute height")
 	}
 	exeblock := w.mempool.GetBlockByHash(crypto.Convert(proof.BlockHash))
 	if exeblock == nil {
+		w.log.WithField("block_hash", hexutil.Encode(proof.BlockHash)).Warn("Cannot find executed block in mempool")
 		return false, nil, fmt.Errorf("could not find exeblock %s", hexutil.Encode(proof.BlockHash))
 	}
 	if exeblock.Header.Height != proof.Height {
+		w.log.WithFields(logrus.Fields{
+			"proof_height": proof.Height,
+			"block_height": exeblock.Header.Height,
+		}).Warn("BCI reward proof height mismatch with block")
 		return false, nil, fmt.Errorf("the height of proof %d is not equal to the height of block %d", proof.Height, exeblock.Header.Height)
 	}
 	for _, tx := range exeblock.Txs {
 		if !bytes.Equal(tx.TxHash, proof.TxHash) {
 			continue
 		} else {
+			w.log.WithFields(logrus.Fields{
+				"proof_height": proof.Height,
+				"tx_hash":      hexutil.Encode(proof.TxHash),
+			}).Trace("BCI reward verified successfully")
 			return true, tx, nil
 		}
 	}
+	w.log.WithFields(logrus.Fields{
+		"block_hash": hexutil.Encode(proof.BlockHash),
+		"tx_hash":    hexutil.Encode(proof.TxHash),
+	}).Warn("Transaction not found in block")
 	return false, nil, fmt.Errorf("not found tx in block")
 }
 
+// SendBci 接收并广播BCI奖励请求，先广播到网络再本地处理
 func (w *Worker) SendBci(ctx context.Context, request *pb.SendBciRequest) (*pb.SendBciResponse, error) {
-	// SendBci: 接受并广播 BCI 奖励请求。
-	// 输入: gRPC 上下文和 SendBciRequest 包含若干 BciReward
-	// 输出: SendBciResponse 表明是否成功以及当前高度
-	// 行为: 先广播请求到网络，然后在本地处理请求（将有效的 BciReward 加入内存池）。
+	w.log.WithField("reward_count", len(request.GetBciReward())).Debug("Received SendBci request")
 	err := w.broadcastSendBciRequest(request)
 	if err != nil {
+		w.log.WithError(err).Error("Failed to broadcast SendBci request")
 		return &pb.SendBciResponse{IsSuccess: false}, err
 	}
 	return w.handleSendBciRequest(request)
 }
 
+// GetBalance 查询指定地址的UTXO与余额，返回所有UTXO列表和总余额
 func (w *Worker) GetBalance(ctx context.Context, request *pb.GetBalanceRequest) (*pb.GetBalanceResponse, error) {
-
-	// GetBalance: 查询指定地址的 UTXO 与余额并返回
-	// 输入: GetBalanceRequest 包含查询地址
-	// 输出: GetBalanceResponse 包含地址、余额与 UTXO 列表
-	// 行为: 从链上(通过 chainReader) 查找所有 UTXO，将其转换为 pb.Utxo 格式并汇总余额
-
 	addr := request.GetAddress()
-	w.log.Errorf("get balance of %s", hexutil.Encode(addr))
-	//amount := w.chainReader.GetBalance(addr)
+	w.log.WithField("address", hexutil.Encode(addr)).Trace("Retrieving balance")
 	utxos, err := w.chainReader.FindUTXO(addr)
 	if err != nil {
-		fmt.Println("fail:", err)
+		w.log.WithError(err).WithField("address", hexutil.Encode(addr)).Error("Failed to find UTXO")
 		return &pb.GetBalanceResponse{Balance: 0, Address: addr}, err
 	}
 	balance := int64(0)
 
 	pbutxos := make([]*pb.Utxo, 0)
-	//count := 0
-	fmt.Println(len(utxos))
+	w.log.WithFields(logrus.Fields{
+		"address":    hexutil.Encode(addr),
+		"utxo_count": len(utxos),
+	}).Trace("Processing UTXOs for balance")
 	for utxokey, utxo := range utxos {
 		// var txid [32]byte
 		// var voutput int64
@@ -139,7 +152,7 @@ func (w *Worker) GetBalance(ctx context.Context, request *pb.GetBalanceRequest) 
 		txid := parts[0]
 		voutput, err := strconv.ParseInt(parts[1], 10, 64)
 		if err != nil {
-			w.log.Errorf("Failed to parse voutput: %v", err)
+			w.log.WithError(err).WithField("voutput", parts[1]).Error("Failed to parse UTXO voutput")
 			return &pb.GetBalanceResponse{Balance: 0, Address: addr}, err
 		}
 
@@ -169,11 +182,9 @@ func (w *Worker) GetBalance(ctx context.Context, request *pb.GetBalanceRequest) 
 // 	return w.handleDevastateBciRequest(request)
 // }
 
+// VerifyUTXO 验证UTXO证明（当前简化实现，总是返回true）
 func (w *Worker) VerifyUTXO(ctx context.Context, request *pb.VerifyUTXORequest) (*pb.VerifyUTXOResponse, error) {
-	// VerifyUTXO: 验证 UTXO 证明（当前为简单占位实现，总是返回 true）
-	// 输入: VerifyUTXORequest（包含证明或其他字段）
-	// 输出: VerifyUTXOResponse.Flag 表示证明是否有效
-	// 行为: 当前实现直接返回 true；注释掉的代码显示了更完整的验证流程（遍历链上区块查找 txid 并比对 data）。
+	w.log.Trace("Verifying UTXO (simplified implementation)")
 	return &pb.VerifyUTXOResponse{Flag: true}, nil
 	// from := request.GetFrom()
 	// if from != nil {
@@ -220,33 +231,34 @@ func (w *Worker) VerifyUTXO(ctx context.Context, request *pb.VerifyUTXORequest) 
 	// return &pb.VerifyUTXOResponse{Flag: false}, nil
 }
 
+// CreateLockTransaction 创建锁定类型交易，校验后广播并加入内存池
 func (w *Worker) CreateLockTransaction(ctx context.Context, request *pb.CreateLockTransactionRequest) (*pb.CreateLockTransactionResponse, error) {
-	// CreateLockTransaction: 创建一个锁定类型交易的 gRPC 接口实现。
-	// 输入: 包含要创建交易的 pb.RawTx
-	// 输出: CreateLockTransactionResponse, error
-	// 行为: 将 pb 的交易转换为内部 RawTx，调用 checkLockTransaction 校验，
-	// 若校验通过则广播该交易并加入内存池。
 	txs := request.GetTx()
 	rawtx := types.ToRawTx(txs)
+	w.log.WithField("tx_id", hexutil.Encode(rawtx.Txid[:])).Debug("Creating lock transaction")
 	err := w.checkLockTransaction(rawtx)
 	if err != nil {
+		w.log.WithError(err).WithField("tx_id", hexutil.Encode(rawtx.Txid[:])).Warn("Lock transaction validation failed")
 		return &pb.CreateLockTransactionResponse{}, err
 	}
 
 	err = w.broadcastClientTransaction(rawtx, pb.TxType_CreateLockTransaction)
 	if err != nil {
+		w.log.WithError(err).WithField("tx_id", hexutil.Encode(rawtx.Txid[:])).Error("Failed to broadcast lock transaction")
 		return nil, err
 	}
 	w.mempool.AddRawTx(rawtx)
+	w.log.WithField("tx_id", hexutil.Encode(rawtx.Txid[:])).Info("Lock transaction created successfully")
 	return &pb.CreateLockTransactionResponse{IsSuccess: true}, nil
 }
 
+// checkLockTransaction 校验CreateLock交易的合法性，检查UTXO存在性、类型、金额和锁定时间
 func (w *Worker) checkLockTransaction(rawtx *types.RawTx) error {
-	// checkLockTransaction: 在提交前本地校验 CreateLock 交易的合法性。
-	// 输入: rawtx - 待校验的交易
-	// 输出: error - 校验失败时返回具体错误
-	// 行为: 读取本地 UTXO（bolt DB），检查输入输出的类型、数额、锁定时间、签名能否解锁等规则。
 	height := w.getEpoch()
+	w.log.WithFields(logrus.Fields{
+		"tx_id":  hexutil.Encode(rawtx.Txid[:]),
+		"height": height,
+	}).Trace("Checking lock transaction")
 	db := w.chainReader.GetBoltDb()
 	err := db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(storage.UTXOBucket))
@@ -322,10 +334,12 @@ func (w *Worker) checkLockTransaction(rawtx *types.RawTx) error {
 	return err
 }
 
+// broadcastClientTransaction 将客户端交易封装为PoT消息并广播到网络
 func (w *Worker) broadcastClientTransaction(rawtx *types.RawTx, types pb.TxType) error {
-	// broadcastClientTransaction: 将客户端交易封装为 PoT 消息并通过 Engine 广播到网络
-	// 输入: rawtx - 内部 RawTx, types - 交易种类（pb.TxType）
-	// 输出: error - 广播或编码失败时返回
+	w.log.WithFields(logrus.Fields{
+		"tx_id":   hexutil.Encode(rawtx.Txid[:]),
+		"tx_type": types.String(),
+	}).Trace("Broadcasting client transaction")
 	pbtx := pb.ClientTransaction{
 		Tx:     rawtx.ToProto(),
 		TxType: types,
@@ -350,29 +364,32 @@ func (w *Worker) broadcastClientTransaction(rawtx *types.RawTx, types pb.TxType)
 	return nil
 }
 
+// CreateLockTransferTransaction 创建锁定转移交易，校验后广播并加入内存池
 func (w *Worker) CreateLockTransferTransaction(ctx context.Context, request *pb.CreateLockTransferTransactionRequest) (*pb.CreateLockTransferTransactionResponse, error) {
-	// CreateLockTransferTransaction: gRPC 接口，创建锁定转移交易（transfer lock）
-	// 行为: 校验交易(CheckLockTransferTransaction)、广播并加入内存池。
 	pbrawtx := request.GetTx()
 	rawtx := types.ToRawTx(pbrawtx)
+	w.log.WithField("tx_id", hexutil.Encode(rawtx.Txid[:])).Debug("Creating lock transfer transaction")
 	err := w.CheckLockTransferTransaction(rawtx)
 	if err != nil {
+		w.log.WithError(err).WithField("tx_id", hexutil.Encode(rawtx.Txid[:])).Warn("Lock transfer transaction validation failed")
 		return nil, err
 	}
 
 	err = w.broadcastClientTransaction(rawtx, pb.TxType_LockTransferTranscation)
 	if err != nil {
+		w.log.WithError(err).WithField("tx_id", hexutil.Encode(rawtx.Txid[:])).Error("Failed to broadcast lock transfer transaction")
 		return nil, err
 	}
 	w.mempool.AddRawTx(rawtx)
+	w.log.WithField("tx_id", hexutil.Encode(rawtx.Txid[:])).Info("Lock transfer transaction created successfully")
 	return &pb.CreateLockTransferTransactionResponse{
 		IsSuccess: true,
 	}, nil
 }
 
+// CheckLockTransferTransaction 校验transfer-lock交易，检查锁定UTXO、利息使用和费用限制
 func (w *Worker) CheckLockTransferTransaction(rawtx *types.RawTx) error {
-	// CheckLockTransferTransaction: 校验一个 transfer-lock 类型交易是否合法。
-	// 主要检查输入是否对应已存在的 lock UTXO、兴趣(interest) 使用是否合理以及费用限制等。
+	w.log.WithField("tx_id", hexutil.Encode(rawtx.Txid[:])).Trace("Checking lock transfer transaction")
 	height := w.getEpoch()
 	db := w.chainReader.GetBoltDb()
 	err := db.View(func(tx *bolt.Tx) error {
@@ -436,16 +453,20 @@ func (w *Worker) CreateDevastateTransaction(ctx context.Context, request *pb.Cre
 	// 行为: 校验 CreateDevastateTransaction 后广播并加入内存池。
 	pbrawtx := request.GetTx()
 	rawtx := types.ToRawTx(pbrawtx)
+	w.log.WithField("tx_id", hexutil.Encode(rawtx.Txid[:])).Debug("Creating devastate transaction")
 	err := w.CheckDevastateTransaction(rawtx)
 	if err != nil {
+		w.log.WithError(err).WithField("tx_id", hexutil.Encode(rawtx.Txid[:])).Warn("Devastate transaction validation failed")
 		return nil, err
 	}
 	w.mempool.AddRawTx(rawtx)
 	err = w.broadcastClientTransaction(rawtx, pb.TxType_DevasteTransaction)
 	if err != nil {
+		w.log.WithError(err).WithField("tx_id", hexutil.Encode(rawtx.Txid[:])).Error("Failed to broadcast devastate transaction")
 		return nil, err
 	}
 
+	w.log.WithField("tx_id", hexutil.Encode(rawtx.Txid[:])).Info("Devastate transaction created successfully")
 	return &pb.CreateDevastateTransactionResponse{IsSuccess: true}, nil
 }
 
@@ -500,16 +521,20 @@ func (w *Worker) CreateNonLockTransferTransaction(ctx context.Context, request *
 	// CreateNonLockTransferTransaction: gRPC 接口，创建不带锁定的转账交易（non-lock transfer）。
 	pbrawtx := request.GetTx()
 	rawtx := types.ToRawTx(pbrawtx)
+	w.log.WithField("tx_id", hexutil.Encode(rawtx.Txid[:])).Debug("Creating non-lock transfer transaction")
 	err := w.CheckNonLockTransferTransaction(rawtx)
 	if err != nil {
+		w.log.WithError(err).WithField("tx_id", hexutil.Encode(rawtx.Txid[:])).Warn("Non-lock transfer transaction validation failed")
 		return nil, err
 	}
 
 	err = w.broadcastClientTransaction(rawtx, pb.TxType_NonLockTransferTranscation)
 	if err != nil {
+		w.log.WithError(err).WithField("tx_id", hexutil.Encode(rawtx.Txid[:])).Error("Failed to broadcast non-lock transfer transaction")
 		return nil, err
 	}
 	w.mempool.AddRawTx(rawtx)
+	w.log.WithField("tx_id", hexutil.Encode(rawtx.Txid[:])).Info("Non-lock transfer transaction created successfully")
 	return &pb.CreateNonLockTransferTransactionResponse{IsSuccess: true}, nil
 }
 
@@ -571,15 +596,19 @@ func (w *Worker) CreateBciToVsiTransaction(ctx context.Context, request *pb.Crea
 	// CreateBciToVsiTransaction: gRPC 接口，将 BCI 转换为 VSI 的交易创建入口，经过校验后广播并加入内存池。
 	pbrawtx := request.GetTx()
 	rawtx := types.ToRawTx(pbrawtx)
+	w.log.WithField("tx_id", hexutil.Encode(rawtx.Txid[:])).Debug("Creating BCI to VSI transaction")
 	err := w.CheckBciToVsiRequest(rawtx)
 	if err != nil {
+		w.log.WithError(err).WithField("tx_id", hexutil.Encode(rawtx.Txid[:])).Warn("BCI to VSI transaction validation failed")
 		return nil, err
 	}
 	err = w.broadcastClientTransaction(rawtx, pb.TxType_CreateBciToVsiTransaction)
 	if err != nil {
+		w.log.WithError(err).WithField("tx_id", hexutil.Encode(rawtx.Txid[:])).Error("Failed to broadcast BCI to VSI transaction")
 		return nil, err
 	}
 	w.mempool.AddRawTx(rawtx)
+	w.log.WithField("tx_id", hexutil.Encode(rawtx.Txid[:])).Info("BCI to VSI transaction created successfully")
 	return &pb.CreateBciToVsiResponse{IsSuccess: true}, nil
 }
 
@@ -589,14 +618,20 @@ func (w *Worker) GetPqcKey(ctx context.Context, request *pb.GetPqcKeyRequest) (*
 	// 输出: GetPqcKeyResponse 包含 Flag（是否成功）、PublicKey 与 SecretKey（若成功）
 	// 行为: 若提供 Height 则从链中读取对应区块并尝试查找私钥；否则使用 BlockHash 从 blockStorage 获取区块并查找。
 	if request.Height != 0 {
+		w.log.WithField("height", request.Height).Debug("Getting PQC key by height")
 		b, err := w.chainReader.GetByHeight(request.Height)
 		if err != nil {
+			w.log.WithError(err).WithField("height", request.Height).Warn("Failed to get block by height")
 			return &pb.GetPqcKeyResponse{Flag: false}, fmt.Errorf("[GetPqcKey] failed to get block at height %d: %w", request.Height, err)
 		}
 		bhash := b.GetHeader().Hash()
 
 		flag, key := w.TryFindKey(crypto.Convert(bhash))
 		if !flag {
+			w.log.WithFields(logrus.Fields{
+				"height":     request.Height,
+				"block_hash": hexutil.Encode(bhash),
+			}).Warn("PQC key not found - block not owned by this node")
 			return &pb.GetPqcKeyResponse{Flag: false}, fmt.Errorf("can't find key for height %d for the block is not owned by this node", request.Height)
 		}
 		return &pb.GetPqcKeyResponse{
@@ -605,14 +640,17 @@ func (w *Worker) GetPqcKey(ctx context.Context, request *pb.GetPqcKeyRequest) (*
 			SecretKey: key,
 		}, nil
 	} else {
+		w.log.WithField("block_hash", hexutil.Encode(request.BlockHash)).Debug("Getting PQC key by block hash")
 		b, err := w.blockStorage.Get(request.BlockHash)
 		if err != nil {
+			w.log.WithError(err).WithField("block_hash", hexutil.Encode(request.BlockHash)).Warn("Failed to get block by hash")
 			return &pb.GetPqcKeyResponse{Flag: false}, fmt.Errorf("[GetPqcKey] failed to get block by hash %s: %w", hexutil.Encode(request.BlockHash), err)
 		}
 		bhash := b.GetHeader().Hash()
 
 		flag, key := w.TryFindKey(crypto.Convert(bhash))
 		if !flag {
+			w.log.WithField("block_hash", hexutil.Encode(bhash)).Warn("PQC key not found for block")
 			return &pb.GetPqcKeyResponse{Flag: false}, fmt.Errorf("can't find key for height %d for the block is not owned by this node", request.Height)
 		}
 		return &pb.GetPqcKeyResponse{
@@ -681,12 +719,14 @@ func (w *Worker) handleSendBciRequest(request *pb.SendBciRequest) (*pb.SendBciRe
 	// handleSendBciRequest: 处理本地收到的 SendBciRequest，将验证通过的 BciReward 加入内存池
 	// 行为: 对请求中的每个 BciReward 调用 VerifyBciReward，提取地址并 AddBciReward 到 mempool。
 	Bcirewards := request.GetBciReward()
+	w.log.WithField("reward_count", len(Bcirewards)).Trace("Handling SendBci request")
 
 	for _, pbBcireward := range Bcirewards {
 
 		BciReward := ToBciReward(pbBcireward)
 		flag, tx, err := w.VerifyBciReward(BciReward)
 		if !flag {
+			w.log.WithError(err).Warn("BCI reward verification failed")
 			return &pb.SendBciResponse{
 				IsSuccess: false,
 				Height:    0,
@@ -694,15 +734,19 @@ func (w *Worker) handleSendBciRequest(request *pb.SendBciRequest) (*pb.SendBciRe
 		} else {
 			txdata := tx.Data
 			if len(txdata) < 98 {
+				w.log.WithField("data_len", len(txdata)).Warn("BCI reward transaction data too short")
 				return &pb.SendBciResponse{
 					IsSuccess: false,
 					Height:    0,
 				}, fmt.Errorf("the Bci reward is not valid for %s", err.Error())
 			} else {
 				address := txdata[2:98]
-				//fmt.Println(hexutil.Encode(address))
 				BciReward.Address = address
 				w.mempool.AddBciReward(BciReward)
+				w.log.WithFields(logrus.Fields{
+					"address": hexutil.Encode(address),
+					"amount":  BciReward.Amount,
+				}).Debug("BCI reward added to mempool")
 			}
 		}
 	}
@@ -845,6 +889,10 @@ func (w *Worker) GenerateCoinbaseTx(pubkeybyte []byte, vdf0res []byte, totalrewa
 	// 输出: *types.Tx 包含序列化后的 coinbase 交易数据
 	// 行为: 将 BciRewards 分组、按权重抽样、根据 bcimap 规则分配奖励到对应 TxOutput 中，并返回封装好的 coinbase tx。
 	Bcirewards := w.mempool.GetAllBciRewards()
+	w.log.WithFields(logrus.Fields{
+		"reward_count": len(Bcirewards),
+		"total_reward": totalreward,
+	}).Trace("Generating coinbase transaction")
 	coinbaseproof := make([]types.CoinbaseProof, 0)
 	for _, Bcireward := range Bcirewards {
 		proof := types.CoinbaseProof{
@@ -935,7 +983,7 @@ func (w *Worker) GenerateCoinbaseTx(pubkeybyte []byte, vdf0res []byte, totalrewa
 	tx.Txid = tx.Hash()
 
 	if len(txouts) == 2 {
-		fmt.Println(hexutil.Encode(tx.Txid[:]))
+		w.log.WithField("tx_id", hexutil.Encode(tx.Txid[:])).Trace("Coinbase transaction with 2 outputs generated")
 	}
 
 	txdata, _ := tx.EncodeToByte()
@@ -1018,8 +1066,10 @@ func (w *Worker) handleConfirmBlockTx(height uint64) error {
 	if height < ConfirmDelay {
 		return nil
 	}
+	w.log.WithField("height", height).Trace("Handling confirmed block transactions")
 	block, err := w.chainReader.GetByHeight(height - ConfirmDelay)
 	if err != nil {
+		w.log.WithError(err).WithField("height", height-ConfirmDelay).Warn("Failed to get confirmed block")
 		return err
 	}
 
@@ -1028,9 +1078,13 @@ func (w *Worker) handleConfirmBlockTx(height uint64) error {
 		if !tx.IsCoinBase() {
 			for _, txoutput := range tx.TxOutput {
 				if len(txoutput.Data) != 0 {
-					fmt.Printf("txid %s data transfer to vm\n", hexutil.Encode(tx.Txid[:]))
+					w.log.WithFields(logrus.Fields{
+						"tx_id":    hexutil.Encode(tx.Txid[:]),
+						"data_len": len(txoutput.Data),
+					}).Debug("Transferring transaction data to EVM")
 					err := w.TransferTx2EVM(txoutput.Data)
 					if err != nil {
+						w.log.WithError(err).Error("Failed to transfer transaction to EVM")
 						return err
 					}
 				}
@@ -1046,9 +1100,11 @@ func (w *Worker) TransferTx2EVM(data []byte) error {
 	// TransferTx2EVM: 调用远程执行器（gRPC）将交易数据转发到 EVM/执行器进行执行。
 	// 输入: data - 需要在执行器中执行的交易字节
 	// 输出: error - 远程调用失败或执行器返回失败时返回错误
+	w.log.WithField("data_len", len(data)).Debug("Transferring transaction to EVM")
 	conn, err := grpc.NewClient(w.config.PoT.ExecutorAddress, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(1024*1024*1024)))
 
 	if err != nil {
+		w.log.WithError(err).Error("Failed to connect to executor")
 		return err
 	}
 	client := pb.NewPoTExecutorClient(conn)
@@ -1057,6 +1113,7 @@ func (w *Worker) TransferTx2EVM(data []byte) error {
 	}
 	resp, err := client.ExecuteTxs(context.Background(), request)
 	if err != nil {
+		w.log.WithError(err).Error("Failed to execute transaction on EVM")
 		return err
 	}
 	if resp.GetFlag() {
@@ -1069,6 +1126,10 @@ func (w *Worker) CheckBlockTxs(block *types.Block) (bool, error) {
 	// CheckBlockTxs: 校验一个区块内所有交易的类型与内容是否合法。
 	// 行为: 对每笔交易调用 CheckTxWithBlock，非 coinbase 类型根据不同判断分派到不同的校验函数（create lock, transfer lock, non-lock, devasted）。
 	txs := block.GetRawTx()
+	w.log.WithFields(logrus.Fields{
+		"block_height": block.GetHeader().Height,
+		"tx_count":     len(txs),
+	}).Trace("Checking block transactions")
 	// header := block.GetHeader()
 	for _, tx := range txs {
 		flag, err := w.CheckTxWithBlock(tx, block)
@@ -1077,18 +1138,19 @@ func (w *Worker) CheckBlockTxs(block *types.Block) (bool, error) {
 		}
 		if !tx.IsCoinBase() {
 			if w.IsCreateLockTransaction(tx, block) {
-				fmt.Printf("tx %s is create lock transaction\n", hexutil.Encode(tx.Txid[:]))
+				w.log.WithField("tx_id", hexutil.Encode(tx.Txid[:])).Trace("Checking create lock transaction")
 				return w.checkCreateLockTransaction(block, tx)
 			} else if w.IsTransferLockTransaction(tx, block) {
-				fmt.Printf("tx %s is transfer lock transaction\n", hexutil.Encode(tx.Txid[:]))
+				w.log.WithField("tx_id", hexutil.Encode(tx.Txid[:])).Trace("Checking transfer lock transaction")
 				return w.checkTransferLockTransaction(tx, block)
 			} else if w.IsNonLockTransferTransaction(tx, block) {
-				fmt.Printf("tx %s is non lock transfer transaction\n", hexutil.Encode(tx.Txid[:]))
+				w.log.WithField("tx_id", hexutil.Encode(tx.Txid[:])).Trace("Checking non-lock transfer transaction")
 				return w.checkNonLockTransferTransaction(tx, block)
 			} else if w.IsDevastedTransaction(tx, block) {
-				fmt.Printf("tx %s is devasted transaction\n", hexutil.Encode(tx.Txid[:]))
+				w.log.WithField("tx_id", hexutil.Encode(tx.Txid[:])).Trace("Checking devasted transaction")
 				return w.checkDevastedTransaction(tx, block)
 			} else {
+				w.log.WithField("tx_id", hexutil.Encode(tx.Txid[:])).Error("Unknown transaction type")
 				return false, fmt.Errorf("tx type error")
 			}
 		}
@@ -1101,6 +1163,11 @@ func (w *Worker) CheckTxWithBlock(rawtx *types.RawTx, block *types.Block) (bool,
 	// 输入: rawtx - 待校验交易; block - 当前包含该交易的区块
 	// 输出: bool, error - 校验是否通过及失败原因
 	// 行为: 若为非 coinbase 交易，检查输入 utxo 的存在性、解锁能力、金额一致性等；若为 coinbase，检查 coinbase 输出（矿工份额、抽样分配等）是否符合规则。
+	w.log.WithFields(logrus.Fields{
+		"tx_id":        hexutil.Encode(rawtx.Txid[:]),
+		"is_coinbase":  rawtx.IsCoinBase(),
+		"block_height": block.GetHeader().Height,
+	}).Trace("Validating transaction with block")
 	db := w.chainReader.GetBoltDb()
 	header := block.GetHeader()
 	totalreward := CalcTotalReward(header.Height)
@@ -1581,9 +1648,8 @@ func (w *Worker) IsDevastedTransaction(rawtx *types.RawTx, block *types.Block) b
 		return nil
 	})
 
-	fmt.Printf("tx %s is a devasted transaction", hexutil.Encode(rawtx.Txid[:]))
 	if err != nil {
-		fmt.Println(err)
+		w.log.WithError(err).WithField("tx_id", hexutil.Encode(rawtx.Txid[:])).Trace("Transaction is not a devasted transaction")
 	}
 	return err == nil
 }

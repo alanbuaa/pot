@@ -8,6 +8,7 @@ import (
 	"sync"
 	time2 "time"
 
+	"github.com/sirupsen/logrus"
 	"github.com/zzz136454872/upgradeable-consensus/types"
 )
 
@@ -267,7 +268,10 @@ func (w *Worker) chainResetAdvanced(branch []*types.Block) error {
 			}
 		}
 	}
-	w.log.Infof("[PoT]\tepoch %d: the chain has been reset by branch %s", epoch, branchstr)
+	w.log.WithFields(logrus.Fields{
+		"epoch":   epoch,
+		"heights": branchstr,
+	}).Info("Chain reset complete")
 	return nil
 }
 
@@ -297,7 +301,10 @@ func (w *Worker) chainreset(branch []*types.Block) error {
 
 	}
 
-	w.log.Infof("[PoT]\tepoch %d: the chain has been reset by branch %s", epoch, branchstr)
+	w.log.WithFields(logrus.Fields{
+		"epoch":   epoch,
+		"heights": branchstr,
+	}).Info("Chain reset to fork branch")
 	flag := w.IsVDF1Working()
 	//w.log.Infof("[PoT]\tflag: %t", flag)
 	time := time2.Now()
@@ -307,7 +314,7 @@ func (w *Worker) chainreset(branch []*types.Block) error {
 			close(w.abort.abortchannel)
 		})
 		w.wg.Wait()
-		w.log.Infof("[PoT]\tthe vdf1 work got abort for chain reset, need %d ms", time2.Since(time)/time2.Millisecond)
+		w.log.WithField("duration_ms", time2.Since(time)/time2.Millisecond).Debug("VDF1 work aborted for chain reset")
 	}
 
 	return nil

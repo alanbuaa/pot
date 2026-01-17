@@ -1,7 +1,6 @@
 package simpleWhirly
 
 import (
-	"strconv"
 	"sync"
 	"time"
 
@@ -22,8 +21,12 @@ type NewEpochMechanism struct {
 // func (sw *SimpleWhirlyImpl) NewEpochConfirmation(potSignal *PoTSignal, sharding *Sharding) {
 func (sw *SimpleWhirlyImpl) NewEpochConfirmation(epoch int64, proof []byte, committee []string) {
 	sw.Log.WithFields(logrus.Fields{
-		"address": sw.PublicAddress,
-	}).Info("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] new Epoch Confirmation!")
+		"replica_id":     sw.ID,
+		"current_epoch":  sw.epoch,
+		"view":           sw.View.ViewNum,
+		"public_address": sw.PublicAddress,
+		"new_epoch":      epoch,
+	}).Info("Starting new epoch confirmation process")
 
 	sw.newEpoch.curEchoLock.Lock()
 	sw.newEpoch.curEcho = make(map[string]*pb.SimpleWhirlyProof)
@@ -47,7 +50,7 @@ func (sw *SimpleWhirlyImpl) NewEpochConfirmation(epoch int64, proof []byte, comm
 		}
 		err := sw.Broadcast(newLeaderMsg)
 		if err != nil {
-			sw.Log.WithField("error", err.Error()).Warn("Broadcast newLeaderMsg failed.")
+			sw.Log.WithError(err).Warn("Failed to broadcast new leader notification")
 		}
 		time.Sleep(3 * time.Second)
 	}
@@ -83,10 +86,13 @@ func (sw *SimpleWhirlyImpl) OnReceiveNewLeaderNotify(newLeaderMsg *pb.NewLeaderN
 	}
 
 	sw.Log.WithFields(logrus.Fields{
-		"newEpoch":  epoch,
-		"newLeader": publicAddress,
-		"myAddress": sw.PublicAddress,
-	}).Trace("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] OnReceive Notify.")
+		"replica_id":     sw.ID,
+		"current_epoch":  sw.epoch,
+		"view":           sw.View.ViewNum,
+		"new_epoch":      epoch,
+		"new_leader":     publicAddress,
+		"public_address": sw.PublicAddress,
+	}).Trace("Received new leader notification")
 
 	// block, err := sw.BlockStorage.Get(sw.lockProof.BlockHash)
 	// if err != nil {
@@ -117,9 +123,11 @@ func (sw *SimpleWhirlyImpl) OnReceiveNewLeaderEcho(msg *pb.WhirlyMsg) {
 
 	if int64(echoMsg.Epoch) < sw.epoch {
 		sw.Log.WithFields(logrus.Fields{
-			"echoMsg.epoch": echoMsg.Epoch,
-			"myEpoch":       sw.epoch,
-		}).Warn("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] the epoch of echo message is too old.")
+			"replica_id":  sw.ID,
+			"view":        sw.View.ViewNum,
+			"echo_epoch":  echoMsg.Epoch,
+			"local_epoch": sw.epoch,
+		}).Warn("Received echo from outdated epoch")
 		return
 	}
 
@@ -131,12 +139,15 @@ func (sw *SimpleWhirlyImpl) OnReceiveNewLeaderEcho(msg *pb.WhirlyMsg) {
 	}
 
 	sw.Log.WithFields(logrus.Fields{
-		"sender":       echoMsg.PublicAddress,
-		"epoch":        echoMsg.Epoch,
-		"leader":       echoMsg.Leader,
-		"len(curEcho)": len(sw.newEpoch.curEcho),
-		"VHeight":      echoMsg.VHeight,
-	}).Trace("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] OnReceiveEcho.")
+		"replica_id":  sw.ID,
+		"epoch":       sw.epoch,
+		"view":        sw.View.ViewNum,
+		"sender":      echoMsg.PublicAddress,
+		"echo_epoch":  echoMsg.Epoch,
+		"echo_leader": echoMsg.Leader,
+		"echo_count":  len(sw.newEpoch.curEcho),
+		"v_height":    echoMsg.VHeight,
+	}).Trace("Received new leader echo")
 
 	// err := sw.BlockStorage.Put(echoMsg.Block)
 	// if err != nil {
@@ -146,7 +157,12 @@ func (sw *SimpleWhirlyImpl) OnReceiveNewLeaderEcho(msg *pb.WhirlyMsg) {
 	// }
 
 	if !sw.verfiySwProof(echoMsg.SwProof) {
-		sw.Log.Warn("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] echo proof is wrong.")
+		sw.Log.WithFields(logrus.Fields{
+			"replica_id": sw.ID,
+			"epoch":      sw.epoch,
+			"view":       sw.View.ViewNum,
+			"sender":     echoMsg.PublicAddress,
+		}).Warn("Echo proof verification failed")
 		sw.newEpoch.curEchoLock.Unlock()
 		return
 	}
@@ -158,7 +174,12 @@ func (sw *SimpleWhirlyImpl) OnReceiveNewLeaderEcho(msg *pb.WhirlyMsg) {
 	// sw.lock.Unlock()
 
 	if len(sw.newEpoch.curEcho) >= 2*sw.Config.F+1 {
-		sw.Log.Warn("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] begin RequestLatestBlock.")
+		sw.Log.WithFields(logrus.Fields{
+			"replica_id": sw.ID,
+			"epoch":      sw.epoch,
+			"view":       sw.View.ViewNum,
+			"echo_count": len(sw.newEpoch.curEcho),
+		}).Info("Quorum of echoes received, requesting latest block")
 		sw.newEpoch.curEcho = make(map[string]*pb.SimpleWhirlyProof)
 
 		// 开始向旧委员会获取最新的区块

@@ -64,6 +64,11 @@ func (wu *WhirlyUtilitiesImpl) Init(
 	log *logrus.Entry,
 	publicAddress string,
 ) {
+	log.WithFields(logrus.Fields{
+		"node_id":        id,
+		"consensus_id":   cid,
+		"public_address": publicAddress,
+	}).Info("Initializing WhirlyUtilities")
 	wu.ID = cid // Use consensus ID as the main ID
 	wu.PublicAddress = publicAddress
 	wu.Config = cfg
@@ -93,7 +98,7 @@ func (wu *WhirlyUtilitiesImpl) Init(
 	//	wu.Log.Error("Subscribe error: ", err.Error())
 	//	return
 	//}
-	wu.Log.Info("Joined to topic: ", wu.Topic)
+	log.WithField("topic", wu.Topic).Info("Joined Whirly topic")
 }
 
 func (wu *WhirlyUtilitiesImpl) InitForLocalTest(
@@ -104,6 +109,10 @@ func (wu *WhirlyUtilitiesImpl) InitForLocalTest(
 	p2pAdaptor p2p.P2PAdaptor,
 	log *logrus.Entry,
 ) {
+	log.WithFields(logrus.Fields{
+		"node_id":      id,
+		"consensus_id": cid,
+	}).Info("Initializing WhirlyUtilities for local testing")
 	wu.ID = id
 	wu.PublicAddress = p2pAdaptor.GetPeerID()
 	wu.ID = cid

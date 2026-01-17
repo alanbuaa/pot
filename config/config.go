@@ -93,6 +93,7 @@ type P2PConfig struct {
 }
 
 type Config struct {
+	CfgPath             string           `yaml:"-"`
 	RestServerAddress   string           `yaml:"http_server_address"`
 	AddressStartPort    string           `yaml:"address_start_port"`
 	RpcAddressStartPort string           `yaml:"rpc_address_start_port"`
@@ -145,6 +146,7 @@ func NewConfig(path string, id int64) (*Config, error) {
 	cfg.Consensus.F = (cfg.Total - 1) / 3
 	// cfg.Consensus.F = 1
 	cfg.Consensus.Topic = cfg.Topic
+	cfg.CfgPath = path
 	return cfg, nil
 }
 

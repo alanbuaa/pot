@@ -11,6 +11,7 @@ import (
 	"github.com/zzz136454872/upgradeable-consensus/config"
 	"github.com/zzz136454872/upgradeable-consensus/executor"
 	"github.com/zzz136454872/upgradeable-consensus/p2p"
+	"github.com/zzz136454872/upgradeable-consensus/pkg/logging"
 	pb "github.com/zzz136454872/upgradeable-consensus/pkg/proto"
 	"google.golang.org/protobuf/proto"
 )
@@ -66,7 +67,9 @@ func NewNodeController(
 	p2pAdaptor p2p.P2PAdaptor,
 	log *logrus.Entry,
 ) *NodeController {
-	log.Debug("[Node Controller] starting")
+	log = logging.GetLogger().WithField("module", "WHIRLY.NODECTRL").WithField("c_id", cid)
+	log.Info("Initializing NodeController")
+	log.Debug("Starting NodeController with configuration")
 	ctx, cancel := context.WithCancel(context.Background())
 	nc := &NodeController{
 		PeerId:         p2pAdaptor.GetPeerID(),
@@ -74,7 +77,7 @@ func NewNodeController(
 		Config:         cfg,
 		Executor:       exec,
 		p2pAdaptor:     p2pAdaptor,
-		Log:            log.WithField("consensus id", cid),
+		Log:            log,
 		cancel:         cancel,
 		epoch:          0,
 		StopEntrance:   make(chan string, 10),
@@ -111,22 +114,18 @@ func (nc *NodeController) GetRequestEntrance() chan<- *pb.Request {
 //		}
 //		return msg, nil
 //	}
-func DecodePacket(packet []byte) (*pb.Packet, error) {
-	p := new(pb.Packet)
-	err := proto.Unmarshal(packet, p)
-	if err != nil {
-		return nil, err
-	}
-	return p, nil
-}
 
 func (nc *NodeController) Stop() {
+	nc.Log.Info("Stopping NodeController")
+	nc.Log.Debug("Canceling context")
 	nc.cancel()
+	nc.Log.Debug("Closing message channels")
 	close(nc.MsgByteEntrance)
 	close(nc.RequestByteEntrance)
 	close(nc.PoTByteEntrance)
 	close(nc.StopEntrance)
 	close(nc.UpdateEntrance)
+	nc.Log.Info("NodeController stopped successfully")
 }
 
 func (nc *NodeController) receiveMsg(ctx context.Context) {
@@ -140,26 +139,27 @@ func (nc *NodeController) receiveMsg(ctx context.Context) {
 			}
 
 			if req.Sharding == nil {
-				nc.Log.Warn("Invalid Request")
+				nc.Log.Warn("Received request with nil sharding field, dropping request")
 				continue
 			}
-			nc.Log.Debugf("received request %v", req)
+			nc.Log.WithField("sharding", string(req.Sharding)).Debug("Received request")
 			shardingName := string(req.Sharding)
 			nc.shardingsLock.Lock()
 			sharding, ok2 := nc.Shardings[shardingName]
 			if !ok2 {
-				nc.Log.Errorf("Receive request error: Invalid sharding name")
+				nc.Log.WithField("sharding", shardingName).Error("Failed to route request: sharding not found")
 			} else {
 				sharding.handleRequest(req)
 			}
 			nc.shardingsLock.Unlock()
 		case msgByte, ok := <-nc.MsgByteEntrance:
 			if !ok {
+				nc.Log.Debug("MsgByteEntrance channel closed")
 				return // closed
 			}
 			packet, err := DecodePacket(msgByte)
 			if err != nil {
-				nc.Log.WithError(err).Warn("nodeController: decode packet failed")
+				nc.Log.WithError(err).Error("Failed to decode packet, dropping message")
 				continue
 			}
 			go nc.handleMsg(packet)
@@ -220,14 +220,21 @@ func (nc *NodeController) handleMsg(packet *pb.Packet) {
 	// }).Warn("handleMsg in NodeController")
 
 	if packet.ReceiverShardingName == "" {
-		nc.Log.Warn("Receive message error: Invalid sharding name")
+		nc.Log.Warn("Dropping message with empty receiver sharding name")
 		return
 	}
 	nc.shardingsLock.Lock()
 	sharding, ok := nc.Shardings[packet.ReceiverShardingName]
 	if !ok {
-		nc.Log.Warnf("Receive message error: Sharding name %s in %s message does not exist\n", packet.ReceiverShardingName, packet.Msg)
+		nc.Log.WithFields(logrus.Fields{
+			"sharding": packet.ReceiverShardingName,
+			"epoch":    packet.Epoch,
+		}).Debug("Dropping message for non-existent sharding")
 	} else {
+		nc.Log.WithFields(logrus.Fields{
+			"sharding": packet.ReceiverShardingName,
+			"epoch":    packet.Epoch,
+		}).Debug("Routing message to sharding")
 		go sharding.handleMsg(packet)
 	}
 	nc.shardingsLock.Unlock()
@@ -240,15 +247,29 @@ func (nc *NodeController) handlePotSignal(potSignalBytes []byte) {
 	potSignal := &PoTSignal{}
 	err := json.Unmarshal(potSignalBytes, potSignal)
 	if err != nil {
-		nc.Log.Error("Unmarshal potSignal failed.")
+		nc.Log.WithError(err).Error("Failed to unmarshal PoT signal")
 		return
 	}
 
-	// Ignoring pot signals from old epochs
-	if potSignal.Epoch <= nc.epoch {
+	// Ignoring pot signals from old epochs (but always accept epoch 0 for genesis)
+	if potSignal.Epoch < nc.epoch {
+		nc.Log.WithFields(logrus.Fields{
+			"signal_epoch":  potSignal.Epoch,
+			"current_epoch": nc.epoch,
+		}).Debug("Ignoring PoT signal from old epoch")
 		return
-	} else {
+	} else if potSignal.Epoch > nc.epoch {
+		nc.Log.WithFields(logrus.Fields{
+			"old_epoch": nc.epoch,
+			"new_epoch": potSignal.Epoch,
+		}).Info("Processing PoT signal for new epoch")
 		nc.epoch = potSignal.Epoch
+	} else {
+		// potSignal.Epoch == nc.epoch
+		// For epoch 0 (genesis), we should still process it to create initial sharding
+		nc.Log.WithFields(logrus.Fields{
+			"epoch": nc.epoch,
+		}).Debug("Processing PoT signal for current epoch (genesis or update)")
 	}
 
 	nc.ShardManage(potSignal)
@@ -261,7 +282,11 @@ func (nc *NodeController) ShardManage(potSignal *PoTSignal) {
 		localSharding, ok := nc.Shardings[s.Name]
 		if !ok {
 			// create a new sharding
-			nc.Log.Info("create a new sharding: ", s.Name)
+			nc.Log.WithFields(logrus.Fields{
+				"sharding":     s.Name,
+				"consensus_id": s.SubConsensus.ConsensusID,
+				"leader":       s.LeaderPublicAddress,
+			}).Info("Creating new sharding")
 			ns := NewSharding(s.Name, nc, s)
 			nc.Shardings[s.Name] = ns
 		} else {
@@ -271,7 +296,11 @@ func (nc *NodeController) ShardManage(potSignal *PoTSignal) {
 			if localSharding.SubConsensus.ConsensusID != s.SubConsensus.ConsensusID {
 				// 此时意味者发送了共识切换，需要为新共识创建一个 DaemonNode 节点
 				// 请注意，创建节点的共识类型，是依据 localSharding.SubConsensus 指定的，因此在创建前需要先更新 localSharding.SubConsensus
-				nc.Log.Info("create a new consensus DaemonNode in ", s.Name, " for consensusID: ", s.SubConsensus.ConsensusID)
+				nc.Log.WithFields(logrus.Fields{
+					"sharding":         s.Name,
+					"old_consensus_id": localSharding.SubConsensus.ConsensusID,
+					"new_consensus_id": s.SubConsensus.ConsensusID,
+				}).Info("Creating DaemonNode for consensus switch")
 				localSharding.SubConsensus = &s.SubConsensus
 				address := EncodeAddress(localSharding.Name+nc.PeerId, s.SubConsensus.ConsensusID, DaemonNodePublicAddress)
 				localSharding.createConsensusNode(address)
@@ -293,7 +322,7 @@ func (nc *NodeController) ShardManage(potSignal *PoTSignal) {
 		}
 		if flag == 0 {
 			// delete a sharding
-			nc.Log.Info("delete a sharding")
+			nc.Log.WithField("sharding", name).Info("Deleting obsolete sharding")
 			nc.Shardings[name].Stop()
 			delete(nc.Shardings, name)
 		}
@@ -302,8 +331,12 @@ func (nc *NodeController) ShardManage(potSignal *PoTSignal) {
 }
 
 func (nc *NodeController) NodeManage(potSignal *PoTSignal) {
-	nc.Log.Info("======================== epoch: ", nc.epoch, "========================")
-	nc.Log.Debug("len(SelfPublicAddress): ", len(potSignal.SelfPublicAddress))
+	nc.Log.WithFields(logrus.Fields{
+		"epoch":              nc.epoch,
+		"self_address_count": len(potSignal.SelfPublicAddress),
+		"sharding_count":     len(potSignal.Shardings),
+	}).Info("Managing nodes for new epoch")
+	nc.Log.WithField("addresses", len(potSignal.SelfPublicAddress)).Debug("Self public addresses count")
 	// fmt.Printf("%+v\n", potSignal.Shardings)
 	// println(potSignal.Shardings)
 
@@ -333,9 +366,16 @@ func (nc *NodeController) handleStop(address string) {
 
 	defer nc.shardingsLock.Unlock()
 	if !ok {
-		nc.Log.Errorf("Stop Node Error: Sharding %s does not exist", shardingName)
+		nc.Log.WithFields(logrus.Fields{
+			"sharding": shardingName,
+			"address":  address,
+		}).Error("Failed to stop node: sharding not found")
 		return
 	}
+	nc.Log.WithFields(logrus.Fields{
+		"sharding": shardingName,
+		"address":  rawAddress,
+	}).Debug("Stopping node")
 	go sharding.handleStop(address)
 }
 
@@ -358,8 +398,15 @@ func (nc *NodeController) handleUpdate(address string) {
 	}
 
 	if !ok {
-		nc.Log.Errorf("Update Node Error: Sharding does not exist")
+		nc.Log.WithFields(logrus.Fields{
+			"sharding": shardingName,
+			"address":  address,
+		}).Error("Failed to update node: sharding not found")
 	} else {
+		nc.Log.WithFields(logrus.Fields{
+			"sharding": shardingName,
+			"address":  rawAddress,
+		}).Debug("Updating node")
 		go sharding.handleUpdate(address)
 	}
 	nc.shardingsLock.Unlock()
@@ -373,9 +420,10 @@ func EncodeAddress(shardingName string, consensusID int64, address string) strin
 // Input: address that is encoded
 // Output: shardingName, consensusID, rawAddress
 func DecodeAddress(address string) (string, int64, string) {
+	logger := logging.GetLogger().WithField("module", "WHIRLY.NODECTRL")
 	res := strings.Split(address, "-")
 	if len(res) < 3 {
-		println("DecodeAddress Error: Illegal parameter")
+		logger.WithField("address", address).Error("Failed to decode address: illegal parameter format")
 		return "", 0, ""
 	}
 
@@ -387,7 +435,10 @@ func DecodeAddress(address string) (string, int64, string) {
 
 	consensusID, err := strconv.ParseInt(consensusIDStr, 10, 64)
 	if err != nil {
-		println("DecodeAddress Error: Illegal ConsensusID")
+		logger.WithFields(logrus.Fields{
+			"address":      address,
+			"consensus_id": consensusIDStr,
+		}).Error("Failed to decode address: illegal consensus ID")
 		return "", 0, ""
 	}
 
@@ -395,4 +446,13 @@ func DecodeAddress(address string) (string, int64, string) {
 	shardingName := strings.Join(res[:len(res)-2], "-")
 
 	return shardingName, consensusID, rawAddress
+}
+
+func DecodePacket(packet []byte) (*pb.Packet, error) {
+	p := new(pb.Packet)
+	err := proto.Unmarshal(packet, p)
+	if err != nil {
+		return nil, err
+	}
+	return p, nil
 }

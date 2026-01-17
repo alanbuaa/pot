@@ -14,9 +14,10 @@ type Executor interface {
 }
 
 func BuildExecutor(cfg *config.ExecutorConfig, log *logrus.Entry) Executor {
-	if cfg.Type == "local" {
+	switch cfg.Type {
+	case "local":
 		return NewLocalExecutor(cfg, log)
-	} else if cfg.Type == "remote" {
+	case "remote":
 		return NewRemoteExecutor(cfg, log)
 	}
 	log.WithField("type", cfg.Type).Warn("executor type error")

@@ -48,8 +48,11 @@ type PoTEngine struct {
 }
 
 func NewPoTEngine(nid int64, cid int64, config *config.ConsensusConfig, exec executor.Executor, adaptor p2p.P2PAdaptor, log *logrus.Entry) *PoTEngine {
+	log = log.WithField("module", "PoT").WithField("c_id", cid)
+	log.Info("Initializing PoT consensus")
 	ch := make(chan []byte, 1024)
 	//st := types.NewHeaderStorage(nid)
+	log.WithField("datadir", config.Nodes[nid].Datadir).Debug("Creating block storage")
 	bst := storage.NewBlockStorage(nid, config.Nodes[nid].Datadir)
 	e := &PoTEngine{
 		id:              nid,
@@ -65,36 +68,51 @@ func NewPoTEngine(nid int64, cid int64, config *config.ConsensusConfig, exec exe
 		blockStorage: bst,
 		Topic:        []byte(config.Topic),
 	}
+	log.Debug("Initializing genesis block")
 	bst.Put(types.DefaultGenesisBlock())
+	log.Debug("Creating PoT worker")
 	worker := NewWorker(nid, config, log, bst, e)
 	e.Worker = worker
 
 	// adaptor.SetReceiver(e)
 	adaptor.SetReceiver(e.GetMsgByteEntrance())
+	log.WithField("topic", config.Topic).Debug("Subscribing to P2P topic")
 	err := adaptor.Subscribe([]byte(config.Topic))
 	if adaptor.GetP2PType() == "p2p" {
 		e.peerId = config.Nodes[nid].Address
+		log.WithField("peer_id", e.peerId).Debug("Using base P2P with address as peer ID")
 	} else {
 		e.peerId = adaptor.GetPeerID()
+		log.WithField("peer_id", e.peerId).Debug("Using libp2p with generated peer ID")
 	}
 	if err != nil {
+		log.WithError(err).Error("Failed to subscribe to P2P topic")
 		return nil
 	}
+	log.Info("P2P configuration completed")
 
 	e.start()
 	return e
 }
 func (e *PoTEngine) start() {
 
-	e.log.Infof("[PoT]\tPoT Consensus Engine starts working")
+	e.log.Info("Starting PoT Consensus Engine")
+	e.log.Debug("Initializing committee consensus (Whirly)")
 	whirly := e.StartCommitee()
 	e.Worker.SetWhirly(whirly)
+	e.log.Debug("Committee consensus initialized")
 
+	// Send initial PoT signal to create genesis sharding before accepting client requests
+	e.log.Debug("Sending initial PoT signal for genesis sharding")
+	e.Worker.SendInitialPoTSignal()
+
+	e.log.Debug("Starting PoT worker goroutines")
 	go e.Worker.OnGetVdf0Response()
 	go e.Worker.Work()
 	go e.Worker.handleVdfhalf()
 	go e.onReceiveMsg()
 	go e.Worker.rpcserver.Serve(e.Worker.listener)
+	e.log.Info("PoT Consensus Engine started successfully, all worker goroutines running")
 }
 func (e *PoTEngine) GetRequestEntrance() chan<- *pb.Request {
 	if e.UpperConsensus != nil && e.UpperConsensus.GetRequestEntrance() != nil {
@@ -108,9 +126,15 @@ func (e *PoTEngine) GetMsgByteEntrance() chan<- []byte {
 }
 
 func (e *PoTEngine) Stop() {
-	_ = os.RemoveAll("dbfile/node0-" + strconv.Itoa(int(e.id)))
+	e.log.Info("Stopping PoT Consensus Engine")
+	dbPath := "dbfile/node0-" + strconv.Itoa(int(e.id))
+	e.log.WithField("path", dbPath).Debug("Cleaning up database files")
+	_ = os.RemoveAll(dbPath)
+	e.log.Debug("Stopping worker")
 	e.Worker.Stop()
+	e.log.Debug("Closing message entrance channel")
 	close(e.GetMsgByteEntrance())
+	e.log.Info("PoT Consensus Engine stopped successfully")
 }
 
 func (e *PoTEngine) VerifyBlock(block []byte, proof []byte) bool {
@@ -143,8 +167,10 @@ func (e *PoTEngine) RequestLatestBlock(epoch int64, proof []byte, committee []st
 
 func (e *PoTEngine) Broadcast(msgByte []byte) error {
 	if e.Adaptor == nil {
+		e.log.Error("P2P adaptor not found")
 		return fmt.Errorf("can't find p2p adaptor")
 	}
+	e.log.WithField("msg_size", len(msgByte)).Trace("Broadcasting message")
 	packet := &pb.Packet{
 		Msg:         msgByte,
 		ConsensusID: e.consensusID,
@@ -196,7 +222,7 @@ func (e *PoTEngine) StartCommitee() *nodeController.NodeController {
 	//s := simpleWhirly.NewSimpleWhirly(e.id, 1009, whirlyconfig, e.exec, e.Adaptor, e.log, "", nil)
 	s := nodeController.NewNodeController(e.id, 1009, whirlyconfig, e.exec, e.Adaptor, e.log)
 	e.UpperConsensus = s
-	e.log.Infof("[PoT]\tCommitee consensus whirly get prepared")
+	e.log.Debug("Committee consensus (Whirly) initialized")
 	return s
 }
 

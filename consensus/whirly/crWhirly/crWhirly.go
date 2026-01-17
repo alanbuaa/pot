@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/hex"
 	"os"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -243,12 +242,44 @@ func (sw *CrWhirlyImpl) UpdateExternalStatus(status model.ExternalStatus) {
 
 func (sw *CrWhirlyImpl) GetLeader(epoch int64) string {
 	sw.leaderLock.Lock()
+	defer sw.leaderLock.Unlock()
+
 	leaderID, ok := sw.leader[epoch]
-	sw.leaderLock.Unlock()
-	if !ok {
-		return ""
+	if ok {
+		return leaderID
 	}
-	return leaderID
+
+	// Fallback strategy 1: Search for leader in earlier epochs (descending)
+	for e := epoch - 1; e >= 0; e-- {
+		if leader, exists := sw.leader[e]; exists {
+			sw.Log.WithFields(logrus.Fields{
+				"requested_epoch": epoch,
+				"found_epoch":     e,
+				"leader":          leader,
+			}).Debug("GetLeader: Using leader from earlier epoch")
+			return leader
+		}
+	}
+
+	// Fallback strategy 2: Use any available leader as last resort
+	if len(sw.leader) > 0 {
+		for e, leader := range sw.leader {
+			sw.Log.WithFields(logrus.Fields{
+				"requested_epoch": epoch,
+				"using_epoch":     e,
+				"leader":          leader,
+				"leader_map_size": len(sw.leader),
+			}).Warn("GetLeader: Using leader from different epoch as fallback")
+			return leader
+		}
+	}
+
+	sw.Log.WithFields(logrus.Fields{
+		"epoch":      epoch,
+		"leader_map": sw.leader,
+		"sw.epoch":   sw.epoch,
+	}).Error("GetLeader: No leader found for any epoch")
+	return ""
 }
 
 func (sw *CrWhirlyImpl) CleanVote(txLength int) {
@@ -330,7 +361,7 @@ func (sw *CrWhirlyImpl) receiveMsg(ctx context.Context) {
 }
 
 func (sw *CrWhirlyImpl) handleMsg(msg *pb.WhirlyMsg) {
-	// sw.Log.Trace("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] recevice msg")
+	// sw.Log.WithFields(logrus.Fields{"epoch": sw.epoch, "replica": sw.ID, "view": sw.View.ViewNum}).Trace("receive msg")
 	switch msg.Payload.(type) {
 	case *pb.WhirlyMsg_Request:
 		request := msg.GetRequest()
@@ -398,8 +429,12 @@ func (sw *CrWhirlyImpl) Update(crProof *pb.CrWhirlyProof) {
 	}
 	// sw.lock.Unlock()
 
-	sw.Log.WithField(
-		"blockHash", hex.EncodeToString(block1.Hash)).Trace("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] [SIMPLE WHIRLY] LOCK.")
+	sw.Log.WithFields(logrus.Fields{
+		"epoch":     sw.epoch,
+		"replica":   sw.ID,
+		"view":      sw.View.ViewNum,
+		"blockHash": hex.EncodeToString(block1.Hash),
+	}).Trace("SIMPLE WHIRLY LOCK")
 	// pre-commit block1
 	sw.UpdateLockProof(crProof)
 
@@ -415,13 +450,15 @@ func (sw *CrWhirlyImpl) Update(crProof *pb.CrWhirlyProof) {
 		_, _, address := DecodeAddress(sw.PublicAddress)
 		if sw.View.ViewNum%2 == 0 && (sw.ID == 0 || address == DaemonNodePublicAddress) {
 			sw.Log.WithFields(logrus.Fields{
+				"epoch":       sw.epoch,
+				"replica":     sw.ID,
+				"view":        sw.View.ViewNum,
 				"blockHash":   hex.EncodeToString(block2.Hash),
 				"blockHeight": block2.Height,
 				"myAddress":   sw.PublicAddress,
-			}).Info("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] [CR WHIRLY] COMMIT.")
+			}).Info("CR WHIRLY COMMIT")
 		}
-		// sw.Log.WithField(
-		// 	"blockHash", hex.EncodeToString(block2.Hash)).Trace("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] [SIMPLE WHIRLY] COMMIT.")
+		// sw.Log.WithFields(logrus.Fields{"epoch": sw.epoch, "replica": sw.ID, "view": sw.View.ViewNum, "blockHash": hex.EncodeToString(block2.Hash)}).Trace("SIMPLE WHIRLY COMMIT")
 		sw.OnCommit(block2)
 		sw.bExec = block2
 	}
@@ -438,7 +475,7 @@ func (sw *CrWhirlyImpl) OnCommit(block *pb.WhirlyBlock) {
 			sw.Log.WithField("error", err.Error()).Fatal("Update block state failed")
 		}
 		// }()
-		//sw.Log.WithField("blockHash", hex.EncodeToString(block.Hash)).Trace("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] [SIMPLE WHIRLY] EXEC.")
+		//sw.Log.WithFields(logrus.Fields{"epoch": sw.epoch, "replica": sw.ID, "view": sw.View.ViewNum, "blockHash": hex.EncodeToString(block.Hash)}).Trace("SIMPLE WHIRLY EXEC")
 		// 只有 DaemonNode 需要提交交易
 		_, _, address := DecodeAddress(sw.PublicAddress)
 		if sw.ID == 0 || address == DaemonNodePublicAddress {
@@ -453,10 +490,13 @@ func (sw *CrWhirlyImpl) verfiyCrProof(crProof *pb.CrWhirlyProof) bool {
 	}
 	if len(crProof.VoteProof) < 2*sw.Config.F+1 {
 		sw.Log.WithFields(logrus.Fields{
+			"epoch":       sw.epoch,
+			"replica":     sw.ID,
+			"view":        sw.View.ViewNum,
 			"proofHeight": crProof.ViewNum,
 			"len(proof)":  len(crProof.VoteProof),
 			"blockHash":   hex.EncodeToString(crProof.BlockHash),
-		}).Warn("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] proof is too small.")
+		}).Warn("Proof is too small")
 		return false
 	}
 	// TODO: verfig proofs
@@ -465,10 +505,13 @@ func (sw *CrWhirlyImpl) verfiyCrProof(crProof *pb.CrWhirlyProof) bool {
 
 func (sw *CrWhirlyImpl) OnReceiveProposal(newBlock *pb.WhirlyBlock, crProof *pb.CrWhirlyProof, publicAddress string) {
 	sw.Log.WithFields(logrus.Fields{
+		"epoch":       sw.epoch,
+		"replica":     sw.ID,
+		"view":        sw.View.ViewNum,
 		"blockHeight": newBlock.Height,
 		"proofView":   crProof.ViewNum,
-	}).Trace("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] OnReceiveProposal.")
-	// sw.Log.WithField("blockHash", hex.EncodeToString(newBlock.Hash)).Trace("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] OnReceiveProposal.")
+	}).Trace("OnReceiveProposal")
+	// sw.Log.WithFields(logrus.Fields{"epoch": sw.epoch, "replica": sw.ID, "view": sw.View.ViewNum, "blockHash": hex.EncodeToString(newBlock.Hash)}).Trace("OnReceiveProposal")
 
 	// if newBlock.ExecHeight == 1 && sw.GetP2pAdaptorType() != "p2p" {
 	// 	// TODO: ensure to cancel send pingMsg when a proposal is received the first time
@@ -484,23 +527,30 @@ func (sw *CrWhirlyImpl) OnReceiveProposal(newBlock *pb.WhirlyBlock, crProof *pb.
 	// verfiy proposal
 	v := newBlock.Height
 	if v <= sw.lockProof.ViewNum {
-		// sw.Log.Warn("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] receive old proposal.")
+		// sw.Log.WithFields(logrus.Fields{"epoch": sw.epoch, "replica": sw.ID, "view": sw.View.ViewNum}).Warn("Receive old proposal")
 		return
 	}
 
 	if !sw.verfiyCrProof(crProof) {
-		sw.Log.Warn("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] proposal proof is wrong.")
+		sw.Log.WithFields(logrus.Fields{
+			"epoch":   sw.epoch,
+			"replica": sw.ID,
+			"view":    sw.View.ViewNum,
+		}).Warn("Proposal proof is wrong")
 		return
 	}
 
 	if !bytes.Equal(crProof.BlockHash, newBlock.ParentHash) {
 		sw.Log.WithFields(logrus.Fields{
+			"epoch":       sw.epoch,
+			"replica":     sw.ID,
+			"view":        sw.View.ViewNum,
 			"proofHeight": crProof.ViewNum,
 			"blockHeight": newBlock.Height,
 			"proofHash":   hex.EncodeToString(crProof.BlockHash),
 			"blockHash":   hex.EncodeToString(newBlock.ParentHash),
-		}).Warn("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] OnReceiveProposal: proposal block and proof is incongruous.")
-		// sw.Log.Warn("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] proposal block and proof is incongruous.")
+		}).Warn("OnReceiveProposal: proposal block and proof is incongruous")
+		// sw.Log.Warn("OnReceiveProposal: proposal block and proof is incongruous")
 		return
 	}
 
@@ -508,14 +558,21 @@ func (sw *CrWhirlyImpl) OnReceiveProposal(newBlock *pb.WhirlyBlock, crProof *pb.
 	if v <= sw.vHeight {
 		// info log rathee than warn
 		sw.Log.WithFields(logrus.Fields{
+			"epoch":       sw.epoch,
+			"replica":     sw.ID,
+			"view":        sw.View.ViewNum,
 			"blockHeight": newBlock.Height,
 			"vHeight":     sw.vHeight,
 			"myAddress":   sw.PublicAddress,
-		}).Info("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] OnReceiveProposal: WhirlyBlock height less than vHeight.")
+		}).Info("OnReceiveProposal: WhirlyBlock height less than vHeight")
 		return
 	}
 
-	sw.Log.Debug("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "]  OnReceiveProposal: Accepted block.")
+	sw.Log.WithFields(logrus.Fields{
+		"epoch":   sw.epoch,
+		"replica": sw.ID,
+		"view":    sw.View.ViewNum,
+	}).Debug("OnReceiveProposal: Accepted block")
 	// update vHeight
 	sw.vHeight = newBlock.Height
 	sw.MemPool.MarkProposed(types.RawTxArrayFromBytes(newBlock.Txs))
@@ -526,7 +583,11 @@ func (sw *CrWhirlyImpl) OnReceiveProposal(newBlock *pb.WhirlyBlock, crProof *pb.
 	sw.AdvanceView(newBlock.Height)
 
 	if !sw.inCommittee {
-		sw.Log.Trace("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "]  OnReceiveProposal: Not in Committee.")
+		sw.Log.WithFields(logrus.Fields{
+			"epoch":   sw.epoch,
+			"replica": sw.ID,
+			"view":    sw.View.ViewNum,
+		}).Trace("OnReceiveProposal: Not in Committee")
 		return
 	}
 
@@ -612,7 +673,11 @@ func (sw *CrWhirlyImpl) OnReceiveProposal(newBlock *pb.WhirlyBlock, crProof *pb.
 
 func (sw *CrWhirlyImpl) OnReceiveVote(whirlyVoteMsg *pb.CrWhirlyVote) {
 	if !sw.inCommittee {
-		sw.Log.Trace("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "]  OnReceiveVote: Not in Committee.")
+		sw.Log.WithFields(logrus.Fields{
+			"epoch":   sw.epoch,
+			"replica": sw.ID,
+			"view":    sw.View.ViewNum,
+		}).Trace("OnReceiveVote: Not in Committee")
 		return
 	}
 
@@ -623,12 +688,15 @@ func (sw *CrWhirlyImpl) OnReceiveVote(whirlyVoteMsg *pb.CrWhirlyVote) {
 	if sw.GetLeader(sw.epoch) != sw.PublicAddress {
 		// if sw.GetLeader(int64(whirlyVoteMsg.BlockView)) != sw.ID {
 		sw.Log.WithFields(logrus.Fields{
+			"epoch":     sw.epoch,
+			"replica":   sw.ID,
+			"view":      sw.View.ViewNum,
 			"senderId":  whirlyVoteMsg.SenderId,
 			"getleader": sw.GetLeader(sw.epoch),
 			"blockView": whirlyVoteMsg.BlockView,
 			"sw.ID":     sw.ID,
 			"Flag":      whirlyVoteMsg.Flag,
-		}).Warn("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] OnReceiveVote with error node.")
+		}).Warn("OnReceiveVote with error node")
 		// sw.Log.Warn("OnReceiveVote with error block view")
 		return
 	}
@@ -640,13 +708,16 @@ func (sw *CrWhirlyImpl) OnReceiveVote(whirlyVoteMsg *pb.CrWhirlyVote) {
 	}
 
 	sw.Log.WithFields(logrus.Fields{
+		"epoch":        sw.epoch,
+		"replica":      sw.ID,
+		"view":         sw.View.ViewNum,
 		"senderId":     whirlyVoteMsg.SenderId,
 		"blockView":    whirlyVoteMsg.BlockView,
 		"flag":         whirlyVoteMsg.Flag,
 		"len(YesVote)": len(sw.curYesVote),
 		"weight":       whirlyVoteMsg.Weight,
-	}).Trace("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] OnReceiveVote.")
-	// sw.Log.Trace("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] OnReceiveVote.")
+	}).Trace("OnReceiveVote")
+	// sw.Log.Trace("OnReceiveVote")
 
 	if whirlyVoteMsg.Flag {
 		sw.voteLock.Lock()
@@ -755,17 +826,23 @@ func (sw *CrWhirlyImpl) OnReceiveVote(whirlyVoteMsg *pb.CrWhirlyVote) {
 
 			proof := sw.CrProof(whirlyVoteMsg.BlockView, plaintextTxsBytes, sw.curYesVote, whirlyVoteMsg.BlockHash)
 			sw.Log.WithFields(logrus.Fields{
+				"epoch":     sw.epoch,
+				"replica":   sw.ID,
+				"view":      sw.View.ViewNum,
 				"proofView": proof.ViewNum,
-			}).Trace("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] create full proof!")
+			}).Trace("Create full proof")
 			// update proofHigh
 			sw.lock.Lock()
 			sw.UpdateLockProof(proof)
 			sw.lock.Unlock()
 		} else {
 			sw.Log.WithFields(logrus.Fields{
+				"epoch":       sw.epoch,
+				"replica":     sw.ID,
+				"view":        sw.View.ViewNum,
 				"msgView":     whirlyVoteMsg.BlockView,
 				"len(NoVote)": len(sw.curNoVote),
-			}).Error("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] have NoVote!")
+			}).Error("Have NoVote")
 		}
 
 		sw.AdvanceView(whirlyVoteMsg.BlockView)
@@ -786,16 +863,23 @@ func (sw *CrWhirlyImpl) OnPropose() {
 	if sw.GetLeader(sw.epoch) != sw.PublicAddress || sw.proposeView >= sw.View.ViewNum {
 		// if sw.GetLeader(int64(1)) != sw.ID {
 		sw.Log.WithFields(logrus.Fields{
+			"epoch":   sw.epoch,
+			"replica": sw.ID,
+			"view":    sw.View.ViewNum,
 			"nowView": sw.View.ViewNum,
 			"leader":  sw.GetLeader(sw.epoch),
-		}).Trace("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] OnPropose: not allow!")
+		}).Trace("OnPropose: not allow")
 		sw.proposalLock.Unlock()
 		return
 	}
 	sw.proposeView = sw.View.ViewNum
 	sw.proposalLock.Unlock()
 
-	sw.Log.Trace("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] OnPropose")
+	sw.Log.WithFields(logrus.Fields{
+		"epoch":   sw.epoch,
+		"replica": sw.ID,
+		"view":    sw.View.ViewNum,
+	}).Trace("OnPropose")
 	txs := sw.MemPool.GetFirst(int(sw.Config.Whirly.BatchSize))
 	if len(txs) != 0 {
 		_ = 1
@@ -908,12 +992,15 @@ func (sw *CrWhirlyImpl) UpdateLockProof(crProof *pb.CrWhirlyProof) {
 	}
 	if block.Height > oldProofHighBlock.Height {
 		sw.Log.WithFields(logrus.Fields{
+			"epoch":               sw.epoch,
+			"replica":             sw.ID,
+			"view":                sw.View.ViewNum,
 			"old":                 sw.lockProof.ViewNum,
 			"new":                 crProof.ViewNum,
 			"lockProof.blockHash": hex.EncodeToString(crProof.BlockHash),
 			"bLock.Hash":          hex.EncodeToString(block.Hash),
-		}).Trace("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] UpdateLockProof.")
-		// p.log.Trace("[SIMPLE WHIRLY] UpdateLockProof.")
+		}).Trace("UpdateLockProof")
+		// p.log.Trace("UpdateLockProof")
 		sw.lockProof = crProof
 		sw.bLock = block
 	}
@@ -966,7 +1053,11 @@ func (sw *CrWhirlyImpl) AdvanceView(viewNum uint64) {
 	if viewNum >= sw.View.ViewNum {
 		sw.View.ViewNum = viewNum
 		sw.View.ViewNum++
-		sw.Log.Trace("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] advanceView success!")
+		sw.Log.WithFields(logrus.Fields{
+			"epoch":   sw.epoch,
+			"replica": sw.ID,
+			"view":    sw.View.ViewNum,
+		}).Trace("AdvanceView success")
 	}
 }
 

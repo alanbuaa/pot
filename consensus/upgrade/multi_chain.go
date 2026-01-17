@@ -56,14 +56,22 @@ func (mcm *MultiChainManager) StartCandidateChain(
 	mcm.mu.Lock()
 	defer mcm.mu.Unlock()
 
+	mcm.log.WithFields(logrus.Fields{
+		"candidate_id": candidateID,
+		"fork_height":  forkHeight,
+	}).Info("Starting candidate chain")
+
 	// 检查候选链是否已存在
 	if _, exists := mcm.candidateChains[candidateID]; exists {
+		mcm.log.WithField("candidate_id", candidateID).Error("Candidate chain already exists")
 		return fmt.Errorf("candidate chain %s already exists", candidateID)
 	}
 
 	// 获取分叉点状态
+	mcm.log.WithField("fork_height", forkHeight).Debug("Fetching fork block from main chain")
 	forkBlock, err := mcm.storage.GetMainBlock(forkHeight)
 	if err != nil {
+		mcm.log.WithError(err).WithField("fork_height", forkHeight).Error("Failed to get fork block")
 		return fmt.Errorf("failed to get fork block: %w", err)
 	}
 
@@ -98,13 +106,17 @@ func (mcm *MultiChainManager) ProcessMainChainBlock(block *types.Block) error {
 	mcm.mu.Lock()
 	defer mcm.mu.Unlock()
 
+	mcm.log.WithField("height", block.Header.Height).Trace("Processing main chain block")
+
 	// 验证区块
 	if err := mcm.validateBlock(mcm.mainChain, block); err != nil {
+		mcm.log.WithError(err).WithField("height", block.Header.Height).Warn("Main chain block validation failed")
 		return fmt.Errorf("invalid main chain block: %w", err)
 	}
 
 	// 存储区块
 	if err := mcm.storage.StoreMainBlock(block); err != nil {
+		mcm.log.WithError(err).WithField("height", block.Header.Height).Error("Failed to store main block")
 		return fmt.Errorf("failed to store main block: %w", err)
 	}
 
@@ -115,15 +127,24 @@ func (mcm *MultiChainManager) ProcessMainChainBlock(block *types.Block) error {
 		copy(blockHash[:], block.Hash())
 	}
 	mcm.mainChain.LatestBlockHash = blockHash
+	mcm.log.WithField("height", block.Header.Height).Debug("Main chain state updated")
 
 	// 同步交易到所有活跃的候选链
+	activeCount := 0
 	for candidateID, candidate := range mcm.candidateChains {
 		if candidate.Active {
+			activeCount++
 			if err := mcm.syncTransactionsToCandidate(candidateID, block); err != nil {
 				mcm.log.WithError(err).WithField("candidate_id", candidateID).
 					Warn("Failed to sync transactions to candidate chain")
 			}
 		}
+	}
+	if activeCount > 0 {
+		mcm.log.WithFields(logrus.Fields{
+			"height":            block.Header.Height,
+			"active_candidates": activeCount,
+		}).Debug("Synced transactions to active candidate chains")
 	}
 
 	return nil
@@ -157,22 +178,40 @@ func (mcm *MultiChainManager) ProcessCandidateBlock(candidateID string, block *t
 	mcm.mu.Lock()
 	defer mcm.mu.Unlock()
 
+	mcm.log.WithFields(logrus.Fields{
+		"candidate_id": candidateID,
+		"height":       block.Header.Height,
+	}).Trace("Processing candidate chain block")
+
 	candidate, exists := mcm.candidateChains[candidateID]
 	if !exists {
+		mcm.log.WithField("candidate_id", candidateID).Warn("Candidate chain not found")
 		return fmt.Errorf("candidate chain %s not found", candidateID)
 	}
 
 	if !candidate.Active {
+		mcm.log.WithFields(logrus.Fields{
+			"candidate_id": candidateID,
+			"height":       block.Header.Height,
+		}).Warn("Candidate chain not active, skipping block")
 		return fmt.Errorf("candidate chain %s not active", candidateID)
 	}
 
 	// 验证区块
 	if err := mcm.validateBlock(candidate.ChainState, block); err != nil {
+		mcm.log.WithError(err).WithFields(logrus.Fields{
+			"candidate_id": candidateID,
+			"height":       block.Header.Height,
+		}).Warn("Candidate block validation failed")
 		return fmt.Errorf("invalid candidate block: %w", err)
 	}
 
 	// 存储候选链区块
 	if err := mcm.storage.StoreCandidateBlock(candidateID, block); err != nil {
+		mcm.log.WithError(err).WithFields(logrus.Fields{
+			"candidate_id": candidateID,
+			"height":       block.Header.Height,
+		}).Error("Failed to store candidate block")
 		return fmt.Errorf("failed to store candidate block: %w", err)
 	}
 
@@ -183,6 +222,10 @@ func (mcm *MultiChainManager) ProcessCandidateBlock(candidateID string, block *t
 		copy(blockHash[:], block.Hash())
 	}
 	candidate.LatestBlockHash = blockHash
+	mcm.log.WithFields(logrus.Fields{
+		"candidate_id": candidateID,
+		"height":       block.Header.Height,
+	}).Debug("Candidate chain state updated")
 
 	return nil
 }

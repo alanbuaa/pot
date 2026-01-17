@@ -7,12 +7,12 @@ public_key_path: data/keys/pub.key
 http_server_address: "0.0.0.0:8088"
 
 # ======= Total Number of Replicas =======
-total: 1
+total: 4
 
 # ========= Log Configuration =========
 log: 
-  level: debug
-  to_file: false
+  level: trace
+  to_file: true
   filename: ./data/logs/pot_%s.log
 
 # ========= Executor Configuration =========

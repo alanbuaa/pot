@@ -48,9 +48,12 @@ func (e *Engine) GetMsgByteEntrance() chan<- []byte {
 }
 
 func (e *Engine) Stop() {
+	e.log.Info("Stopping PoW Consensus Engine")
+	e.log.Debug("Closing exit channel")
 	close(e.exitChan)
+	e.log.Debug("Waiting for goroutines to finish")
 	e.wg.Wait()
-	e.log.Info("pow stopped")
+	e.log.Info("PoW Consensus Engine stopped successfully")
 }
 
 func (e *Engine) VerifyBlock(block []byte, proof []byte) bool {
@@ -78,12 +81,20 @@ func (e *Engine) RequestLatestBlock(epoch int64, proof []byte, committee []strin
 }
 
 func NewPowEngine(nid int64, cid int64, config *config.ConsensusConfig, exec executor.Executor, adaptor p2p.P2PAdaptor, log *logrus.Entry) *Engine {
+	log = log.WithField("module", "PoW").WithField("c_id", cid)
+	log.WithFields(logrus.Fields{
+		"nid":        nid,
+		"cid":        cid,
+		"hash_algo":  config.Pow.Hash,
+		"difficulty": config.Pow.InitDifficulty,
+	}).Info("Initializing PoW Engine")
 	// make sure the hash function is available
 	// _, err := crypto.HashFactory(config.Pow.Hash)
 	// if err != nil {
 	// 	log.Error("unable to find hash function")
 	// 	return nil
 	// }
+	log.Debug("Creating PoW data structures")
 	e := &Engine{
 		id:              nid,
 		consensusID:     cid,

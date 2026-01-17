@@ -2,12 +2,13 @@ package main
 
 import (
 	"flag"
-	go_hotstuff "github.com/wjbbig/go-hotstuff"
-	"github.com/wjbbig/go-hotstuff/logging"
 	"os"
 	"path"
 	"strconv"
 	"strings"
+
+	go_hotstuff "github.com/wjbbig/go-hotstuff"
+	"github.com/wjbbig/go-hotstuff/logging"
 )
 
 var logger = logging.GetLogger()
@@ -42,7 +43,7 @@ func main() {
 		logger.Fatal(err)
 	}
 	for i, key := range privateKeys {
-		privateKeyPath := path.Join(filePath,"r"+strconv.Itoa(i+1)+".key")
+		privateKeyPath := path.Join(filePath, "r"+strconv.Itoa(i+1)+".key")
 		err = go_hotstuff.WriteThresholdPrivateKeyToFile(key, privateKeyPath)
 		if err != nil {
 			logger.Fatal(err)

@@ -2,11 +2,14 @@ package pot
 
 import (
 	"fmt"
+	"time"
+
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/sirupsen/logrus"
 	pb "github.com/zzz136454872/upgradeable-consensus/pkg/proto"
+	"github.com/zzz136454872/upgradeable-consensus/pkg/utils"
 	"github.com/zzz136454872/upgradeable-consensus/types"
 	"google.golang.org/protobuf/proto"
-	"time"
 )
 
 func (w *Worker) request(request *pb.BlockRequest) (*pb.BlockResponse, error) {
@@ -47,14 +50,17 @@ func (w *Worker) request(request *pb.BlockRequest) (*pb.BlockResponse, error) {
 			return nil, fmt.Errorf("receive response from wrong address")
 		}
 		res = response
-		w.log.Infof("[PoT]\treceive for header %s from %s", hexutil.Encode(request.GetHashes()), request.GetDes())
+		w.log.WithFields(logrus.Fields{
+			"hash": utils.EncodeShortPrint(request.GetHashes()),
+			"from": request.GetDes(),
+		}).Trace("Received block response")
 		timer.Stop()
 	case <-timer.C:
 
 		close(w.blockResponseChan)
 		w.blockResponseChan = nil
 		timer.Stop()
-		return nil, fmt.Errorf("request for header %s from %s timeout", hexutil.Encode(request.GetHashes()), request.GetDes())
+		return nil, fmt.Errorf("request for header %s from %s timeout", utils.EncodeShortPrint(request.GetHashes()), request.GetDes())
 	}
 
 	close(w.blockResponseChan)

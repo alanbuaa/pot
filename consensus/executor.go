@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	"github.com/zzz136454872/upgradeable-consensus/config"
 	pb "github.com/zzz136454872/upgradeable-consensus/pkg/proto"
 	"github.com/zzz136454872/upgradeable-consensus/pkg/utils"
@@ -17,13 +18,14 @@ func (uc *UpgradeableConsensus) VerifyTx(rtx types.RawTransaction) bool {
 }
 
 func (uc *UpgradeableConsensus) executeNormalTx(block types.ConsensusBlock, proof []byte, cid int64) {
+	uc.log.WithFields(logrus.Fields{"cid": cid, "tx_count": len(block.GetTxs())}).Debug("Executing normal transactions")
 	ntxs := [][]byte{}
 	for _, rbtx := range block.GetTxs() {
 		rtx := types.RawTransaction(rbtx)
 		hash := rtx.Hash()
 		tx, err := rtx.ToTx()
 		if err != nil {
-			uc.log.WithError(err).Warn("decode tx failed")
+			uc.log.WithError(err).Warn("Failed to decode transaction")
 			continue
 		}
 		if tx.Type == pb.TransactionType_NORMAL {
@@ -31,7 +33,7 @@ func (uc *UpgradeableConsensus) executeNormalTx(block types.ConsensusBlock, proo
 			if _, ok := uc.commitedTxs[hash]; !ok {
 				ntxs = append(ntxs, rbtx)
 			} else {
-				uc.log.WithField("hash", hash).Debug("tx already commited")
+				uc.log.WithField("hash", hash).Trace("Transaction already committed, skipping")
 			}
 			uc.inputLock.Lock()
 			delete(uc.inputBuffer, hash)
@@ -39,6 +41,7 @@ func (uc *UpgradeableConsensus) executeNormalTx(block types.ConsensusBlock, proo
 			uc.commitLock.Unlock()
 		}
 	}
+	uc.log.WithFields(logrus.Fields{"cid": cid, "new_tx_count": len(ntxs)}).Debug("Committing block to executor")
 	uc.executor.CommitBlock(&pb.WhirlyBlock{Txs: ntxs}, GenProof(block, proof, uc.cid), uc.cid)
 }
 
@@ -58,47 +61,54 @@ func (uc *UpgradeableConsensus) CommitBlock(block types.ConsensusBlock, proof []
 			case pb.TransactionType_NORMAL:
 				continue
 			case pb.TransactionType_UPGRADE:
+				uc.log.Info("Processing upgrade transaction")
 				if !uc.executor.VerifyTx(rbtx) {
-					uc.log.Warn("upgrade tx not verified")
+					uc.log.Warn("Upgrade transaction verification failed")
 					return
 				}
 				cc := new(config.ConsensusConfig)
 				err := json.Unmarshal(tx.Payload, cc)
 				if err != nil {
-					uc.log.Warn("unmarshal upgrade tx failed")
+					uc.log.WithError(err).Warn("Failed to unmarshal upgrade transaction payload")
 					return
 				}
 				cc.Nodes = uc.config.Nodes
 				cc.Keys = uc.config.Keys
 				cc.F = uc.config.F
-				uc.log.WithField("cc", cc).Info("get consensus config")
+				uc.log.WithFields(logrus.Fields{
+					"target_type": cc.Type,
+					"target_cid":  cc.ConsensusID,
+				}).Info("Upgrade consensus config received")
 				uc.upgradeLock.Lock()
 				txHash := rtx.Hash()
 				uc.upgradeBuffer[txHash] = cc
 				uc.upgradeLock.Unlock()
+				uc.log.WithField("hash", txHash).Debug("Upgrade config buffered")
 
 				if uc.config.Upgradeable.NetworkType == config.NetworkSync {
+					uc.log.Debug("Sync mode: sending time vote")
 					go uc.sendTimeVote(txHash)
 				} else {
+					uc.log.Debug("Async mode: starting new consensus immediately")
 					go uc.startNewConsensus(cc)
 				}
 
 			case pb.TransactionType_TIMEVOTE:
 				if uc.config.Upgradeable.NetworkType == config.NetworkAsync {
-					uc.log.Warn("time vote not allowed in async network")
+					uc.log.Warn("Time vote not allowed in async network mode")
 					continue
 				}
 				tv := new(TimeVote)
 				if err := json.Unmarshal(tx.Payload, tv); err != nil {
-					uc.log.Warn("unmarshal time vote failed")
+					uc.log.WithError(err).Warn("Failed to unmarshal time vote")
 					continue
 				}
 				if !tv.Verify(uc.config.Keys) {
-					uc.log.Warn("time vote verify failed")
+					uc.log.Warn("Time vote verification failed")
 					continue
 				}
 				tvi := tv.TVI
-				uc.log.WithField("time", tvi.Time).Debug("commit time vote")
+				uc.log.WithFields(logrus.Fields{"node_id": tvi.ID, "time": tvi.Time}).Debug("Processing time vote")
 				uc.timeWeightLock.Lock()
 				if _, ok := uc.timeWeight[tvi.Hash]; !ok {
 					uc.timeWeight[tvi.Hash] = NewTimeWeightRecord()
@@ -146,27 +156,30 @@ func (uc *UpgradeableConsensus) CommitBlock(block types.ConsensusBlock, proof []
 				}()
 
 			case pb.TransactionType_LOCK:
+				uc.log.Info("Processing lock transaction for consensus upgrade")
 				lock := new(Lock)
 				if err := json.Unmarshal(tx.Payload, lock); err != nil {
-					uc.log.WithError(err).Warn("parse lock failed")
+					uc.log.WithError(err).Warn("Failed to parse lock transaction")
 					continue
 				}
+				uc.log.WithField("cid", lock.Cid).Debug("Lock transaction targets consensus")
 				uc.consensusLock.Lock()
 				nc, ok := uc.candidates[lock.Cid]
 				if !ok {
-					uc.log.WithField("cid", lock.Cid).Warn("candidate not found")
+					uc.log.WithField("cid", lock.Cid).Warn("Candidate consensus not found for lock")
 					uc.consensusLock.Unlock()
 					continue
 				}
+				uc.log.WithField("cid", lock.Cid).Debug("Verifying lock block")
 				if !nc.VerifyBlock(lock.Block, proof) {
-					uc.log.WithField("cid", lock.Cid).Warn("block validate failed")
+					uc.log.WithField("cid", lock.Cid).Warn("Lock block verification failed")
 					uc.consensusLock.Unlock()
 					continue
 				}
+				uc.log.WithField("cid", lock.Cid).Info("Lock verified, upgrading to candidate consensus")
 				uc.upgradeConsensusTo(lock.Cid)
 				uc.consensusLock.Unlock()
 				// no further control tx should be executed
-				// uc.log.WithField("cid", cid).Debug("commit block done 2")
 				return
 			default:
 				uc.log.WithField("type", tx.Type).Warn("transaction type unknown")

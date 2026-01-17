@@ -13,6 +13,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/sirupsen/logrus"
 	"github.com/zzz136454872/upgradeable-consensus/config"
 	"github.com/zzz136454872/upgradeable-consensus/consensus/whirly/nodeController"
 	"github.com/zzz136454872/upgradeable-consensus/crypto"
@@ -116,14 +117,101 @@ func (w *Worker) GetPeerQueue() chan *types.Block {
 	return w.peerMsgQueue
 }
 
+// SendInitialPoTSignal sends an initial PoT signal to create the genesis sharding
+// This ensures the NodeController has a sharding available before client requests arrive
+func (w *Worker) SendInitialPoTSignal() {
+	w.log.Info("Generating initial PoT signal for genesis sharding")
+
+	// Create initial committee from config nodes
+	// Use first Commiteelen nodes as the genesis committee
+	committee := make([]string, Commiteelen)
+	for i := 0; i < Commiteelen && i < len(w.config.Nodes); i++ {
+		// Use node ID as placeholder public key for genesis committee
+		// In real deployment, this should be the actual node public key
+		committee[i] = hexutil.EncodeUint64(uint64(w.config.Nodes[i].ID))
+	}
+
+	w.log.WithFields(logrus.Fields{
+		"committee_size": len(committee),
+		"leader":         committee[0],
+	}).Debug("Genesis committee created")
+
+	// Create consensus config for the genesis sharding
+	whilyConsensus := &config.WhirlyConfig{
+		Type:      "simple",
+		BatchSize: 2,
+		Timeout:   2,
+	}
+
+	consensus := config.ConsensusConfig{
+		Type:        "whirly",
+		ConsensusID: 1201,
+		Whirly:      whilyConsensus,
+		Nodes:       w.config.Nodes,
+		Topic:       w.config.Topic,
+		F:           w.config.F,
+	}
+
+	// Create genesis sharding with name matching client requests
+	sharding := nodeController.PoTSharding{
+		Name:                hexutil.EncodeUint64(1),
+		ParentSharding:      nil,
+		LeaderPublicAddress: committee[0],
+		Committee:           committee,
+		SubConsensus:        consensus,
+	}
+
+	shardings := []nodeController.PoTSharding{sharding}
+
+	// For genesis, include all committee members as self addresses
+	// This allows all nodes to participate in consensus from the start
+	selfPublicAddress := make([]string, len(committee))
+	copy(selfPublicAddress, committee)
+
+	// Create PoT signal for epoch 1 (SimpleWhirly starts from epoch 1, not 0)
+	potsignal := &nodeController.PoTSignal{
+		Epoch:             1,
+		Proof:             make([]byte, 0),
+		ID:                0,
+		SelfPublicAddress: selfPublicAddress, // Include all committee members for genesis
+		Shardings:         shardings,
+	}
+
+	b, err := json.Marshal(potsignal)
+	if err != nil {
+		w.log.WithError(err).Error("Failed to marshal initial PoT signal")
+		return
+	}
+
+	if w.potSignalChan != nil {
+		w.log.WithFields(logrus.Fields{
+			"epoch":          1,
+			"sharding_name":  sharding.Name,
+			"committee_size": len(committee),
+		}).Info("Sending initial PoT signal for genesis sharding")
+		w.potSignalChan <- b
+	} else {
+		w.log.Warn("PoT signal channel not initialized, skipping initial signal")
+	}
+}
+
 func (w *Worker) CommitteeUpdate(height uint64) {
 
 	if height >= CommiteeDelay+Commiteelen {
+		w.log.WithFields(logrus.Fields{
+			"height":        height,
+			"delay":         CommiteeDelay,
+			"committee_len": Commiteelen,
+		}).Debug("Updating committee membership")
 		committee := make([]string, Commiteelen)
 		selfaddress := make([]string, 0)
 		for i := uint64(0); i < Commiteelen; i++ {
 			block, err := w.chainReader.GetByHeight(height - CommiteeDelay - i)
 			if err != nil {
+				w.log.WithFields(logrus.Fields{
+					"height":        height,
+					"target_height": height - CommiteeDelay - i,
+				}).WithError(err).Warn("Failed to retrieve block for committee update")
 				return
 			}
 			if block != nil {
@@ -131,6 +219,11 @@ func (w *Worker) CommitteeUpdate(height uint64) {
 				committee[i] = hexutil.Encode(header.CommiteePubkey)
 				flag, _ := w.TryFindCommiteeKey(crypto.Convert(header.Hash()))
 				if flag {
+					w.log.WithFields(logrus.Fields{
+						"height":     height,
+						"position":   i,
+						"public_key": utils.EncodeShortPrint(header.CommiteePubkey),
+					}).Debug("Found own committee key in block")
 					selfaddress = append(selfaddress, hexutil.Encode(header.CommiteePubkey))
 				}
 			}
@@ -190,17 +283,36 @@ func (w *Worker) CommitteeUpdate(height uint64) {
 		}
 		b, err := json.Marshal(potsignal)
 		if err != nil {
-			w.log.WithError(err)
+			w.log.WithFields(logrus.Fields{
+				"height":    height,
+				"epoch":     potsignal.Epoch,
+				"shardings": len(shardings),
+			}).WithError(err).Error("Failed to marshal PoT signal for committee update")
 			return
 		}
 		if w.potSignalChan != nil {
+			w.log.WithFields(logrus.Fields{
+				"height":             height,
+				"epoch":              int64(height),
+				"committee_size":     len(committee),
+				"self_address_count": len(selfaddress),
+				"shardings":          len(shardings),
+			}).Debug("Sending PoT signal for committee update")
 			w.potSignalChan <- b
 		}
 	}
 	epoch := height
 	if epoch > 1 && w.ID == 0 {
+		w.log.WithFields(logrus.Fields{
+			"epoch":     epoch,
+			"worker_id": w.ID,
+		}).Trace("Processing epoch block for BCI recording")
 		block, err := w.chainReader.GetByHeight(epoch - 1)
 		if err != nil {
+			w.log.WithFields(logrus.Fields{
+				"epoch":        epoch,
+				"block_height": epoch - 1,
+			}).WithError(err).Warn("Failed to retrieve block for BCI recording")
 			return
 		}
 		header := block.GetHeader()
@@ -216,7 +328,18 @@ func (w *Worker) CommitteeUpdate(height uint64) {
 				"",
 			}
 			if err := utils.AppendLinesToFile("bci", lines); err != nil {
-				w.log.WithError(err).Error("Failed to write to bci file")
+				w.log.WithFields(logrus.Fields{
+					"epoch":      epoch,
+					"block_hash": utils.EncodeShortPrint(header.Hash()),
+					"tx_id":      utils.EncodeShortPrint(coinbasetx.Txid[:]),
+					"file":       "bci",
+				}).WithError(err).Error("Failed to write coinbase transaction to BCI file")
+			} else {
+				w.log.WithFields(logrus.Fields{
+					"epoch":      epoch,
+					"block_hash": utils.EncodeShortPrint(header.Hash()),
+					"value":      coinbasetx.TxOutput[0].Value,
+				}).Debug("Successfully recorded coinbase transaction to BCI file")
 			}
 		}
 	}

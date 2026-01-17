@@ -72,8 +72,8 @@ func ToBciReward(proof *pb.BciReward) *BciReward {
 type Mempool struct {
 	mutex         *sync.RWMutex
 	BciRewardPool map[string]*WrappedBciReward
-	execorder     *list.List
-	execset       map[[crypto.Hashlen]byte]*list.Element // 存放已执行的区块
+	execorder     *list.List                             // 存放已执行的区块
+	execset       map[[crypto.Hashlen]byte]*list.Element // 存放已执行的区块哈希
 	raworder      *list.List
 	rawset        map[[crypto.Hashlen]byte]*list.Element
 	rawmap        map[[crypto.Hashlen]byte][]byte

@@ -23,17 +23,24 @@ type LocalExecutor struct {
 func NewLocalExecutor(cfg *config.ExecutorConfig, uplog *logrus.Entry) *LocalExecutor {
 	return &LocalExecutor{
 		counter: 0,
-		log:     uplog.WithField("app", "local executor"),
+		log:     uplog.WithField("module", "[lEXECUTOR]"),
 	}
 }
 
 func (e *LocalExecutor) CommitBlock(block types.ConsensusBlock, proof []byte, cid int64) {
+	e.log.WithFields(logrus.Fields{
+		"consensus_id": cid,
+		"tx_count":     len(block.GetTxs()),
+	}).Trace("[TRACE-6] LocalExecutor.CommitBlock called - EXECUTION STARTED")
+
 	for _, rtx := range block.GetTxs() {
 		tx, err := types.RawTransaction(rtx).ToTx()
 		if tx.Type != pb.TransactionType_NORMAL {
+			e.log.WithField("type", tx.Type.String()).Debug("Skipping non-NORMAL transaction")
 			continue
 		}
 		utils.PanicOnError(err)
+		e.log.WithField("payload", string(tx.Payload)).Trace("[TRACE-6.1] Executing transaction")
 		split := strings.Split(string(tx.Payload), ",")
 		arg1, _ := strconv.Atoi(split[0])
 		arg2, _ := strconv.Atoi(split[1])

@@ -24,9 +24,7 @@ type BaseP2p struct {
 	pb.UnimplementedP2PServer
 }
 
-func NewBaseP2p(log *logrus.Entry, id int64) (*BaseP2p, string, error) {
-	cfg, err := config.NewConfig("config/config.yaml", id) // TODO  配置文件传递问题
-	utils.PanicOnError(err)
+func NewBaseP2p(cfg *config.Config, log *logrus.Entry, id int64) (*BaseP2p, string, error) {
 	info := cfg.GetNodeInfo(id)
 	port := info.Address[strings.Index(info.Address, ":"):]
 	listen, err := net.Listen("tcp", port)
@@ -118,13 +116,19 @@ func (bp *BaseP2p) Unicast(address string, msgByte []byte, consensusID int64, to
 
 // BaseP2p implements P2PServer
 func (bp *BaseP2p) Send(ctx context.Context, in *pb.Packet) (*pb.Empty, error) {
+	bp.log.WithFields(logrus.Fields{
+		"packet_type":  in.Type.String(),
+		"consensus_id": in.ConsensusID,
+		"epoch":        in.Epoch,
+	}).Trace("[TRACE-1] P2P layer received packet")
+
 	bytePacket, err := proto.Marshal(in)
-	// bp.log.Trace("[basep2p] received msg")
 	if err != nil {
 		bp.log.Warn("marshal packet failed")
 		return nil, err
 	}
 	if bp.output != nil {
+		bp.log.Trace("[TRACE-1.1] Forwarding packet to consensus engine")
 		bp.output <- bytePacket
 	} else {
 		bp.log.Warn("[BaseP2p] output nil")

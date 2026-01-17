@@ -2,6 +2,7 @@ package pot
 
 import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/sirupsen/logrus"
 	pb "github.com/zzz136454872/upgradeable-consensus/pkg/proto"
 	"github.com/zzz136454872/upgradeable-consensus/types"
 	"google.golang.org/protobuf/proto"
@@ -16,8 +17,8 @@ func (e *PoTEngine) onReceiveMsg() {
 			}
 			packet, err := DecodePacket(msgByte)
 			if err != nil {
-				e.log.WithError(err).Warn("decode packet failed")
-				e.log.Infof("Decode byte:%s", hexutil.Encode(msgByte))
+				e.log.WithError(err).Warn("Failed to decode packet from network")
+				e.log.WithField("raw_data", hexutil.Encode(msgByte)).Trace("Invalid packet data (hex dump)")
 				continue
 			}
 			e.handlePacket(packet)
@@ -31,20 +32,27 @@ func (e *PoTEngine) onReceiveMsg() {
 // }
 
 func (e *PoTEngine) handlePacket(packet *pb.Packet) {
+	e.log.WithFields(logrus.Fields{
+		"packet_type":  packet.Type.String(),
+		"consensus_id": packet.ConsensusID,
+	}).Trace("[TRACE-2] PoTEngine received packet")
+
 	if packet.Type == pb.PacketType_P2PPACKET {
 		if packet.ConsensusID == e.consensusID {
+			e.log.Trace("[TRACE-2.1] Handling PoT internal message")
 			potMsg := new(pb.PoTMessage)
 			if err := proto.Unmarshal(packet.Msg, potMsg); err != nil {
-				e.log.WithError(err).Warn("decode pot message failed")
+				e.log.WithError(err).Warn("Failed to unmarshal PoT message")
 				return
 			}
 			err := e.handlePoTMsg(potMsg)
 			if err != nil {
-				e.log.WithError(err).Warn("handle pot message error")
+				e.log.WithError(err).Warn("Failed to handle PoT message")
 				return
 			}
 		} else {
 			if e.UpperConsensus != nil && e.UpperConsensus.GetMsgByteEntrance() != nil {
+				e.log.WithField("target_consensus_id", packet.ConsensusID).Trace("[TRACE-2.2] Forwarding P2P packet to upper consensus (Whirly)")
 				// TODO: cache message
 				// e.UpperConsensus.GetMsgByteEntrance() <- packet.GetMsg()
 				// controllerMessage := &ControllerMessage{
@@ -59,46 +67,71 @@ func (e *PoTEngine) handlePacket(packet *pb.Packet) {
 				// e.UpperConsensus.GetMsgByteEntrance() <- controllerMessageBytes
 				bytePacket, err := proto.Marshal(packet)
 				if err != nil {
-					e.log.Warn("marshal packet failed")
+					e.log.WithError(err).Warn("Failed to marshal packet")
 					return
 				}
 				e.UpperConsensus.GetMsgByteEntrance() <- bytePacket
 			}
 		}
 	} else if packet.Type == pb.PacketType_CLIENTPACKET {
+		e.log.Trace("[TRACE-2.3] Received CLIENTPACKET, unmarshalling request")
 		request := new(pb.Request)
 		if err := proto.Unmarshal(packet.Msg, request); err != nil {
-			e.log.WithError(err).Warn("unmarshal msg failed")
+			e.log.WithError(err).Error("Failed to unmarshal client request")
 			return
 		}
 
 		if request == nil {
-			e.log.Warn("only request msg allowed in client packet")
+			e.log.Error("Received null request in client packet")
 			return
 		}
+		e.log.WithField("sharding", string(request.Sharding)).Trace("[TRACE-2.4] Calling handleRequest")
 		e.handleRequest(request)
 	}
 }
 
 func (e *PoTEngine) handleRequest(request *pb.Request) {
+	e.log.Trace("[TRACE-3] handleRequest called")
 	rtx := types.RawTransaction(request.Tx)
+	txHash := rtx.Hash()
+	e.log.WithField("tx_hash", hexutil.Encode(txHash[:8])).Debug("Verifying transaction")
+
 	if !e.exec.VerifyTx(rtx) {
-		e.log.Warn("executedBlock verify failed")
+		e.log.WithField("tx_hash", txHash).Error("[TRACE-3.1] Transaction verification FAILED")
 		return
 	}
+	e.log.Trace("[TRACE-3.2] Transaction verification passed")
+
 	tx, err := rtx.ToTx()
 	if err != nil {
-		e.log.WithError(err).Warn("decode into transaction failed")
+		e.log.WithError(err).Error("[TRACE-3.3] Failed to decode transaction payload")
 		return
 	}
+
+	e.log.WithFields(logrus.Fields{
+		"type":            tx.Type.String(),
+		"payload_preview": string(tx.Payload[:min(len(tx.Payload), 50)]),
+	}).Trace("[TRACE-3.4] Processing transaction")
+
 	switch tx.Type {
 	case pb.TransactionType_NORMAL:
 		if e.UpperConsensus != nil {
+			e.log.Trace("[TRACE-3.5] Forwarding NORMAL transaction to UpperConsensus (Whirly)")
 			e.UpperConsensus.GetRequestEntrance() <- request
+			e.log.Trace("[TRACE-3.6] Transaction forwarded to Whirly successfully")
+		} else {
+			e.log.Error("[TRACE-3.5-ERROR] UpperConsensus is nil, cannot forward transaction!")
 		}
 	default:
-		e.log.Warn("transaction type unknown", tx.Type.String())
+		e.log.WithField("type", tx.Type.String()).Warn("Unknown transaction type")
 	}
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func (e *PoTEngine) handlePoTMsg(message *pb.PoTMessage) error {
@@ -125,7 +158,7 @@ func (e *PoTEngine) handlePoTMsg(message *pb.PoTMessage) error {
 		block, err := st.Get(hashes)
 
 		if err != nil {
-			e.log.Errorf("get block err for %s", err)
+			e.log.WithError(err).WithField("block_hash", hexutil.Encode(hashes)).Error("Failed to get requested block")
 			return err
 		}
 		pbblock := block.ToProto()
@@ -184,7 +217,10 @@ func (e *PoTEngine) handlePoTMsg(message *pb.PoTMessage) error {
 		if err != nil {
 			return err
 		}
-		e.log.Infof("[Engine]\treceive pot request from %s ", request.Src)
+		e.log.WithFields(logrus.Fields{
+			"from":  request.Src,
+			"epoch": request.GetEpoch(),
+		}).Trace("Received PoT request")
 		epoch := request.GetEpoch()
 		proof, err := e.blockStorage.GetVDFresbyEpoch(epoch)
 		if err != nil {
@@ -234,7 +270,7 @@ func (e *PoTEngine) handlePoTMsg(message *pb.PoTMessage) error {
 			return err
 		}
 		_, err = e.Worker.handleSendBciRequest(request)
-		e.log.Error("[Engine]Get send Bci request")
+		e.log.Trace("Received SendBci request")
 		if err != nil {
 			return err
 		}

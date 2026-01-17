@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/sirupsen/logrus"
 	"github.com/zzz136454872/upgradeable-consensus/config"
 	"github.com/zzz136454872/upgradeable-consensus/consensus/model"
@@ -56,6 +55,9 @@ type UpgradeableConsensus struct {
 }
 
 func NewUpgradeableConsensus(nid int64, cid int64, cfg *config.ConsensusConfig, exec executor.Executor, p2pAdaptor p2p.P2PAdaptor, log *logrus.Entry) *UpgradeableConsensus {
+	log = log.WithField("module", "UPGRADECC").WithField("c_id", cid)
+	log.Info("Initializing Upgradeable consensus")
+
 	uc := &UpgradeableConsensus{
 		nid:             nid,
 		cid:             cid,
@@ -92,16 +94,22 @@ func NewUpgradeableConsensus(nid int64, cid int64, cfg *config.ConsensusConfig, 
 		wg:     new(sync.WaitGroup),
 		closed: make(chan []byte),
 	}
+	log.Debug("UpgradeableConsensus data structures initialized")
 	// p2pAdaptor.SetReceiver(uc)
 	p2pAdaptor.SetReceiver(uc.GetMsgByteEntrance())
 	p2pAdaptor.Subscribe([]byte("consensus"))
+	log.Debug("P2P adaptor configured, subscribed to 'consensus' topic")
 	uc.wg.Add(1)
 
 	cfg.Upgradeable.InitConsensus.Nodes = cfg.Nodes
 	cfg.Upgradeable.InitConsensus.Keys = cfg.Keys
 	cfg.Upgradeable.InitConsensus.F = cfg.F
+	log.WithFields(logrus.Fields{
+		"init_type": cfg.Upgradeable.InitConsensus.Type,
+		"init_cid":  cfg.Upgradeable.InitConsensus.ConsensusID,
+	}).Info("Building initial working consensus")
 	if cfg.Upgradeable.InitConsensus.Type != "whirly" {
-		uc.working = BuildConsensus(
+		uc.working, _ = BuildConsensus(
 			nid,
 			cfg.Upgradeable.InitConsensus.ConsensusID,
 			cfg.Upgradeable.InitConsensus,
@@ -110,7 +118,7 @@ func NewUpgradeableConsensus(nid int64, cid int64, cfg *config.ConsensusConfig, 
 			log,
 		)
 	} else {
-		uc.working = BuildConsensus(
+		uc.working, _ = BuildConsensus(
 			nid,
 			cfg.Upgradeable.InitConsensus.ConsensusID,
 			cfg.Upgradeable.InitConsensus,
@@ -121,10 +129,12 @@ func NewUpgradeableConsensus(nid int64, cid int64, cfg *config.ConsensusConfig, 
 	}
 
 	if uc.working == nil {
-		log.Error("initialize working consensus failed")
+		log.Error("Failed to initialize working consensus")
 		return nil
 	}
+	log.Info("Initial working consensus initialized successfully")
 	go uc.receiveMsg()
+	log.Debug("Message receiver goroutine started")
 
 	// go func() {
 	// 	for {
@@ -161,9 +171,11 @@ func (uc *UpgradeableConsensus) GetRequestEntrance() chan<- *pb.Request {
 }
 
 func (uc *UpgradeableConsensus) Stop() {
-	uc.log.Info("[UpgradeableConsensus] Exiting...")
+	uc.log.Info("Stopping UpgradeableConsensus...")
 	close(uc.closed)
+	uc.log.Debug("Waiting for goroutines to finish")
 	uc.wg.Wait()
+	uc.log.Info("UpgradeableConsensus stopped successfully")
 }
 
 func (uc *UpgradeableConsensus) VerifyBlock(block []byte, proof []byte) bool {
@@ -229,37 +241,41 @@ func (uc *UpgradeableConsensus) receiveMsg() {
 func (uc *UpgradeableConsensus) handleRequest(request *pb.Request) {
 	rtx := types.RawTransaction(request.Tx)
 	if !uc.executor.VerifyTx(rtx) {
-		uc.log.Warn("tx verify failed")
+		uc.log.Warn("Transaction verification failed")
 		return
 	}
 	tx, err := rtx.ToTx()
 	if err != nil {
-		uc.log.WithError(err).Warn("decode into transaction failed")
+		uc.log.WithError(err).Warn("Failed to decode transaction")
 		return
 	}
+	uc.log.WithField("type", tx.Type.String()).Debug("Processing transaction request")
 	switch tx.Type {
 	case pb.TransactionType_NORMAL:
 		hash := rtx.Hash()
 		uc.inputLock.Lock()
 		uc.inputBuffer[hash] = request
 		uc.inputLock.Unlock()
+		uc.log.WithField("hash", hash).Trace("Normal transaction added to input buffer")
 		uc.consensusLock.RLock()
 		defer uc.consensusLock.RUnlock()
 		uc.working.GetRequestEntrance() <- request
-		for _, candi := range uc.candidates {
+		for cid, candi := range uc.candidates {
+			uc.log.WithField("candidate_cid", cid).Trace("Forwarding transaction to candidate consensus")
 			candi.GetRequestEntrance() <- request
 		}
 
 	case pb.TransactionType_UPGRADE:
+		uc.log.Info("Received upgrade transaction")
 		uc.consensusLock.RLock()
 		defer uc.consensusLock.RUnlock()
 		uc.working.GetRequestEntrance() <- request
 	case pb.TransactionType_LOCK:
 		fallthrough
 	case pb.TransactionType_TIMEVOTE:
-		uc.log.Warn("transaction type not allowed", tx.Type.String())
+		uc.log.WithField("type", tx.Type.String()).Warn("Transaction type not allowed for external requests")
 	default:
-		uc.log.Warn("transaction type unknown", tx.Type.String())
+		uc.log.WithField("type", tx.Type.String()).Warn("Unknown transaction type")
 	}
 }
 
@@ -323,25 +339,34 @@ Upgrade consensus to nextCid
 	and nextCid exists
 */
 func (uc *UpgradeableConsensus) upgradeConsensusTo(nextCid int64) {
-	uc.log.WithField("cid", nextCid).Info("upgrading consensus")
+	uc.log.WithFields(logrus.Fields{"from_cid": uc.working.GetConsensusID(), "to_cid": nextCid}).Info("Starting consensus upgrade")
 	var nextWorking model.Consensus
+	candidateCount := len(uc.candidates)
+	uc.log.WithField("candidate_count", candidateCount).Debug("Processing candidate consensuses")
 	for cid, c := range uc.candidates {
 		if cid == nextCid {
 			nextWorking = c
+			uc.log.WithField("cid", cid).Debug("Selected as new working consensus")
 		} else {
+			uc.log.WithField("cid", cid).Debug("Stopping non-selected candidate")
 			c.Stop()
 		}
 	}
 	// clear candidates
 	uc.candidates = map[int64]model.Consensus{}
+	uc.log.Debug("Candidate consensuses cleared")
 
 	// execute output
+	outputBlockCount := len(uc.outputBuffer[nextCid])
+	uc.log.WithField("block_count", outputBlockCount).Debug("Executing buffered output blocks")
 	for _, block := range uc.outputBuffer[nextCid] {
 		uc.executeNormalTx(block, []byte{}, nextCid)
 	}
 
 	// redo request
 	uc.inputLock.Lock()
+	inputCount := len(uc.inputBuffer)
+	uc.log.WithField("request_count", inputCount).Debug("Replaying buffered requests")
 	for _, request := range uc.inputBuffer {
 		nextWorking.GetRequestEntrance() <- request
 	}
@@ -351,44 +376,53 @@ func (uc *UpgradeableConsensus) upgradeConsensusTo(nextCid int64) {
 	uc.outputLock.Lock()
 	uc.outputBuffer = map[int64][]types.ConsensusBlock{}
 	uc.outputLock.Unlock()
+	uc.log.Debug("Output buffer cleared")
 
 	if uc.config.Upgradeable.NetworkType == config.NetworkAsync {
 		// clear msgBuffer
 		uc.msgLock.Lock()
+		msgCount := len(uc.msgBuffer)
 		uc.msgBuffer = map[int64][][]byte{}
 		uc.msgLock.Unlock()
+		uc.log.WithField("cleared_msg_count", msgCount).Debug("Message buffer cleared (async mode)")
 	}
 
+	uc.log.WithField("old_cid", uc.working.GetConsensusID()).Debug("Stopping old working consensus")
 	uc.working.Stop()
 	uc.working = nextWorking
-	uc.log.WithField("new", nextCid).Info("upgrade consensus done")
 	uc.epoch++
+	uc.log.WithFields(logrus.Fields{"new_cid": nextCid, "epoch": uc.epoch}).Info("Consensus upgrade completed successfully")
 }
 
 func (uc *UpgradeableConsensus) startNewConsensus(cc *config.ConsensusConfig) {
-	uc.log.WithField("cid", cc.ConsensusID).Debug("starting new consensus")
+	uc.log.WithFields(logrus.Fields{"cid": cc.ConsensusID, "type": cc.Type}).Info("Starting new candidate consensus")
 	switch cc.Type {
 	case "hotstuff":
 		fallthrough
 	case "whirly":
 		uc.consensusLock.Lock()
 		if _, ok := uc.candidates[cc.ConsensusID]; ok {
-			uc.log.WithField("cid", cc.ConsensusID).Warn("consensus already started")
+			uc.log.WithField("cid", cc.ConsensusID).Warn("Candidate consensus already exists, skipping creation")
 			uc.consensusLock.Unlock()
+			return
 		}
-		nc := BuildConsensus(uc.nid, cc.ConsensusID, cc, uc, uc, uc.log)
+		uc.log.WithField("cid", cc.ConsensusID).Debug("Building candidate consensus instance")
+		nc, _ := BuildConsensus(uc.nid, cc.ConsensusID, cc, uc, uc, uc.log)
 
 		if nc == nil {
-			log.Error("start new consensus failed")
+			uc.log.WithField("cid", cc.ConsensusID).Error("Failed to build candidate consensus")
+			uc.consensusLock.Unlock()
 			return
 		}
 		uc.candidates[cc.ConsensusID] = nc
 		uc.consensusLock.Unlock()
+		uc.log.WithField("cid", cc.ConsensusID).Info("Candidate consensus started successfully")
 
 		if uc.config.Upgradeable.NetworkType == config.NetworkAsync {
 			ch := nc.GetMsgByteEntrance()
 			uc.msgLock.Lock()
 			if buf := uc.msgBuffer[cc.ConsensusID]; len(buf) > 0 {
+				uc.log.WithFields(logrus.Fields{"cid": cc.ConsensusID, "msg_count": len(buf)}).Debug("Replaying buffered messages")
 				for _, msg := range buf {
 					ch <- msg
 				}
@@ -397,7 +431,7 @@ func (uc *UpgradeableConsensus) startNewConsensus(cc *config.ConsensusConfig) {
 			uc.msgLock.Unlock()
 		}
 	default:
-		uc.log.Warnf("consensus: %s not implemented yet", cc.Type)
+		uc.log.WithField("type", cc.Type).Warn("Consensus type not supported for candidate creation")
 		return
 	}
 }

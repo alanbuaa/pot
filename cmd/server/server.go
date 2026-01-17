@@ -33,28 +33,36 @@ func main() {
 	}
 
 	logging.Setup(*cfgPath)
-	logger := logging.GetLogger()
+	logger := logging.GetLogger().WithField("module", "POTSVR")
+
+	logger.Info("Server starting...")
+	logger.WithField("config_path", *cfgPath).Debug("Configuration loaded successfully")
 
 	// node list
 	nodeNum := int64(len(cfg.Nodes))
 	if nodeNum <= 0 {
-		logger.Error("no nodes defined in config: ", *cfgPath)
+		logger.WithField("config_path", *cfgPath).Error("No nodes defined in configuration")
 		fmt.Fprintln(os.Stderr, "no nodes defined in config")
 		os.Exit(1)
 	}
+	logger.WithField("node_count", nodeNum).Info("Initializing nodes...")
 	nodes := make([]*chain.Node, nodeNum)
-	// create nodes
+	// Create nodes - each node will have its own dedicated logger instance
 	for i := int64(0); i < nodeNum; i++ {
 		go func(index int64) {
-			nodes[index] = chain.NewNode(index)
+			logger.WithField("id", index).Debug("Creating node...")
+			nodes[index] = chain.NewNode(index, *cfgPath)
 		}(i)
 	}
+	logger.Info("All nodes created successfully, server is running")
 	// time.Sleep(20 * time.Second)
 	// nodes[nodeNum-1] = upgradeable_consensus.NewNode(nodeNum - 1)
 
 	<-sigChan
-	logger.Info("[UpgradeableConsensus] Exit...")
-	for i := range nodeNum {
+	logger.Info("Shutdown signal received, stopping all nodes...")
+	for i := int64(0); i < nodeNum; i++ {
+		logger.WithField("id", i).Debug("Stopping node...")
 		nodes[i].Stop()
 	}
+	logger.Info("Server shutdown complete")
 }

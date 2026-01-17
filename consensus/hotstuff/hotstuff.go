@@ -71,30 +71,40 @@ func (hs *HotStuffImpl) Init(
 	log *logrus.Entry,
 ) {
 	hs.ID = id
-	hs.ID = cid
+	hs.ConsensusID = cid
 	cfg.F = (len(cfg.Nodes) - 1) / 3
 	hs.Config = cfg
 	hs.Executor = exec
 	hs.p2pAdaptor = p2pAdaptor
-	hs.Log = log.WithField("cid", cid)
+	hs.Log = log.WithField("module", "HOTSTUFF").WithField("c_id", cid)
+	hs.Log.WithFields(logrus.Fields{
+		"replica_id": id,
+		"f":          cfg.F,
+		"node_count": len(cfg.Nodes),
+	}).Info("Initializing HotStuff consensus")
 
 	hs.MsgByteEntrance = make(chan []byte, 10)
 	hs.RequestEntrance = make(chan *pb.Request, 10)
 
 	if p2pAdaptor != nil {
-		// p2pAdaptor.SetReceiver(hs)
 		p2pAdaptor.SetReceiver(hs.GetMsgByteEntrance())
 		p2pAdaptor.Subscribe([]byte(hs.Config.Topic))
+		hs.Log.WithField("topic", hs.Config.Topic).Debug("P2P adaptor initialized and subscribed to topic")
 	} else {
-		hs.Log.Warn("p2p is nil, just for testing")
+		hs.Log.Warn("P2P adaptor is nil, running in test mode")
 	}
 
 	hs.MemPool = types.NewMemPool()
-	hs.Log.Trace("[HOTSTUFF] Init block storage")
 	sid := strconv.Itoa(int(id)) + "-" + strconv.Itoa(int(cid))
 	hs.BlockStorage = whirly.NewBlockStorageImpl(sid, cfg.Nodes[id].Datadir)
+	hs.Log.WithFields(logrus.Fields{
+		"storage_id": sid,
+		"data_dir":   cfg.Nodes[id].Datadir,
+	}).Debug("Block storage initialized")
+
 	hs.Wg = new(sync.WaitGroup)
 	hs.Closed = make(chan []byte)
+	hs.Log.Info("HotStuff consensus initialized successfully")
 }
 
 func (hs *HotStuffImpl) GetConsensusID() int64 {
@@ -254,11 +264,13 @@ func (h *HotStuffImpl) GetRequestEntrance() chan<- *pb.Request {
 }
 
 func (h *HotStuffImpl) Stop() {
-	h.Log.Info("stopping consensus")
+	h.Log.Info("Stopping consensus")
 	close(h.Closed)
+	h.Log.Debug("Waiting for goroutines to finish")
 	h.Wg.Wait()
+	h.Log.Debug("Closing block storage")
 	h.BlockStorage.Close()
-	// _ = os.RemoveAll("dbfile/node" + strconv.Itoa(int(h.ID)))
+	h.Log.Info("Consensus stopped successfully")
 }
 
 // GetLeader get the leader replica in view
@@ -291,35 +303,41 @@ func (h *HotStuffImpl) GetNetworkInfo() map[int64]string {
 
 func (h *HotStuffImpl) Broadcast(msg *pb.Msg) error {
 	if h.p2pAdaptor == nil {
-		h.Log.Warn("p2pAdaptor nil")
+		h.Log.Warn("P2P adaptor is nil, cannot broadcast")
 		return nil
 	}
 	msgByte, err := proto.Marshal(msg)
 	utils.PanicOnError(err)
 
+	sentCount := 0
 	for _, node := range h.Config.Nodes {
 		if node.ID == h.ID {
 			continue
 		}
 		err := h.p2pAdaptor.Unicast(node.Address, msgByte, h.ConsensusID, []byte("consensus"))
 		if err != nil {
-			h.Log.WithError(err).Warn("send msg failed")
+			h.Log.WithError(err).WithField("peer", node.Address).Warn("Failed to send message to peer")
 			return err
 		}
+		sentCount++
 	}
 
-	// return h.p2pAdaptor.Broadcast(msgByte, h.ConsensusID, []byte("consensus"))
+	h.Log.WithField("peer_count", sentCount).Trace("Message broadcast completed")
 	return nil
 }
 
 func (h *HotStuffImpl) Unicast(address string, msg *pb.Msg) error {
 	if h.p2pAdaptor == nil {
-		h.Log.Warn("p2pAdaptor nil")
+		h.Log.Warn("P2P adaptor is nil, cannot unicast")
 		return nil
 	}
 	msgByte, err := proto.Marshal(msg)
 	utils.PanicOnError(err)
-	return h.p2pAdaptor.Unicast(address, msgByte, h.ConsensusID, []byte("consensus"))
+	err = h.p2pAdaptor.Unicast(address, msgByte, h.ConsensusID, []byte("consensus"))
+	if err != nil {
+		h.Log.WithError(err).WithField("peer", address).Warn("Failed to send unicast message")
+	}
+	return err
 }
 
 func (h *HotStuffImpl) ProcessProposal(b *pb.WhirlyBlock, p []byte) {

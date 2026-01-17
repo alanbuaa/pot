@@ -71,7 +71,7 @@ func (cf *ConsensusFactory) CreateConsensus(
 
 	// 创建共识实例
 	cid := int64(proposal.SwitchHeight) // 使用切换高度作为 consensus ID
-	newConsensus := consensus.BuildConsensus(
+	newConsensus, _ := consensus.BuildConsensus(
 		cf.nid,
 		cid,
 		newConfig,

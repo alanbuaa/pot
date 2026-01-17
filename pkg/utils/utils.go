@@ -5,12 +5,19 @@ import (
 	"path"
 	"runtime"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/sirupsen/logrus"
 )
 
 func PanicOnError(err error) {
 	if err != nil {
 		panic(err)
+	}
+}
+
+func PanicOnLogError(err error, log *logrus.Entry) {
+	if err != nil {
+		log.Fatalf("panic: %v", err)
 	}
 }
 
@@ -27,4 +34,14 @@ func ChangeWD2ProjectRoot(relativePath string) {
 	if err != nil {
 		panic(err)
 	}
+}
+
+// EncodeShortPrint encodes b as a hex string without 0x prefix.
+// If b is longer than 8 bytes, only the first 8 bytes are encoded.
+func EncodeShortPrint(b []byte) string {
+	data := b
+	if len(b) > 8 {
+		data = b[:8]
+	}
+	return hexutil.Encode(data)
 }

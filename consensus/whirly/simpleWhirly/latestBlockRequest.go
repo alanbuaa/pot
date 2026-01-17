@@ -58,12 +58,17 @@ func (sw *SimpleWhirlyImpl) RequestLatestBlock(epoch int64, proof []byte, commit
 
 	sw.latestBlockReq.requestLock.Lock()
 	if epoch <= sw.latestBlockReq.requestEpoch {
+		sw.latestBlockReq.requestLock.Unlock()
 		return
 	}
 
 	sw.Log.WithFields(logrus.Fields{
-		"address": sw.PublicAddress,
-	}).Info("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] request latest block!")
+		"replica_id":      sw.ID,
+		"epoch":           sw.epoch,
+		"view":            sw.View.ViewNum,
+		"public_address":  sw.PublicAddress,
+		"requested_epoch": epoch,
+	}).Info("Requesting latest block from old committee")
 
 	sw.latestBlockReq.curEchoLock.Lock()
 	sw.latestBlockReq.curEcho = make(map[string]*pb.SimpleWhirlyProof)
@@ -82,7 +87,7 @@ func (sw *SimpleWhirlyImpl) RequestLatestBlock(epoch int64, proof []byte, commit
 	// broadcast
 	err := sw.Broadcast(newLatestBlockRequest)
 	if err != nil {
-		sw.Log.WithField("error", err.Error()).Warn("Broadcast newLeaderMsg failed.")
+		sw.Log.WithError(err).Warn("Failed to broadcast latest block request")
 	}
 }
 
@@ -91,8 +96,12 @@ func (sw *SimpleWhirlyImpl) UpdateCommittee(committee []string, weight int) {
 	_, _, address := DecodeAddress(sw.PublicAddress)
 	if address != DaemonNodePublicAddress {
 		sw.Log.WithFields(logrus.Fields{
-			"address": sw.PublicAddress,
-		}).Info("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] update committee tirgger!")
+			"replica_id":     sw.ID,
+			"epoch":          sw.epoch,
+			"view":           sw.View.ViewNum,
+			"public_address": sw.PublicAddress,
+			"weight":         weight,
+		}).Info("Committee membership updated")
 		sw.Weight = int64(weight)
 		sw.inCommittee = true
 
@@ -104,8 +113,11 @@ func (sw *SimpleWhirlyImpl) UpdateCommittee(committee []string, weight int) {
 
 func (sw *SimpleWhirlyImpl) SleepNode() {
 	sw.Log.WithFields(logrus.Fields{
-		"address": sw.PublicAddress,
-	}).Info("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] sleep node tirgger!")
+		"replica_id":     sw.ID,
+		"epoch":          sw.epoch,
+		"view":           sw.View.ViewNum,
+		"public_address": sw.PublicAddress,
+	}).Info("Node sleeping, removed from committee")
 
 	sw.Weight = 0
 	sw.inCommittee = false
@@ -137,7 +149,13 @@ func (sw *SimpleWhirlyImpl) OnReceiveLatestBlockRequest(newLeaderMsg *pb.LatestB
 	// Enter the current epoch and record the leader
 	sw.SetLeader(epoch, publicAddress)
 	sw.SetEpoch(epoch)
-	sw.Log.Trace("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] advance Epoch success!")
+	sw.Log.WithFields(logrus.Fields{
+		"replica_id": sw.ID,
+		"old_epoch":  sw.epoch - 1,
+		"new_epoch":  sw.epoch,
+		"view":       sw.View.ViewNum,
+		"new_leader": publicAddress,
+	}).Debug("Advanced to new epoch")
 
 	sw.voteLock.Lock()
 	sw.CleanVote()
@@ -167,14 +185,17 @@ func (sw *SimpleWhirlyImpl) OnReceiveLatestBlockRequest(newLeaderMsg *pb.LatestB
 	}
 
 	sw.Log.WithFields(logrus.Fields{
-		"newEpoch":  epoch,
-		"newLeader": publicAddress,
-		"myAddress": sw.PublicAddress,
-	}).Trace("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] OnReceive LatestBlockRequest.")
+		"replica_id":     sw.ID,
+		"epoch":          sw.epoch,
+		"view":           sw.View.ViewNum,
+		"new_epoch":      epoch,
+		"new_leader":     publicAddress,
+		"public_address": sw.PublicAddress,
+	}).Trace("Received latest block request")
 
 	block, err := sw.BlockStorage.Get(sw.lockProof.BlockHash)
 	if err != nil {
-		sw.Log.Trace("no block for ehco message")
+		sw.Log.WithError(err).Trace("No block found for echo message")
 	}
 
 	// Echo leader
@@ -200,20 +221,25 @@ func (sw *SimpleWhirlyImpl) OnReceiveLatestBlockEcho(msg *pb.WhirlyMsg) {
 
 	if int64(echoMsg.Epoch) < sw.epoch {
 		sw.Log.WithFields(logrus.Fields{
-			"echoMsg.epoch": echoMsg.Epoch,
-			"myEpoch":       sw.epoch,
-		}).Warn("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] the epoch of echo message is too old.")
+			"replica_id":  sw.ID,
+			"view":        sw.View.ViewNum,
+			"echo_epoch":  echoMsg.Epoch,
+			"local_epoch": sw.epoch,
+		}).Warn("Received echo from outdated epoch")
 		return
 	}
 
 	sw.latestBlockReq.curEchoLock.Lock()
 	sw.Log.WithFields(logrus.Fields{
-		"sender":       echoMsg.PublicAddress,
-		"epoch":        echoMsg.Epoch,
-		"leader":       echoMsg.Leader,
-		"len(curEcho)": len(sw.latestBlockReq.curEcho),
-		"VHeight":      echoMsg.VHeight,
-	}).Trace("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] OnReceive LatestBlockEcho.")
+		"replica_id":  sw.ID,
+		"epoch":       sw.epoch,
+		"view":        sw.View.ViewNum,
+		"sender":      echoMsg.PublicAddress,
+		"echo_epoch":  echoMsg.Epoch,
+		"echo_leader": echoMsg.Leader,
+		"echo_count":  len(sw.latestBlockReq.curEcho),
+		"v_height":    echoMsg.VHeight,
+	}).Trace("Received latest block echo")
 
 	err := sw.BlockStorage.Put(echoMsg.Block)
 	if err != nil {
@@ -223,7 +249,12 @@ func (sw *SimpleWhirlyImpl) OnReceiveLatestBlockEcho(msg *pb.WhirlyMsg) {
 	}
 
 	if !sw.verfiySwProof(echoMsg.SwProof) {
-		sw.Log.Warn("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] echo proof is wrong.")
+		sw.Log.WithFields(logrus.Fields{
+			"replica_id": sw.ID,
+			"epoch":      sw.epoch,
+			"view":       sw.View.ViewNum,
+			"sender":     echoMsg.PublicAddress,
+		}).Warn("Echo proof verification failed")
 		sw.latestBlockReq.curEchoLock.Unlock()
 		return
 	}
@@ -240,7 +271,13 @@ func (sw *SimpleWhirlyImpl) OnReceiveLatestBlockEcho(msg *pb.WhirlyMsg) {
 
 	if len(sw.latestBlockReq.curEcho) >= 2*sw.Config.F+1 {
 		sw.AdvanceView(sw.latestBlockReq.maxVHeight)
-		sw.Log.Warn("[epoch_" + strconv.Itoa(int(sw.epoch)) + "] [replica_" + strconv.Itoa(int(sw.ID)) + "] [view_" + strconv.Itoa(int(sw.View.ViewNum)) + "] begin propose.")
+		sw.Log.WithFields(logrus.Fields{
+			"replica_id":   sw.ID,
+			"epoch":        sw.epoch,
+			"view":         sw.View.ViewNum,
+			"echo_count":   len(sw.latestBlockReq.curEcho),
+			"max_v_height": sw.latestBlockReq.maxVHeight,
+		}).Info("Quorum of echoes received, beginning proposal")
 		sw.latestBlockReq.curEcho = make(map[string]*pb.SimpleWhirlyProof)
 		sw.latestBlockReq.curEchoLock.Unlock()
 		go sw.OnPropose()

@@ -13,8 +13,10 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/sirupsen/logrus"
 	"github.com/zzz136454872/upgradeable-consensus/crypto"
 	pb "github.com/zzz136454872/upgradeable-consensus/pkg/proto"
+	"github.com/zzz136454872/upgradeable-consensus/pkg/utils"
 	"github.com/zzz136454872/upgradeable-consensus/types"
 	"google.golang.org/protobuf/proto"
 )
@@ -35,7 +37,10 @@ func (w *Worker) handleBlock() {
 			flag, err := block.Header.BasicVerify()
 
 			if !flag {
-				w.log.Errorf("[PoT]\tepoch %d:Receive error block from node %d for %s", epoch, block.GetHeader().Address, err)
+				w.log.WithError(err).WithFields(logrus.Fields{
+					"epoch":     epoch,
+					"from_node": block.GetHeader().Address,
+				}).Warn("Received invalid block")
 				continue
 			}
 
@@ -44,7 +49,11 @@ func (w *Worker) handleBlock() {
 			} else if header.Height == epoch {
 				if header.PeerId == w.self() {
 
-					w.log.Infof("[PoT]\tepoch %d:Receive block from myself, Difficulty %d, with parent %s", epoch, header.Difficulty.Int64(), hex.EncodeToString(header.ParentHash))
+					w.log.WithFields(logrus.Fields{
+						"epoch":      epoch,
+						"difficulty": header.Difficulty.Int64(),
+						"parent":     hex.EncodeToString(header.ParentHash),
+					}).Debug("Received block from myself")
 
 					w.mutex.Lock()
 					// w.backupBlock = append(w.backupBlock, header)
@@ -52,17 +61,23 @@ func (w *Worker) handleBlock() {
 					b, err := w.blockStorage.PutByte(block)
 					w.mutex.Unlock()
 					if err != nil {
-						w.log.Errorf("[PoT]\tput block error:%s", err)
+						w.log.WithError(err).Error("Failed to store block")
 					}
 
 					err = w.blockbytebroadcast(b)
 
 					if err != nil {
-						w.log.Errorf("[PoT]\tbroadcast header error:%s", err)
+						w.log.WithError(err).Error("Failed to broadcast block")
 					}
 
 				} else {
-					w.log.Infof("[PoT]\tepoch %d:Receive block from node %d, Difficulty %d, with parent %s, transport need %f millseconds", epoch, header.Address, header.Difficulty.Int64(), hex.EncodeToString(header.ParentHash), float64(time.Since(header.Timestamp))/float64(time.Millisecond))
+					w.log.WithFields(logrus.Fields{
+						"epoch":            epoch,
+						"from_node":        header.Address,
+						"difficulty":       header.Difficulty.Int64(),
+						"parent":           hex.EncodeToString(header.ParentHash),
+						"transfer_time_ms": float64(time.Since(header.Timestamp)) / float64(time.Millisecond),
+					}).Trace("Received block from peer %d", header.PeerId)
 					//if w.ID == 0 {
 					//	transfertime := float64(time.Since(header.Timestamp)) / float64(time.Millisecond)
 					//	fill, err := os.OpenFile("transfertime", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
@@ -84,18 +99,26 @@ func (w *Worker) handleBlock() {
 					go func() {
 						err := w.handleCurrentBlock(block)
 						if err != nil {
-							w.log.Errorf("[PoT]\tepoch %d:handle current block err for %s", epoch, err)
+							w.log.WithError(err).WithField("epoch", epoch).Warn("Failed to handle current block")
 						}
 					}()
 
 				}
 			} else if header.Height > epoch {
 				// vdf check
-				w.log.Infof("[PoT]\tepoch %d:Receive a epoch %d block %s from node %d", epoch, header.Height, hexutil.Encode(header.Hashes), header.Address)
+				w.log.WithFields(logrus.Fields{
+					"current_epoch": epoch,
+					"block_epoch":   header.Height,
+					"block_hash":    hexutil.Encode(header.Hashes),
+					"from_node":     header.Address,
+				}).Debug("Received advanced block")
 				go func() {
 					err := w.handleAdvancedBlock(epoch, block)
 					if err != nil {
-						w.log.Errorf("[PoT]\tepoch %d:handle advanced block err for %s", epoch, err)
+						w.log.WithError(err).WithFields(logrus.Fields{
+							"epoch":        epoch,
+							"block_height": header.Height,
+						}).Warn("Failed to handle advanced block")
 					}
 
 				}()
@@ -129,7 +152,13 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 	if !w.isBehindHeight(header.Height-1, block) {
 
 		if header.ParentHash != nil {
-			w.log.Warnf("[PoT]\tfind fork at epoch %d block %s with parents %s,current epoch %d %s", block.GetHeader().Height, hexutil.Encode(block.Hash()), hexutil.Encode(block.GetHeader().ParentHash), w.chainReader.GetCurrentHeight(), hexutil.Encode(w.chainReader.GetCurrentBlock().Hash()))
+			w.log.WithFields(logrus.Fields{
+				"block_epoch":   block.GetHeader().Height,
+				"block_hash":    hexutil.Encode(block.Hash()),
+				"parent_hash":   hexutil.Encode(block.GetHeader().ParentHash),
+				"current_epoch": w.chainReader.GetCurrentHeight(),
+				"current_hash":  hexutil.Encode(w.chainReader.GetCurrentBlock().Hash()),
+			}).Warn("Fork detected")
 			w.mutex.Lock()
 			if w.chainresetflag {
 				w.mutex.Unlock()
@@ -149,7 +178,7 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 				case <-ctx.Done():
 					doonce.Do(func() {
 						close(done)
-						w.log.Errorf("[PoT]\thandle fork timeout")
+						w.log.Error("Fork handling timeout")
 					})
 					return
 				}
@@ -159,17 +188,21 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 			ances, err := w.GetSharedAncestor(block, currentblock)
 
 			if err != nil {
-				w.log.Error(err)
+				w.log.WithError(err).Error("Failed to get shared ancestor")
 				return err
 			}
 
 			c, err := w.chainReader.GetByHeight(ances.GetHeader().Height)
 			if err != nil {
-				w.log.Error(err)
+				w.log.WithError(err).Error("Failed to get block by height")
 				return err
 			}
 
-			w.log.Infof("[PoT]\tthe shared ancestor of fork is %s at %d,match %t", hexutil.Encode(ances.GetHeader().Hashes), ances.GetHeader().Height, bytes.Equal(c.GetHeader().Hashes, ances.GetHeader().Hashes))
+			w.log.WithFields(logrus.Fields{
+				"ancestor_hash":   hexutil.Encode(ances.GetHeader().Hashes),
+				"ancestor_height": ances.GetHeader().Height,
+				"match":           bytes.Equal(c.GetHeader().Hashes, ances.GetHeader().Hashes),
+			}).Debug("Found shared ancestor")
 			//nowBranch, _, err := w.GetBranch(ances, currentblock)
 
 			forkBranch, _, err := w.GetBranch(ances, block)
@@ -181,46 +214,55 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 
 			flag, err := w.CheckVDF0ForBranch(forkBranch)
 			if flag {
-				w.log.Debugf("[PoT]\tPass VDF Check")
+				w.log.Trace("VDF verification passed for fork branch")
 			} else {
 				return err
 			}
 
 			for i := 0; i < len(nowBranch); i++ {
-				w.log.Errorf("[PoT]\tthe nowBranch at height %d: %s", nowBranch[i].GetHeader().Height, hexutil.Encode(nowBranch[i].Hash()))
+				w.log.WithFields(logrus.Fields{
+					"height": nowBranch[i].GetHeader().Height,
+					"hash":   utils.EncodeShortPrint(nowBranch[i].Hash()),
+				}).Trace("Current chain branch block")
 			}
 			for i := 0; i < len(forkBranch); i++ {
-				w.log.Errorf("[PoT]\tthe fork chain at height %d: %s", forkBranch[i].GetHeader().Height, hexutil.Encode(forkBranch[i].Hash()))
+				w.log.WithFields(logrus.Fields{
+					"height": forkBranch[i].GetHeader().Height,
+					"hash":   utils.EncodeShortPrint(forkBranch[i].Hash()),
+				}).Trace("Fork chain branch block")
 			}
 
 			w1 := w.calculateChainWeight(ances, currentblock)
 			w2 := w.calculateChainWeight(ances, block)
-			w.log.Infof("[PoT]\tthe chain weight %d, the fork chain weight %d", w1.Int64(), w2.Int64())
+			w.log.WithFields(logrus.Fields{
+				"current_weight": w1.Int64(),
+				"fork_weight":    w2.Int64(),
+			}).Info("Comparing chain weights")
 
 			if w1.Int64() > w2.Int64() {
-				w.log.Infof("[PoT]\tthe fork chain weight less than current chain not to change")
+				w.log.Info("Fork chain weight insufficient, keeping current chain")
 				return nil
 			}
 
 			flag, err = w.handleForkTx(nowBranch, forkBranch)
 			if err != nil {
-				w.log.Errorf("[PoT]\thandle fork tx error for %s", err)
+				w.log.WithError(err).Error("Failed to handle fork transactions")
 
 			}
 
 			err = w.chainreset(forkBranch)
 			if err != nil {
-				w.log.Errorf("[PoT]\tchain reset error for %s", err)
+				w.log.WithError(err).Error("Failed to reset chain")
 			}
 
 			_ = w.blockStorage.Put(block)
 
 			err = w.workReset(block.GetHeader().Height, block)
 			if err != nil {
-				w.log.Errorf("[PoT]\twork reset error for %s", err)
+				w.log.WithError(err).Error("Failed to reset work")
 			}
 			doonce.Do(func() {
-				w.log.Warn("[PoT]\tHandle fork done")
+				w.log.Info("Fork handling complete")
 				close(done)
 			})
 
@@ -274,7 +316,7 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 		case <-ctx.Done():
 			doonce.Do(func() {
 				close(done)
-				w.log.Errorf("[PoT]\thandle fork timeout")
+				w.log.Error("Advanced block handling timeout")
 				return
 			})
 			return
@@ -288,11 +330,15 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 		return err
 	}
 
-	w.log.Infof("[PoT]\tGet shared ancestor of block %s is %s at height %d", hexutil.Encode(block.Hash()), hexutil.Encode(ances.Hash()), ances.GetHeader().Height)
+	w.log.WithFields(logrus.Fields{
+		"block_hash":      hexutil.Encode(block.Hash()),
+		"ancestor_hash":   hexutil.Encode(ances.Hash()),
+		"ancestor_height": ances.GetHeader().Height,
+	}).Debug("Found shared ancestor for advanced block")
 
 	nowbranch, _, err := w.GetBranch(ances, current)
 	if err != nil {
-		w.log.Errorf("[PoT]\tGet branch error for: %s", err)
+		w.log.WithError(err).Error("Failed to get current branch")
 		doonce.Do(func() {
 			close(done)
 		})
@@ -300,7 +346,7 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 	}
 	branch, _, err := w.GetBranch(ances, block)
 	if err != nil {
-		w.log.Errorf("[PoT]\tGet branch error for: %s", err)
+		w.log.WithError(err).Error("Failed to get fork branch")
 		doonce.Do(func() {
 			close(done)
 		})
@@ -309,10 +355,10 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 
 	flag, err := w.CheckVDF0ForBranch(branch)
 	if flag {
-		w.log.Infof("[PoT]\tPass VDF Check")
+		w.log.Trace("VDF verification passed for advanced block")
 	}
 	if err != nil {
-		w.log.Errorf("[PoT]\tCheck Branch VDF0 error for: %s", err)
+		w.log.WithError(err).Error("VDF verification failed for branch")
 		doonce.Do(func() {
 			close(done)
 		})
@@ -323,33 +369,39 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 	weightadvanced := w.calculateChainWeight(ances, block)
 
 	if weightnow.Cmp(weightadvanced) > 0 {
-		w.log.Infof("[PoT]\tthe current chain weight %d is greater than the fork chain weight %d", weightnow.Int64(), weightadvanced.Int64())
+		w.log.WithFields(logrus.Fields{
+			"current_weight": weightnow.Int64(),
+			"fork_weight":    weightadvanced.Int64(),
+		}).Info("Current chain weight greater, keeping current chain")
 		doonce.Do(func() {
 			close(done)
 		})
 		return fmt.Errorf("the current chain weight %d is greater than the fork chain weight %d", weightnow.Int64(), weightadvanced.Int64())
 	}
 
-	w.log.Infof("[PoT]\tthe chain weight %d, the fork chain weight %d", weightnow, w.calculateChainWeight(ances, block).Int64())
+	w.log.WithFields(logrus.Fields{
+		"current_weight": weightnow,
+		"fork_weight":    w.calculateChainWeight(ances, block).Int64(),
+	}).Info("Switching to fork chain")
 
 	//for i := 0; i < len(branch); i++ {
 	//	w.log.Infof("[PoT]\tthe nowbranch at height %d: %s", branch[i].GetHeader().ExecHeight, hexutil.Encode(branch[i].Hash()))
 	//}
 	flag, err = w.handleForkTx(nowbranch, branch)
 	if err != nil {
-		w.log.Errorf("[PoT]\thandle fork tx error for %s", err)
+		w.log.WithError(err).Error("Failed to handle fork transactions")
 		return err
 	}
 	err = w.chainResetAdvanced(branch)
 	if err != nil {
-		w.log.Errorf("[PoT]\tchain reset error for %s", err)
+		w.log.WithError(err).Error("Failed to reset chain for advanced block")
 		doonce.Do(func() {
 			close(done)
 		})
 		return err
 	}
 	finishflag := w.vdf0.Finished
-	w.log.Infof("[PoT]\tMinew Work flag: %t", finishflag)
+	w.log.WithField("vdf0_finished", finishflag).Debug("Checked VDF0 work status")
 
 	if w.IsVDF1Working() {
 		w.abort.once.Do(func() {
@@ -363,7 +415,7 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 	if len(header.UncleHash) != 0 {
 		_, err := w.getUncleBlock(block)
 		if err != nil {
-			w.log.Errorf("[PoT]\tGet uncle block err for %s", err)
+			w.log.WithError(err).Error("Failed to get uncle block")
 			doonce.Do(func() {
 				close(done)
 			})
@@ -380,7 +432,7 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 
 	err = w.setVDF0epoch(block.GetHeader().Height)
 	if err != nil {
-		w.log.Warnf("[PoT]\tepoch %d: execset vdf error for %s:", epoch, err)
+		w.log.WithError(err).WithField("epoch", epoch).Warn("Failed to set VDF epoch")
 		doonce.Do(func() {
 			close(done)
 		})
@@ -392,13 +444,17 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 		Epoch: block.GetHeader().Height,
 	}
 	w.vdfhalfchan <- res
-	w.log.Infof("[PoT]\tepoch %d:execset vdf complete. Start from epoch %d with res %s", epoch, block.GetHeader().Height, hexutil.Encode(crypto.Hash(res.Res)))
+	w.log.WithFields(logrus.Fields{
+		"current_epoch": epoch,
+		"start_epoch":   block.GetHeader().Height,
+		"vdf_res":       hexutil.Encode(crypto.Hash(res.Res)),
+	}).Debug("VDF epoch set complete")
 	//w.mutex.Lock()
 	//w.log.Error(w.chainresetflag)
 	//w.mutex.Unlock()
 	doonce.Do(func() {
 		close(done)
-		w.log.Debug("[PoT]\tHandle fork done")
+		w.log.Debug("Advanced block handling complete")
 	})
 
 	<-done
@@ -535,7 +591,7 @@ func (w *Worker) checkHeaderVDF0(block *types.Block) (bool, error) {
 		if !w.vdfChecker.CheckVDF(vdfInput, vdfOutput) {
 			return false, fmt.Errorf("the vdf0 proof of block is wrong")
 		}
-		w.log.Infof("[PoT]\tVDF Check need %d ms", time.Since(times)/time.Millisecond)
+		w.log.WithField("duration_ms", time.Since(times)/time.Millisecond).Trace("VDF verification complete")
 		return true, nil
 	}
 	return true, nil
@@ -663,21 +719,21 @@ func (w *Worker) handleForkTx(current []*types.Block, fork []*types.Block) (bool
 		curblock := current[i]
 		if flag, _ := w.chainReader.IsBlockOnChain(curblock); flag {
 			err := w.chainReader.TryResetTxForBlock(curblock)
-			w.log.Info("reset tx for block", "height", curblock.GetHeader().Height)
+			w.log.WithField("height", curblock.GetHeader().Height).Trace("Resetting transactions for block")
 			if err != nil {
-				w.log.Info("try reset error at height ", curblock.GetHeader().Height, " for ", err)
+				w.log.WithError(err).WithField("height", curblock.GetHeader().Height).Warn("Transaction reset attempt failed")
 				return false, err
 			}
 			err = w.chainReader.ResetTxForBlock(curblock)
 			if err != nil {
-				w.log.Info("reset error at height ", curblock.GetHeader().Height)
+				w.log.WithError(err).WithField("height", curblock.GetHeader().Height).Error("Transaction reset failed")
 				for j := i; j >= 0; j-- {
 					block := current[j]
 					err := w.chainReader.TryUpdateTxForBlock(block)
 					if err != nil {
 						return false, err
 					}
-					w.log.Infof("reset error and back to height %d", block.Header.Height)
+					w.log.WithField("height", block.Header.Height).Debug("Rolling back to previous height")
 					err = w.chainReader.UpdateTxForBlock(block)
 					if err != nil {
 						return false, err

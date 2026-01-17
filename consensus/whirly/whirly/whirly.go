@@ -72,8 +72,9 @@ func NewWhirly(
 	p2pAdaptor p2p.P2PAdaptor,
 	log *logrus.Entry,
 ) *WhirlyImpl {
-	log.WithField("consensus id", cid).Debug("[WHIRLY] starting")
-	log.WithField("consensus id", cid).Trace("[WHIRLY] Generate genesis block")
+	log = log.WithField("module", "WHIRLY").WithField("c_id", cid)
+	log.Info("Initializing Whirly consensus")
+	log.WithField("consensus id", cid).Trace("Generate genesis block")
 	genesisBlock := whirlyUtilities.GenerateGenesisBlock()
 	ctx, cancel := context.WithCancel(context.Background())
 	whi := &WhirlyImpl{
@@ -98,8 +99,8 @@ func NewWhirly(
 	// view number add 1
 	whi.View.ViewNum++
 	whi.waitProposal = sync.NewCond(&whi.lock)
-	whi.Log.WithField("replicaID", id).Debug("[WHIRLY] Init block storage.")
-	whi.Log.WithField("replicaID", id).Debug("[WHIRLY] Init command cache.")
+	whi.Log.WithField("replica_id", id).Debug("Block storage initialized")
+	whi.Log.WithField("replica_id", id).Debug("Command cache initialized")
 
 	// init timer and stop it
 	whi.TimeChan = utils.NewTimer(time.Duration(whi.Config.Whirly.Timeout) * time.Second)
@@ -109,9 +110,11 @@ func NewWhirly(
 	whi.proposeView = 0
 	whi.pacemaker = NewPacemaker(whi, log.WithField("cid", cid))
 
+	log.Debug("Starting message receiver and pacemaker goroutines")
 	go whi.receiveMsg(ctx)
 	go whi.pacemaker.Run(ctx)
 
+	log.Info("Whirly consensus initialized successfully")
 	return whi
 }
 
@@ -172,11 +175,17 @@ func (whi *WhirlyImpl) GetEvents() chan Event {
 }
 
 func (whi *WhirlyImpl) Stop() {
+	whi.Log.Info("Stopping Whirly consensus")
+	whi.Log.Debug("Canceling context")
 	whi.cancel()
+	whi.Log.Debug("Closing block storage")
 	whi.BlockStorage.Close()
 	close(whi.MsgByteEntrance)
 	close(whi.RequestEntrance)
-	_ = os.RemoveAll("dbfile/node" + strconv.Itoa(int(whi.ID)))
+	dbPath := "dbfile/node" + strconv.Itoa(int(whi.ID))
+	whi.Log.WithField("path", dbPath).Debug("Cleaning up database files")
+	_ = os.RemoveAll(dbPath)
+	whi.Log.Info("Whirly consensus stopped successfully")
 }
 
 func (whi *WhirlyImpl) receiveMsg(ctx context.Context) {
@@ -222,9 +231,13 @@ func (whi *WhirlyImpl) handleMsg(msg *pb.WhirlyMsg) {
 		whi.OnReceiveVote(msg)
 	case *pb.WhirlyMsg_WhirlyNewView:
 		newViewMsg := msg.GetWhirlyNewView()
-		// whi.Log.Trace("[replica_" + strconv.Itoa(int(whi.ID)) + "] [view_" + strconv.Itoa(int(whi.View.ViewNum)) + "] recevice newview")
 		if whi.GetLeader(int64(newViewMsg.ViewNum)) != whi.ID || newViewMsg.ViewNum < whi.View.ViewNum {
-			whi.Log.Warn("[replica_" + strconv.Itoa(int(whi.ID)) + "] [view_" + strconv.Itoa(int(whi.View.ViewNum)) + "] recevice error newview!")
+			whi.Log.WithFields(logrus.Fields{
+				"replica_id":      whi.ID,
+				"current_view":    whi.View.ViewNum,
+				"msg_view":        newViewMsg.ViewNum,
+				"expected_leader": whi.GetLeader(int64(newViewMsg.ViewNum)),
+			}).Warn("Received invalid new view message")
 			return
 		}
 
@@ -236,7 +249,10 @@ func (whi *WhirlyImpl) handleMsg(msg *pb.WhirlyMsg) {
 		if len(whi.curNewView) == 2*whi.Config.F+1 {
 			if newViewMsg.ViewNum > whi.View.ViewNum {
 				whi.View.ViewNum = newViewMsg.ViewNum
-				whi.Log.Trace("[replica_" + strconv.Itoa(int(whi.ID)) + "] [view_" + strconv.Itoa(int(whi.View.ViewNum)) + "] advanceView by newview success!")
+				whi.Log.WithFields(logrus.Fields{
+					"replica_id": whi.ID,
+					"new_view":   whi.View.ViewNum,
+				}).Debug("Advanced to new view by quorum")
 			}
 			whi.pacemaker.OnReceiverNewView(whi.lockQC)
 		}
@@ -259,8 +275,12 @@ func (whi *WhirlyImpl) Update(qc *pb.QuorumCert) {
 	whi.lock.Lock()
 	defer whi.lock.Unlock()
 
-	whi.Log.WithField(
-		"blockHash", hex.EncodeToString(block1.Hash)).Trace("[replica_" + strconv.Itoa(int(whi.ID)) + "] [view_" + strconv.Itoa(int(whi.View.ViewNum)) + "] [WHIRLY] LOCK.")
+	whi.Log.WithFields(logrus.Fields{
+		"replica_id":   whi.ID,
+		"view":         whi.View.ViewNum,
+		"block_hash":   hex.EncodeToString(block1.Hash),
+		"block_height": block1.Height,
+	}).Trace("Locking block (pre-commit)")
 	// pre-commit block1
 	whi.pacemaker.UpdateLockQC(qc)
 
@@ -274,11 +294,11 @@ func (whi *WhirlyImpl) Update(qc *pb.QuorumCert) {
 
 	if block2.Height+1 == block1.Height {
 		whi.Log.WithFields(logrus.Fields{
-			"blockHash":   hex.EncodeToString(block2.Hash),
-			"blockHeight": block2.Height,
-		}).Info("[replica_" + strconv.Itoa(int(whi.ID)) + "] [view_" + strconv.Itoa(int(whi.View.ViewNum)) + "] [WHIRLY] COMMIT.")
-		// whi.Log.WithField(
-		// 	"blockHash", hex.EncodeToString(block2.Hash)).Trace("[replica_" + strconv.Itoa(int(whi.ID)) + "] [view_" + strconv.Itoa(int(whi.View.ViewNum)) + "] [WHIRLY] COMMIT.")
+			"replica_id":   whi.ID,
+			"view":         whi.View.ViewNum,
+			"block_hash":   hex.EncodeToString(block2.Hash),
+			"block_height": block2.Height,
+		}).Info("Committing block")
 		whi.OnCommit(block2)
 		whi.bExec = block2
 	}
@@ -289,13 +309,17 @@ func (whi *WhirlyImpl) OnCommit(block *pb.WhirlyBlock) {
 		if parent, _ := whi.BlockStorage.ParentOf(block); parent != nil {
 			whi.OnCommit(parent)
 		}
-		// go func() {
 		err := whi.BlockStorage.UpdateState(block)
 		if err != nil {
-			whi.Log.WithField("error", err.Error()).Fatal("Update block state failed")
+			whi.Log.WithFields(logrus.Fields{
+				"block_hash":   hex.EncodeToString(block.Hash),
+				"block_height": block.Height,
+			}).WithError(err).Fatal("Failed to update block state")
 		}
-		// }()
-		// whi.Log.WithField("blockHash", hex.EncodeToString(block.Hash)).Trace("[replica_" + strconv.Itoa(int(whi.ID)) + "] [view_" + strconv.Itoa(int(whi.View.ViewNum)) + "] [WHIRLY] EXEC.")
+		whi.Log.WithFields(logrus.Fields{
+			"block_hash":   hex.EncodeToString(block.Hash),
+			"block_height": block.Height,
+		}).Trace("Executing committed block")
 		go whi.ProcessProposal(block, []byte{})
 	}
 }
@@ -306,10 +330,12 @@ func (whi *WhirlyImpl) verfiyQc(qc *pb.QuorumCert) bool {
 
 func (whi *WhirlyImpl) OnReceiveProposal(newBlock *pb.WhirlyBlock, qc *pb.QuorumCert) {
 	whi.Log.WithFields(logrus.Fields{
-		"blockHeight": newBlock.Height,
-		"qcView":      qc.ViewNum,
-	}).Trace("[replica_" + strconv.Itoa(int(whi.ID)) + "] [view_" + strconv.Itoa(int(whi.View.ViewNum)) + "] OnReceiveProposal.")
-	// whi.Log.WithField("blockHash", hex.EncodeToString(newBlock.Hash)).Trace("[replica_" + strconv.Itoa(int(whi.ID)) + "] [view_" + strconv.Itoa(int(whi.View.ViewNum)) + "] OnReceiveProposal.")
+		"replica_id":   whi.ID,
+		"view":         whi.View.ViewNum,
+		"block_height": newBlock.Height,
+		"block_hash":   hex.EncodeToString(newBlock.Hash),
+		"qc_view":      qc.ViewNum,
+	}).Trace("Received proposal")
 
 	// store the block
 	err := whi.BlockStorage.Put(newBlock)
@@ -320,33 +346,39 @@ func (whi *WhirlyImpl) OnReceiveProposal(newBlock *pb.WhirlyBlock, qc *pb.Quorum
 	// verfiy proposal
 	v := newBlock.Height
 	if v <= whi.lockQC.ViewNum {
-		// whi.Log.Warn("[replica_" + strconv.Itoa(int(whi.ID)) + "] [view_" + strconv.Itoa(int(whi.View.ViewNum)) + "] receive old proposal.")
+		// whi.Log.WithFields(logrus.Fields{"replica": whi.ID, "view": whi.View.ViewNum}).Warn("Receive old proposal")
 		return
 	}
 
 	if !whi.verfiyQc(qc) {
-		whi.Log.Warn("[replica_" + strconv.Itoa(int(whi.ID)) + "] [view_" + strconv.Itoa(int(whi.View.ViewNum)) + "] proposal qc is wrong.")
+		whi.Log.WithFields(logrus.Fields{
+			"replica_id": whi.ID,
+			"view":       whi.View.ViewNum,
+			"qc_view":    qc.ViewNum,
+		}).Warn("Proposal QC verification failed")
 		return
 	}
 
 	if !bytes.Equal(qc.BlockHash, newBlock.ParentHash) {
 		whi.Log.WithFields(logrus.Fields{
-			"qcHeight":    qc.ViewNum,
-			"blockHeight": newBlock.Height,
-			"qcHash":      hex.EncodeToString(qc.BlockHash),
-			"blockHash":   hex.EncodeToString(newBlock.ParentHash),
-		}).Warn("[replica_" + strconv.Itoa(int(whi.ID)) + "] [view_" + strconv.Itoa(int(whi.View.ViewNum)) + "] OnReceiveProposal: proposal block and qc is incongruous.")
-		// whi.Log.Warn("[replica_" + strconv.Itoa(int(whi.ID)) + "] [view_" + strconv.Itoa(int(whi.View.ViewNum)) + "] proposal block and qc is incongruous.")
+			"replica_id":        whi.ID,
+			"view":              whi.View.ViewNum,
+			"qc_view":           qc.ViewNum,
+			"block_height":      newBlock.Height,
+			"qc_block_hash":     hex.EncodeToString(qc.BlockHash),
+			"block_parent_hash": hex.EncodeToString(newBlock.ParentHash),
+		}).Warn("Proposal block and QC mismatch")
 		return
 	}
 
 	// verfiy ExecHeight
 	if v <= whi.vHeight {
-		// info log rathee than warn
 		whi.Log.WithFields(logrus.Fields{
-			"blockHeight": newBlock.Height,
-			"vHeight":     whi.vHeight,
-		}).Info("[replica_" + strconv.Itoa(int(whi.ID)) + "] [view_" + strconv.Itoa(int(whi.View.ViewNum)) + "] OnReceiveProposal: WhirlyBlock height less than vHeight.")
+			"replica_id":   whi.ID,
+			"view":         whi.View.ViewNum,
+			"block_height": newBlock.Height,
+			"v_height":     whi.vHeight,
+		}).Debug("Block height not greater than vHeight, ignoring")
 		return
 	}
 
@@ -364,7 +396,10 @@ func (whi *WhirlyImpl) OnReceiveProposal(newBlock *pb.WhirlyBlock, qc *pb.Quorum
 		documentHash, _ := crypto.CreateDocumentHash(marshal, whi.Config.Keys.PublicKey)
 		votePartSig, err = crypto.TSign(documentHash, whi.Config.Keys.PrivateKey, whi.Config.Keys.PublicKey)
 		if err != nil {
-			whi.Log.WithField("error", err.Error()).Error("[replica_" + strconv.Itoa(int(whi.ID)) + "] [view_" + strconv.Itoa(int(whi.View.ViewNum)) + "] OnReceiveProposal: create partSig failed!")
+			whi.Log.WithFields(logrus.Fields{
+				"replica_id": whi.ID,
+				"view":       whi.View.ViewNum,
+			}).WithError(err).Error("Failed to create partial signature for vote")
 			return
 		}
 		voteQc = nil
@@ -374,7 +409,12 @@ func (whi *WhirlyImpl) OnReceiveProposal(newBlock *pb.WhirlyBlock, qc *pb.Quorum
 		votePartSig = nil
 	}
 
-	whi.Log.Debug("[replica_" + strconv.Itoa(int(whi.ID)) + "] [view_" + strconv.Itoa(int(whi.View.ViewNum)) + "]  OnReceiveProposal: Accepted block.")
+	whi.Log.WithFields(logrus.Fields{
+		"replica_id":   whi.ID,
+		"view":         whi.View.ViewNum,
+		"block_height": newBlock.Height,
+		"vote_flag":    voteFlag,
+	}).Debug("Accepted proposal, voting")
 	// update vHeight
 	whi.vHeight = newBlock.Height
 	whi.MemPool.MarkProposed(types.RawTxArrayFromBytes(newBlock.Txs))
@@ -403,29 +443,30 @@ func (whi *WhirlyImpl) OnReceiveVote(msg *pb.WhirlyMsg) {
 
 	if whi.GetLeader(int64(whirlyVoteMsg.BlockView)+1) != whi.ID {
 		whi.Log.WithFields(logrus.Fields{
-			"senderId":  whirlyVoteMsg.SenderId,
-			"getleader": whi.GetLeader(int64(whirlyVoteMsg.BlockView) + 1),
-			"blockView": whirlyVoteMsg.BlockView,
-			"whi.ID":    whi.ID,
-			"Flag":      whirlyVoteMsg.Flag,
-		}).Warn("[replica_" + strconv.Itoa(int(whi.ID)) + "] [view_" + strconv.Itoa(int(whi.View.ViewNum)) + "] OnReceiveVote with error block view.")
-		// whi.Log.Warn("OnReceiveVote with error block view")
+			"replica_id":      whi.ID,
+			"view":            whi.View.ViewNum,
+			"sender_id":       whirlyVoteMsg.SenderId,
+			"expected_leader": whi.GetLeader(int64(whirlyVoteMsg.BlockView) + 1),
+			"block_view":      whirlyVoteMsg.BlockView,
+			"vote_flag":       whirlyVoteMsg.Flag,
+		}).Warn("Received vote for wrong view or non-leader")
 		return
 	}
 
 	// Ignore messages from old views
 	if whirlyVoteMsg.BlockView < whi.proposeView || whirlyVoteMsg.BlockView <= whi.lockQC.ViewNum {
-		// whi.Log.Warn("ignore vote from old views")
 		return
 	}
 
 	whi.Log.WithFields(logrus.Fields{
-		"senderId":     whirlyVoteMsg.SenderId,
-		"blockView":    whirlyVoteMsg.BlockView,
-		"flag":         whirlyVoteMsg.Flag,
-		"len(YesVote)": len(whi.curYesVote),
-	}).Trace("[replica_" + strconv.Itoa(int(whi.ID)) + "] [view_" + strconv.Itoa(int(whi.View.ViewNum)) + "] OnReceiveVote.")
-	// whi.Log.Trace("[replica_" + strconv.Itoa(int(whi.ID)) + "] [view_" + strconv.Itoa(int(whi.View.ViewNum)) + "] OnReceiveVote.")
+		"replica_id": whi.ID,
+		"view":       whi.View.ViewNum,
+		"sender_id":  whirlyVoteMsg.SenderId,
+		"block_view": whirlyVoteMsg.BlockView,
+		"vote_flag":  whirlyVoteMsg.Flag,
+		"yes_votes":  len(whi.curYesVote),
+		"no_votes":   len(whi.curNoVote),
+	}).Trace("Received vote")
 
 	var documentHash []byte
 	if whirlyVoteMsg.Flag {
@@ -446,11 +487,12 @@ func (whi *WhirlyImpl) OnReceiveVote(msg *pb.WhirlyMsg) {
 		err = crypto.VerifyPartSig(partSig, documentHash, whi.Config.Keys.PublicKey)
 		if err != nil {
 			whi.Log.WithFields(logrus.Fields{
-				"error":     err.Error(),
-				"blockView": whirlyVoteMsg.BlockView,
-				"blockHash": hex.EncodeToString(whirlyVoteMsg.BlockHash),
-				"view":      whi.View.ViewNum,
-			}).Warn("[replica_" + strconv.Itoa(int(whi.ID)) + "] [view_" + strconv.Itoa(int(whi.View.ViewNum)) + "] OnReceiveVote: signature not verified!")
+				"replica_id": whi.ID,
+				"view":       whi.View.ViewNum,
+				"sender_id":  whirlyVoteMsg.SenderId,
+				"block_view": whirlyVoteMsg.BlockView,
+				"block_hash": hex.EncodeToString(whirlyVoteMsg.BlockHash),
+			}).WithError(err).Warn("Partial signature verification failed")
 			return
 		}
 		whi.voteLock.Lock()
@@ -475,23 +517,31 @@ func (whi *WhirlyImpl) OnReceiveVote(msg *pb.WhirlyMsg) {
 				whi.Config.Keys.PublicKey)
 			if err != nil {
 				whi.Log.WithFields(logrus.Fields{
-					"error": err.Error(),
-				}).Error("[replica_" + strconv.Itoa(int(whi.ID)) + "] [view_" + strconv.Itoa(int(whi.View.ViewNum)) + "] create full signature error!")
+					"replica_id": whi.ID,
+					"view":       whi.View.ViewNum,
+					"block_view": whirlyVoteMsg.BlockView,
+				}).WithError(err).Error("Failed to create full signature from partial signatures")
 			}
 			// create a QC
 			qc := whi.QC(whirlyVoteMsg.BlockView, signature, whirlyVoteMsg.BlockHash)
 			whi.Log.WithFields(logrus.Fields{
-				"qcView": qc.ViewNum,
-			}).Trace("[replica_" + strconv.Itoa(int(whi.ID)) + "] [view_" + strconv.Itoa(int(whi.View.ViewNum)) + "] create full signature!")
+				"replica_id": whi.ID,
+				"view":       whi.View.ViewNum,
+				"qc_view":    qc.ViewNum,
+				"yes_votes":  len(whi.curYesVote),
+			}).Debug("Created QC from quorum of votes")
 			// update qcHigh
 			whi.lock.Lock()
 			whi.pacemaker.UpdateLockQC(qc)
 			whi.lock.Unlock()
 		} else {
 			whi.Log.WithFields(logrus.Fields{
-				"msgView":     whirlyVoteMsg.BlockView,
-				"len(NoVote)": len(whi.curNoVote),
-			}).Error("[replica_" + strconv.Itoa(int(whi.ID)) + "] [view_" + strconv.Itoa(int(whi.View.ViewNum)) + "] have NoVote!")
+				"replica_id": whi.ID,
+				"view":       whi.View.ViewNum,
+				"block_view": whirlyVoteMsg.BlockView,
+				"no_votes":   len(whi.curNoVote),
+				"yes_votes":  len(whi.curYesVote),
+			}).Warn("Received no-votes, cannot form QC")
 		}
 
 		whi.pacemaker.AdvanceView(whirlyVoteMsg.BlockView)
@@ -509,13 +559,17 @@ func (whi *WhirlyImpl) OnPropose() {
 
 	if whi.GetLeader(int64(whi.View.ViewNum)) != whi.ID || whi.proposeView >= whi.View.ViewNum {
 		whi.Log.WithFields(logrus.Fields{
-			"nowView":     whi.View.ViewNum,
-			"leader":      whi.GetLeader(int64(whi.View.ViewNum)),
-			"proposeView": whi.proposeView,
-		}).Error("[replica_" + strconv.Itoa(int(whi.ID)) + "] [view_" + strconv.Itoa(int(whi.View.ViewNum)) + "] OnPropose: not allow!")
+			"replica_id":   whi.ID,
+			"current_view": whi.View.ViewNum,
+			"leader":       whi.GetLeader(int64(whi.View.ViewNum)),
+			"propose_view": whi.proposeView,
+		}).Debug("Cannot propose: not leader or already proposed in this view")
 		return
 	}
-	whi.Log.Trace("[replica_" + strconv.Itoa(int(whi.ID)) + "] [view_" + strconv.Itoa(int(whi.View.ViewNum)) + "]  OnPropose")
+	whi.Log.WithFields(logrus.Fields{
+		"replica_id": whi.ID,
+		"view":       whi.View.ViewNum,
+	}).Trace("Starting proposal process")
 	txs := whi.MemPool.GetFirst(int(whi.Config.Whirly.BatchSize))
 	if len(txs) != 0 {
 		_ = 1
@@ -548,14 +602,20 @@ func (whi *WhirlyImpl) OnPropose() {
 	// the following line may panic
 	defer func() {
 		if err := recover(); err != nil {
-			whi.Log.WithField("error", err).Warn("[WHIRLY] insert into channel failed")
+			whi.Log.WithFields(logrus.Fields{
+				"replica_id": whi.ID,
+				"view":       whi.View.ViewNum,
+			}).WithField("error", err).Warn("Failed to insert message into channel")
 		}
 	}()
 	whi.MsgByteEntrance <- msgByte
 	// broadcast
 	err = whi.Broadcast(msg)
 	if err != nil {
-		whi.Log.WithField("error", err.Error()).Warn("Broadcast proposal failed.")
+		whi.Log.WithFields(logrus.Fields{
+			"replica_id": whi.ID,
+			"view":       whi.View.ViewNum,
+		}).WithError(err).Warn("Failed to broadcast proposal")
 	}
 }
 
@@ -566,7 +626,7 @@ func (whi *WhirlyImpl) expectBlock(hash []byte) (*pb.WhirlyBlock, error) {
 	if err == nil {
 		return block, nil
 	} else {
-		// whi.Log.WithField("error", err.Error()).Error("[replica_" + strconv.Itoa(int(whi.ID)) + "] expect block failed.")
+		// whi.Log.WithFields(logrus.Fields{"replica": whi.ID, "error": err.Error()}).Error("Expect block failed")
 		_ = 1
 	}
 	whi.waitProposal.Wait()

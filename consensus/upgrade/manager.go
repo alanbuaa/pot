@@ -182,31 +182,47 @@ func (um *UpgradeManager) recoverState() error {
 
 // ValidateProposal 验证提案
 func (um *UpgradeManager) ValidateProposal(proposal *UpgradeProposal) error {
+	um.log.Debug("Validating upgrade proposal")
 	if proposal == nil {
+		um.log.Error("Proposal validation failed: proposal is nil")
 		return fmt.Errorf("proposal is nil")
 	}
 
 	// 验证目标共识类型
 	if proposal.TargetConsensus == "" {
+		um.log.Error("Proposal validation failed: target consensus type is empty")
 		return fmt.Errorf("target consensus type is empty")
 	}
 
 	// 验证高度参数
 	if proposal.PreexecStartHeight == 0 {
+		um.log.Error("Proposal validation failed: preexec start height is zero")
 		return fmt.Errorf("preexec start height is zero")
 	}
 	if proposal.SwitchHeight == 0 {
+		um.log.Error("Proposal validation failed: switch height is zero")
 		return fmt.Errorf("switch height is zero")
 	}
 	if proposal.SwitchHeight <= proposal.PreexecStartHeight {
+		um.log.WithFields(logrus.Fields{
+			"switch_height":  proposal.SwitchHeight,
+			"preexec_height": proposal.PreexecStartHeight,
+		}).Error("Proposal validation failed: switch height must be greater than preexec start height")
 		return fmt.Errorf("switch height must be greater than preexec start height")
 	}
 
 	// 验证阈值
 	if proposal.Threshold == 0 {
+		um.log.Error("Proposal validation failed: threshold is zero")
 		return fmt.Errorf("threshold is zero")
 	}
 
+	um.log.WithFields(logrus.Fields{
+		"target_consensus": proposal.TargetConsensus,
+		"preexec_height":   proposal.PreexecStartHeight,
+		"switch_height":    proposal.SwitchHeight,
+		"threshold":        proposal.Threshold,
+	}).Info("Proposal validation successful")
 	return nil
 }
 
@@ -216,11 +232,13 @@ func (um *UpgradeManager) StartUpgrade(proposal *UpgradeProposal, newConsensus m
 	defer um.mu.Unlock()
 
 	if um.upgradeState.Started {
+		um.log.Warn("Upgrade already in progress, rejecting new upgrade request")
 		return fmt.Errorf("upgrade already in progress")
 	}
 
 	// 验证提案
 	if err := um.ValidateProposal(proposal); err != nil {
+		um.log.WithError(err).Error("Proposal validation failed")
 		return fmt.Errorf("proposal validation failed: %w", err)
 	}
 
@@ -256,16 +274,22 @@ func (um *UpgradeManager) StartUpgrade(proposal *UpgradeProposal, newConsensus m
 
 	// 生成候选链ID
 	um.currentCandidateID = fmt.Sprintf("%s-upgrade-%x", proposal.TargetConsensus, proposal.ProposalID)
+	um.log.WithField("candidate_id", um.currentCandidateID).Info("Generated candidate chain ID")
 
 	// 启动候选链
-	um.log.WithField("candidate_id", um.currentCandidateID).Info("Starting candidate chain")
+	um.log.WithFields(logrus.Fields{
+		"candidate_id": um.currentCandidateID,
+		"fork_height":  proposal.PreexecStartHeight,
+	}).Info("Starting candidate chain")
 	err := um.multiChainManager.StartCandidateChain(um.currentCandidateID, proposal.PreexecStartHeight, newConsensus)
 	if err != nil {
+		um.log.WithError(err).Error("Failed to start candidate chain")
 		um.upgradeState.Phase = PhaseFailed
 		um.upgradeState.Failed = true
 		um.upgradeState.FailureReason = fmt.Sprintf("Failed to start candidate chain: %v", err)
 		return err
 	}
+	um.log.Info("Candidate chain started successfully")
 
 	// 候选共识启动后，冲刷缓存的消息（内部调用，不加锁）
 	if err := um.onCandidateConsensusStartedNoLock(newConsensus.GetConsensusID()); err != nil {
@@ -273,6 +297,7 @@ func (um *UpgradeManager) StartUpgrade(proposal *UpgradeProposal, newConsensus m
 	}
 
 	// 初始化预执行监控器
+	um.log.Debug("Initializing preexecution monitor")
 	um.preexecMonitor = NewPreexecMonitor(
 		proposal,
 		um.currentCandidateID,
@@ -282,24 +307,31 @@ func (um *UpgradeManager) StartUpgrade(proposal *UpgradeProposal, newConsensus m
 
 	// 初始化指标收集器（从监控器获取）
 	um.metricsCollector = um.preexecMonitor.metricsCollector
+	um.log.Debug("Metrics collector initialized")
 
 	// 初始化切换和回退管理器
+	um.log.Debug("Initializing switch and rollback managers")
 	um.switchManager = NewSwitchManager(um.currentCandidateID, um.multiChainManager, um.preexecMonitor, um.log)
 	um.rollbackManager = NewRollbackManager(um.currentCandidateID, um.multiChainManager, um.preexecMonitor, um.log)
 
 	// 准备切换
+	um.log.WithField("switch_height", proposal.SwitchHeight).Info("Preparing consensus switch")
 	err = um.switchManager.PrepareSwitch(proposal.SwitchHeight)
 	if err != nil {
+		um.log.WithError(err).Error("Failed to prepare switch")
 		um.upgradeState.Phase = PhaseFailed
 		um.upgradeState.Failed = true
 		um.upgradeState.FailureReason = fmt.Sprintf("Failed to prepare switch: %v", err)
 		return err
 	}
+	um.log.Info("Switch preparation completed")
 
 	// 启动监控
+	um.log.Info("Starting preexecution monitor")
 	um.preexecMonitor.Start()
 
 	// 启动自动回退监控
+	um.log.Info("Starting automatic rollback monitoring")
 	go um.rollbackManager.MonitorAndRollback()
 
 	// 更新状态
@@ -320,6 +352,7 @@ func (um *UpgradeManager) ProcessBlock(block *pb.Block, isMainChain bool) error 
 
 	if isMainChain {
 		// 处理主链区块
+		um.log.WithField("height", block.Header.Height).Trace("Processing main chain block")
 		// 注意：这里需要将 pb.Block 转换为 types.Block
 		// 为了简化，我们假设已经转换或直接使用 pb.Block
 		// 实际使用中可能需要添加转换逻辑
@@ -327,11 +360,18 @@ func (um *UpgradeManager) ProcessBlock(block *pb.Block, isMainChain bool) error 
 		// 检查是否达到切换高度
 		if block.Header.Height >= um.currentProposal.SwitchHeight &&
 			um.upgradeState.Phase == PhasePreexecuting {
-			um.log.Info("Reached switch height, initiating switch")
+			um.log.WithFields(logrus.Fields{
+				"current_height": block.Header.Height,
+				"switch_height":  um.currentProposal.SwitchHeight,
+			}).Info("Reached switch height, initiating consensus switch")
 			go um.executeSwitch()
 		}
 	} else {
 		// 处理候选链区块
+		um.log.WithFields(logrus.Fields{
+			"height": block.Header.Height,
+			"txs":    len(block.Txs),
+		}).Trace("Processing candidate chain block")
 		// 注意：类型转换问题同上
 
 		// 通知监控器
@@ -352,6 +392,7 @@ func (um *UpgradeManager) ProcessBlock(block *pb.Block, isMainChain bool) error 
 // executeSwitch 执行切换（内部方法）
 func (um *UpgradeManager) executeSwitch() {
 	um.mu.Lock()
+	um.log.Info("Entering switch phase")
 	um.upgradeState.Phase = PhaseSwitching
 	um.mu.Unlock()
 
@@ -359,7 +400,7 @@ func (um *UpgradeManager) executeSwitch() {
 
 	err := um.switchManager.ExecuteSwitch()
 	if err != nil {
-		um.log.WithError(err).Error("Switch execution failed")
+		um.log.WithError(err).Error("Consensus switch execution failed")
 		um.mu.Lock()
 		um.upgradeState.Phase = PhaseFailed
 		um.upgradeState.Failed = true
@@ -369,17 +410,22 @@ func (um *UpgradeManager) executeSwitch() {
 	}
 
 	// 切换成功，处理缓存的消息
+	um.log.Info("Consensus switch executed successfully, processing cached messages")
 	cachedMessages := um.messageCache.OnSwitch()
-	um.log.WithField("cached_count", len(cachedMessages)).Info("Processing cached messages after switch")
+	um.log.WithField("cached_count", len(cachedMessages)).Info("Retrieved cached messages")
 
 	// 更新状态
 	um.mu.Lock()
 	um.upgradeState.Phase = PhaseCompleted
 	um.upgradeState.Completed = true
 	um.upgradeState.EndTime = time.Now()
+	duration := um.upgradeState.EndTime.Sub(um.upgradeState.StartTime)
 	um.mu.Unlock()
 
-	um.log.Info("Upgrade completed successfully")
+	um.log.WithFields(logrus.Fields{
+		"duration_seconds": duration.Seconds(),
+		"final_phase":      PhaseCompleted.String(),
+	}).Info("Upgrade completed successfully")
 }
 
 // OnNetworkMessage 处理网络消息（核心入口）

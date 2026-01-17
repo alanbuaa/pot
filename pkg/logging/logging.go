@@ -13,6 +13,8 @@ import (
 
 var logging *logrus.Logger
 
+type Logger = logrus.Logger
+
 func Setup(cfgPath string) {
 	fcfg, err := config.NewConfig(cfgPath, 0)
 	var cfg *config.LogConfig
@@ -27,22 +29,25 @@ func Setup(cfgPath string) {
 	}
 	level, err := logrus.ParseLevel(cfg.Level)
 	utils.PanicOnError(err)
+
 	var out io.Writer
 	if cfg.ToFile {
 		filename := fmt.Sprintf(cfg.Filename, time.Now().Format("2006-0102-150405"))
-		file, err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY, 0644)
+		file, err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 		utils.PanicOnError(err)
+		// 同时输出到终端和文件
+		// 终端会显示颜色，文件不会（CustomFormatter 会自动检测）
 		out = io.MultiWriter(os.Stdout, file)
 	} else {
 		out = os.Stdout
 	}
+
 	logging = &logrus.Logger{
 		Out: out,
 		Formatter: &CustomFormatter{ // 使用自定义 Formatter
 			TextFormatter: logrus.TextFormatter{
+				TimestampFormat: "15:04:05.00000", // 时分秒.毫秒.微秒/10
 				ForceColors:     true,
-				TimestampFormat: "20060102-150405.000",
-				FullTimestamp:   true,
 			},
 		},
 		Level: level,
@@ -52,6 +57,47 @@ func Setup(cfgPath string) {
 // should be called after InitLog
 func GetLogger() *logrus.Logger {
 	return logging
+}
+
+// CreateNodeLogger creates a dedicated logger instance for a specific node
+// This ensures each node has its own log file and avoids concurrent write conflicts
+func CreateNodeLogger(cfgPath string, nodeID int64) *logrus.Logger {
+	fcfg, err := config.NewConfig(cfgPath, nodeID)
+	var cfg *config.LogConfig
+	if err == nil {
+		cfg = fcfg.Log
+	} else {
+		// for testing
+		cfg = &config.LogConfig{
+			Level:  "debug",
+			ToFile: false,
+		}
+	}
+	level, err := logrus.ParseLevel(cfg.Level)
+	utils.PanicOnError(err)
+
+	var out io.Writer
+	if cfg.ToFile {
+		// Include node ID in filename to separate logs for each node
+		filename := fmt.Sprintf(cfg.Filename, fmt.Sprintf("node%d_%s", nodeID, time.Now().Format("2006-0102-150405")))
+		file, err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+		utils.PanicOnError(err)
+		// Output to both terminal and file
+		out = io.MultiWriter(os.Stdout, file)
+	} else {
+		out = os.Stdout
+	}
+
+	return &logrus.Logger{
+		Out: out,
+		Formatter: &CustomFormatter{
+			TextFormatter: logrus.TextFormatter{
+				TimestampFormat: "15:04:05.00000",
+				ForceColors:     true,
+			},
+		},
+		Level: level,
+	}
 }
 
 func DebugF(format string, args ...interface{}) {

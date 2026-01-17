@@ -3,7 +3,7 @@ GO ?= go
 PROTOC ?= protoc
 PROTO_FLAGS := --go_out=. --go-grpc_out=require_unimplemented_servers=false:.
 
-CMDS := bci client genkey governance http pot_test executor server txtest upgrade-cli
+CMDS := bci client genkey governance http executor server txtest upgrade-cli
 
 .PHONY: help build build-cmds clean test compile_proto genkey run_server run_client run_executor run_governance run_bci run_http run_txtest run_genkey run_upgrade-cli docker_build docker_run
 
@@ -14,7 +14,7 @@ help:
 	@echo "Usage: make [target]"
 	@echo "Common targets: build, build-cmds, test, compile_proto, genkey, clean, docker_build"
 
-build: build_genkey build_client build_server btest 
+build: build_genkey build_client build_server 
 	@:
 
 # build all cmd/* programs into $(BIN_DIR)
@@ -35,9 +35,6 @@ build_client: $(BIN_DIR)
 build_server: $(BIN_DIR)
 	$(GO) build -o $(BIN_DIR)/server ./cmd/server
 
-btest: $(BIN_DIR)
-	$(GO) build -o $(BIN_DIR)/test ./cmd/pot_test
-
 # --------------------------------------------------
 # Run targets
 # --------------------------------------------------
@@ -46,9 +43,6 @@ run-%: build-%
 
 run_server: build_server
 	$(BIN_DIR)/server
-
-run_server_new: btest
-	$(BIN_DIR)/test 2>&1 | tee log.txt
 
 run_client: build_client
 	$(BIN_DIR)/client
@@ -74,9 +68,6 @@ compile_proto:
 test:
 	$(GO) clean -testcache
 	$(GO) test -v ./...
-
-pot_test: $(BIN_DIR)
-	$(GO) build -o $(BIN_DIR)/pot_test.exe ./cmd/pot_test
 
 # --------------------------------------------------
 # Utilities
@@ -148,5 +139,5 @@ $(BIN_DIR):
 	fi
 
 clean: 
-	rm -rf $(BIN_DIR)/* data/*
+	rm -rf $(BIN_DIR)/* data/logs/*
 	@echo "Cleaned up binaries and data directories."

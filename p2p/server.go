@@ -6,7 +6,6 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/zzz136454872/upgradeable-consensus/config"
-	"github.com/zzz136454872/upgradeable-consensus/pkg/utils"
 
 	pad "p2padaptor"
 )
@@ -29,20 +28,18 @@ type P2PAdaptor interface {
 	Stop()
 }
 
-func BuildP2P(cfg *config.P2PConfig, log *logrus.Entry, id int64) (P2PAdaptor, string, error) {
-	switch cfg.Type {
+func BuildP2P(cfg *config.Config, log *logrus.Entry, id int64) (P2PAdaptor, string, error) {
+	switch cfg.P2P.Type {
 	case "p2p":
-		return NewBaseP2p(log, id)
+		return NewBaseP2p(cfg, log, id)
 	case "p2p-adaptor":
-		return NewP2pAdaptor(log, id)
+		return NewP2pAdaptor(cfg, log, id)
 	}
-	log.WithField("type", cfg.Type).Warn("p2p type error")
+	log.WithField("type", cfg.P2P.Type).Warn("p2p type error")
 	return nil, "", nil
 }
 
-func NewP2pAdaptor(log *logrus.Entry, id int64) (*pad.NetworkAdaptor, string, error) {
-	cfg, err := config.NewConfig("config/config.yaml", id)
-	utils.PanicOnError(err)
+func NewP2pAdaptor(cfg *config.Config, log *logrus.Entry, id int64) (*pad.NetworkAdaptor, string, error) {
 	info := cfg.GetNodeInfo(id)
 	port := info.Address[strings.Index(info.Address, ":")+1:]
 

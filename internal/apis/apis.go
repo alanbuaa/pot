@@ -34,7 +34,7 @@ func NewApiServer(config *Config, log *logrus.Entry) *ApiServer {
 		config:          config,
 		handlers:        make([]ConsensusHandler, 0),
 		monitorHandlers: make([]ConsensusHandler, 0),
-		log:             log,
+		log:             log.WithField("module", "API-SERVER"),
 	}
 }
 
@@ -106,11 +106,11 @@ func (s *ApiServer) setupRoutes() *gin.Engine {
 func (s *ApiServer) Start() error {
 	s.Engine = s.setupRoutes()
 	addr := fmt.Sprintf("0.0.0.0:%d", s.config.Port)
-	s.log.Infof("Starting API server on %s", addr)
+	s.log.WithField("address", addr).Info("Starting API server")
 
 	go func() {
 		if err := s.Engine.Run(addr); err != nil {
-			s.log.Fatalf("Failed to start API server: %v", err)
+			s.log.WithError(err).Fatal("API server failed to start")
 		}
 	}()
 
@@ -121,5 +121,6 @@ func (s *ApiServer) Start() error {
 func (s *ApiServer) Stop() error {
 	s.log.Info("Stopping API server")
 	// TODO: Implement graceful shutdown if needed
+	s.log.Info("API server stopped")
 	return nil
 }

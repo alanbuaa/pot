@@ -423,10 +423,10 @@ func (s *BlockStorage) PutExcutedBlock(block *ExecutedBlock) error {
 		blockin := bucket.Get(blockhash[:])
 		if blockin != nil {
 			//fmt.Println("error for not nil block")
-			return fmt.Errorf("already have block for hash %s", hexutil.Encode(blockhash[:]))
+			return fmt.Errorf("already have block for hash %s", hexutil.Encode(blockhash[:8]))
 		}
 		err = bucket.Put(blockhash[:], b)
-		//fmt.Println(hexutil.Encode(blockhash[:]), hexutil.Encode(b))
+		//fmt.Println(hexutil.Encode(blockhash[:8]), hexutil.Encode(b))
 		if err != nil {
 			return err
 		}
