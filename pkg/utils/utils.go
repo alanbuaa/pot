@@ -4,6 +4,7 @@ import (
 	"os"
 	"path"
 	"runtime"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/sirupsen/logrus"
@@ -44,4 +45,12 @@ func EncodeShortPrint(b []byte) string {
 		data = b[:8]
 	}
 	return hexutil.Encode(data)
+}
+
+func GetAddressPort(address string) (string, string) {
+	parts := strings.Split(address, ":")
+	if len(parts) != 2 {
+		return "", ""
+	}
+	return parts[0], parts[1]
 }

@@ -344,6 +344,11 @@ func (n *Network) GetPeerID() string {
 	return n.host.ID().String()
 }
 
+// GetDHT 获取 DHT 实例用于节点发现
+func (n *Network) GetDHT() *kaddht.IpfsDHT {
+	return n.dht
+}
+
 func PathExistsOrCreates(path string) {
 	_, err := os.Stat(path)
 

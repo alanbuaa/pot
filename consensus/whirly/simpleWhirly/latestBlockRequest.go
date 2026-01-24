@@ -269,7 +269,7 @@ func (sw *SimpleWhirlyImpl) OnReceiveLatestBlockEcho(msg *pb.WhirlyMsg) {
 	sw.UpdateLockProof(echoMsg.SwProof)
 	sw.lock.Unlock()
 
-	if len(sw.latestBlockReq.curEcho) >= 2*sw.Config.F+1 {
+	if len(sw.latestBlockReq.curEcho) >= sw.GetQuorumSize() {
 		sw.AdvanceView(sw.latestBlockReq.maxVHeight)
 		sw.Log.WithFields(logrus.Fields{
 			"replica_id":   sw.ID,

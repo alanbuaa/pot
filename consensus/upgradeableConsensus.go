@@ -54,6 +54,31 @@ type UpgradeableConsensus struct {
 	closed chan []byte
 }
 
+// DiscoverPeers implements [p2p.P2PAdaptor].
+func (uc *UpgradeableConsensus) DiscoverPeers() error {
+	panic("unimplemented")
+}
+
+// GetDiscoveredNodes implements [p2p.P2PAdaptor].
+func (uc *UpgradeableConsensus) GetDiscoveredNodes() map[int64]string {
+	panic("unimplemented")
+}
+
+// GetNodeCount implements [p2p.P2PAdaptor].
+func (uc *UpgradeableConsensus) GetNodeCount() int {
+	panic("unimplemented")
+}
+
+// RegisterNodeDiscoveryCallback implements [p2p.P2PAdaptor].
+func (uc *UpgradeableConsensus) RegisterNodeDiscoveryCallback(callback p2p.NodeDiscoveryCallback) {
+	panic("unimplemented")
+}
+
+// WaitForNodes implements [p2p.P2PAdaptor].
+func (uc *UpgradeableConsensus) WaitForNodes(count int, timeout int) error {
+	panic("unimplemented")
+}
+
 func NewUpgradeableConsensus(nid int64, cid int64, cfg *config.ConsensusConfig, exec executor.Executor, p2pAdaptor p2p.P2PAdaptor, log *logrus.Entry) *UpgradeableConsensus {
 	log = log.WithField("module", "UPGRADECC").WithField("c_id", cid)
 	log.Info("Initializing Upgradeable consensus")
@@ -103,7 +128,7 @@ func NewUpgradeableConsensus(nid int64, cid int64, cfg *config.ConsensusConfig, 
 
 	cfg.Upgradeable.InitConsensus.Nodes = cfg.Nodes
 	cfg.Upgradeable.InitConsensus.Keys = cfg.Keys
-	cfg.Upgradeable.InitConsensus.F = cfg.F
+	cfg.Upgradeable.InitConsensus.Fault = cfg.Fault
 	log.WithFields(logrus.Fields{
 		"init_type": cfg.Upgradeable.InitConsensus.Type,
 		"init_cid":  cfg.Upgradeable.InitConsensus.ConsensusID,

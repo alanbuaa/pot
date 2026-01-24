@@ -48,17 +48,17 @@ func (sw *CrWhirlyImpl) handlePingMsg(msg *pb.WhirlyPing) {
 		}
 	}
 
-	if temp == 0 && len(sw.readyNodes) < 2*sw.Config.F+1 {
+	if temp == 0 && len(sw.readyNodes) < 2*sw.Config.Fault+1 {
 		sw.Log.WithFields(logrus.Fields{
 			"node_id":        id,
 			"public_address": publicAddress,
 			"ready_count":    len(sw.readyNodes) + 1,
-			"required":       2*sw.Config.F + 1,
+			"required":       2*sw.Config.Fault + 1,
 		}).Debug("Discovered new ready node")
 		sw.readyNodes = append(sw.readyNodes, publicAddress)
 	}
 
-	if len(sw.readyNodes) == 2*sw.Config.F+1 {
+	if len(sw.readyNodes) == 2*sw.Config.Fault+1 {
 		if sw.PublicAddress == sw.leader[sw.epoch] && sw.proposeView == 0 {
 			sw.Log.WithField("ready_nodes", len(sw.readyNodes)).Info("Quorum reached, starting proposal process")
 			go sw.OnPropose()

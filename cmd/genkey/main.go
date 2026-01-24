@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	go_hotstuff "github.com/wjbbig/go-hotstuff"
+	hotstuff "github.com/wjbbig/go-hotstuff"
 	"github.com/wjbbig/go-hotstuff/logging"
 )
 
@@ -26,6 +26,7 @@ func main() {
 	flag.Parse()
 	if filePath == "" {
 		flag.Usage()
+		return
 	}
 	dirPath := filePath[:strings.LastIndex(filePath, "/")]
 	exist, err := isDirExist(dirPath)
@@ -38,19 +39,21 @@ func main() {
 			logger.Fatal(err)
 		}
 	}
-	privateKeys, publicKey, err := go_hotstuff.GenerateThresholdKeys(k, l)
+
+	// generate hotstuff keys
+	privateKeys, publicKey, err := hotstuff.GenerateThresholdKeys(k, l)
 	if err != nil {
 		logger.Fatal(err)
 	}
 	for i, key := range privateKeys {
-		privateKeyPath := path.Join(filePath, "r"+strconv.Itoa(i+1)+".key")
-		err = go_hotstuff.WriteThresholdPrivateKeyToFile(key, privateKeyPath)
+		privateKeyPath := path.Join(filePath, "node-"+strconv.Itoa(i)+".key")
+		err = hotstuff.WriteThresholdPrivateKeyToFile(key, privateKeyPath)
 		if err != nil {
 			logger.Fatal(err)
 		}
 	}
-	publicKeyPath := path.Join(filePath, "pub.key")
-	err = go_hotstuff.WriteThresholdPublicKeyToFile(publicKey, publicKeyPath)
+	publicKeyPath := path.Join(filePath, "node-pub.key")
+	err = hotstuff.WriteThresholdPublicKeyToFile(publicKey, publicKeyPath)
 	if err != nil {
 		logger.Fatal(err)
 	}

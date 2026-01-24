@@ -23,7 +23,7 @@ type LocalExecutor struct {
 func NewLocalExecutor(cfg *config.ExecutorConfig, uplog *logrus.Entry) *LocalExecutor {
 	return &LocalExecutor{
 		counter: 0,
-		log:     uplog.WithField("module", "[lEXECUTOR]"),
+		log:     uplog.WithField("module", "EXECUTOR"),
 	}
 }
 

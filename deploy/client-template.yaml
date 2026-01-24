@@ -1,0 +1,9 @@
+# ========= Node Configuration =========
+id: 0
+rpc_address: {{SERVER_RPC_ADDRESS}}
+
+# ========= Log Configuration =========
+log: 
+  level: trace
+  to_file: false
+  filename: {{LOG_FILE}}

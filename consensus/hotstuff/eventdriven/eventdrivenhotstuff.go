@@ -246,11 +246,11 @@ func (ehs *EventDrivenHotStuffImpl) handleMsg(msg *pb.Msg) {
 		newViewMsg := msg.GetNewView()
 		ehs.Log.WithFields(logrus.Fields{
 			"highqc_count": len(ehs.CurExec.HighQC) + 1,
-			"threshold":    ehs.Config.F,
+			"threshold":    ehs.Config.Fault,
 		}).Debug("Received NEWVIEW message")
 		// wait for 2f votes
 		ehs.CurExec.HighQC = append(ehs.CurExec.HighQC, newViewMsg.PrepareQC)
-		if len(ehs.CurExec.HighQC) == ehs.Config.F {
+		if len(ehs.CurExec.HighQC) == ehs.Config.Fault {
 			ehs.Log.Debug("Sufficient NEWVIEW messages received")
 			for _, cert := range ehs.CurExec.HighQC {
 				if cert.ViewNum > ehs.GetHighQC().ViewNum {
@@ -444,9 +444,9 @@ func (ehs *EventDrivenHotStuffImpl) OnReceiveVote(partSig *tcrsa.SigShare) {
 	ehs.CurExec.PrepareVote = append(ehs.CurExec.PrepareVote, partSig)
 	ehs.Log.WithFields(logrus.Fields{
 		"vote_count": len(ehs.CurExec.PrepareVote),
-		"threshold":  2*ehs.Config.F + 1,
+		"threshold":  2*ehs.Config.Fault + 1,
 	}).Debug("Collected vote")
-	if len(ehs.CurExec.PrepareVote) == 2*ehs.Config.F+1 {
+	if len(ehs.CurExec.PrepareVote) == 2*ehs.Config.Fault+1 {
 		ehs.Log.Debug("Threshold reached, creating QC")
 		// create full signature
 		signature, _ := crypto.CreateFullSignature(ehs.CurExec.DocumentHash, ehs.CurExec.PrepareVote,

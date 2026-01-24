@@ -4,17 +4,14 @@ import (
 	"context"
 	"net"
 	"strconv"
-	"strings"
 
 	"github.com/sirupsen/logrus"
 	"github.com/zzz136454872/upgradeable-consensus/config"
 	"github.com/zzz136454872/upgradeable-consensus/consensus"
 	"github.com/zzz136454872/upgradeable-consensus/consensus/model"
-	"github.com/zzz136454872/upgradeable-consensus/consensus/pot"
 	"github.com/zzz136454872/upgradeable-consensus/executor"
 	"github.com/zzz136454872/upgradeable-consensus/internal/apis"
 	"github.com/zzz136454872/upgradeable-consensus/p2p"
-	"github.com/zzz136454872/upgradeable-consensus/pkg/logging"
 	pb "github.com/zzz136454872/upgradeable-consensus/pkg/proto"
 	"github.com/zzz136454872/upgradeable-consensus/pkg/utils"
 	"google.golang.org/grpc"
@@ -22,7 +19,8 @@ import (
 )
 
 type Node struct {
-	id int64
+	id     int64
+	config *config.Config
 	// pot        *pot.PoTEngine
 	consensus  model.Consensus
 	rpcServer  *grpc.Server
@@ -31,20 +29,19 @@ type Node struct {
 	pb.UnimplementedP2PServer
 }
 
-func NewNode(id int64, cfgPath string) *Node {
+func NewNode(id int64, cfgPath string, log *logrus.Entry) *Node {
 	// Create dedicated logger for this node to avoid log conflicts in multi-node scenarios
-	nodeLogger := logging.CreateNodeLogger(cfgPath, id)
-	log := nodeLogger.WithField("module", "NODE").WithField("id", id)
+	log = log.WithField("module", "NODE").WithField("id", id)
 
 	log.Info("Initializing node")
 
 	// Load configuration
-	cfg, err := config.NewConfig(cfgPath, id)
+	cfg, err := config.NewConfig(cfgPath)
 	utils.PanicOnError(err)
 	log.WithField("config_path", cfgPath).Info("Configuration loaded successfully")
 
-	info := cfg.GetNodeInfo(id)
-	port := info.RpcAddress[strings.Index(info.RpcAddress, ":"):]
+	info, err := cfg.GetNodeFromSet(id)
+	utils.PanicOnError(err)
 
 	// Initialize P2P network
 	log.Info("Building P2P network")
@@ -61,7 +58,8 @@ func NewNode(id int64, cfgPath string) *Node {
 	}).Info("P2P network initialized successfully")
 
 	// Initialize API server
-	apiPort, err := strconv.Atoi(strings.Split(cfg.RestServerAddress, ":")[1])
+	_, apiPortStr := utils.GetAddressPort(info.ApiServerAddress)
+	apiPort, err := strconv.Atoi(apiPortStr)
 	if err != nil {
 		log.WithError(err).Fatal("Failed to parse API port")
 	}
@@ -91,6 +89,7 @@ func NewNode(id int64, cfgPath string) *Node {
 
 	node := &Node{
 		id:                     id,
+		config:                 cfg,
 		consensus:              c,
 		rpcServer:              rpcServer,
 		p2pAdaptor:             p,
@@ -98,14 +97,38 @@ func NewNode(id int64, cfgPath string) *Node {
 		UnimplementedP2PServer: pb.UnimplementedP2PServer{},
 	}
 
+	// 注册节点发现回调
+	node.registerNodeDiscoveryCallback()
+
+	// 启动节点发现
+	log.Info("Starting node discovery")
+	if err := p.DiscoverPeers(); err != nil {
+		log.WithError(err).Warn("Failed to start node discovery")
+	}
+
+	// 非动态共识需要等待足够节点上线
+	if !config.IsDynamicConsensus(cfg) {
+		log.WithFields(logrus.Fields{
+			"consensus_type": c.GetConsensusType(),
+			"required_nodes": cfg.Total,
+		}).Info("Static consensus detected, waiting for nodes to be online")
+
+		// 等待节点上线（超时30秒）
+		if err := p.WaitForNodes(cfg.Total, 30); err != nil {
+			log.WithError(err).Warn("Not all nodes are online, proceeding anyway")
+		} else {
+			log.WithField("node_count", p.GetNodeCount()).Info("All required nodes are online")
+		}
+	}
+
 	// Register P2P server
 	pb.RegisterP2PServer(rpcServer, node)
 	log.Info("P2P server registered")
 
 	// Start RPC listener
-	listen, err := net.Listen("tcp", port)
+	listen, err := net.Listen("tcp", info.RpcAddress)
 	if err != nil {
-		log.WithError(err).WithField("port", port).Fatal("Failed to listen on TCP port")
+		log.WithError(err).WithField("address", info.RpcAddress).Fatal("Failed to listen on TCP address")
 	}
 	log.WithField("address", listen.Addr().String()).Info("RPC server listening")
 	go func() {
@@ -137,6 +160,7 @@ func (node *Node) Stop() {
 	node.log.Info("Node stopped successfully")
 }
 
+// Send 实现 P2PServer 接口 - 处理接收到的 P2P 消息。 这种命名真的很抽象！
 func (node *Node) Send(ctx context.Context, in *pb.Packet) (*pb.Empty, error) {
 	node.log.WithField("packet_type", in.Type).Trace("Received packet")
 
@@ -161,60 +185,4 @@ func (node *Node) Send(ctx context.Context, in *pb.Packet) (*pb.Empty, error) {
 	node.log.WithField("chain_id", request.ChainID).Trace("Forwarding client request to consensus")
 	node.consensus.GetRequestEntrance() <- request
 	return &pb.Empty{}, nil
-}
-
-// func (node *Node) Request(ctx context.Context, in *pb.HeaderRequest) (*pb.Header, error) {
-//	node.log.Infoln("[node]\t receive request for header")
-//	hash := in.Hashes
-//	st := node.pot.GetBlockStorage()
-//	header, err := st.Get(hash)
-//	if err != nil {
-//		node.log.Error("get block err for ", err)
-//		return nil, err
-//	} else {
-//		return header.ToProto(), nil
-//	}
-//
-// }
-//
-// func (node *Node) PoTresRequest(ctx context.Context, request *pb.PoTRequest) (*pb.PoTResponse, error) {
-//	node.log.Infoln("[node]\t receive request for header")
-//	epoch := request.GetEpoch()
-//	st := node.pot.GetBlockStorage()
-//	res, err := st.GetVDFresbyEpoch(epoch)
-//	if err != nil {
-//		node.log.Error("[node]\t get PoTProof error ", err)
-//		return nil, err
-//	} else {
-//		return &pb.PoTResponse{
-//			Epoch:   epoch,
-//			Proof:   res,
-//			Address: node.id,
-//		}, nil
-//	}
-// }
-
-func RegisterApiServices(apiServer *apis.ApiServer, c model.Consensus, log *logrus.Entry) {
-	consensusType := c.GetConsensusType()
-	log.WithField("consensus_type", consensusType).Info("Registering API services")
-
-	switch consensusType {
-	case "pot":
-		if potEngine, ok := c.(*pot.PoTEngine); ok {
-			// Register transaction API service
-			apiServer.RegisterPotService(apis.NewPotWorkerAdapter(potEngine.Worker))
-			log.Info("Registered PoT transaction API service")
-
-			// Register monitoring API service
-			apiServer.RegisterMonitorService(apis.NewPotMonitorAdapter(potEngine, log))
-			log.Info("Registered PoT monitoring API service")
-		} else {
-			log.Error("Failed to cast consensus to PoTEngine for API registration")
-		}
-	// case "pow":
-	// 	apiServer.RegisterPowService(apis.NewPowWorkerAdapter(cons.worker))
-	// 	log.Info("Registered PoW API service")
-	default:
-		log.WithField("consensus_type", consensusType).Info("No specific API service to register for this consensus type")
-	}
 }

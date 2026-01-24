@@ -246,7 +246,7 @@ func (whi *WhirlyImpl) handleMsg(msg *pb.WhirlyMsg) {
 		whi.curNewView = append(whi.curNewView, newViewMsg.LockQC)
 		whi.voteLock.Unlock()
 		whi.pacemaker.UpdateLockQC(newViewMsg.LockQC)
-		if len(whi.curNewView) == 2*whi.Config.F+1 {
+		if len(whi.curNewView) == 2*whi.Config.Fault+1 {
 			if newViewMsg.ViewNum > whi.View.ViewNum {
 				whi.View.ViewNum = newViewMsg.ViewNum
 				whi.Log.WithFields(logrus.Fields{
@@ -510,8 +510,8 @@ func (whi *WhirlyImpl) OnReceiveVote(msg *pb.WhirlyMsg) {
 		whi.lock.Unlock()
 	}
 
-	if len(whi.curYesVote)+len(whi.curNoVote) == 2*whi.Config.F+1 {
-		if len(whi.curYesVote) == 2*whi.Config.F+1 {
+	if len(whi.curYesVote)+len(whi.curNoVote) == 2*whi.Config.Fault+1 {
+		if len(whi.curYesVote) == 2*whi.Config.Fault+1 {
 			// create full signature
 			signature, err := crypto.CreateFullSignature(documentHash, whi.curYesVote,
 				whi.Config.Keys.PublicKey)

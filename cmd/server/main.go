@@ -26,11 +26,13 @@ func main() {
 		os.Exit(2)
 	}
 
-	cfg, err := config.NewConfig(*cfgPath, 0)
+	cfg, err := config.NewConfig(*cfgPath)
 	if err != nil {
 		fmt.Printf("read config failed: %v", err)
 		os.Exit(1)
 	}
+
+	id := cfg.Node.ID
 
 	logging.Setup(*cfgPath)
 	logger := logging.GetLogger().WithField("module", "POTSVR")
@@ -38,31 +40,13 @@ func main() {
 	logger.Info("Server starting...")
 	logger.WithField("config_path", *cfgPath).Debug("Configuration loaded successfully")
 
-	// node list
-	nodeNum := int64(len(cfg.Nodes))
-	if nodeNum <= 0 {
-		logger.WithField("config_path", *cfgPath).Error("No nodes defined in configuration")
-		fmt.Fprintln(os.Stderr, "no nodes defined in config")
-		os.Exit(1)
-	}
-	logger.WithField("node_count", nodeNum).Info("Initializing nodes...")
-	nodes := make([]*chain.Node, nodeNum)
-	// Create nodes - each node will have its own dedicated logger instance
-	for i := int64(0); i < nodeNum; i++ {
-		go func(index int64) {
-			logger.WithField("id", index).Debug("Creating node...")
-			nodes[index] = chain.NewNode(index, *cfgPath)
-		}(i)
-	}
-	logger.Info("All nodes created successfully, server is running")
-	// time.Sleep(20 * time.Second)
-	// nodes[nodeNum-1] = upgradeable_consensus.NewNode(nodeNum - 1)
+	logger.WithField("id", id).Debug("Creating node...")
+	node := chain.NewNode(id, *cfgPath, logger)
+	logger.Info("Node created successfully, server is running")
 
 	<-sigChan
-	logger.Info("Shutdown signal received, stopping all nodes...")
-	for i := int64(0); i < nodeNum; i++ {
-		logger.WithField("id", i).Debug("Stopping node...")
-		nodes[i].Stop()
-	}
+	logger.Info("Shutdown signal received, stopping node...")
+	logger.WithField("id", id).Debug("Stopping node...")
+	node.Stop()
 	logger.Info("Server shutdown complete")
 }

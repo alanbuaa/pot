@@ -2,9 +2,7 @@ package executor
 
 import (
 	"context"
-	"math/big"
 
-	"github.com/zzz136454872/upgradeable-consensus/crypto"
 	"github.com/zzz136454872/upgradeable-consensus/pkg/logging"
 	pb "github.com/zzz136454872/upgradeable-consensus/pkg/proto"
 )
@@ -130,25 +128,4 @@ func (p *PoTExecutor) GetIncentive(ctx context.Context, request *pb.GetIncentive
 	logger.Debug("Getting incentive")
 
 	return &pb.GetIncentiveResponse{}, nil
-}
-
-// GenerateTxsForHeight 为指定高度生成模拟交易
-func (p *PoTExecutor) GenerateTxsForHeight(height uint64) *Mockblock {
-	logger := logging.GetLogger().WithField("module", "POTEXECUTOR")
-	txs := make([][]byte, 0)
-	for i := 0; i < 100; i++ {
-		bigint := big.NewInt(int64(i))
-		tx := crypto.Hash(bigint.Bytes())
-		txs = append(txs, tx)
-	}
-
-	logger.WithFields(map[string]interface{}{
-		"height":   height,
-		"tx_count": len(txs),
-	}).Debug("Generated mock transactions")
-
-	return &Mockblock{
-		Height: height,
-		Txs:    txs,
-	}
 }

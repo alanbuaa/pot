@@ -31,7 +31,7 @@ type WhirlyUtilities interface {
 	QC(view uint64, sig tcrsa.Signature, blockHash []byte) *pb.QuorumCert
 	GetMsgByteEntrance() chan<- []byte
 	GetRequestEntrance() chan<- *pb.Request
-	GetSelfInfo() *config.ReplicaInfo
+	GetSelfInfo() *config.NodeInfo
 	GetConsensusID() int64
 	GetP2pAdaptorType() string
 }
@@ -86,8 +86,9 @@ func (wu *WhirlyUtilitiesImpl) Init(
 	// println("newPeerId2: ", newPeerId2)
 	sid := strconv.Itoa(int(id)) + "-" + newPeerId2 + "-" + strconv.Itoa(int(cid))
 
-	// Use a safe index for accessing cfg.Nodes - use modulo to wrap around if needed
-	wu.BlockStorage = storage.NewBlockStorageImpl(sid, cfg.Nodes[0].Datadir)
+	// Use Nodes to get first node's data directory
+	dataDir := cfg.Nodes[cfg.NodeId].DataDir // Default to current node
+	wu.BlockStorage = storage.NewBlockStorageImpl(sid, dataDir)
 
 	// Set receiver
 	//p2pAdaptor.SetReceiver(wu.GetMsgByteEntrance())
@@ -126,7 +127,7 @@ func (wu *WhirlyUtilitiesImpl) InitForLocalTest(
 	// wu.Log.Debugf("[HOTSTUFF] Init block storage")
 	newPeerId1 := strings.Replace(wu.PublicAddress, ".", "", -1)
 	newPeerId2 := strings.Replace(newPeerId1, ":", "", -1)
-	wu.BlockStorage = storage.NewBlockStorageImpl(strconv.Itoa(int(cid))+"-"+newPeerId2, cfg.Nodes[id].Datadir)
+	wu.BlockStorage = storage.NewBlockStorageImpl(strconv.Itoa(int(cid))+"-"+newPeerId2, cfg.Nodes[id].DataDir)
 
 	// Set receiver
 	p2pAdaptor.SetReceiver(wu.GetMsgByteEntrance())
@@ -335,13 +336,17 @@ func (wu *WhirlyUtilitiesImpl) GetRequestEntrance() chan<- *pb.Request {
 
 // GetLeader get the leader replica in view
 func (wu *WhirlyUtilitiesImpl) GetLeader(viewNum int64) int64 {
-	id := viewNum % int64(len(wu.Config.Nodes))
+	nodeCount := wu.Config.GetNodeCount()
+	if nodeCount == 0 {
+		return 0
+	}
+	id := viewNum % int64(nodeCount)
 	return id
 }
 
-func (wu *WhirlyUtilitiesImpl) GetSelfInfo() *config.ReplicaInfo {
-	self := &config.ReplicaInfo{}
-	for _, info := range wu.Config.Nodes {
+func (wu *WhirlyUtilitiesImpl) GetSelfInfo() *config.NodeInfo {
+	self := &config.NodeInfo{}
+	for _, info := range wu.Config.GetAllNodes() {
 		if info.ID == wu.ID {
 			self = info
 			break
@@ -352,11 +357,11 @@ func (wu *WhirlyUtilitiesImpl) GetSelfInfo() *config.ReplicaInfo {
 
 func (wu *WhirlyUtilitiesImpl) GetNetworkInfo() map[int64]string {
 	networkInfo := make(map[int64]string)
-	for _, info := range wu.Config.Nodes {
+	for _, info := range wu.Config.GetNodesSlice() {
 		if info.ID == wu.ID {
 			continue
 		}
-		networkInfo[info.ID] = info.Address
+		networkInfo[info.ID] = info.P2PAddress
 	}
 	return networkInfo
 }
@@ -445,8 +450,9 @@ func GenerateGenesisBlock() *pb.WhirlyBlock {
 }
 
 func (wu *WhirlyUtilitiesImpl) GetWeight(nid int64) float64 {
-	if nid < int64(len(wu.Config.Nodes)) {
-		return 1.0 / float64(len(wu.Config.Nodes))
+	nodeCount := wu.Config.GetNodeCount()
+	if nodeCount > 0 && nid < int64(nodeCount) {
+		return 1.0 / float64(nodeCount)
 	}
 	return 0.0
 }

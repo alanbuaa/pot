@@ -1,0 +1,82 @@
+# ========= 节点配置模板 =========
+# 此文件用于生成多节点配置
+# 使用 ./cmd.sh start-all -n <节点数> 生成配置
+
+node:
+  id: {{NODE_ID}}
+  p2p_address: 0.0.0.0:{{ADDRESS_PORT}} # local listened address
+  rpc_address: 0.0.0.0:{{RPC_PORT}} # local listened address
+  bci_rpc_server: 0.0.0.0:{{BCI_RPC_PORT}} # local listened address
+  api_server_address: 0.0.0.0:{{API_PORT}} # local listened address
+  private_key_path: {{PRIVATE_KEY}}
+  public_key_path: {{PUBLIC_KEY}}
+  data_dir: "{{DATADIR}}"
+
+# ======= Total Number of Replicas =======
+total: {{TOTAL_REPLICAS}}
+
+# ========= Executor Configuration =========
+executor:
+  type: remote
+  address: 0.0.0.0:{{EXECUTOR_PORT}}
+
+# ========= Log Configuration =========
+log:
+  level: trace
+  to_file: false
+  filename: {{LOG_FILE}}
+
+# ========= Network Configuration =========
+network:
+  p2p-type: p2p-adaptor
+  topic: this-is-p2p-topic-tttaaabbbcccddd-043
+  model-type:
+    sync # or async
+    # p2p-adaptor currently only supports simple-whirly
+    # sudo sysctl -w net.core.rmem_max=2500000
+
+# ========= Consensus Configuration =========
+consensus:
+  # type: "upgradeable"
+  # consensus_id: 10001
+  # upgradeable:
+  #   commit_time: 5
+  #   network_type: 0
+  #   init_consensus:
+  # type: hotstuff
+  # hotstuff:
+  #   consensus_id: 1000
+  #   type: event-driven
+  #   # type: basic
+  #   batch_size: 10
+  #   batch_timeout: 1
+  #   timeout: 2
+  #  type: whirly
+  #  consensus_id: 1009
+  #  whirly:
+  #    type: simple
+  #    # type: basic
+  #    batch_size: 10
+  #    timeout: 2
+  #     # type: pow
+  #     # consensus_id: 1008
+  #     # pow:
+  #     #   init_difficulty: 0x0010000000000000000000000000000000000000000000000000000000000000
+  type: "pot"
+  fault_model: "1/3"
+  consensus_id: 10001
+  pot:
+    snum: 2
+    sysPara: 2
+    vdf0Iteration: 100000
+    vdf1Iteration: 80000
+    batchsize: 100
+    timeout: 5
+    commiteeSize: 4
+    confirmDelay: 6
+    slowrate: 6
+    vdfType: "wesolowski_rust"
+    executorAddress: 127.0.0.1:{{POT_EXECUTOR_PORT}}
+    dynamic: true
+
+# 100 - 5KB 10000 - 411K 30000-1290K

@@ -1,6 +1,8 @@
 package main
 
 import (
+	"flag"
+	"fmt"
 	"os"
 	"time"
 
@@ -9,18 +11,29 @@ import (
 )
 
 // main 是客户端程序的入口函数
-//  1. 无参数：正常运行模式，持续发送交易
-//  2. 带参数 "upgrade <consensus_type>"：发起共识升级
+//  1. 无参数或不指定-upgrade：正常运行模式，持续发送交易
+//  2. 指定-upgrade参数：发起共识升级到指定类型
 func main() {
+
+	// 定义命令行参数
+	cfgPath := flag.String("c", "config/config.yaml", "path to config yaml file")
+	upgradeTarget := flag.String("upgrade", "", "target consensus type for upgrade (e.g., hotstuff, pot, pow)")
+	flag.Parse()
+
+	if cfgPath == nil || len(*cfgPath) == 0 {
+		fmt.Printf("config path is empty. Use -c to specify the config file")
+		os.Exit(2)
+	}
+
 	// 初始化日志系统
-	logging.Setup("config/config.yaml")
+	logging.Setup(*cfgPath)
 	logger := logging.GetLogger().WithField("module", "CLIENT")
 	logger.Info("Starting client application")
 
 	// 加载配置文件
-	cfg, err := config.NewConfig("config/config.yaml", 0)
+	cfg, err := config.NewClientConfig(*cfgPath)
 	if err != nil {
-		logger.WithError(err).Fatal("Failed to load config.yaml")
+		logger.WithError(err).Fatal("Failed to load config-client.yaml")
 	}
 	logger.Info("Configuration loaded successfully")
 
@@ -28,23 +41,17 @@ func main() {
 	client := NewClient(cfg, logger)
 
 	// 根据命令行参数选择运行模式
-	if len(os.Args) == 1 {
+	if upgradeTarget != nil && len(*upgradeTarget) > 0 {
+		// 共识升级模式
+		logger.WithField("target", *upgradeTarget).Info("Running in upgrade mode")
+		client.upgradeConsensus(*upgradeTarget)
+		time.Sleep(2 * time.Second) // 等待交易发送完成
+	} else {
 		// 正常运行模式
 		logger.Info("Running in normal mode (continuous transaction sending)")
 		client.normalRun()
-	} else if len(os.Args) == 3 {
-		// 共识升级模式
-		if os.Args[1] != "upgrade" {
-			logger.WithField("command", os.Args[1]).Error("Unsupported command, use 'upgrade'")
-			os.Exit(1)
-		}
-		logger.WithField("target", os.Args[2]).Info("Running in upgrade mode")
-		client.upgradeConsensus(os.Args[2])
-		time.Sleep(2 * time.Second) // 等待交易发送完成
-	} else {
-		logger.Error("Invalid arguments. Usage: client OR client upgrade <consensus_type>")
-		os.Exit(1)
 	}
+
 	// 停止客户端
 	logger.Info("Shutting down client")
 	client.Stop()

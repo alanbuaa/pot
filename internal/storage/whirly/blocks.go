@@ -61,7 +61,7 @@ type BlockStorageImpl struct {
 }
 
 func NewBlockStorageImpl(id string, path string) *BlockStorageImpl {
-	db, err := leveldb.OpenFile(path+"/node"+"/leveldb-"+id, nil)
+	db, err := leveldb.OpenFile(path+"/storage/leveldb-"+id, nil)
 	if err != nil {
 		fmt.Println("output", err)
 		panic(err)

@@ -812,14 +812,16 @@ func (w *Worker) handleBlockExecutedHeader(block *types.Block) error {
 
 // handleBlockRawTx processes the raw transactions in a block
 func (w *Worker) handleBlockRawTx(block *types.Block) error {
+
 	txs := block.GetRawTx()
-
-	// Validate that non-genesis blocks contain transactions
-	if len(txs) == 0 && block.Header.Height != 0 {
+	//
+	if len(block.GetRawTx()) != 0 {
+		//fmt.Println(hexutil.Encode(block.GetRawTx()[0].Txid[:]))
+	} else if len(txs) == 0 && block.Header.Height != 0 {
 		return fmt.Errorf("block %s at %d has no tx", block.Hash(), block.Header.Height)
+	} else {
+		return nil
 	}
-
-	return nil
 
 	err := w.chainReader.UpdateTxForBlock(block)
 	if err != nil {

@@ -341,9 +341,9 @@ func (m *PotMonitor) GetNetworkTopology() (*model.NetworkTopology, error) {
 	// Build nodes from config
 	for i, node := range m.engine.GetConfig().Nodes {
 		nodeStatus := model.NetworkNode{
-			ID:          i,
+			ID:          int(i),
 			PeerID:      fmt.Sprintf("peer-%d", i),
-			Address:     node.Address,
+			Address:     node.P2PAddress,
 			Status:      "online",
 			Connections: 0,
 			Latency:     20,
@@ -366,8 +366,8 @@ func (m *PotMonitor) GetNetworkTopology() (*model.NetworkTopology, error) {
 	for i := 0; i < len(nodes); i++ {
 		for j := i + 1; j < len(nodes); j++ {
 			edges = append(edges, model.NetworkEdge{
-				Source:       i,
-				Target:       j,
+				Source:       int(i),
+				Target:       int(j),
 				Latency:      15,
 				MessageCount: 500,
 			})

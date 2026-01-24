@@ -21,7 +21,7 @@ func TestGenerateGenesisBlock(t *testing.T) {
 }
 
 func TestHotStuffImpl_GetSelfInfo(t *testing.T) {
-	cfg, err := config.NewConfig("config/config.yaml", 1)
+	cfg, err := config.NewConfig("config/config.yaml")
 	utils.PanicOnError(err)
 	h := &HotStuffImpl{}
 	h.Config = cfg.Consensus.Upgradeable.InitConsensus
@@ -33,7 +33,7 @@ func TestHotStuffImpl_GetLeader(t *testing.T) {
 	wd, err := os.Getwd()
 	utils.PanicOnError(err)
 	t.Log("pwd", wd)
-	cfg, err := config.NewConfig("config/config.yaml", 1)
+	cfg, err := config.NewConfig("config/config.yaml")
 	utils.PanicOnError(err)
 	h := &HotStuffImpl{}
 	h.Config = cfg.Consensus.Upgradeable.InitConsensus

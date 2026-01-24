@@ -173,7 +173,7 @@ func (sw *SimpleWhirlyImpl) OnReceiveNewLeaderEcho(msg *pb.WhirlyMsg) {
 	// sw.UpdateLockProof(echoMsg.SwProof)
 	// sw.lock.Unlock()
 
-	if len(sw.newEpoch.curEcho) >= 2*sw.Config.F+1 {
+	if len(sw.newEpoch.curEcho) >= sw.GetQuorumSize() {
 		sw.Log.WithFields(logrus.Fields{
 			"replica_id": sw.ID,
 			"epoch":      sw.epoch,

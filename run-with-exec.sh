@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # POT 区块链节点管理脚本
-# 支持多命名空间、多节点、多客户端的初始化和管理
+# 支持多命名空间、多节点、多执行器的初始化和管理
 
 set -e
 
@@ -14,12 +14,11 @@ BASE_P2P_PORT=7000
 BASE_RPC_PORT=8000
 BASE_BCI_RPC_PORT=9000
 BASE_API_PORT=10000
-BASE_CLIENT_RPC_PORT=11000
 BASE_EXECUTOR_PORT=12000
+BASE_POT_EXECUTOR_PORT=13000
 
 # 模板文件路径
 SERVER_TEMPLATE="deploy/server-template.yaml"
-CLIENT_TEMPLATE="deploy/client-template.yaml"
 
 # ==================== 颜色输出 ====================
 RED='\033[0;31m'
@@ -59,10 +58,6 @@ check_templates() {
         log_error "服务器模板文件 '$SERVER_TEMPLATE' 不存在"
         exit 1
     fi
-    if [[ ! -f "$CLIENT_TEMPLATE" ]]; then
-        log_error "客户端模板文件 '$CLIENT_TEMPLATE' 不存在"
-        exit 1
-    fi
 }
 
 # 获取命名空间目录
@@ -85,7 +80,7 @@ check_namespace_exists() {
 init_namespace() {
     local namespace=$1
     local num_nodes=$2
-    local num_clients=$3
+    local num_executors=$3
 
     # 参数验证
     if [[ -z "$namespace" ]]; then
@@ -98,8 +93,14 @@ init_namespace() {
         exit 1
     fi
 
-    if [[ ! "$num_clients" =~ ^[0-9]+$ ]] || [[ "$num_clients" -lt 0 ]]; then
-        log_error "客户端数量必须是非负整数"
+    if [[ ! "$num_executors" =~ ^[0-9]+$ ]] || [[ "$num_executors" -lt 0 ]]; then
+        log_error "执行器数量必须是非负整数"
+        exit 1
+    fi
+
+    # 执行器数量不能超过节点数量
+    if [[ "$num_executors" -gt "$num_nodes" ]]; then
+        log_error "执行器数量($num_executors)不能超过节点数量($num_nodes)"
         exit 1
     fi
 
@@ -117,11 +118,10 @@ init_namespace() {
         rm -rf "$ns_dir"
     fi
 
-    log_step "创建命名空间: $namespace (节点数: $num_nodes, 客户端数: $num_clients)"
+    log_step "创建命名空间: $namespace (节点数: $num_nodes, 执行器数: $num_executors)"
 
     # 创建目录结构
     mkdir -p "$ns_dir/configs/servers"
-    mkdir -p "$ns_dir/configs/clients"
     mkdir -p "$ns_dir/keys"
     mkdir -p "$ns_dir/data"
     mkdir -p "$ns_dir/logs"
@@ -130,12 +130,6 @@ init_namespace() {
     log_step "生成节点配置文件..."
     for ((i=0; i<$num_nodes; i++)); do
         generate_server_config "$ns_dir" "$i" "$num_nodes"
-    done
-
-    # 生成客户端配置文件
-    log_step "生成客户端配置文件..."
-    for ((i=0; i<$num_clients; i++)); do
-        generate_client_config "$ns_dir" "$i" "$num_nodes"
     done
 
     # 生成密钥
@@ -147,6 +141,10 @@ init_namespace() {
     log_info "密钥目录: $ns_dir/keys"
     log_info "数据目录: $ns_dir/data"
     log_info "日志目录: $ns_dir/logs"
+    log_info "节点数: $num_nodes, 执行器数: $num_executors"
+    
+    # 保存执行器数量到配置文件，供启动时使用
+    echo "$num_executors" > "$ns_dir/.executor_count"
 }
 
 # 生成服务器配置文件
@@ -160,6 +158,7 @@ generate_server_config() {
     local bci_rpc_port=$((BASE_BCI_RPC_PORT + node_id))
     local api_port=$((BASE_API_PORT + node_id))
     local executor_port=$((BASE_EXECUTOR_PORT + node_id))
+    local pot_executor_port=$((BASE_POT_EXECUTOR_PORT + node_id))
 
     local config_file="$ns_dir/configs/servers/node-$node_id.yaml"
     local private_key_path="$ns_dir/keys/node-$node_id-priv.key"
@@ -179,38 +178,13 @@ generate_server_config() {
         sed "s|{{DATADIR}}|$data_dir|g" | \
         sed "s|{{LOG_FILE}}|$log_file|g" | \
         sed "s|{{TOTAL_REPLICAS}}|$total_nodes|g" | \
-        sed "s|{{EXECUTOR_PORT}}|$executor_port|g" \
+        sed "s|{{EXECUTOR_PORT}}|$executor_port|g" | \
+        sed "s|{{POT_EXECUTOR_PORT}}|$pot_executor_port|g" \
         > "$config_file"
 
-    log_info "生成节点配置: node-$node_id (P2P:$p2p_port, RPC:$rpc_port, BCI:$bci_rpc_port, API:$api_port, Executor:$executor_port)"
+    log_info "生成节点配置: node-$node_id (P2P:$p2p_port, RPC:$rpc_port, BCI:$bci_rpc_port, API:$api_port, Executor:$executor_port, PotExecutor:$pot_executor_port)"
 }
 
-# 生成客户端配置文件
-generate_client_config() {
-    local ns_dir=$1
-    local client_id=$2
-    local num_nodes=$3
-
-    local rpc_port=$((BASE_CLIENT_RPC_PORT + client_id))
-    local config_file="$ns_dir/configs/clients/client-$client_id.yaml"
-    local log_file="$ns_dir/logs/client-$client_id.log"
-    
-    # 计算对应的服务器节点 ID (循环分配)
-    # 客户端 0 -> 服务器 0, 客户端 1 -> 服务器 1, ...
-    # 如果客户端数 > 服务器数，则循环: 客户端 4 -> 服务器 0 (假设有4个服务器)
-    local server_id=$((client_id % num_nodes))
-    local server_rpc_port=$((BASE_RPC_PORT + server_id))
-    local server_rpc_address="127.0.0.1:$server_rpc_port"
-
-    # 复制模板并替换变量
-    cat "$CLIENT_TEMPLATE" | \
-        sed "s|id: 0|id: $client_id|g" | \
-        sed "s|{{SERVER_RPC_ADDRESS}}|$server_rpc_address|g" | \
-        sed "s|{{LOG_FILE}}|$log_file|g" \
-        > "$config_file"
-
-    log_info "生成客户端配置: client-$client_id (RPC:$rpc_port, 连接服务器:$server_id @ $server_rpc_address)"
-}
 
 # 生成密钥
 generate_keys() {
@@ -363,84 +337,93 @@ start_single_server() {
     log_info "服务器节点 $node_id 已启动 (PID: $pid, 日志: $log_file)"
 }
 
-start_clients() {
+start_executors() {
     local namespace=$1
-    local client_id=${2:-"all"}
+    local executor_id=${2:-"all"}
     local follow_log=${3:-false}
 
     check_namespace_exists "$namespace"
     
     local ns_dir=$(get_namespace_dir "$namespace")
-    local pids_file="$ns_dir/.client_pids"
+    local pids_file="$ns_dir/.executor_pids"
 
-    # 确保 bin/client 存在
-    if [[ ! -f "bin/client" ]]; then
-        log_warn "client 二进制文件不存在,尝试构建..."
-        make build-client
+    # 确保 bin/executor 存在
+    if [[ ! -f "bin/executor" ]]; then
+        log_warn "executor 二进制文件不存在,尝试构建..."
+        make build-executor
     fi
 
-    if [[ "$client_id" == "all" ]]; then
-        log_step "启动命名空间 '$namespace' 的所有客户端..."
+    if [[ "$executor_id" == "all" ]]; then
+        log_step "启动命名空间 '$namespace' 的所有执行器..."
         
         # 清空 PID 文件
         > "$pids_file"
         
-        # 启动所有客户端
-        local configs=("$ns_dir/configs/clients"/client-*.yaml)
-        for config in "${configs[@]}"; do
-            if [[ -f "$config" ]]; then
-                local client_num=$(basename "$config" .yaml | sed 's/client-//')
-                start_single_client "$namespace" "$client_num" "$pids_file"
+        # 读取执行器数量配置
+        local executor_count_file="$ns_dir/.executor_count"
+        local num_executors=0
+        if [[ -f "$executor_count_file" ]]; then
+            num_executors=$(cat "$executor_count_file")
+        else
+            # 如果没有配置文件，默认启动所有节点对应的执行器
+            num_executors=$(ls -1 "$ns_dir/configs/servers"/node-*.yaml 2>/dev/null | wc -l)
+        fi
+        
+        # 只启动指定数量的执行器 (使用对应的节点配置)
+        for ((i=0; i<$num_executors; i++)); do
+            if [[ -f "$ns_dir/configs/servers/node-$i.yaml" ]]; then
+                start_single_executor "$namespace" "$i" "$pids_file"
             fi
         done
         
-        log_info "所有客户端已启动"
+        log_info "所有执行器已启动"
         
         if [[ "$follow_log" == true ]]; then
-            log_info "查看日志: tail -f $ns_dir/logs/client-*.log"
+            log_info "查看日志: tail -f $ns_dir/logs/executor-*.log"
         fi
     else
-        log_step "启动命名空间 '$namespace' 的客户端 $client_id..."
-        start_single_client "$namespace" "$client_id" "$pids_file"
+        log_step "启动命名空间 '$namespace' 的执行器 $executor_id..."
+        start_single_executor "$namespace" "$executor_id" "$pids_file"
         
         if [[ "$follow_log" == true ]]; then
             log_info "跟踪日志..."
-            tail -f "$ns_dir/logs/client-$client_id.log"
+            tail -f "$ns_dir/logs/executor-$executor_id.log"
         fi
     fi
 }
 
-start_single_client() {
+start_single_executor() {
     local namespace=$1
-    local client_id=$2
+    local executor_id=$2
     local pids_file=$3
 
     local ns_dir=$(get_namespace_dir "$namespace")
-    local config="$ns_dir/configs/clients/client-$client_id.yaml"
-    local log_file="$ns_dir/logs/client-$client_id.log"
+    # 执行器使用对应节点的配置文件
+    local config="$ns_dir/configs/servers/node-$executor_id.yaml"
+    local log_file="$ns_dir/logs/executor-$executor_id.log"
 
     if [[ ! -f "$config" ]]; then
-        log_error "客户端 $client_id 的配置文件不存在: $config"
+        log_error "执行器 $executor_id 的配置文件不存在: $config"
         return 1
     fi
 
-    # 检查客户端是否已在运行
+    # 检查执行器是否已在运行
     if [[ -f "$pids_file" ]]; then
-        local existing_pid=$(grep "^$client_id:" "$pids_file" | cut -d: -f2)
+        local existing_pid=$(grep "^$executor_id:" "$pids_file" | cut -d: -f2)
         if [[ -n "$existing_pid" ]] && kill -0 "$existing_pid" 2>/dev/null; then
-            log_warn "客户端 $client_id 已在运行 (PID: $existing_pid)"
+            log_warn "执行器 $executor_id 已在运行 (PID: $existing_pid)"
             return 0
         fi
     fi
 
-    # 启动客户端
-    nohup ./bin/client -c "$config" > "$log_file" 2>&1 &
+    # 启动执行器
+    nohup ./bin/executor -c "$config" > "$log_file" 2>&1 &
     local pid=$!
     
     # 保存 PID
-    echo "$client_id:$pid" >> "$pids_file"
+    echo "$executor_id:$pid" >> "$pids_file"
     
-    log_info "客户端 $client_id 已启动 (PID: $pid, 日志: $log_file)"
+    log_info "执行器 $executor_id 已启动 (PID: $pid, 日志: $log_file)"
 }
 
 stop_servers() {
@@ -491,50 +474,50 @@ stop_servers() {
     fi
 }
 
-stop_clients() {
+stop_executors() {
     local namespace=$1
-    local client_id=${2:-"all"}
+    local executor_id=${2:-"all"}
 
     check_namespace_exists "$namespace"
     
     local ns_dir=$(get_namespace_dir "$namespace")
-    local pids_file="$ns_dir/.client_pids"
+    local pids_file="$ns_dir/.executor_pids"
 
     if [[ ! -f "$pids_file" ]]; then
-        log_warn "没有找到运行中的客户端"
+        log_warn "没有找到运行中的执行器"
         return 0
     fi
 
-    if [[ "$client_id" == "all" ]]; then
-        log_step "停止命名空间 '$namespace' 的所有客户端..."
+    if [[ "$executor_id" == "all" ]]; then
+        log_step "停止命名空间 '$namespace' 的所有执行器..."
         
-        while IFS=: read -r cid pid; do
+        while IFS=: read -r eid pid; do
             if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
                 kill "$pid"
-                log_info "客户端 $cid 已停止 (PID: $pid)"
+                log_info "执行器 $eid 已停止 (PID: $pid)"
             fi
         done < "$pids_file"
         
         rm -f "$pids_file"
-        log_info "所有客户端已停止"
+        log_info "所有执行器已停止"
     else
-        log_step "停止命名空间 '$namespace' 的客户端 $client_id..."
+        log_step "停止命名空间 '$namespace' 的执行器 $executor_id..."
         
-        local pid=$(grep "^$client_id:" "$pids_file" | cut -d: -f2)
+        local pid=$(grep "^$executor_id:" "$pids_file" | cut -d: -f2)
         if [[ -z "$pid" ]]; then
-            log_warn "客户端 $client_id 未在运行"
+            log_warn "执行器 $executor_id 未在运行"
             return 0
         fi
         
         if kill -0 "$pid" 2>/dev/null; then
             kill "$pid"
-            log_info "客户端 $client_id 已停止 (PID: $pid)"
+            log_info "执行器 $executor_id 已停止 (PID: $pid)"
         else
-            log_warn "客户端 $client_id 的进程不存在 (PID: $pid)"
+            log_warn "执行器 $executor_id 的进程不存在 (PID: $pid)"
         fi
         
         # 从 PID 文件中删除该行
-        grep -v "^$client_id:" "$pids_file" > "${pids_file}.tmp" || true
+        grep -v "^$executor_id:" "$pids_file" > "${pids_file}.tmp" || true
         mv "${pids_file}.tmp" "$pids_file"
     fi
 }
@@ -555,15 +538,15 @@ clean_namespace() {
         return 0
     fi
 
-    # 先停止所有服务器和客户端
+    # 先停止所有服务器和执行器
     if [[ -f "$ns_dir/.server_pids" ]]; then
         log_step "停止运行中的服务器节点..."
         stop_servers "$namespace" "all"
     fi
     
-    if [[ -f "$ns_dir/.client_pids" ]]; then
-        log_step "停止运行中的客户端..."
-        stop_clients "$namespace" "all"
+    if [[ -f "$ns_dir/.executor_pids" ]]; then
+        log_step "停止运行中的执行器..."
+        stop_executors "$namespace" "all"
     fi
 
     # 清理数据
@@ -586,12 +569,11 @@ list_namespaces() {
         if [[ -d "$ns" ]]; then
             local name=$(basename "$ns")
             local num_nodes=$(ls -1 "$ns/configs/servers" 2>/dev/null | wc -l)
-            local num_clients=$(ls -1 "$ns/configs/clients" 2>/dev/null | wc -l)
             
-            # 检查是否有运行中的服务器和客户端
+            # 检查是否有运行中的服务器和执行器
             local running=""
             local server_count=0
-            local client_count=0
+            local executor_count=0
             
             if [[ -f "$ns/.server_pids" ]]; then
                 while IFS=: read -r nid pid; do
@@ -601,19 +583,19 @@ list_namespaces() {
                 done < "$ns/.server_pids"
             fi
             
-            if [[ -f "$ns/.client_pids" ]]; then
-                while IFS=: read -r cid pid; do
+            if [[ -f "$ns/.executor_pids" ]]; then
+                while IFS=: read -r eid pid; do
                     if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
-                        ((client_count++))
+                        ((executor_count++))
                     fi
-                done < "$ns/.client_pids"
+                done < "$ns/.executor_pids"
             fi
             
-            if [[ $server_count -gt 0 ]] || [[ $client_count -gt 0 ]]; then
-                running=" ${GREEN}(运行中: ${server_count}服务器, ${client_count}客户端)${NC}"
+            if [[ $server_count -gt 0 ]] || [[ $executor_count -gt 0 ]]; then
+                running=" ${GREEN}(运行中: ${server_count}服务器, ${executor_count}执行器)${NC}"
             fi
             
-            echo -e "  - ${BLUE}$name${NC}: $num_nodes 节点, $num_clients 客户端$running"
+            echo -e "  - ${BLUE}$name${NC}: $num_nodes 节点$running"
             ((count++))
         fi
     done
@@ -635,7 +617,6 @@ status_namespace() {
     log_step "命名空间 '$namespace' 状态:"
     echo "  目录: $ns_dir"
     echo "  服务器节点数: $(ls -1 "$ns_dir/configs/servers" 2>/dev/null | wc -l)"
-    echo "  客户端数: $(ls -1 "$ns_dir/configs/clients" 2>/dev/null | wc -l)"
     echo ""
     
     # 显示运行中的服务器节点
@@ -659,23 +640,23 @@ status_namespace() {
     
     echo ""
     
-    # 显示运行中的客户端
-    local client_pids="$ns_dir/.client_pids"
-    if [[ -f "$client_pids" ]]; then
-        log_step "运行中的客户端:"
+    # 显示运行中的执行器
+    local executor_pids="$ns_dir/.executor_pids"
+    if [[ -f "$executor_pids" ]]; then
+        log_step "运行中的执行器:"
         local has_running=false
-        while IFS=: read -r cid pid; do
+        while IFS=: read -r eid pid; do
             if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
-                echo -e "  - 客户端 ${GREEN}$cid${NC} (PID: $pid)"
+                echo -e "  - 执行器 ${GREEN}$eid${NC} (PID: $pid)"
                 has_running=true
             fi
-        done < "$client_pids"
+        done < "$executor_pids"
         
         if [[ "$has_running" == false ]]; then
-            echo "  (无运行中的客户端)"
+            echo "  (无运行中的执行器)"
         fi
     else
-        echo "  (无运行中的客户端)"
+        echo "  (无运行中的执行器)"
     fi
 }
 
@@ -718,33 +699,34 @@ POT 区块链节点管理脚本
 用法: $0 <命令> [参数...]
 
 命令:
-  init <namespace> <num_nodes> <num_clients>
+  init <namespace> <num_nodes> <num_executors>
       初始化命名空间,创建配置文件和密钥
+      执行器数量不能超过节点数量
       示例: $0 init mytest 4 2
 
-  start <namespace> [server|client|all] [id] [-f|--follow]
-      启动服务器节点或客户端
-      - 不指定类型: 启动所有服务器和客户端
+  start <namespace> [server|executor|all] [id] [-f|--follow]
+      启动服务器节点或执行器
+      - 不指定类型: 启动所有服务器和执行器
       - server [id]: 启动服务器节点（不指定id则启动所有）
-      - client [id]: 启动客户端（不指定id则启动所有）
-      - all: 启动所有服务器和客户端
+      - executor [id]: 启动执行器（不指定id则启动所有）
+      - all: 启动所有服务器和执行器
       - -f/--follow: 跟踪日志输出
       示例: $0 start mytest              # 启动所有
       示例: $0 start mytest server      # 启动所有服务器
       示例: $0 start mytest server 0    # 启动服务器0
-      示例: $0 start mytest client      # 启动所有客户端
-      示例: $0 start mytest client 0 -f # 启动客户端0并跟踪日志
+      示例: $0 start mytest executor    # 启动所有执行器
+      示例: $0 start mytest executor 0 -f # 启动执行器0并跟踪日志
 
-  stop <namespace> [server|client|all] [id]
-      停止服务器节点或客户端
-      - 不指定类型: 停止所有服务器和客户端
+  stop <namespace> [server|executor|all] [id]
+      停止服务器节点或执行器
+      - 不指定类型: 停止所有服务器和执行器
       - server [id]: 停止服务器节点（不指定id则停止所有）
-      - client [id]: 停止客户端（不指定id则停止所有）
-      - all: 停止所有服务器和客户端
+      - executor [id]: 停止执行器（不指定id则停止所有）
+      - all: 停止所有服务器和执行器
       示例: $0 stop mytest              # 停止所有
       示例: $0 stop mytest server      # 停止所有服务器
       示例: $0 stop mytest server 0    # 停止服务器0
-      示例: $0 stop mytest client      # 停止所有客户端
+      示例: $0 stop mytest executor    # 停止所有执行器
 
   status <namespace>
       查看命名空间状态
@@ -767,7 +749,7 @@ POT 区块链节点管理脚本
       示例: $0 list
 
   test
-      快速创建测试命名空间(1节点1客户端)
+      快速创建测试命名空间(1节点1执行器)
       示例: $0 test
 
   help
@@ -807,7 +789,7 @@ main() {
     case "$command" in
         init)
             if [[ $# -lt 3 ]]; then
-                log_error "用法: $0 init <namespace> <num_nodes> <num_clients>"
+                log_error "用法: $0 init <namespace> <num_nodes> <num_executors>"
                 exit 1
             fi
             init_namespace "$1" "$2" "$3"
@@ -815,7 +797,7 @@ main() {
         
         start)
             if [[ $# -lt 1 ]]; then
-                log_error "用法: $0 start <namespace> [server|client|all] [id] [-f|--follow]"
+                log_error "用法: $0 start <namespace> [server|executor|all] [id] [-f|--follow]"
                 exit 1
             fi
             local namespace=$1
@@ -831,7 +813,7 @@ main() {
                         follow=true
                         shift
                         ;;
-                    server|client|all)
+                    server|executor|all)
                         type=$1
                         shift
                         # 检查是否有ID参数
@@ -856,12 +838,12 @@ main() {
                 server)
                     start_servers "$namespace" "$id" "$follow"
                     ;;
-                client)
-                    start_clients "$namespace" "$id" "$follow"
+                executor)
+                    start_executors "$namespace" "$id" "$follow"
                     ;;
                 all)
                     start_servers "$namespace" "all" false
-                    start_clients "$namespace" "all" false
+                    start_executors "$namespace" "all" false
                     log_info "使用 './run.sh stop $namespace' 停止所有服务"
                     if [[ "$follow" == true ]]; then
                         log_info "跟踪日志: tail -f $(get_namespace_dir "$namespace")/logs/*.log"
@@ -872,7 +854,7 @@ main() {
         
         stop)
             if [[ $# -lt 1 ]]; then
-                log_error "用法: $0 stop <namespace> [server|client|all] [id]"
+                log_error "用法: $0 stop <namespace> [server|executor|all] [id]"
                 exit 1
             fi
             local namespace=$1
@@ -883,7 +865,7 @@ main() {
             # 解析参数
             if [[ $# -gt 0 ]]; then
                 case "$1" in
-                    server|client|all)
+                    server|executor|all)
                         type=$1
                         shift
                         if [[ $# -gt 0 ]]; then
@@ -903,12 +885,12 @@ main() {
                 server)
                     stop_servers "$namespace" "$id"
                     ;;
-                client)
-                    stop_clients "$namespace" "$id"
+                executor)
+                    stop_executors "$namespace" "$id"
                     ;;
                 all)
                     stop_servers "$namespace" "all"
-                    stop_clients "$namespace" "all"
+                    stop_executors "$namespace" "all"
                     ;;
             esac
             ;;
@@ -960,7 +942,7 @@ main() {
             ;;
         
         test)
-            log_step "创建默认测试命名空间 (1节点, 1客户端)..."
+            log_step "创建默认测试命名空间 (1节点, 1执行器)..."
             init_namespace "$DEFAULT_NAMESPACE" 1 1
             log_info "使用 '$0 start $DEFAULT_NAMESPACE' 启动测试节点"
             ;;

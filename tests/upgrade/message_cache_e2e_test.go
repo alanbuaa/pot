@@ -87,7 +87,7 @@ func TestMessageCacheInConsensusSwitchE2E(t *testing.T) {
 	// 创建配置
 	cfg := &config.ConsensusConfig{
 		ConsensusID: 1,
-		F:           1,
+		Fault:       1,
 	}
 
 	t.Log("✓ 模拟共识创建完成")
@@ -483,7 +483,7 @@ func TestMessageCacheWithConcurrentConsensusSwitch(t *testing.T) {
 
 	cfg := &config.ConsensusConfig{
 		ConsensusID: 1,
-		F:           1,
+		Fault:       1,
 	}
 
 	upgradeManager, err := upgrade.NewUpgradeManagerWithPersistence(
@@ -618,7 +618,7 @@ func TestMessageCacheExpiredCleanupDuringSwitch(t *testing.T) {
 
 	cfg := &config.ConsensusConfig{
 		ConsensusID: 1,
-		F:           1,
+		Fault:       1,
 	}
 
 	upgradeManager, err := upgrade.NewUpgradeManagerWithPersistence(

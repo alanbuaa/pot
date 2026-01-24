@@ -172,7 +172,7 @@ func (sw *CrWhirlyImpl) OnReceiveNewLeaderEcho(msg *pb.WhirlyMsg) {
 	// sw.UpdateLockProof(echoMsg.SwProof)
 	// sw.lock.Unlock()
 
-	if len(sw.newEpoch.curEcho) >= 2*sw.Config.F+1 {
+	if len(sw.newEpoch.curEcho) >= 2*sw.Config.Fault+1 {
 		sw.Log.WithFields(logrus.Fields{
 			"epoch":   sw.epoch,
 			"replica": sw.ID,

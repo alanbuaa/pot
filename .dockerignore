@@ -48,3 +48,7 @@ tests/
 .dockerignore
 docker-compose.yml
 Dockerfile
+
+deploy/*
+!deploy/client-template.yaml
+!deploy/server-template.yaml

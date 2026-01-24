@@ -18,7 +18,7 @@ type RemoteExecutor struct {
 }
 
 func NewRemoteExecutor(cfg *config.ExecutorConfig, uplog *logrus.Entry) *RemoteExecutor {
-	log := uplog.WithField("module", "[lEXECUTOR]")
+	log := uplog.WithField("module", "EXECUTOR")
 	conn, err := grpc.Dial(cfg.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Warn("connect to ", cfg.Address, "failed")

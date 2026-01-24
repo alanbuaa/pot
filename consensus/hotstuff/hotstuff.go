@@ -30,7 +30,7 @@ type HotStuff interface {
 	SafeNode(node *pb.WhirlyBlock, qc *pb.QuorumCert) bool
 	GetMsgByteEntrance() chan<- []byte
 	GetRequestEntrance() chan<- *pb.Request
-	GetSelfInfo() *config.ReplicaInfo
+	GetSelfInfo() *config.NodeInfo
 	Stop()
 	GetConsensusID() int64
 	GetWeight(nid int64) float64
@@ -72,15 +72,14 @@ func (hs *HotStuffImpl) Init(
 ) {
 	hs.ID = id
 	hs.ConsensusID = cid
-	cfg.F = (len(cfg.Nodes) - 1) / 3
 	hs.Config = cfg
 	hs.Executor = exec
 	hs.p2pAdaptor = p2pAdaptor
 	hs.Log = log.WithField("module", "HOTSTUFF").WithField("c_id", cid)
 	hs.Log.WithFields(logrus.Fields{
 		"replica_id": id,
-		"f":          cfg.F,
-		"node_count": len(cfg.Nodes),
+		"f":          cfg.Fault,
+		"node_count": cfg.Total,
 	}).Info("Initializing HotStuff consensus")
 
 	hs.MsgByteEntrance = make(chan []byte, 10)
@@ -96,10 +95,10 @@ func (hs *HotStuffImpl) Init(
 
 	hs.MemPool = types.NewMemPool()
 	sid := strconv.Itoa(int(id)) + "-" + strconv.Itoa(int(cid))
-	hs.BlockStorage = whirly.NewBlockStorageImpl(sid, cfg.Nodes[id].Datadir)
+	hs.BlockStorage = whirly.NewBlockStorageImpl(sid, cfg.Nodes[id].DataDir)
 	hs.Log.WithFields(logrus.Fields{
 		"storage_id": sid,
-		"data_dir":   cfg.Nodes[id].Datadir,
+		"data_dir":   cfg.Nodes[id].DataDir,
 	}).Debug("Block storage initialized")
 
 	hs.Wg = new(sync.WaitGroup)
@@ -273,30 +272,24 @@ func (h *HotStuffImpl) Stop() {
 	h.Log.Info("Consensus stopped successfully")
 }
 
-// GetLeader get the leader replica in view
-func (h *HotStuffImpl) GetLeader() int64 {
-	id := int64(h.View.ViewNum) % int64(len(h.Config.Nodes))
-	return id
+// GetSelfInfo get self node info
+func (h *HotStuffImpl) GetSelfInfo() *config.NodeInfo {
+	return h.Config.Nodes[h.ID]
 }
 
-func (h *HotStuffImpl) GetSelfInfo() *config.ReplicaInfo {
-	self := &config.ReplicaInfo{}
-	for _, info := range h.Config.Nodes {
-		if info.ID == h.ID {
-			self = info
-			break
-		}
-	}
-	return self
+// GetLeader get the leader replica in view
+func (h *HotStuffImpl) GetLeader() int64 {
+	id := int64(h.View.ViewNum) % int64(h.Config.Total)
+	return id
 }
 
 func (h *HotStuffImpl) GetNetworkInfo() map[int64]string {
 	networkInfo := make(map[int64]string)
-	for _, info := range h.Config.Nodes {
+	for _, info := range h.Config.GetNodesSlice() {
 		if info.ID == h.ID {
 			continue
 		}
-		networkInfo[info.ID] = info.Address
+		networkInfo[info.ID] = info.P2PAddress
 	}
 	return networkInfo
 }
@@ -310,13 +303,13 @@ func (h *HotStuffImpl) Broadcast(msg *pb.Msg) error {
 	utils.PanicOnError(err)
 
 	sentCount := 0
-	for _, node := range h.Config.Nodes {
+	for _, node := range h.Config.GetNodesSlice() {
 		if node.ID == h.ID {
 			continue
 		}
-		err := h.p2pAdaptor.Unicast(node.Address, msgByte, h.ConsensusID, []byte("consensus"))
+		err := h.p2pAdaptor.Unicast(node.P2PAddress, msgByte, h.ConsensusID, []byte("consensus"))
 		if err != nil {
-			h.Log.WithError(err).WithField("peer", node.Address).Warn("Failed to send message to peer")
+			h.Log.WithError(err).WithField("peer", node.P2PAddress).Warn("Failed to send message to peer")
 			return err
 		}
 		sentCount++
@@ -369,8 +362,9 @@ func GenerateGenesisBlock() *pb.WhirlyBlock {
 }
 
 func (hs *HotStuffImpl) GetWeight(nid int64) float64 {
-	if nid < int64(len(hs.Config.Nodes)) {
-		return 1.0 / float64(len(hs.Config.Nodes))
+	nodeCount := hs.Config.GetNodeCount()
+	if nodeCount > 0 && nid < int64(nodeCount) {
+		return 1.0 / float64(nodeCount)
 	}
 	return 0.0
 }

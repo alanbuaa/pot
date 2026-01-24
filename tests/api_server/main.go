@@ -147,15 +147,14 @@ func createStandaloneWorker(log *logrus.Entry) (*pot.Worker, error) {
 			ExecutorAddress: "localhost:50051", // Mock executor address
 			BciRpcAddress:   ":50052",
 		},
-		Nodes: []*config.ReplicaInfo{
-			{
+		Nodes: map[int64]*config.NodeInfo{
+			0: {
 				ID:         0,
-				Address:    "localhost:8000",
 				RpcAddress: "localhost:9000",
-				Datadir:    "./data/node-0",
+				DataDir:    "./data/node-0",
 			},
 		},
-		F:     0,
+		Fault: 0,
 		Topic: "pot-test",
 	}
 
@@ -189,22 +188,27 @@ func createFullWorker(configPath string, nodeID int64, log *logrus.Entry) (*pot.
 	log.Infof("Loading configuration from: %s", configPath)
 
 	// Load configuration
-	cfg, err := config.NewConfig(configPath, nodeID)
+	cfg, err := config.NewConfig(configPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config: %v", err)
 	}
 
 	log.Infof("Node ID: %d", nodeID)
 	log.Infof("Total nodes: %d", cfg.Total)
-	log.Infof("Data directory: %s", cfg.Nodes[nodeID].Datadir)
+
+	nodeInfo, err := cfg.GetNodeFromSet(nodeID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get node info: %v", err)
+	}
+	log.Infof("Data directory: %s", nodeInfo.DataDir)
 
 	// Create data directory
-	if err := os.MkdirAll(cfg.Nodes[nodeID].Datadir, 0755); err != nil {
+	if err := os.MkdirAll(nodeInfo.DataDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create data directory: %v", err)
 	}
 
 	// Create block storage
-	blockStorage := storage.NewBlockStorage(nodeID, cfg.Nodes[nodeID].Datadir)
+	blockStorage := storage.NewBlockStorage(nodeID, nodeInfo.DataDir)
 
 	// Create PoT worker without full engine
 	// Note: This creates worker without network/executor dependencies for API testing

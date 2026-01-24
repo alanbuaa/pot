@@ -16,7 +16,7 @@ type TimeVoteInner struct {
 	ID   int64        `json:"id"`
 }
 
-func (tvi *TimeVoteInner) GenHash(ks *config.KeySet) []byte {
+func (tvi *TimeVoteInner) GenHash(ks *config.CryptoConfig) []byte {
 	btvi, err := json.Marshal(tvi)
 	utils.PanicOnError(err)
 	h, err := crypto.CreateDocumentHash(btvi, ks.PublicKey)
@@ -24,7 +24,7 @@ func (tvi *TimeVoteInner) GenHash(ks *config.KeySet) []byte {
 	return h
 }
 
-func (tvi *TimeVoteInner) Sign(ks *config.KeySet) *TimeVote {
+func (tvi *TimeVoteInner) Sign(ks *config.CryptoConfig) *TimeVote {
 	h := tvi.GenHash(ks)
 	sig, err := crypto.TSign(h, ks.PrivateKey, ks.PublicKey)
 	utils.PanicOnError(err)
@@ -39,7 +39,7 @@ type TimeVote struct {
 	Sig *tcrsa.SigShare `json:"sig"`
 }
 
-func (tv *TimeVote) Verify(ks *config.KeySet) bool {
+func (tv *TimeVote) Verify(ks *config.CryptoConfig) bool {
 	h := tv.TVI.GenHash(ks)
 	return crypto.VerifyPartSig(tv.Sig, h, ks.PublicKey) == nil
 }

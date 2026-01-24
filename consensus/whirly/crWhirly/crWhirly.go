@@ -195,8 +195,8 @@ func NewCrWhirlyForLocalTest(
 	// go sw.updateAsync(ctx)
 	go sw.receiveMsg(ctx)
 
-	sw.SetLeader(sw.epoch, cfg.Nodes[1].Address)
-	if sw.GetPeerID() == cfg.Nodes[1].Address {
+	sw.SetLeader(sw.epoch, cfg.Nodes[1].P2PAddress)
+	if sw.GetPeerID() == cfg.Nodes[1].P2PAddress {
 		// TODO: ensure all nodes is ready before OnPropose
 		sw.SetLeader(sw.epoch, sw.GetPeerID())
 		go sw.OnPropose()
@@ -488,7 +488,7 @@ func (sw *CrWhirlyImpl) verfiyCrProof(crProof *pb.CrWhirlyProof) bool {
 	if crProof.ViewNum == 0 {
 		return true
 	}
-	if len(crProof.VoteProof) < 2*sw.Config.F+1 {
+	if len(crProof.VoteProof) < 2*sw.Config.Fault+1 {
 		sw.Log.WithFields(logrus.Fields{
 			"epoch":       sw.epoch,
 			"replica":     sw.ID,
@@ -782,8 +782,8 @@ func (sw *CrWhirlyImpl) OnReceiveVote(whirlyVoteMsg *pb.CrWhirlyVote) {
 		sw.lock.Unlock()
 	}
 
-	if len(sw.curYesVote)+len(sw.curNoVote) >= 2*sw.Config.F+1 {
-		if len(sw.curYesVote) >= 2*sw.Config.F+1 {
+	if len(sw.curYesVote)+len(sw.curNoVote) >= 2*sw.Config.Fault+1 {
+		if len(sw.curYesVote) >= 2*sw.Config.Fault+1 {
 			var plaintextTxsBytes [][]byte
 			if sw.txCRs == nil || len(sw.txCRs) == 0 {
 				plaintextTxsBytes = nil
@@ -791,7 +791,7 @@ func (sw *CrWhirlyImpl) OnReceiveVote(whirlyVoteMsg *pb.CrWhirlyVote) {
 				plaintextTxsBytes = make([][]byte, len(sw.txCRs))
 				for i := 0; i < len(sw.txCRs); i++ {
 					// 领导者重构门限加密密文
-					roundSecretBytes := bc_api.RecoverRoundSecret(uint32(2*sw.Config.F+1), sw.curYesRoundShares[i])
+					roundSecretBytes := bc_api.RecoverRoundSecret(uint32(2*sw.Config.Fault+1), sw.curYesRoundShares[i])
 					if roundSecretBytes == nil {
 						// 共识失败，丢弃交易
 						sw.voteLock.Unlock()

@@ -52,8 +52,8 @@ func NewPoTEngine(nid int64, cid int64, config *config.ConsensusConfig, exec exe
 	log.Info("Initializing PoT consensus")
 	ch := make(chan []byte, 1024)
 	//st := types.NewHeaderStorage(nid)
-	log.WithField("datadir", config.Nodes[nid].Datadir).Debug("Creating block storage")
-	bst := storage.NewBlockStorage(nid, config.Nodes[nid].Datadir)
+	log.WithField("datadir", config.Nodes[nid].DataDir).Debug("Creating block storage")
+	bst := storage.NewBlockStorage(nid, config.Nodes[nid].DataDir)
 	e := &PoTEngine{
 		id:              nid,
 		peerId:          adaptor.GetPeerID(),
@@ -79,7 +79,7 @@ func NewPoTEngine(nid int64, cid int64, config *config.ConsensusConfig, exec exe
 	log.WithField("topic", config.Topic).Debug("Subscribing to P2P topic")
 	err := adaptor.Subscribe([]byte(config.Topic))
 	if adaptor.GetP2PType() == "p2p" {
-		e.peerId = config.Nodes[nid].Address
+		e.peerId = config.Nodes[nid].P2PAddress
 		log.WithField("peer_id", e.peerId).Debug("Using base P2P with address as peer ID")
 	} else {
 		e.peerId = adaptor.GetPeerID()
@@ -213,10 +213,11 @@ func (e *PoTEngine) StartCommitee() *nodeController.NodeController {
 			BatchSize: 10,
 			Timeout:   2000,
 		},
-		Nodes: e.config.Nodes,
-		Keys:  e.config.Keys,
-		Topic: e.config.Topic,
-		F:     e.config.F,
+		Nodes:  e.config.Nodes,
+		Keys:   e.config.Keys,
+		Topic:  e.config.Topic,
+		Fault:  e.config.Fault,
+		NodeId: e.config.NodeId, // 传递父共识id
 	}
 
 	//s := simpleWhirly.NewSimpleWhirly(e.id, 1009, whirlyconfig, e.exec, e.Adaptor, e.log, "", nil)

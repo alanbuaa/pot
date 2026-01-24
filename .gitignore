@@ -27,3 +27,7 @@ getbalance
 
 /bin/*
 data/*
+
+deploy/*
+!deploy/client-template.yaml
+!deploy/server-template.yaml

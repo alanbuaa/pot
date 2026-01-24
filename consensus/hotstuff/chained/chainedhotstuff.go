@@ -202,9 +202,9 @@ func (chs *ChainedHotStuff) handleMsg(msg *pb.Msg) {
 		chs.CurExec.PrepareVote = append(chs.CurExec.PrepareVote, partSig)
 		chs.Log.WithFields(logrus.Fields{
 			"vote_count": len(chs.CurExec.PrepareVote),
-			"threshold":  chs.Config.F*2 + 1,
+			"threshold":  chs.Config.Fault*2 + 1,
 		}).Debug("Collected PREPARE_VOTE")
-		if len(chs.CurExec.PrepareVote) == chs.Config.F*2+1 {
+		if len(chs.CurExec.PrepareVote) == chs.Config.Fault*2+1 {
 			chs.Log.Debug("Threshold reached, creating generic QC")
 			signature, _ := crypto.CreateFullSignature(chs.CurExec.DocumentHash, chs.CurExec.PrepareVote, chs.Config.Keys.PublicKey)
 			qc := chs.QC(pb.MsgType_PREPARE_VOTE, signature, prepareVote.BlockHash)

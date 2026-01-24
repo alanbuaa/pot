@@ -74,7 +74,7 @@ func (uc *UpgradeableConsensus) CommitBlock(block types.ConsensusBlock, proof []
 				}
 				cc.Nodes = uc.config.Nodes
 				cc.Keys = uc.config.Keys
-				cc.F = uc.config.F
+				cc.Fault = uc.config.Fault
 				uc.log.WithFields(logrus.Fields{
 					"target_type": cc.Type,
 					"target_cid":  cc.ConsensusID,

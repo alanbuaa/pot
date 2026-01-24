@@ -14,7 +14,7 @@ help:
 	@echo "Usage: make [target]"
 	@echo "Common targets: build, build-cmds, test, compile_proto, genkey, clean, docker_build"
 
-build: build_genkey build_client build_server 
+build: build_genkey build_client build_server build_executor
 	@:
 
 # build all cmd/* programs into $(BIN_DIR)
@@ -35,6 +35,9 @@ build_client: $(BIN_DIR)
 build_server: $(BIN_DIR)
 	$(GO) build -o $(BIN_DIR)/server ./cmd/server
 
+build_executor: $(BIN_DIR)
+	$(GO) build -o $(BIN_DIR)/executor ./cmd/executor
+	
 # --------------------------------------------------
 # Run targets
 # --------------------------------------------------
@@ -46,9 +49,6 @@ run_server: build_server
 
 run_client: build_client
 	$(BIN_DIR)/client
-
-run_txtest: build-txtest
-	$(BIN_DIR)/txtest
 
 run_governance: build-governance
 	$(BIN_DIR)/governance

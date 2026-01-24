@@ -16,7 +16,7 @@ var logging *logrus.Logger
 type Logger = logrus.Logger
 
 func Setup(cfgPath string) {
-	fcfg, err := config.NewConfig(cfgPath, 0)
+	fcfg, err := config.NewConfig(cfgPath)
 	var cfg *config.LogConfig
 	if err == nil {
 		cfg = fcfg.Log
@@ -47,7 +47,8 @@ func Setup(cfgPath string) {
 		Formatter: &CustomFormatter{ // 使用自定义 Formatter
 			TextFormatter: logrus.TextFormatter{
 				TimestampFormat: "15:04:05.00000", // 时分秒.毫秒.微秒/10
-				ForceColors:     true,
+				ForceColors:     false,
+				DisableColors:   true,
 			},
 		},
 		Level: level,
@@ -57,47 +58,6 @@ func Setup(cfgPath string) {
 // should be called after InitLog
 func GetLogger() *logrus.Logger {
 	return logging
-}
-
-// CreateNodeLogger creates a dedicated logger instance for a specific node
-// This ensures each node has its own log file and avoids concurrent write conflicts
-func CreateNodeLogger(cfgPath string, nodeID int64) *logrus.Logger {
-	fcfg, err := config.NewConfig(cfgPath, nodeID)
-	var cfg *config.LogConfig
-	if err == nil {
-		cfg = fcfg.Log
-	} else {
-		// for testing
-		cfg = &config.LogConfig{
-			Level:  "debug",
-			ToFile: false,
-		}
-	}
-	level, err := logrus.ParseLevel(cfg.Level)
-	utils.PanicOnError(err)
-
-	var out io.Writer
-	if cfg.ToFile {
-		// Include node ID in filename to separate logs for each node
-		filename := fmt.Sprintf(cfg.Filename, fmt.Sprintf("node%d_%s", nodeID, time.Now().Format("2006-0102-150405")))
-		file, err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-		utils.PanicOnError(err)
-		// Output to both terminal and file
-		out = io.MultiWriter(os.Stdout, file)
-	} else {
-		out = os.Stdout
-	}
-
-	return &logrus.Logger{
-		Out: out,
-		Formatter: &CustomFormatter{
-			TextFormatter: logrus.TextFormatter{
-				TimestampFormat: "15:04:05.00000",
-				ForceColors:     true,
-			},
-		},
-		Level: level,
-	}
 }
 
 func DebugF(format string, args ...interface{}) {

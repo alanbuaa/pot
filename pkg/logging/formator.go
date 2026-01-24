@@ -101,7 +101,7 @@ func (f *CustomFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 	b.WriteString(" ")
 
 	// 写入级别（根据 ForceColors 或终端状态决定是否着色）
-	shouldColor := f.TextFormatter.ForceColors || f.isTerminal
+	shouldColor := (f.TextFormatter.ForceColors || f.isTerminal) && !f.TextFormatter.DisableColors
 	if shouldColor {
 		// 终端输出或强制彩色：使用颜色
 		b.WriteString(style.color)
@@ -138,7 +138,6 @@ func (f *CustomFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 
 		// 如果有 id，单独为 id 字段着色
 		if hasID {
-			shouldColor := f.TextFormatter.ForceColors || f.isTerminal
 			if shouldColor {
 				// 终端输出或强制彩色：为 id 着色
 				color := colors[int(intID)%len(colors)]

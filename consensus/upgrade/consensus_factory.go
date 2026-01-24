@@ -365,7 +365,7 @@ func (cf *ConsensusFactory) buildConfig(
 		ConsensusID: int64(proposal.SwitchHeight),
 		Type:        proposal.TargetConsensus,
 		Keys:        baseConfig.Keys,
-		F:           baseConfig.F,
+		Fault:       baseConfig.Fault,
 	}
 
 	// 根据目标共识类型设置特定配置
@@ -407,7 +407,7 @@ func (cf *ConsensusFactory) buildConfigFromCDL(
 		ConsensusID: baseConfig.ConsensusID,
 		Type:        cdlDescriptor.Type,
 		Keys:        baseConfig.Keys,
-		F:           baseConfig.F,
+		Fault:       baseConfig.Fault,
 	}
 
 	// 从 CDL 参数中提取配置

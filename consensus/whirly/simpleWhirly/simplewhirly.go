@@ -201,8 +201,8 @@ func NewSimpleWhirlyForLocalTest(
 	// go sw.updateAsync(ctx)
 	go sw.receiveMsg(ctx)
 
-	sw.SetLeader(sw.epoch, cfg.Nodes[1].Address)
-	if sw.GetPeerID() == cfg.Nodes[1].Address {
+	sw.SetLeader(sw.epoch, cfg.Nodes[1].P2PAddress)
+	if sw.GetPeerID() == cfg.Nodes[1].P2PAddress {
 		// TODO: ensure all nodes is ready before OnPropose
 		sw.SetLeader(sw.epoch, sw.GetPeerID())
 		go sw.OnPropose()
@@ -261,6 +261,14 @@ func (sw *SimpleWhirlyImpl) CleanVote() {
 	sw.curYesVote = make([]*pb.WhirlyVote, 0)
 	sw.curNoVote = make([]*pb.SimpleWhirlyProof, 0)
 	sw.incentive = *whirlyUtilities.NewIncentive(sw.PublicAddress)
+}
+
+func (sw *SimpleWhirlyImpl) GetQuorumSize() int {
+	if len(sw.Committee) > 0 {
+		f := (len(sw.Committee) - 1) / 3
+		return 2*f + 1
+	}
+	return 2*int(sw.Config.Fault) + 1
 }
 
 func (sw *SimpleWhirlyImpl) GetHeight() uint64 {
@@ -469,7 +477,7 @@ func (sw *SimpleWhirlyImpl) verfiySwProof(swProof *pb.SimpleWhirlyProof) bool {
 	if swProof.ViewNum == 0 {
 		return true
 	}
-	if len(swProof.Proof) < 2*sw.Config.F+1 {
+	if len(swProof.Proof) < sw.GetQuorumSize() {
 		sw.Log.WithFields(logrus.Fields{
 			"epoch":       sw.epoch,
 			"replica":     sw.ID,
@@ -691,8 +699,8 @@ func (sw *SimpleWhirlyImpl) OnReceiveVote(whirlyVoteMsg *pb.WhirlyVote) {
 		sw.lock.Unlock()
 	}
 
-	if len(sw.curYesVote)+len(sw.curNoVote) >= 2*sw.Config.F+1 {
-		if len(sw.curYesVote) >= 2*sw.Config.F+1 {
+	if len(sw.curYesVote)+len(sw.curNoVote) >= sw.GetQuorumSize() {
+		if len(sw.curYesVote) >= sw.GetQuorumSize() {
 			proof := sw.Proof(whirlyVoteMsg.BlockView, sw.curYesVote, whirlyVoteMsg.BlockHash)
 			sw.Log.WithFields(logrus.Fields{
 				"epoch":     sw.epoch,

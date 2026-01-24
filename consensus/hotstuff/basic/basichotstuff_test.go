@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/zzz136454872/upgradeable-consensus/config"
-	pb "github.com/zzz136454872/upgradeable-consensus/pkg/proto"
 	"github.com/zzz136454872/upgradeable-consensus/pkg/logging"
+	pb "github.com/zzz136454872/upgradeable-consensus/pkg/proto"
 	"github.com/zzz136454872/upgradeable-consensus/pkg/utils"
 	"google.golang.org/protobuf/proto"
 )
@@ -22,7 +22,7 @@ func TestBasicHotStuff_ReceiveMsg(t *testing.T) {
 	wd, err := os.Getwd()
 	utils.PanicOnError(err)
 	t.Log("pwd", wd)
-	cfg, err := config.NewConfig("config/config.yaml", 1)
+	cfg, err := config.NewConfig("config/config.yaml")
 	utils.PanicOnError(err)
 	cfg.Consensus.Upgradeable.InitConsensus.Nodes = cfg.Consensus.Nodes
 	stuff := NewBasicHotStuff(2, 10001, cfg.Consensus.Upgradeable.InitConsensus, nil, nil, logging.GetLogger().WithField("test", true))

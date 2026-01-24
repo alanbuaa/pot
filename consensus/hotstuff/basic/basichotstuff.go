@@ -163,7 +163,7 @@ func (bhs *BasicHotStuff) handleMsg(msg *pb.Msg) {
 		// process highqc and node
 		bhs.CurExec.HighQC = append(bhs.CurExec.HighQC, msg.GetNewView().PrepareQC)
 		if bhs.decided {
-			if len(bhs.CurExec.HighQC) >= 2*bhs.Config.F {
+			if len(bhs.CurExec.HighQC) >= 2*bhs.Config.Fault {
 				bhs.Log.WithField("highqc_count", len(bhs.CurExec.HighQC)).Debug("Sufficient NEWVIEW messages received, starting view change")
 				bhs.View.ViewChanging = true
 				bhs.HighQC = bhs.PrepareQC
@@ -221,9 +221,9 @@ func (bhs *BasicHotStuff) handleMsg(msg *pb.Msg) {
 		bhs.CurExec.PrepareVote = append(bhs.CurExec.PrepareVote, partSig)
 		bhs.Log.WithFields(logrus.Fields{
 			"vote_count": len(bhs.CurExec.PrepareVote),
-			"threshold":  bhs.Config.F*2 + 1,
+			"threshold":  bhs.Config.Fault*2 + 1,
 		}).Debug("Collected PREPARE_VOTE")
-		if len(bhs.CurExec.PrepareVote) == bhs.Config.F*2+1 {
+		if len(bhs.CurExec.PrepareVote) == bhs.Config.Fault*2+1 {
 			// create full signature
 			bhs.Log.Debug("Threshold reached, creating PRECOMMIT message")
 			signature, _ := crypto.CreateFullSignature(bhs.CurExec.DocumentHash, bhs.CurExec.PrepareVote, bhs.Config.Keys.PublicKey)
@@ -263,7 +263,7 @@ func (bhs *BasicHotStuff) handleMsg(msg *pb.Msg) {
 			return
 		}
 		bhs.CurExec.PreCommitVote = append(bhs.CurExec.PreCommitVote, partSig)
-		if len(bhs.CurExec.PreCommitVote) == 2*bhs.Config.F+1 {
+		if len(bhs.CurExec.PreCommitVote) == 2*bhs.Config.Fault+1 {
 			bhs.Log.Debug("Threshold reached, creating COMMIT message")
 			signature, _ := crypto.CreateFullSignature(bhs.CurExec.DocumentHash, bhs.CurExec.PreCommitVote, bhs.Config.Keys.PublicKey)
 			preCommitQC := bhs.QC(pb.MsgType_PRECOMMIT_VOTE, signature, bhs.CurExec.Node.Hash)
@@ -302,7 +302,7 @@ func (bhs *BasicHotStuff) handleMsg(msg *pb.Msg) {
 			return
 		}
 		bhs.CurExec.CommitVote = append(bhs.CurExec.CommitVote, partSig)
-		if len(bhs.CurExec.CommitVote) == 2*bhs.Config.F+1 {
+		if len(bhs.CurExec.CommitVote) == 2*bhs.Config.Fault+1 {
 			bhs.Log.Debug("Threshold reached, creating DECIDE message")
 			signature, _ := crypto.CreateFullSignature(bhs.CurExec.DocumentHash, bhs.CurExec.CommitVote, bhs.Config.Keys.PublicKey)
 			commitQC := bhs.QC(pb.MsgType_COMMIT_VOTE, signature, bhs.CurExec.Node.Hash)

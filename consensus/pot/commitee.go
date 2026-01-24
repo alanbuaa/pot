@@ -124,11 +124,14 @@ func (w *Worker) SendInitialPoTSignal() {
 
 	// Create initial committee from config nodes
 	// Use first Commiteelen nodes as the genesis committee
-	committee := make([]string, Commiteelen)
-	for i := 0; i < Commiteelen && i < len(w.config.Nodes); i++ {
+	committee := make([]string, 0, Commiteelen)
+	for nodeID := range w.config.Nodes {
+		if len(committee) >= int(Commiteelen) {
+			break
+		}
 		// Use node ID as placeholder public key for genesis committee
 		// In real deployment, this should be the actual node public key
-		committee[i] = hexutil.EncodeUint64(uint64(w.config.Nodes[i].ID))
+		committee = append(committee, hexutil.EncodeUint64(uint64(nodeID)))
 	}
 
 	w.log.WithFields(logrus.Fields{
@@ -149,7 +152,7 @@ func (w *Worker) SendInitialPoTSignal() {
 		Whirly:      whilyConsensus,
 		Nodes:       w.config.Nodes,
 		Topic:       w.config.Topic,
-		F:           w.config.F,
+		Fault:       w.config.Fault,
 	}
 
 	// Create genesis sharding with name matching client requests
@@ -249,7 +252,7 @@ func (w *Worker) CommitteeUpdate(height uint64) {
 			Whirly:      whilyConsensus,
 			Nodes:       w.config.Nodes,
 			Topic:       w.config.Topic,
-			F:           w.config.F,
+			Fault:       w.config.Fault,
 		}
 
 		sharding1 := nodeController.PoTSharding{

@@ -9,6 +9,7 @@ import (
 	"github.com/zzz136454872/upgradeable-consensus/consensus/model"
 	"github.com/zzz136454872/upgradeable-consensus/consensus/whirly/crWhirly"
 	"github.com/zzz136454872/upgradeable-consensus/consensus/whirly/simpleWhirly"
+	"github.com/zzz136454872/upgradeable-consensus/p2p"
 	"github.com/zzz136454872/upgradeable-consensus/pkg/logging"
 	pb "github.com/zzz136454872/upgradeable-consensus/pkg/proto"
 	"github.com/zzz136454872/upgradeable-consensus/pkg/utils"
@@ -43,6 +44,31 @@ type Sharding struct {
 	nodesLock sync.Mutex
 	epoch     int64
 	active    int
+}
+
+// DiscoverPeers implements [p2p.P2PAdaptor].
+func (s *Sharding) DiscoverPeers() error {
+	panic("unimplemented")
+}
+
+// GetDiscoveredNodes implements [p2p.P2PAdaptor].
+func (s *Sharding) GetDiscoveredNodes() map[int64]string {
+	panic("unimplemented")
+}
+
+// GetNodeCount implements [p2p.P2PAdaptor].
+func (s *Sharding) GetNodeCount() int {
+	panic("unimplemented")
+}
+
+// RegisterNodeDiscoveryCallback implements [p2p.P2PAdaptor].
+func (s *Sharding) RegisterNodeDiscoveryCallback(callback p2p.NodeDiscoveryCallback) {
+	panic("unimplemented")
+}
+
+// WaitForNodes implements [p2p.P2PAdaptor].
+func (s *Sharding) WaitForNodes(count int, timeout int) error {
+	panic("unimplemented")
 }
 
 func NewSharding(name string, nc *NodeController, s PoTSharding) *Sharding {
