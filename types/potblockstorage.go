@@ -21,6 +21,7 @@ const blocksBucket = "blocks"
 const UTXOBucket = "chainstate"
 const ExecutedBucket = "Executed"
 const ClientBucket = "client"
+const RewardedBucket = "rewarded"
 
 var (
 	ErrHeightHashNotFound = errors.New("height hash not found")
@@ -61,15 +62,19 @@ func NewBlockStorage(id int64, cid int64) *BlockStorage {
 	}
 
 	err = boltdb.Update(func(tx *bolt.Tx) error {
-		_, err := tx.CreateBucket([]byte(blocksBucket))
+		_, err := tx.CreateBucketIfNotExists([]byte(blocksBucket))
 		if err != nil {
 			return err
 		}
-		_, err = tx.CreateBucket([]byte(UTXOBucket))
+		_, err = tx.CreateBucketIfNotExists([]byte(UTXOBucket))
 		if err != nil {
 			return err
 		}
-		_, err = tx.CreateBucket([]byte(ExecutedBucket))
+		_, err = tx.CreateBucketIfNotExists([]byte(ExecutedBucket))
+		if err != nil {
+			return err
+		}
+		_, err = tx.CreateBucketIfNotExists([]byte(RewardedBucket))
 		if err != nil {
 			return err
 		}

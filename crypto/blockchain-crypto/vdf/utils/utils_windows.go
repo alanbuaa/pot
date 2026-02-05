@@ -3,14 +3,14 @@ package utils
 import (
 	"encoding/hex"
 	"fmt"
-	"golang.org/x/sys/windows"
 	"io"
-	"log"
 	"os/exec"
 	"path"
 	"runtime"
 	"strconv"
 	"syscall"
+
+	"golang.org/x/sys/windows"
 )
 
 var (
@@ -67,13 +67,13 @@ func ExecCmd(command string) []byte {
 	return output
 }
 
-func ExecWesolowskiVDFAffinity(challenge []byte, iterations int, ctrl *Controller) []byte {
+func ExecWesolowskiVDFAffinity(challenge []byte, iterations int, ctrl *Controller) ([]byte, error) {
 	cmd := exec.Command(FilePath, hex.EncodeToString(challenge), strconv.Itoa(iterations))
 	stdout, _ := cmd.StdoutPipe() // 创建输出管道
 	defer closeStdoutPipe(stdout)
 
 	if err := cmd.Start(); err != nil {
-		fmt.Printf("cmd.Start: %v\n", err)
+		return nil, err
 	}
 
 	// set pid
@@ -82,7 +82,7 @@ func ExecWesolowskiVDFAffinity(challenge []byte, iterations int, ctrl *Controlle
 	// open handle
 	handle, err := syscall.OpenProcess(PROCESS_SET_INFORMATION|PROCESS_QUERY_INFORMATION, false, uint32(ctrl.Pid))
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 	handleForWin := windows.Handle(handle)
 
@@ -90,34 +90,34 @@ func ExecWesolowskiVDFAffinity(challenge []byte, iterations int, ctrl *Controlle
 	err = SetProcessAffinityMask(handleForWin, 1<<ctrl.CpuNo)
 	if err != nil {
 		fmt.Println(err)
-		return nil
+		return nil, err
 	}
 	// set priority
 	err = windows.SetPriorityClass(handleForWin, windows.HIGH_PRIORITY_CLASS)
 	if err != nil {
 		fmt.Println(err)
-		return nil
+		return nil, err
 	}
 	// 关闭句柄
 	err = syscall.CloseHandle(handle)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 
 	output, err := io.ReadAll(stdout) // 读取输出结果
 	if err != nil {
-		return nil
+		return nil, err
 	}
-	return output
+	return output, nil
 }
 
-func ExecPietrzakVDFAffinity(challenge []byte, iterations int, ctrl *Controller) []byte {
+func ExecPietrzakVDFAffinity(challenge []byte, iterations int, ctrl *Controller) ([]byte, error) {
 	cmd := exec.Command(FilePath, "-tpietrzak", hex.EncodeToString(challenge), strconv.Itoa(iterations))
 	stdout, _ := cmd.StdoutPipe() // 创建输出管道
 	defer closeStdoutPipe(stdout)
 
 	if err := cmd.Start(); err != nil {
-		fmt.Printf("cmd.Start: %v\n", err)
+		return nil, err
 	}
 
 	// set pid
@@ -126,7 +126,7 @@ func ExecPietrzakVDFAffinity(challenge []byte, iterations int, ctrl *Controller)
 	// open handle
 	handle, err := syscall.OpenProcess(PROCESS_SET_INFORMATION|PROCESS_QUERY_INFORMATION, false, uint32(ctrl.Pid))
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 	handleForWin := windows.Handle(handle)
 
@@ -134,33 +134,35 @@ func ExecPietrzakVDFAffinity(challenge []byte, iterations int, ctrl *Controller)
 	err = SetProcessAffinityMask(handleForWin, 1<<ctrl.CpuNo)
 	if err != nil {
 		fmt.Println(err)
-		return nil
+		return nil, err
 	}
 	// set priority
 	err = windows.SetPriorityClass(handleForWin, windows.HIGH_PRIORITY_CLASS)
 	if err != nil {
 		fmt.Println(err)
-		return nil
+		return nil, err
 	}
 	// 关闭句柄
 	err = syscall.CloseHandle(handle)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 
 	output, err := io.ReadAll(stdout) // 读取输出结果
 	if err != nil {
-		return nil
+		return nil, err
 	}
-	return output
+	return output, nil
 }
 
-func KillProc(pid int) {
+func KillProc(pid int) error {
 	command := fmt.Sprintf("taskkill /f /pid %s", strconv.Itoa(pid))
 	taskkillCmd := exec.Command("cmd", "/C", command)
 	err := taskkillCmd.Run()
 	if err != nil {
 		fmt.Println("杀死进程失败:", err)
 		// os.Exit(1)
+		return err
 	}
+	return nil
 }

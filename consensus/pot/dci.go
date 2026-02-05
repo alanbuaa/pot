@@ -1104,8 +1104,15 @@ func (w *Worker) CheckTxWithBlock(rawtx *types.RawTx, block *types.Block) (bool,
 			coinbaseproofs := make([]types.CoinbaseProof, len(rawtx.CoinbaseProofs))
 			if len(coinbaseproofs) != 0 {
 				copy(coinbaseproofs, rawtx.CoinbaseProofs)
+				rewardedB := tx.Bucket([]byte(types.RewardedBucket))
 				notdrawProof := make(map[int32][]*types.CoinbaseProof)
 				for _, coinbaseproof := range coinbaseproofs {
+					if len(coinbaseproof.TxHash) > 0 {
+						if rewardedB != nil && rewardedB.Get(coinbaseproof.TxHash) != nil {
+							return fmt.Errorf("BCI reward for tx %s has already been issued", hexutil.Encode(coinbaseproof.TxHash))
+						}
+					}
+
 					if !coinbaseproof.DoDraw {
 						if flag, err := w.CheckNotDrawCoinbaseProof(&coinbaseproof); !flag {
 							return err

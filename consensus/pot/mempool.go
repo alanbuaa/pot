@@ -61,6 +61,7 @@ func ToBciReward(proof *pb.BciReward) *BciReward {
 		Address: proof.GetAddress(),
 		Amount:  proof.GetAmount(),
 		BciType: proof.GetBciType(),
+		DoDraw:  proof.GetDoDraw(),
 		Proof: BciProof{
 			Height:    proof.GetBciProof().GetHeight(),
 			BlockHash: proof.GetBciProof().GetBlockHash(),

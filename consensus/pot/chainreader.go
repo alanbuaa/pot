@@ -316,8 +316,22 @@ func (c *ChainReader) ResetTxForBlock(block *types.Block, tx *bolt.Tx) error {
 
 	resetFunc := func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(types.UTXOBucket))
+		rewardedB := tx.Bucket([]byte(types.RewardedBucket))
 
 		for _, rawTx := range txs {
+			if rawTx.IsCoinBase() {
+				// Rollback rewarded status
+				for _, proof := range rawTx.CoinbaseProofs {
+					if len(proof.TxHash) > 0 {
+						if rewardedB != nil {
+							err := rewardedB.Delete(proof.TxHash)
+							if err != nil {
+								return err
+							}
+						}
+					}
+				}
+			}
 
 			// delete txoutput of the rawtx
 			for i, output := range rawTx.TxOutput {
@@ -516,7 +530,22 @@ func (c *ChainReader) UpdateTxForBlock(block *types.Block, tx *bolt.Tx) error {
 
 	updateFunc := func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(types.UTXOBucket))
+		rewardedB := tx.Bucket([]byte(types.RewardedBucket))
 		for _, rawTx := range txs {
+			if rawTx.IsCoinBase() {
+				// Record issued BCI rewards
+				for _, proof := range rawTx.CoinbaseProofs {
+					if len(proof.TxHash) > 0 {
+						if rewardedB != nil {
+							err := rewardedB.Put(proof.TxHash, []byte{1})
+							if err != nil {
+								return err
+							}
+						}
+					}
+				}
+			}
+
 			if !rawTx.IsCoinBase() {
 				for _, input := range rawTx.TxInput {
 					// find if there is corresponding utxo in the utxo
