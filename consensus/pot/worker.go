@@ -46,6 +46,13 @@ const (
 	ConfirmDelay       = 6
 	CandidateKeyLen    = 32 // candidate pubkey len
 	Commitees          = 4  // commitee len
+
+	// Scaling states
+	ScalingNone       = 0
+	ScalingWaiting    = 1
+	ScalingFilling    = 2
+	ScalingWorking    = 3
+	ScalingWaitRounds = 10
 )
 
 type Worker struct {
@@ -106,6 +113,16 @@ type Worker struct {
 	SelfAddress    []string
 	Cryptoset      *CryptoSet
 	//committee     *orderedmap.OrderedMap
+
+	// Scaling state
+	ScalingState             int
+	ScalingTarget            int
+	ScalingStartHeight       uint64
+	NewMembersBuffer         []string
+	FrozenCommittees         [][]string
+	CurrentPartitionNum      int
+	UpdateIndex              int
+	CommitteeMemberOwnership map[string]bool
 }
 
 func NewWorker(id int64, config *config.ConsensusConfig, logger *logrus.Entry, bst *types.BlockStorage, engine *PoTEngine) *Worker {
@@ -184,6 +201,12 @@ func NewWorker(id int64, config *config.ConsensusConfig, logger *logrus.Entry, b
 		BackupCommitee:  BackupCommitee,
 		chainresetflag:  false,
 		keyseed:         randseed,
+
+		// Init scaling state
+		ScalingState:             ScalingNone,
+		CurrentPartitionNum:      2, // Default 2 partitions
+		UpdateIndex:              0,
+		CommitteeMemberOwnership: make(map[string]bool),
 	}
 	fill, err := os.OpenFile("bci", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
 	if err != nil {
@@ -1420,4 +1443,26 @@ func (w *Worker) stop() {
 	fill.Close()
 	w.rpcserver.Stop()
 	w.listener.Close()
+}
+
+func (w *Worker) TriggerScaling(targetPartitions int) {
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
+
+	if w.ScalingState != ScalingNone {
+		w.log.Warnf("[PoT] Scaling already in progress")
+		return
+	}
+	if targetPartitions <= w.CurrentPartitionNum {
+		w.log.Warnf("[PoT] Target partitions %d <= Current %d", targetPartitions, w.CurrentPartitionNum)
+		return
+	}
+
+	w.ScalingState = ScalingWaiting
+	w.ScalingTarget = targetPartitions
+	// We don't know the exact height here easily unless we pass it or read it,
+	// but CommitteeUpdate will handle the "Waiting" transition based on current height.
+	// Actually, we can just set a flag and let CommitteeUpdate set the StartHeight.
+	w.ScalingStartHeight = 0 // Will be set in CommitteeUpdate
+	w.log.Infof("[PoT] Scaling triggered: %d -> %d", w.CurrentPartitionNum, targetPartitions)
 }
