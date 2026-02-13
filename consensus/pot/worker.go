@@ -46,14 +46,23 @@ const (
 	ConfirmDelay       = 6
 	CandidateKeyLen    = 32 // candidate pubkey len
 	Commitees          = 4  // commitee len
-
-	// Scaling states
-	ScalingNone       = 0
-	ScalingWaiting    = 1
-	ScalingFilling    = 2
-	ScalingWorking    = 3
-	ScalingWaitRounds = 10
 )
+
+type ScalingState int
+
+const (
+	StateNormal ScalingState = iota
+	StateFilling
+	StateTrial
+)
+
+type ScalingInfo struct {
+	State             ScalingState
+	NewPartitionID    string
+	TargetPartitionID string
+	TrialDuration     int64
+	TrialStartEpoch   uint64
+}
 
 type Worker struct {
 	// basic info
@@ -114,15 +123,11 @@ type Worker struct {
 	Cryptoset      *CryptoSet
 	//committee     *orderedmap.OrderedMap
 
-	// Scaling state
-	ScalingState             int
-	ScalingTarget            int
-	ScalingStartHeight       uint64
-	NewMembersBuffer         []string
-	FrozenCommittees         [][]string
-	CurrentPartitionNum      int
-	UpdateIndex              int
-	CommitteeMemberOwnership map[string]bool
+	// Scaling related
+	PartitionMap       map[string][]uint64
+	PartitionIDs       []string
+	NextPartitionIndex int
+	ScalingInfo        *ScalingInfo
 }
 
 func NewWorker(id int64, config *config.ConsensusConfig, logger *logrus.Entry, bst *types.BlockStorage, engine *PoTEngine) *Worker {
@@ -157,6 +162,15 @@ func NewWorker(id int64, config *config.ConsensusConfig, logger *logrus.Entry, b
 	Commitee := make([][]string, 0)
 	BackupCommitee := make([]string, BackupCommiteeSize)
 
+	// Initialize Partitions
+	partitionMap := make(map[string][]uint64)
+	// Default partitions 1 and 2
+	p1 := hexutil.EncodeUint64(1)
+	p2 := hexutil.EncodeUint64(2)
+	partitionMap[p1] = make([]uint64, 0)
+	partitionMap[p2] = make([]uint64, 0)
+	partitionIDs := []string{p1, p2}
+
 	aborts := &Abortcontrol{
 		abortchannel: make(chan struct{}),
 		once:         new(sync.Once),
@@ -190,23 +204,23 @@ func NewWorker(id int64, config *config.ConsensusConfig, logger *logrus.Entry, b
 		mempool:      mempool,
 		blockStorage: bst,
 		//committee:    orderedmap.NewOrderedMap(),
-		vdfChecker:      vdf.New("wesolowski_rust", []byte(""), potconfig.Vdf0Iteration, id),
-		chainReader:     NewChainReader(bst),
-		PeerId:          engine.GetPeerID(),
-		workFlag:        false,
-		blockKeyMap:     keyblockmap,
-		CommitteeKeyMap: commiteemap,
-		Commitee:        Commitee,
-		CommiteeNum:     int32(1),
-		BackupCommitee:  BackupCommitee,
-		chainresetflag:  false,
-		keyseed:         randseed,
-
-		// Init scaling state
-		ScalingState:             ScalingNone,
-		CurrentPartitionNum:      2, // Default 2 partitions
-		UpdateIndex:              0,
-		CommitteeMemberOwnership: make(map[string]bool),
+		vdfChecker:         vdf.New("wesolowski_rust", []byte(""), potconfig.Vdf0Iteration, id),
+		chainReader:        NewChainReader(bst),
+		PeerId:             engine.GetPeerID(),
+		workFlag:           false,
+		blockKeyMap:        keyblockmap,
+		CommitteeKeyMap:    commiteemap,
+		Commitee:           Commitee,
+		CommiteeNum:        int32(1),
+		BackupCommitee:     BackupCommitee,
+		chainresetflag:     false,
+		keyseed:            randseed,
+		PartitionMap:       partitionMap,
+		PartitionIDs:       partitionIDs,
+		NextPartitionIndex: 0,
+		ScalingInfo: &ScalingInfo{
+			State: StateNormal,
+		},
 	}
 	fill, err := os.OpenFile("bci", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
 	if err != nil {
@@ -378,6 +392,9 @@ func (w *Worker) OnGetVdf0Response() {
 		// 	w.simpleLeaderUpdate(parentblock)
 		// }
 
+		if parentblock != nil {
+			w.ApplyBlockToPartitionState(parentblock.GetHeader())
+		}
 		w.CommitteeUpdate(epoch)
 		difficulty := w.calcDifficulty(parentblock, uncleblock)
 		w.startWorking()
@@ -1443,26 +1460,4 @@ func (w *Worker) stop() {
 	fill.Close()
 	w.rpcserver.Stop()
 	w.listener.Close()
-}
-
-func (w *Worker) TriggerScaling(targetPartitions int) {
-	w.mutex.Lock()
-	defer w.mutex.Unlock()
-
-	if w.ScalingState != ScalingNone {
-		w.log.Warnf("[PoT] Scaling already in progress")
-		return
-	}
-	if targetPartitions <= w.CurrentPartitionNum {
-		w.log.Warnf("[PoT] Target partitions %d <= Current %d", targetPartitions, w.CurrentPartitionNum)
-		return
-	}
-
-	w.ScalingState = ScalingWaiting
-	w.ScalingTarget = targetPartitions
-	// We don't know the exact height here easily unless we pass it or read it,
-	// but CommitteeUpdate will handle the "Waiting" transition based on current height.
-	// Actually, we can just set a flag and let CommitteeUpdate set the StartHeight.
-	w.ScalingStartHeight = 0 // Will be set in CommitteeUpdate
-	w.log.Infof("[PoT] Scaling triggered: %d -> %d", w.CurrentPartitionNum, targetPartitions)
 }

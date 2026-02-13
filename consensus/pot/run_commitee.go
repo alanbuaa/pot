@@ -121,132 +121,34 @@ func (w *Worker) CommitteeUpdate(height uint64) {
 		return
 	}
 
-	// Get latest candidate key
-	latestCandidateBlock, err := w.chainReader.GetByHeight(height - CommiteeDelay)
-	if err != nil || latestCandidateBlock == nil {
-		return
-	}
-	latestKey := hexutil.Encode(latestCandidateBlock.GetHeader().CommiteePubkey)
-
 	w.mutex.Lock()
-	// Update ownership map for the new key
-	flag, _ := w.TryFindCommiteeKey(crypto.Convert(latestCandidateBlock.GetHeader().Hash()))
-	w.CommitteeMemberOwnership[latestKey] = flag
-
-	// Initialize partitions if needed (Legacy / First Run)
-	if len(w.Commitee) == 0 {
-		w.Commitee = make([][]string, w.CurrentPartitionNum)
-		initialCommittee := make([]string, Commiteelen)
-		for i := uint64(0); i < Commiteelen; i++ {
-			b, _ := w.chainReader.GetByHeight(height - CommiteeDelay - i)
-			if b != nil {
-				key := hexutil.Encode(b.GetHeader().CommiteePubkey)
-				initialCommittee[i] = key
-				f, _ := w.TryFindCommiteeKey(crypto.Convert(b.GetHeader().Hash()))
-				w.CommitteeMemberOwnership[key] = f
+	activeIDs := make([]string, len(w.PartitionIDs))
+	copy(activeIDs, w.PartitionIDs)
+	if w.ScalingInfo.State == StateFilling || w.ScalingInfo.State == StateTrial {
+		found := false
+		for _, id := range activeIDs {
+			if id == w.ScalingInfo.NewPartitionID {
+				found = true
+				break
 			}
 		}
-		for i := 0; i < w.CurrentPartitionNum; i++ {
-			w.Commitee[i] = make([]string, Commiteelen)
-			copy(w.Commitee[i], initialCommittee)
+		if !found {
+			activeIDs = append(activeIDs, w.ScalingInfo.NewPartitionID)
 		}
 	}
 
-	// State Machine
-	switch w.ScalingState {
-	case ScalingNone:
-		// Default behavior: Sliding window for all partitions
-		currentCommittee := make([]string, Commiteelen)
-		for i := uint64(0); i < Commiteelen; i++ {
-			b, _ := w.chainReader.GetByHeight(height - CommiteeDelay - i)
-			if b != nil {
-				key := hexutil.Encode(b.GetHeader().CommiteePubkey)
-				currentCommittee[i] = key
-				// Ensure map is updated (though likely already done in previous rounds)
-				f, _ := w.TryFindCommiteeKey(crypto.Convert(b.GetHeader().Hash()))
-				w.CommitteeMemberOwnership[key] = f
-			}
-		}
-		for i := 0; i < w.CurrentPartitionNum; i++ {
-			w.Commitee[i] = currentCommittee
-		}
-
-	case ScalingWaiting:
-		if w.ScalingStartHeight == 0 {
-			w.ScalingStartHeight = height
-		}
-		if height-w.ScalingStartHeight >= ScalingWaitRounds {
-			w.ScalingState = ScalingFilling
-			w.log.Infof("[PoT] Scaling: Entered Filling State")
-
-			// Freeze current committees
-			w.FrozenCommittees = make([][]string, len(w.Commitee))
-			for i, c := range w.Commitee {
-				w.FrozenCommittees[i] = make([]string, len(c))
-				copy(w.FrozenCommittees[i], c)
-			}
-			w.NewMembersBuffer = make([]string, 0)
-		} else {
-			// Still update as usual
-			currentCommittee := make([]string, Commiteelen)
-			for i := uint64(0); i < Commiteelen; i++ {
-				b, _ := w.chainReader.GetByHeight(height - CommiteeDelay - i)
-				if b != nil {
-					key := hexutil.Encode(b.GetHeader().CommiteePubkey)
-					currentCommittee[i] = key
-					f, _ := w.TryFindCommiteeKey(crypto.Convert(b.GetHeader().Hash()))
-					w.CommitteeMemberOwnership[key] = f
-				}
-			}
-			for i := 0; i < w.CurrentPartitionNum; i++ {
-				w.Commitee[i] = currentCommittee
-			}
-		}
-
-	case ScalingFilling:
-		// Use Frozen committees for existing partitions
-		for i := 0; i < w.CurrentPartitionNum; i++ {
-			w.Commitee[i] = w.FrozenCommittees[i]
-		}
-
-		// Accumulate new key
-		w.NewMembersBuffer = append(w.NewMembersBuffer, latestKey)
-
-		needed := (w.ScalingTarget - w.CurrentPartitionNum) * int(Commiteelen)
-		if len(w.NewMembersBuffer) >= needed {
-			w.log.Infof("[PoT] Scaling: Filling Complete. Starting Work.")
-
-			// Create new partitions
-			newPartitionsCount := w.ScalingTarget - w.CurrentPartitionNum
-			for i := 0; i < newPartitionsCount; i++ {
-				start := i * int(Commiteelen)
-				end := start + int(Commiteelen)
-				newComm := make([]string, Commiteelen)
-				copy(newComm, w.NewMembersBuffer[start:end])
-				w.Commitee = append(w.Commitee, newComm)
-			}
-
-			w.CurrentPartitionNum = w.ScalingTarget
-			w.ScalingState = ScalingWorking
-			w.UpdateIndex = 0
-			w.FrozenCommittees = nil
-			w.NewMembersBuffer = nil
-		}
-
-	case ScalingWorking:
-		// Sequential Update
-		// Shift left: [0, 1, 2, 3] -> [1, 2, 3, new]
-		targetPartition := w.Commitee[w.UpdateIndex]
-		copy(targetPartition[0:], targetPartition[1:])
-		targetPartition[Commiteelen-1] = latestKey
-		w.Commitee[w.UpdateIndex] = targetPartition
-
-		// Move to next partition for next round
-		w.UpdateIndex = (w.UpdateIndex + 1) % w.CurrentPartitionNum
+	// Copy the members heights for these partitions
+	snapshot := make(map[string][]uint64)
+	for _, pid := range activeIDs {
+		src := w.PartitionMap[pid]
+		dst := make([]uint64, len(src))
+		copy(dst, src)
+		snapshot[pid] = dst
 	}
+	w.mutex.Unlock()
 
-	// Construct Signal
-	shardings := make([]nodeController.PoTSharding, w.CurrentPartitionNum)
+	var shardings []nodeController.PoTSharding
+	selfaddress := make([]string, 0)
 
 	whilyConsensus := &config.WhirlyConfig{
 		Type:      "simple",
@@ -263,27 +165,51 @@ func (w *Worker) CommitteeUpdate(height uint64) {
 		F:           w.config.F,
 	}
 
-	selfaddress := make([]string, 0)
+	for _, pid := range activeIDs {
+		memberHeights := snapshot[pid]
+		if len(memberHeights) == 0 {
+			continue
+		}
 
-	for i := 0; i < w.CurrentPartitionNum; i++ {
-		committee := w.Commitee[i]
+		committee := make([]string, 0)
+		for _, h := range memberHeights {
+			block, err := w.chainReader.GetByHeight(h)
+			if err != nil || block == nil {
+				w.log.Errorf("Failed to get block for committee member at height %d", h)
+				continue
+			}
+			header := block.GetHeader()
+			committee = append(committee, hexutil.Encode(header.CommiteePubkey))
 
-		// Check for self address
-		for _, member := range committee {
-			if w.CommitteeMemberOwnership[member] {
-				selfaddress = append(selfaddress, member)
+			flag, _ := w.TryFindCommiteeKey(crypto.Convert(header.Hash()))
+			if flag {
+				pub := hexutil.Encode(header.CommiteePubkey)
+				found := false
+				for _, s := range selfaddress {
+					if s == pub {
+						found = true
+						break
+					}
+				}
+				if !found {
+					selfaddress = append(selfaddress, pub)
+				}
 			}
 		}
 
-		shardings[i] = nodeController.PoTSharding{
-			Name:                hexutil.EncodeUint64(uint64(i + 1)),
+		if len(committee) == 0 {
+			continue
+		}
+
+		sharding := nodeController.PoTSharding{
+			Name:                pid,
 			ParentSharding:      nil,
 			LeaderPublicAddress: committee[0],
 			Committee:           committee,
 			SubConsensus:        consensus,
 		}
+		shardings = append(shardings, sharding)
 	}
-	w.mutex.Unlock()
 
 	potsignal := &nodeController.PoTSignal{
 		Epoch:             int64(height),
@@ -319,14 +245,65 @@ func (w *Worker) CommitteeUpdate(height uint64) {
 			fill.WriteString(fmt.Sprintf("[%d]%s\n", epoch, hexutil.Encode(header.Hash())))
 			fill.WriteString(fmt.Sprintf("[%d]%s\n", epoch, hexutil.Encode(coinbasetx.Txid[:])))
 			fill.WriteString(fmt.Sprintf("[%d]%s\n", epoch, hexutil.Encode(coinbasetx.TxOutput[0].Address)))
-			// test, _ := hexutil.Decode(hexutil.Encode(coinbasetx.TxOutput[0].Address))
-			// fmt.Println(bytes.Equal(test, coinbasetx.TxOutput[0].Address))
 			fill.WriteString(fmt.Sprintf("[%d]%s\n", epoch, hexutil.EncodeBig(big.NewInt(coinbasetx.TxOutput[0].Value))))
 			fill.WriteString(fmt.Sprintf("\n"))
 		}
 
 		fill.Close()
 	}
+}
+
+func (w *Worker) ApplyBlockToPartitionState(header *types.Header) {
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
+
+	// Check if header has committee info
+	if len(header.CommiteePubkey) == 0 {
+		return
+	}
+
+	switch w.ScalingInfo.State {
+	case StateNormal:
+		// Round-robin allocation
+		if len(w.PartitionIDs) == 0 {
+			return
+		}
+		targetPID := w.PartitionIDs[w.NextPartitionIndex]
+		w.addMemberToPartition(targetPID, header.Height)
+		w.NextPartitionIndex = (w.NextPartitionIndex + 1) % len(w.PartitionIDs)
+
+	case StateFilling:
+		// Fill new partition only
+		w.addMemberToPartition(w.ScalingInfo.NewPartitionID, header.Height)
+		// Check if full
+		if len(w.PartitionMap[w.ScalingInfo.NewPartitionID]) >= Commiteelen {
+			w.ScalingInfo.State = StateTrial
+			w.ScalingInfo.TrialStartEpoch = header.Height
+			w.log.Infof("[PoT] Scaling: Partition %s full, entering Trial state at epoch %d", w.ScalingInfo.NewPartitionID, header.Height)
+		}
+
+	case StateTrial:
+		// During trial, continue round-robin for OLD partitions
+		targetPID := w.PartitionIDs[w.NextPartitionIndex]
+		w.addMemberToPartition(targetPID, header.Height)
+		w.NextPartitionIndex = (w.NextPartitionIndex + 1) % len(w.PartitionIDs)
+
+		// Check if trial is over
+		if header.Height-w.ScalingInfo.TrialStartEpoch >= uint64(w.ScalingInfo.TrialDuration) {
+			w.ScalingInfo.State = StateNormal
+			w.PartitionIDs = append(w.PartitionIDs, w.ScalingInfo.NewPartitionID)
+			w.log.Infof("[PoT] Scaling: Trial ended at epoch %d, Partition %s added to rotation", header.Height, w.ScalingInfo.NewPartitionID)
+		}
+	}
+}
+
+func (w *Worker) addMemberToPartition(pid string, height uint64) {
+	members := w.PartitionMap[pid]
+	members = append(members, height)
+	if len(members) > Commiteelen {
+		members = members[1:] // Remove oldest
+	}
+	w.PartitionMap[pid] = members
 }
 
 type queue = list.List
@@ -498,7 +475,7 @@ func inWorkStage(height uint64) bool {
 // 					}
 // 				}
 // 			}
-//
+
 // 		}
 // 	}
 // 	// 委员会更新阶段

@@ -116,6 +116,7 @@ func (e *PoTEngine) restart() {
 		parent, _ := e.worker.blockSelection(blocks, res0, i)
 
 		e.worker.handleBlockExecutedHeader(parent)
+		e.worker.ApplyBlockToPartitionState(parent.GetHeader())
 		err = e.worker.handleBlockRawTx(parent)
 		if err != nil {
 			panic(err)
