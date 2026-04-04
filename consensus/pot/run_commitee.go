@@ -253,6 +253,20 @@ func (w *Worker) CommitteeUpdate(height uint64) {
 	}
 }
 
+func (w *Worker) TriggerScaling(startEpoch uint64, scalingDuration int64, trialDuration int64, sourcePartitionID string, newPartitionID string) {
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
+	w.ScalingInfo = &ScalingInfo{
+		State:             StateNormal,
+		NewPartitionID:    newPartitionID,
+		SourcePartitionID: sourcePartitionID,
+		TrialDuration:     trialDuration,
+		StartEpoch:        startEpoch,
+		ScalingDuration:   scalingDuration,
+	}
+	w.log.Infof("[PoT] Scaling triggered: StartEpoch=%d, Source=%s, New=%s", startEpoch, sourcePartitionID, newPartitionID)
+}
+
 func (w *Worker) ApplyBlockToPartitionState(header *types.Header) {
 	w.mutex.Lock()
 	defer w.mutex.Unlock()
@@ -260,6 +274,14 @@ func (w *Worker) ApplyBlockToPartitionState(header *types.Header) {
 	// Check if header has committee info
 	if len(header.CommiteePubkey) == 0 {
 		return
+	}
+
+	// Check for start scaling
+	if w.ScalingInfo.State == StateNormal && w.ScalingInfo.StartEpoch > 0 && header.Height >= w.ScalingInfo.StartEpoch {
+		if w.ScalingInfo.NewPartitionID != "" {
+			w.ScalingInfo.State = StateFilling
+			w.log.Infof("[PoT] Scaling started at epoch %d", header.Height)
+		}
 	}
 
 	switch w.ScalingInfo.State {
@@ -283,16 +305,29 @@ func (w *Worker) ApplyBlockToPartitionState(header *types.Header) {
 		}
 
 	case StateTrial:
-		// During trial, continue round-robin for OLD partitions
-		targetPID := w.PartitionIDs[w.NextPartitionIndex]
+		// During trial, rotate through OLD partitions AND the NEW partition
+		totalPartitions := len(w.PartitionIDs) + 1
+		var targetPID string
+
+		if w.NextPartitionIndex < len(w.PartitionIDs) {
+			targetPID = w.PartitionIDs[w.NextPartitionIndex]
+		} else {
+			targetPID = w.ScalingInfo.NewPartitionID
+		}
+
 		w.addMemberToPartition(targetPID, header.Height)
-		w.NextPartitionIndex = (w.NextPartitionIndex + 1) % len(w.PartitionIDs)
+		w.NextPartitionIndex = (w.NextPartitionIndex + 1) % totalPartitions
 
 		// Check if trial is over
 		if header.Height-w.ScalingInfo.TrialStartEpoch >= uint64(w.ScalingInfo.TrialDuration) {
 			w.ScalingInfo.State = StateNormal
 			w.PartitionIDs = append(w.PartitionIDs, w.ScalingInfo.NewPartitionID)
-			w.log.Infof("[PoT] Scaling: Trial ended at epoch %d, Partition %s added to rotation", header.Height, w.ScalingInfo.NewPartitionID)
+
+			// Clear scaling info to prevent re-triggering
+			w.ScalingInfo.NewPartitionID = ""
+			w.ScalingInfo.StartEpoch = 0
+
+			w.log.Infof("[PoT] Scaling: Trial ended at epoch %d, Partition %s added to rotation", header.Height, targetPID)
 		}
 	}
 }

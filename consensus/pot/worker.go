@@ -62,6 +62,9 @@ type ScalingInfo struct {
 	TargetPartitionID string
 	TrialDuration     int64
 	TrialStartEpoch   uint64
+	StartEpoch        uint64
+	ScalingDuration   int64
+	SourcePartitionID string
 }
 
 type Worker struct {
