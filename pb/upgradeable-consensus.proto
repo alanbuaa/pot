@@ -29,13 +29,22 @@ enum TransactionType{
   CENSORSHIP_RESISTANT = 4;
 }
 
+enum TransactionClass {
+  TRANSACTION_CLASS_NORMAL = 0;
+  TRANSACTION_CLASS_GOVERNANCE = 1;
+  TRANSACTION_CLASS_CONSENSUS = 2;
+}
+
+
 message Transaction {
   TransactionType type = 1;
 
   bytes payload = 2;
   int32 chainID = 3;
+  TransactionClass txClass = 4;
 }
 
 service P2P {
   rpc Send(Packet) returns (Empty) {}
 }
+
