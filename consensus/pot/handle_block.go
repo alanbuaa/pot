@@ -187,6 +187,21 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 				return err
 			}
 
+			// Checkpoint hook: compare implicit checkpoints carried by the current branch and
+			// the fork branch before falling back to weight-based fork choice.
+			checkpointDecision, err := w.checkImplicitCheckpointOrder(nowBranch, forkBranch)
+			if err != nil {
+				return err
+			}
+			forceAdoptFork := checkpointDecision == checkpointDecisionRejectCurrent
+			if checkpointDecision == checkpointDecisionRejectFork {
+				w.log.Infof("[PoT]\tthe fork chain is rejected by implicit checkpoint validation")
+				return nil
+			}
+			if forceAdoptFork {
+				w.log.Infof("[PoT]\tthe current chain is rejected by implicit checkpoint validation")
+			}
+
 			for i := 0; i < len(nowBranch); i++ {
 				w.log.Errorf("[PoT]\tthe nowBranch at height %d: %s", nowBranch[i].GetHeader().Height, hexutil.Encode(nowBranch[i].Hash()))
 			}
@@ -198,7 +213,7 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 			w2 := w.calculateChainWeight(ances, block)
 			w.log.Infof("[PoT]\tthe chain weight %d, the fork chain weight %d", w1.Int64(), w2.Int64())
 
-			if w1.Int64() > w2.Int64() {
+			if !forceAdoptFork && w1.Int64() > w2.Int64() {
 				w.log.Infof("[PoT]\tthe fork chain weight less than current chain not to change")
 				return nil
 			}
@@ -320,10 +335,31 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 		return err
 	}
 
+	// Checkpoint hook: compare implicit checkpoints carried by the current branch and
+	// the fork branch before falling back to weight-based fork choice.
+	checkpointDecision, err := w.checkImplicitCheckpointOrder(nowbranch, branch)
+	if err != nil {
+		doonce.Do(func() {
+			close(done)
+		})
+		return err
+	}
+	forceAdoptFork := checkpointDecision == checkpointDecisionRejectCurrent
+	if checkpointDecision == checkpointDecisionRejectFork {
+		w.log.Infof("[PoT]\tthe fork chain is rejected by implicit checkpoint validation")
+		doonce.Do(func() {
+			close(done)
+		})
+		return fmt.Errorf("the fork chain is rejected by implicit checkpoint validation")
+	}
+	if forceAdoptFork {
+		w.log.Infof("[PoT]\tthe current chain is rejected by implicit checkpoint validation")
+	}
+
 	weightnow := w.calculateChainWeight(ances, current)
 	weightadvanced := w.calculateChainWeight(ances, block)
 
-	if weightnow.Cmp(weightadvanced) > 0 {
+	if !forceAdoptFork && weightnow.Cmp(weightadvanced) > 0 {
 		w.log.Infof("[PoT]\tthe current chain weight %d is greater than the fork chain weight %d", weightnow.Int64(), weightadvanced.Int64())
 		doonce.Do(func() {
 			close(done)
@@ -702,4 +738,61 @@ func (w *Worker) handleForkTx(current []*types.Block, fork []*types.Block) (bool
 	}
 
 	return true, nil
+}
+
+type implicitCheckpoint struct {
+	Height    uint64
+	BlockHash []byte
+}
+
+type checkpointBranchDecision int
+
+const (
+	checkpointDecisionNoPreference checkpointBranchDecision = iota
+	checkpointDecisionRejectCurrent
+	checkpointDecisionRejectFork
+)
+
+func (w *Worker) checkImplicitCheckpointOrder(nowBranch, forkBranch []*types.Block) (checkpointBranchDecision, error) {
+	nowCheckpoints, err := w.collectImplicitCheckpoints(nowBranch)
+	if err != nil {
+		return checkpointDecisionNoPreference, err
+	}
+
+	forkCheckpoints, err := w.collectImplicitCheckpoints(forkBranch)
+	if err != nil {
+		return checkpointDecisionNoPreference, err
+	}
+
+	return w.compareImplicitCheckpoints(nowCheckpoints, forkCheckpoints)
+}
+
+func (w *Worker) collectImplicitCheckpoints(branch []*types.Block) ([]*implicitCheckpoint, error) {
+	checkpoints := make([]*implicitCheckpoint, 0)
+	for _, block := range branch {
+		if block == nil || block.GetHeader() == nil {
+			return nil, fmt.Errorf("branch contains nil block when collecting implicit checkpoints")
+		}
+
+		// TODO: derive implicit checkpoints from transactions in the fork branch or
+		// from previous block history referenced by the current block.
+		_ = block.GetRawTx()
+	}
+	return checkpoints, nil
+}
+
+func (w *Worker) compareImplicitCheckpoints(nowCheckpoints, forkCheckpoints []*implicitCheckpoint) (checkpointBranchDecision, error) {
+	// TODO: implement the ordering comparison between implicit checkpoints on
+	// nowBranch and forkBranch.
+	//
+	// Expected behavior after the comparison logic is completed:
+	// 1. If all implicit checkpoints contained in forkBranch are determined to be
+	//    before the checkpoints on nowBranch, return checkpointDecisionRejectCurrent.
+	// 2. If the fork branch should be rejected by checkpoint order, return
+	//    checkpointDecisionRejectFork.
+	// 3. If checkpoint order does not make a decision, return
+	//    checkpointDecisionNoPreference and continue with the existing weight rule.
+	_ = nowCheckpoints
+	_ = forkCheckpoints
+	return checkpointDecisionNoPreference, nil
 }

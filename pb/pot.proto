@@ -189,6 +189,7 @@ service PoTExecutor {
   rpc   ExecuteTxs(ExecuteTxRequest) returns (ExecuteTxResponse){}
   rpc   VerifyIncensentive(IncensentiveVerifyRequest) returns (IncensentiveVerifyResponse){}
   rpc   GetIncentive(GetIncentiveRequest) returns (GetIncentiveResponse){}
+  rpc   GetCrosschainCheckpoint(GetCrosschainCheckpointRequest) returns (GetCrosschainCheckpointResponse){}
 }
 
 message GetTxRequest{
@@ -389,4 +390,23 @@ message GetPqcKeyResponse{
     bool Flag = 1;
     bytes SecretKey =2;
     bytes PublicKey =3;
+}
+
+message CrosschainCheckpoint{
+    string Chain = 1;
+    int64 ChainID = 2;
+    bytes TxHash = 3;
+    int64 BlockHeight = 4;
+    bytes BlockHash = 5;
+    int64 CurrentHeight = 6;
+    bytes CrosschainTxHash= 7;
+}
+
+message GetCrosschainCheckpointRequest{
+    
+}
+
+message GetCrosschainCheckpointResponse{
+    repeated CrosschainCheckpoint Checkpoints = 1;
+
 }

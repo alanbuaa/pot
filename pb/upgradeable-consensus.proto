@@ -38,7 +38,6 @@ enum TransactionClass {
 
 message Transaction {
   TransactionType type = 1;
-
   bytes payload = 2;
   int32 chainID = 3;
   TransactionClass txClass = 4;

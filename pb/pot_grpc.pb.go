@@ -19,11 +19,12 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	PoTExecutor_GetTxs_FullMethodName             = "/pb.PoTExecutor/GetTxs"
-	PoTExecutor_VerifyTxs_FullMethodName          = "/pb.PoTExecutor/VerifyTxs"
-	PoTExecutor_ExecuteTxs_FullMethodName         = "/pb.PoTExecutor/ExecuteTxs"
-	PoTExecutor_VerifyIncensentive_FullMethodName = "/pb.PoTExecutor/VerifyIncensentive"
-	PoTExecutor_GetIncentive_FullMethodName       = "/pb.PoTExecutor/GetIncentive"
+	PoTExecutor_GetTxs_FullMethodName                  = "/pb.PoTExecutor/GetTxs"
+	PoTExecutor_VerifyTxs_FullMethodName               = "/pb.PoTExecutor/VerifyTxs"
+	PoTExecutor_ExecuteTxs_FullMethodName              = "/pb.PoTExecutor/ExecuteTxs"
+	PoTExecutor_VerifyIncensentive_FullMethodName      = "/pb.PoTExecutor/VerifyIncensentive"
+	PoTExecutor_GetIncentive_FullMethodName            = "/pb.PoTExecutor/GetIncentive"
+	PoTExecutor_GetCrosschainCheckpoint_FullMethodName = "/pb.PoTExecutor/GetCrosschainCheckpoint"
 )
 
 // PoTExecutorClient is the client API for PoTExecutor service.
@@ -35,6 +36,7 @@ type PoTExecutorClient interface {
 	ExecuteTxs(ctx context.Context, in *ExecuteTxRequest, opts ...grpc.CallOption) (*ExecuteTxResponse, error)
 	VerifyIncensentive(ctx context.Context, in *IncensentiveVerifyRequest, opts ...grpc.CallOption) (*IncensentiveVerifyResponse, error)
 	GetIncentive(ctx context.Context, in *GetIncentiveRequest, opts ...grpc.CallOption) (*GetIncentiveResponse, error)
+	GetCrosschainCheckpoint(ctx context.Context, in *GetCrosschainCheckpointRequest, opts ...grpc.CallOption) (*GetCrosschainCheckpointResponse, error)
 }
 
 type poTExecutorClient struct {
@@ -90,6 +92,15 @@ func (c *poTExecutorClient) GetIncentive(ctx context.Context, in *GetIncentiveRe
 	return out, nil
 }
 
+func (c *poTExecutorClient) GetCrosschainCheckpoint(ctx context.Context, in *GetCrosschainCheckpointRequest, opts ...grpc.CallOption) (*GetCrosschainCheckpointResponse, error) {
+	out := new(GetCrosschainCheckpointResponse)
+	err := c.cc.Invoke(ctx, PoTExecutor_GetCrosschainCheckpoint_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // PoTExecutorServer is the server API for PoTExecutor service.
 // All implementations should embed UnimplementedPoTExecutorServer
 // for forward compatibility
@@ -99,6 +110,7 @@ type PoTExecutorServer interface {
 	ExecuteTxs(context.Context, *ExecuteTxRequest) (*ExecuteTxResponse, error)
 	VerifyIncensentive(context.Context, *IncensentiveVerifyRequest) (*IncensentiveVerifyResponse, error)
 	GetIncentive(context.Context, *GetIncentiveRequest) (*GetIncentiveResponse, error)
+	GetCrosschainCheckpoint(context.Context, *GetCrosschainCheckpointRequest) (*GetCrosschainCheckpointResponse, error)
 }
 
 // UnimplementedPoTExecutorServer should be embedded to have forward compatible implementations.
@@ -119,6 +131,9 @@ func (UnimplementedPoTExecutorServer) VerifyIncensentive(context.Context, *Incen
 }
 func (UnimplementedPoTExecutorServer) GetIncentive(context.Context, *GetIncentiveRequest) (*GetIncentiveResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetIncentive not implemented")
+}
+func (UnimplementedPoTExecutorServer) GetCrosschainCheckpoint(context.Context, *GetCrosschainCheckpointRequest) (*GetCrosschainCheckpointResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetCrosschainCheckpoint not implemented")
 }
 
 // UnsafePoTExecutorServer may be embedded to opt out of forward compatibility for this service.
@@ -222,6 +237,24 @@ func _PoTExecutor_GetIncentive_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PoTExecutor_GetCrosschainCheckpoint_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetCrosschainCheckpointRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PoTExecutorServer).GetCrosschainCheckpoint(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PoTExecutor_GetCrosschainCheckpoint_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PoTExecutorServer).GetCrosschainCheckpoint(ctx, req.(*GetCrosschainCheckpointRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // PoTExecutor_ServiceDesc is the grpc.ServiceDesc for PoTExecutor service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -248,6 +281,10 @@ var PoTExecutor_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetIncentive",
 			Handler:    _PoTExecutor_GetIncentive_Handler,
+		},
+		{
+			MethodName: "GetCrosschainCheckpoint",
+			Handler:    _PoTExecutor_GetCrosschainCheckpoint_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
