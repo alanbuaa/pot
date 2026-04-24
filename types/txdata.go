@@ -48,12 +48,8 @@ func ToExecuteBlock(block *pb.ExecuteBlock) *ExecutedBlock {
 	}
 
 	return &ExecutedBlock{
-		Header: &ExecuteHeader{
-			Height:    block.GetHeader().GetHeight(),
-			BlockHash: block.GetHeader().GetBlockHash(),
-			TxsHash:   block.GetHeader().GetTxsHash(),
-		},
-		Txs: txs,
+		Header: ToExeHeader(block.GetHeader()),
+		Txs:    txs,
 	}
 }
 
@@ -62,16 +58,37 @@ func (e *ExecutedBlock) Hash() [crypto.Hashlen]byte {
 }
 
 type ExecuteHeader struct {
-	Height    uint64
-	BlockHash []byte
-	TxsHash   []byte
+	Height        uint64
+	BlockHash     []byte
+	ChainID       int64
+	TxsHash       []byte
+	CommitedTxNum uint64
+	ExecutedTxNum uint64
+	GasIncentive  uint64
+	PoSLeader     []byte
+	PoSVoteInfo   []byte
+	Checkpoints   []*CrosschainCheckpoint
 }
 
 func (e *ExecuteHeader) ToProto() *pb.ExecuteHeader {
+	pbCheckpoints := make([]*pb.CrosschainCheckpoint, 0, len(e.Checkpoints))
+	for _, checkpoint := range e.Checkpoints {
+		if checkpoint != nil {
+			pbCheckpoints = append(pbCheckpoints, checkpoint.ToProto())
+		}
+	}
+
 	return &pb.ExecuteHeader{
-		Height:    e.Height,
-		BlockHash: e.BlockHash,
-		TxsHash:   e.TxsHash,
+		Height:        e.Height,
+		BlockHash:     e.BlockHash,
+		ChainID:       e.ChainID,
+		TxsHash:       e.TxsHash,
+		CommitedTxNum: e.CommitedTxNum,
+		ExecutedTxNum: e.ExecutedTxNum,
+		GasIncentive:  e.GasIncentive,
+		PoSLeader:     e.PoSLeader,
+		PoSVoteInfo:   e.PoSVoteInfo,
+		Checkpoints:   pbCheckpoints,
 	}
 }
 

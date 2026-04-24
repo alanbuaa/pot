@@ -68,6 +68,8 @@ type ScalingInfo struct {
 }
 
 type Worker struct {
+	pb.UnimplementedBciExectorServer
+
 	// basic info
 	ID     int64
 	PeerId string
@@ -85,16 +87,17 @@ type Worker struct {
 	vdfhalf     *types.VDF
 	vdfhalfchan chan *types.VDF0res
 
-	vdfChecker      *vdf.Vdf
-	abort           *Abortcontrol
-	wg              *sync.WaitGroup
-	workFlag        bool
-	blockKeyMap     map[[crypto.Hashlen]byte][]byte
-	CommitteeKeyMap map[[crypto.Hashlen]byte][]byte
-	executeheight   uint64
-	incentiveheight uint64
-	mempool         *Mempool
-	chainresetflag  bool
+	vdfChecker       *vdf.Vdf
+	abort            *Abortcontrol
+	wg               *sync.WaitGroup
+	workFlag         bool
+	blockKeyMap      map[[crypto.Hashlen]byte][]byte
+	CommitteeKeyMap  map[[crypto.Hashlen]byte][]byte
+	executeheight    uint64
+	checkpointheight uint64
+	incentiveheight  uint64
+	mempool          *Mempool
+	chainresetflag   bool
 
 	// rand seed
 	rand         *rand.Rand
@@ -185,24 +188,25 @@ func NewWorker(id int64, config *config.ConsensusConfig, logger *logrus.Entry, b
 	}
 
 	w := &Worker{
-		abort:         aborts,
-		Engine:        engine,
-		config:        config,
-		ID:            id,
-		log:           logger,
-		epoch:         0,
-		vdf0:          vdf0,
-		vdf0Chan:      ch0,
-		vdf1:          vdf1,
-		vdf1Chan:      ch1,
-		vdfhalf:       vdfhalf,
-		vdfhalfchan:   ch2,
-		wg:            new(sync.WaitGroup),
-		rand:          rands,
-		peerMsgQueue:  peer,
-		mutex:         new(sync.Mutex),
-		rwmutex:       new(sync.RWMutex),
-		executeheight: uint64(0),
+		abort:            aborts,
+		Engine:           engine,
+		config:           config,
+		ID:               id,
+		log:              logger,
+		epoch:            0,
+		vdf0:             vdf0,
+		vdf0Chan:         ch0,
+		vdf1:             vdf1,
+		vdf1Chan:         ch1,
+		vdfhalf:          vdfhalf,
+		vdfhalfchan:      ch2,
+		wg:               new(sync.WaitGroup),
+		rand:             rands,
+		peerMsgQueue:     peer,
+		mutex:            new(sync.Mutex),
+		rwmutex:          new(sync.RWMutex),
+		executeheight:    uint64(0),
+		checkpointheight: uint64(0),
 		//storage:      st,
 		mempool:      mempool,
 		blockStorage: bst,
@@ -672,6 +676,12 @@ func (w *Worker) CompleteBlock(emptyblock *types.Block, vdf0res []byte, vdf1res 
 
 	txhash := crypto.ComputeMerkleRoot(types.Txs2Bytes(txs))
 	block.Header.TxHash = txhash
+	exeHash, err := types.ComputeExecuteHeadersRoot(block.ExeHeaders)
+	if err != nil {
+		w.log.Errorf("[PoT]\tcompute execute header root error for %s", err)
+		return nil
+	}
+	block.Header.ExeHash = exeHash
 
 	block.Header.Hashes = block.Header.Hash()
 	w.SetBlockKeyMap(privkey.PrivateKeyBytes(), crypto.Convert(block.Header.Hash()))
@@ -836,10 +846,16 @@ func (w *Worker) createBlock(epoch uint64, parentBlock *types.Block, uncleBlock 
 		Address:    id,
 		PeerId:     peerid,
 		TxHash:     txshash,
+		ExeHash:    crypto.NilTxsHash,
 		Hashes:     nil,
 		PublicKey:  publicKeyBytes,
 		//CryptoElement:  cryptoset,
 	}
+	exeHash, err := types.ComputeExecuteHeadersRoot(exeheader)
+	if err != nil {
+		return nil
+	}
+	h.ExeHash = exeHash
 
 	h.Hashes = h.Hash()
 	w.SetBlockKeyMap(privateKey.Private(), crypto.Convert(h.Hash()))
@@ -892,31 +908,116 @@ func (w *Worker) GetExcutedTxsFromExecutor(epoch uint64) ([]*types.ExecutedBlock
 	//}
 	blocks := make([]*types.ExecutedBlock, 0)
 	for _, executeblock := range executeblocks {
-		pbheader := executeblock.GetHeader()
-		header := &types.ExecuteHeader{
-			Height:    pbheader.GetHeight(),
-			BlockHash: pbheader.GetBlockHash(),
-			TxsHash:   pbheader.GetTxsHash(),
-		}
-		pbtxs := executeblock.GetTxs()
-		executedtxs := make([]*types.ExecutedTx, 0)
-		for _, pbtx := range pbtxs {
-			executedtx := &types.ExecutedTx{
-				Height: pbtx.GetHeight(),
-				TxHash: pbtx.GetTxHash(),
-				Data:   pbtx.GetData(),
-			}
-			executedtxs = append(executedtxs, executedtx)
-		}
-		block := &types.ExecutedBlock{
-			Header: header,
-			Txs:    executedtxs,
-		}
-		w.mempool.Add(block)
-		blocks = append(blocks, block)
+		blocks = append(blocks, types.ToExecuteBlock(executeblock))
 	}
 
+	checkpoints, err := w.GetCrosschainCheckpointFromExecutor(w.checkpointheight, w.executeheight)
+	if err != nil {
+		return nil, err
+	}
+	if err := w.AttachCheckpointsToExecutedBlocks(blocks, checkpoints); err != nil {
+		return nil, err
+	}
+	if w.executeheight > w.checkpointheight {
+		w.checkpointheight = w.executeheight
+	}
+	w.mempool.Add(blocks...)
+
 	return blocks, nil
+}
+
+func (w *Worker) GetCrosschainCheckpointFromExecutor(begin, end uint64) ([]*types.CrosschainCheckpoint, error) {
+	if end <= begin {
+		return nil, nil
+	}
+
+	conn, err := grpc.NewClient(w.config.PoT.ExcutorAddress, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(1024*1024*1024)))
+	if err != nil {
+		return nil, err
+	}
+
+	client := pb.NewPoTExecutorClient(conn)
+	response, err := client.GetCrosschainCheckpoint(context.Background(), &pb.GetCrosschainCheckpointRequest{
+		Begin: begin,
+		End:   end,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return types.ToCrosschainCheckpoints(response.GetCheckpoints()), nil
+}
+
+func (w *Worker) AttachCheckpointsToExecutedBlocks(blocks []*types.ExecutedBlock, checkpoints []*types.CrosschainCheckpoint) error {
+	if len(checkpoints) == 0 {
+		return nil
+	}
+
+	txOwner := make(map[[crypto.Hashlen]byte]*types.ExecutedBlock)
+	for _, block := range blocks {
+		if block == nil || block.Header == nil {
+			continue
+		}
+		for _, executedTx := range block.Txs {
+			if executedTx == nil || len(executedTx.TxHash) != crypto.Hashlen {
+				continue
+			}
+			txOwner[crypto.Convert(executedTx.TxHash)] = block
+		}
+	}
+
+	for _, checkpoint := range checkpoints {
+		if err := validateCrosschainCheckpoint(checkpoint); err != nil {
+			return err
+		}
+
+		block := txOwner[crypto.Convert(checkpoint.TxHash)]
+		if block == nil || block.Header == nil {
+			return fmt.Errorf("could not find executed block in current batch for checkpoint tx %s", hexutil.Encode(checkpoint.TxHash))
+		}
+		if !w.executedBlockContainsTxHash(block, checkpoint.TxHash) {
+			return fmt.Errorf("crosschain checkpoint tx %s does not belong to executed block %s", hexutil.Encode(checkpoint.TxHash), hexutil.Encode(block.Header.BlockHash))
+		}
+		if !hasCrosschainCheckpoint(block.Header.Checkpoints, checkpoint) {
+			block.Header.Checkpoints = append(block.Header.Checkpoints, types.CloneCrosschainCheckpoint(checkpoint))
+			block.Header.Checkpoints = types.SortCrosschainCheckpoints(block.Header.Checkpoints)
+		}
+	}
+
+	return nil
+}
+
+func (w *Worker) executedBlockContainsTxHash(block *types.ExecutedBlock, txHash []byte) bool {
+	if block == nil || block.Header == nil {
+		return false
+	}
+
+	txs := block.Txs
+	if len(txs) == 0 {
+		storedBlock, err := w.blockStorage.GetExcutedBlock(block.Header.BlockHash)
+		if err == nil && storedBlock != nil {
+			txs = storedBlock.Txs
+		}
+	}
+
+	for _, executedTx := range txs {
+		if executedTx != nil && bytes.Equal(executedTx.TxHash, txHash) {
+			return true
+		}
+	}
+	return false
+}
+
+func hasCrosschainCheckpoint(checkpoints []*types.CrosschainCheckpoint, target *types.CrosschainCheckpoint) bool {
+	for _, checkpoint := range checkpoints {
+		if checkpoint == nil || target == nil {
+			continue
+		}
+		if sameCrosschainCheckpointContent(checkpoint, target) {
+			return true
+		}
+	}
+	return false
 }
 
 func (w *Worker) GetExecutedBlockFromMempool() []*types.ExecutedBlock {
@@ -996,6 +1097,7 @@ func (w *Worker) createNilBlock(epoch uint64, parentBlock *types.Block, uncleBlo
 		Address:    w.ID,
 		PeerId:     w.PeerId,
 		TxHash:     crypto.NilTxsHash,
+		ExeHash:    crypto.NilTxsHash,
 		Hashes:     nil,
 		PublicKey:  publicKeyBytes,
 	}

@@ -102,7 +102,7 @@ func (c *poTExecutorClient) GetCrosschainCheckpoint(ctx context.Context, in *Get
 }
 
 // PoTExecutorServer is the server API for PoTExecutor service.
-// All implementations should embed UnimplementedPoTExecutorServer
+// All implementations must embed UnimplementedPoTExecutorServer
 // for forward compatibility
 type PoTExecutorServer interface {
 	GetTxs(context.Context, *GetTxRequest) (*GetTxResponse, error)
@@ -111,9 +111,10 @@ type PoTExecutorServer interface {
 	VerifyIncensentive(context.Context, *IncensentiveVerifyRequest) (*IncensentiveVerifyResponse, error)
 	GetIncentive(context.Context, *GetIncentiveRequest) (*GetIncentiveResponse, error)
 	GetCrosschainCheckpoint(context.Context, *GetCrosschainCheckpointRequest) (*GetCrosschainCheckpointResponse, error)
+	mustEmbedUnimplementedPoTExecutorServer()
 }
 
-// UnimplementedPoTExecutorServer should be embedded to have forward compatible implementations.
+// UnimplementedPoTExecutorServer must be embedded to have forward compatible implementations.
 type UnimplementedPoTExecutorServer struct {
 }
 
@@ -135,6 +136,7 @@ func (UnimplementedPoTExecutorServer) GetIncentive(context.Context, *GetIncentiv
 func (UnimplementedPoTExecutorServer) GetCrosschainCheckpoint(context.Context, *GetCrosschainCheckpointRequest) (*GetCrosschainCheckpointResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetCrosschainCheckpoint not implemented")
 }
+func (UnimplementedPoTExecutorServer) mustEmbedUnimplementedPoTExecutorServer() {}
 
 // UnsafePoTExecutorServer may be embedded to opt out of forward compatibility for this service.
 // Use of this interface is not recommended, as added methods to PoTExecutorServer will
@@ -408,7 +410,7 @@ func (c *bciExectorClient) GetPqcKey(ctx context.Context, in *GetPqcKeyRequest, 
 }
 
 // BciExectorServer is the server API for BciExector service.
-// All implementations should embed UnimplementedBciExectorServer
+// All implementations must embed UnimplementedBciExectorServer
 // for forward compatibility
 type BciExectorServer interface {
 	SendBci(context.Context, *SendBciRequest) (*SendBciResponse, error)
@@ -420,9 +422,10 @@ type BciExectorServer interface {
 	CreateNonLockTransferTransaction(context.Context, *CreateNonLockTransferTransactionRequest) (*CreateNonLockTransferTransactionResponse, error)
 	CreateBciToVsiTransaction(context.Context, *CreateBciToVsiRequest) (*CreateBciToVsiResponse, error)
 	GetPqcKey(context.Context, *GetPqcKeyRequest) (*GetPqcKeyResponse, error)
+	mustEmbedUnimplementedBciExectorServer()
 }
 
-// UnimplementedBciExectorServer should be embedded to have forward compatible implementations.
+// UnimplementedBciExectorServer must be embedded to have forward compatible implementations.
 type UnimplementedBciExectorServer struct {
 }
 
@@ -453,6 +456,7 @@ func (UnimplementedBciExectorServer) CreateBciToVsiTransaction(context.Context, 
 func (UnimplementedBciExectorServer) GetPqcKey(context.Context, *GetPqcKeyRequest) (*GetPqcKeyResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetPqcKey not implemented")
 }
+func (UnimplementedBciExectorServer) mustEmbedUnimplementedBciExectorServer() {}
 
 // UnsafeBciExectorServer may be embedded to opt out of forward compatibility for this service.
 // Use of this interface is not recommended, as added methods to BciExectorServer will

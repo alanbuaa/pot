@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math/big"
 	"math/rand"
+	"strings"
 	"sync"
 	"time"
 
@@ -37,6 +38,11 @@ func (w *Worker) handleBlock() {
 
 			if !flag {
 				w.log.Errorf("[PoT]\tepoch %d:Receive error block from node %d for %s", epoch, block.GetHeader().Address, err)
+				continue
+			}
+			err = w.CheckBlockExecutionData(block)
+			if err != nil {
+				w.log.Errorf("[PoT]\tepoch %d:Receive invalid block execution data from node %d for %s", epoch, block.GetHeader().Address, err)
 				continue
 			}
 
@@ -187,19 +193,19 @@ func (w *Worker) handleCurrentBlock(block *types.Block) error {
 				return err
 			}
 
-			// Checkpoint hook: compare implicit checkpoints carried by the current branch and
+			// Checkpoint hook: compare cross-chain checkpoints carried by the current branch and
 			// the fork branch before falling back to weight-based fork choice.
-			checkpointDecision, err := w.checkImplicitCheckpointOrder(nowBranch, forkBranch)
+			checkpointDecision, err := w.checkCrosschainCheckpointOrder(nowBranch, forkBranch)
 			if err != nil {
 				return err
 			}
 			forceAdoptFork := checkpointDecision == checkpointDecisionRejectCurrent
 			if checkpointDecision == checkpointDecisionRejectFork {
-				w.log.Infof("[PoT]\tthe fork chain is rejected by implicit checkpoint validation")
+				w.log.Infof("[PoT]\tthe fork chain is rejected by cross-chain checkpoint validation")
 				return nil
 			}
 			if forceAdoptFork {
-				w.log.Infof("[PoT]\tthe current chain is rejected by implicit checkpoint validation")
+				w.log.Infof("[PoT]\tthe current chain is rejected by cross-chain checkpoint validation")
 			}
 
 			for i := 0; i < len(nowBranch); i++ {
@@ -335,9 +341,9 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 		return err
 	}
 
-	// Checkpoint hook: compare implicit checkpoints carried by the current branch and
+	// Checkpoint hook: compare cross-chain checkpoints carried by the current branch and
 	// the fork branch before falling back to weight-based fork choice.
-	checkpointDecision, err := w.checkImplicitCheckpointOrder(nowbranch, branch)
+	checkpointDecision, err := w.checkCrosschainCheckpointOrder(nowbranch, branch)
 	if err != nil {
 		doonce.Do(func() {
 			close(done)
@@ -346,14 +352,14 @@ func (w *Worker) handleAdvancedBlock(epoch uint64, block *types.Block) error {
 	}
 	forceAdoptFork := checkpointDecision == checkpointDecisionRejectCurrent
 	if checkpointDecision == checkpointDecisionRejectFork {
-		w.log.Infof("[PoT]\tthe fork chain is rejected by implicit checkpoint validation")
+		w.log.Infof("[PoT]\tthe fork chain is rejected by cross-chain checkpoint validation")
 		doonce.Do(func() {
 			close(done)
 		})
-		return fmt.Errorf("the fork chain is rejected by implicit checkpoint validation")
+		return fmt.Errorf("the fork chain is rejected by cross-chain checkpoint validation")
 	}
 	if forceAdoptFork {
-		w.log.Infof("[PoT]\tthe current chain is rejected by implicit checkpoint validation")
+		w.log.Infof("[PoT]\tthe current chain is rejected by cross-chain checkpoint validation")
 	}
 
 	weightnow := w.calculateChainWeight(ances, current)
@@ -485,6 +491,9 @@ func (w *Worker) checkblock(block *types.Block) (bool, error) {
 
 	flag, err := block.GetHeader().BasicVerify()
 	if !flag {
+		return false, err
+	}
+	if err := w.CheckBlockExecutionData(block); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -740,11 +749,6 @@ func (w *Worker) handleForkTx(current []*types.Block, fork []*types.Block) (bool
 	return true, nil
 }
 
-type implicitCheckpoint struct {
-	Height    uint64
-	BlockHash []byte
-}
-
 type checkpointBranchDecision int
 
 const (
@@ -753,46 +757,212 @@ const (
 	checkpointDecisionRejectFork
 )
 
-func (w *Worker) checkImplicitCheckpointOrder(nowBranch, forkBranch []*types.Block) (checkpointBranchDecision, error) {
-	nowCheckpoints, err := w.collectImplicitCheckpoints(nowBranch)
-	if err != nil {
-		return checkpointDecisionNoPreference, err
-	}
-
-	forkCheckpoints, err := w.collectImplicitCheckpoints(forkBranch)
-	if err != nil {
-		return checkpointDecisionNoPreference, err
-	}
-
-	return w.compareImplicitCheckpoints(nowCheckpoints, forkCheckpoints)
+type branchCheckpointRecord struct {
+	Checkpoint       *types.CrosschainCheckpoint
+	SourcePoTHeight  uint64
+	SourcePoTBlock   []byte
+	SourceExecHeight uint64
+	SourceExecBlock  []byte
+	BranchOrder      int
 }
 
-func (w *Worker) collectImplicitCheckpoints(branch []*types.Block) ([]*implicitCheckpoint, error) {
-	checkpoints := make([]*implicitCheckpoint, 0)
-	for _, block := range branch {
-		if block == nil || block.GetHeader() == nil {
-			return nil, fmt.Errorf("branch contains nil block when collecting implicit checkpoints")
-		}
+func (w *Worker) CheckBlockExecutionData(block *types.Block) error {
+	if err := w.CheckBlockExeHash(block); err != nil {
+		return err
+	}
+	_, err := w.collectCrosschainCheckpointsFromBlock(block)
+	return err
+}
 
-		// TODO: derive implicit checkpoints from transactions in the fork branch or
-		// from previous block history referenced by the current block.
-		_ = block.GetRawTx()
+func (w *Worker) CheckBlockExeHash(block *types.Block) error {
+	if block == nil || block.GetHeader() == nil {
+		return fmt.Errorf("block is nil when checking execute header root")
+	}
+
+	exeHash, err := types.ComputeExecuteHeadersRoot(block.GetExecutedHeaders())
+	if err != nil {
+		return err
+	}
+	if !bytes.Equal(exeHash, block.GetHeader().ExeHash) {
+		return fmt.Errorf("block execute header root is wrong, expect %s but get %s", hexutil.Encode(exeHash), hexutil.Encode(block.GetHeader().ExeHash))
+	}
+	return nil
+}
+
+func (w *Worker) checkCrosschainCheckpointOrder(nowBranch, forkBranch []*types.Block) (checkpointBranchDecision, error) {
+	nowCheckpoints, err := w.collectCrosschainCheckpointsFromBranch(nowBranch)
+	if err != nil {
+		return checkpointDecisionNoPreference, err
+	}
+
+	forkCheckpoints, err := w.collectCrosschainCheckpointsFromBranch(forkBranch)
+	if err != nil {
+		return checkpointDecisionNoPreference, err
+	}
+
+	return w.compareCrosschainCheckpoints(nowCheckpoints, forkCheckpoints)
+}
+
+func (w *Worker) collectCrosschainCheckpointsFromBranch(branch []*types.Block) ([]*branchCheckpointRecord, error) {
+	checkpoints := make([]*branchCheckpointRecord, 0)
+	seen := make(map[string]*branchCheckpointRecord)
+	order := 0
+	for i := len(branch) - 1; i >= 0; i-- {
+		block := branch[i]
+		blockCheckpoints, err := w.collectCrosschainCheckpointsFromBlock(block)
+		if err != nil {
+			return nil, err
+		}
+		for _, checkpoint := range blockCheckpoints {
+			checkpoint.BranchOrder = order
+			order += 1
+			key := crosschainCheckpointAnchorKey(checkpoint.Checkpoint)
+			if existing, ok := seen[key]; ok {
+				if !sameCrosschainCheckpointContent(existing.Checkpoint, checkpoint.Checkpoint) {
+					return nil, fmt.Errorf("conflicting cross-chain checkpoint for tx %s", hexutil.Encode(checkpoint.Checkpoint.TxHash))
+				}
+				continue
+			}
+			seen[key] = checkpoint
+			checkpoints = append(checkpoints, checkpoint)
+		}
 	}
 	return checkpoints, nil
 }
 
-func (w *Worker) compareImplicitCheckpoints(nowCheckpoints, forkCheckpoints []*implicitCheckpoint) (checkpointBranchDecision, error) {
-	// TODO: implement the ordering comparison between implicit checkpoints on
-	// nowBranch and forkBranch.
-	//
-	// Expected behavior after the comparison logic is completed:
-	// 1. If all implicit checkpoints contained in forkBranch are determined to be
-	//    before the checkpoints on nowBranch, return checkpointDecisionRejectCurrent.
-	// 2. If the fork branch should be rejected by checkpoint order, return
-	//    checkpointDecisionRejectFork.
-	// 3. If checkpoint order does not make a decision, return
-	//    checkpointDecisionNoPreference and continue with the existing weight rule.
-	_ = nowCheckpoints
-	_ = forkCheckpoints
+func (w *Worker) collectCrosschainCheckpointsFromBlock(block *types.Block) ([]*branchCheckpointRecord, error) {
+	if block == nil || block.GetHeader() == nil {
+		return nil, fmt.Errorf("block is nil when collecting cross-chain checkpoints")
+	}
+
+	checkpoints := make([]*branchCheckpointRecord, 0)
+	for _, executeHeader := range block.GetExecutedHeaders() {
+		if executeHeader == nil {
+			return nil, fmt.Errorf("block %s contains nil execute header", hexutil.Encode(block.Hash()))
+		}
+		for _, checkpoint := range executeHeader.Checkpoints {
+			if err := validateCrosschainCheckpoint(checkpoint); err != nil {
+				return nil, err
+			}
+			// If the local executed block body is available, validate that the checkpoint tx hash
+			// really belongs to the executed block referenced by the ExecuteHeader.
+			storedBlock, err := w.blockStorage.GetExcutedBlock(executeHeader.BlockHash)
+			if err == nil && storedBlock != nil && !w.executedBlockContainsTxHash(storedBlock, checkpoint.TxHash) {
+				return nil, fmt.Errorf("cross-chain checkpoint tx %s does not belong to executed block %s", hexutil.Encode(checkpoint.TxHash), hexutil.Encode(executeHeader.BlockHash))
+			}
+
+			checkpoints = append(checkpoints, &branchCheckpointRecord{
+				Checkpoint:       types.CloneCrosschainCheckpoint(checkpoint),
+				SourcePoTHeight:  block.GetHeader().Height,
+				SourcePoTBlock:   append([]byte(nil), block.Hash()...),
+				SourceExecHeight: executeHeader.Height,
+				SourceExecBlock:  append([]byte(nil), executeHeader.BlockHash...),
+			})
+		}
+	}
+	return checkpoints, nil
+}
+
+func (w *Worker) compareCrosschainCheckpoints(nowCheckpoints, forkCheckpoints []*branchCheckpointRecord) (checkpointBranchDecision, error) {
+	nowMap := make(map[string]*branchCheckpointRecord)
+	for _, checkpoint := range nowCheckpoints {
+		key := crosschainCheckpointAnchorKey(checkpoint.Checkpoint)
+		nowMap[key] = checkpoint
+	}
+
+	forkMap := make(map[string]*branchCheckpointRecord)
+	for _, checkpoint := range forkCheckpoints {
+		key := crosschainCheckpointAnchorKey(checkpoint.Checkpoint)
+		forkMap[key] = checkpoint
+	}
+
+	// The fork branch must preserve every stable checkpoint that has already appeared on the
+	// current branch, and the external-chain anchor content must remain identical.
+	for key, nowCheckpoint := range nowMap {
+		forkCheckpoint, ok := forkMap[key]
+		if !ok {
+			return checkpointDecisionRejectFork, nil
+		}
+		if !sameCrosschainCheckpointContent(nowCheckpoint.Checkpoint, forkCheckpoint.Checkpoint) {
+			return checkpointDecisionRejectFork, nil
+		}
+	}
+
+	// If the fork contains extra stable checkpoints without conflicting with the current
+	// branch, the current branch is considered stale and should be rejected.
+	for key := range forkMap {
+		if _, ok := nowMap[key]; !ok {
+			return checkpointDecisionRejectCurrent, nil
+		}
+	}
+
 	return checkpointDecisionNoPreference, nil
+}
+
+func validateCrosschainCheckpoint(checkpoint *types.CrosschainCheckpoint) error {
+	if checkpoint == nil {
+		return fmt.Errorf("cross-chain checkpoint is nil")
+	}
+	if len(checkpoint.TxHash) != crypto.Hashlen {
+		return fmt.Errorf("cross-chain checkpoint tx hash length is invalid")
+	}
+	if len(checkpoint.CrosschainTxHash) == 0 {
+		return fmt.Errorf("cross-chain checkpoint external tx hash is empty")
+	}
+	if len(checkpoint.BlockHash) == 0 {
+		return fmt.Errorf("cross-chain checkpoint external block hash is empty")
+	}
+	if checkpoint.BlockHeight < 0 {
+		return fmt.Errorf("cross-chain checkpoint external block height is invalid")
+	}
+	if checkpoint.CurrentHeight < 0 {
+		return fmt.Errorf("cross-chain checkpoint current height is invalid")
+	}
+	if checkpoint.CurrentHeight <= checkpoint.BlockHeight {
+		return fmt.Errorf("cross-chain checkpoint current height is not ahead of external block height")
+	}
+	if !isCrosschainCheckpointStable(checkpoint) {
+		return fmt.Errorf("cross-chain checkpoint for tx %s is not stable on target chain", hexutil.Encode(checkpoint.TxHash))
+	}
+	return nil
+}
+
+func isCrosschainCheckpointStable(checkpoint *types.CrosschainCheckpoint) bool {
+	return checkpoint.CurrentHeight > checkpoint.BlockHeight+crosschainCheckpointFinalityDepth(checkpoint)
+}
+
+func crosschainCheckpointFinalityDepth(checkpoint *types.CrosschainCheckpoint) int64 {
+	chain := normalizedCrosschainCheckpointChain(checkpoint)
+	switch chain {
+	case "bitcoin", "btc":
+		return 6
+	default:
+		return 0
+	}
+}
+
+func normalizedCrosschainCheckpointChain(checkpoint *types.CrosschainCheckpoint) string {
+	if checkpoint == nil {
+		return ""
+	}
+	return strings.ToLower(strings.TrimSpace(checkpoint.Chain))
+}
+
+func crosschainCheckpointAnchorKey(checkpoint *types.CrosschainCheckpoint) string {
+	if checkpoint == nil {
+		return ""
+	}
+	return fmt.Sprintf("%d|%s|%s", checkpoint.ChainID, normalizedCrosschainCheckpointChain(checkpoint), hexutil.Encode(checkpoint.TxHash))
+}
+
+func sameCrosschainCheckpointContent(left, right *types.CrosschainCheckpoint) bool {
+	if left == nil || right == nil {
+		return left == right
+	}
+	return left.ChainID == right.ChainID &&
+		normalizedCrosschainCheckpointChain(left) == normalizedCrosschainCheckpointChain(right) &&
+		left.BlockHeight == right.BlockHeight &&
+		bytes.Equal(left.TxHash, right.TxHash) &&
+		bytes.Equal(left.BlockHash, right.BlockHash) &&
+		bytes.Equal(left.CrosschainTxHash, right.CrosschainTxHash)
 }

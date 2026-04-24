@@ -44,6 +44,7 @@ message Header{
   bytes Pubkey = 12;
   bytes Txhash = 13;
   bytes CommiteePubkey = 14;
+  bytes ExeHash = 15;
 
 //  bytes ExeHash = 14;
 //  bytes Command = 15;
@@ -164,6 +165,7 @@ message ExecuteHeader {
   uint64  GasIncentive = 7;
   bytes   PoSLeader = 8;
   bytes   PoSVoteInfo = 9;
+  repeated CrosschainCheckpoint Checkpoints = 10;
 }
 
 message ExecutedTx{
@@ -403,7 +405,8 @@ message CrosschainCheckpoint{
 }
 
 message GetCrosschainCheckpointRequest{
-    
+    uint64 Begin = 1;
+    uint64 End = 2;
 }
 
 message GetCrosschainCheckpointResponse{

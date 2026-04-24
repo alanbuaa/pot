@@ -142,10 +142,20 @@ func ToBlock(block *pb.Block) *Block {
 }
 
 func ToExeHeader(exeheader *pb.ExecuteHeader) *ExecuteHeader {
+	if exeheader == nil {
+		return nil
+	}
 	return &ExecuteHeader{
-		Height:    exeheader.Height,
-		BlockHash: exeheader.BlockHash,
-		TxsHash:   exeheader.TxsHash,
+		Height:        exeheader.GetHeight(),
+		BlockHash:     exeheader.GetBlockHash(),
+		ChainID:       exeheader.GetChainID(),
+		TxsHash:       exeheader.GetTxsHash(),
+		CommitedTxNum: exeheader.GetCommitedTxNum(),
+		ExecutedTxNum: exeheader.GetExecutedTxNum(),
+		GasIncentive:  exeheader.GetGasIncentive(),
+		PoSLeader:     exeheader.GetPoSLeader(),
+		PoSVoteInfo:   exeheader.GetPoSVoteInfo(),
+		Checkpoints:   ToCrosschainCheckpoints(exeheader.GetCheckpoints()),
 	}
 }
 
@@ -190,6 +200,9 @@ func (b *Header) Hash() []byte {
 	if b.TxHash == nil {
 		panic("txhash is nil")
 	}
+	if b.ExeHash == nil {
+		panic("exehash is nil")
+	}
 	if b.PublicKey == nil {
 		panic("PublicKey is nil")
 	}
@@ -212,7 +225,7 @@ func (b *Header) Hash() []byte {
 		height, b.ParentHash, unclehash,
 		b.Mixdigest, difficulty, nonce,
 		timestamp, b.PoTProof[0], b.PoTProof[1],
-		address, peeridbyte, b.TxHash, b.PublicKey,
+		address, peeridbyte, b.TxHash, b.ExeHash, b.PublicKey,
 	}, []byte(""))
 	hashes := crypto.Hash(hashinput)
 	b.Hashes = hashes
@@ -270,6 +283,9 @@ func (b *Header) CheckHash() (bool, error) {
 	if b.Hashes == nil {
 		return false, fmt.Errorf("the block without hash")
 	}
+	if b.ExeHash == nil {
+		return false, fmt.Errorf("the block without exehash")
+	}
 
 	difficulty := b.Difficulty.Bytes()
 	tmp := new(big.Int)
@@ -296,7 +312,7 @@ func (b *Header) CheckHash() (bool, error) {
 		height, b.ParentHash, unclehash,
 		b.Mixdigest, difficulty, nonce,
 		timestamp, b.PoTProof[0], b.PoTProof[1],
-		address, peeridbyte, b.TxHash, b.PublicKey,
+		address, peeridbyte, b.TxHash, b.ExeHash, b.PublicKey,
 	}, []byte(""))
 
 	hashes := crypto.Hash(hashinput)
@@ -316,6 +332,9 @@ func (b *Header) CheckNilBlock() (bool, error) {
 	}
 	if !bytes.Equal(crypto.NilTxsHash, b.TxHash) {
 		return false, fmt.Errorf("the nil block txhash should be niltxhash")
+	}
+	if b.ExeHash == nil {
+		return false, fmt.Errorf("the nil block without exehash")
 	}
 	return true, nil
 }
@@ -344,6 +363,7 @@ func ToHeader(header *pb.Header) *Header {
 		PeerId:         header.GetPeerId(),
 		PublicKey:      header.GetPubkey(),
 		TxHash:         header.GetTxhash(),
+		ExeHash:        header.GetExeHash(),
 		CommiteePubkey: header.GetCommiteePubkey(),
 	}
 	return h
@@ -365,6 +385,9 @@ func (b *Header) ToProto() *pb.Header {
 	}
 	if b.TxHash == nil {
 		panic("txhash is nil")
+	}
+	if b.ExeHash == nil {
+		panic("exehash is nil")
 	}
 	if b.PublicKey == nil {
 		panic("PublicKey is nil")
@@ -400,6 +423,7 @@ func (b *Header) ToProto() *pb.Header {
 		Pubkey:         b.PublicKey,
 		Txhash:         b.TxHash,
 		CommiteePubkey: b.CommiteePubkey,
+		ExeHash:        b.ExeHash,
 	}
 }
 
@@ -419,6 +443,7 @@ func DefaultGenesisHeader() *Header {
 		PeerId:     "0",
 		PublicKey:  pubkey,
 		TxHash:     crypto.NilTxsHash,
+		ExeHash:    crypto.NilTxsHash,
 	}
 	h.Hash()
 	return h
