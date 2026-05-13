@@ -1,0 +1,47 @@
+node:
+  id: 0
+  p2p_address: 0.0.0.0:7100 # local listened address
+  rpc_address: 0.0.0.0:8100 # local listened address
+  bci_rpc_server: 0.0.0.0:9100 # local listened address
+  api_server_address: 0.0.0.0:10100 # local listened address
+  private_key_path: data/keys/node-0-priv.key
+  public_key_path: data/keys/node-pub.key
+  data_dir: "data/node-0"
+
+# ======= Total Number of Replicas =======
+total: 1
+
+# ========= Executor Configuration =========
+executor:
+  type: local  # 使用 local executor 进行测试
+  address: 0.0.0.0:12100
+
+# ========= Log Configuration =========
+log:
+  level: info
+  to_file: false
+  filename: data/logs/node-0-%s.log
+
+# ========= Network Configuration =========
+network:
+  p2p-type: p2p-adaptor
+  topic: this-is-p2p-topic-upgrade-test-001
+  model-type: sync
+
+# ========= Consensus Configuration =========
+consensus:
+  type: "upgradeable"
+  fault_model: "1/3"
+  consensus_id: 10001
+  upgradeable:
+    commit_time: 5
+    network_type: 0 
+    init_consensus:
+      type: hotstuff
+      consensus_id: 1000
+      fault_model: "1/3"
+      hotstuff:
+        type: event-driven
+        batch_size: 10
+        batch_timeout: 1
+        timeout: 2

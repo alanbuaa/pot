@@ -61,36 +61,78 @@ func (uc *UpgradeableConsensus) CommitBlock(block types.ConsensusBlock, proof []
 			case pb.TransactionType_NORMAL:
 				continue
 			case pb.TransactionType_UPGRADE:
-				uc.log.Info("Processing upgrade transaction")
+				uc.log.Info("=================================================")
+				uc.log.Info("  Processing UPGRADE Transaction")
+				uc.log.Info("=================================================")
 				if !uc.executor.VerifyTx(rbtx) {
 					uc.log.Warn("Upgrade transaction verification failed")
 					return
 				}
-				cc := new(config.ConsensusConfig)
-				err := json.Unmarshal(tx.Payload, cc)
-				if err != nil {
-					uc.log.WithError(err).Warn("Failed to unmarshal upgrade transaction payload")
-					return
-				}
-				cc.Nodes = uc.config.Nodes
-				cc.Keys = uc.config.Keys
-				cc.Fault = uc.config.Fault
-				uc.log.WithFields(logrus.Fields{
-					"target_type": cc.Type,
-					"target_cid":  cc.ConsensusID,
-				}).Info("Upgrade consensus config received")
-				uc.upgradeLock.Lock()
-				txHash := rtx.Hash()
-				uc.upgradeBuffer[txHash] = cc
-				uc.upgradeLock.Unlock()
-				uc.log.WithField("hash", txHash).Debug("Upgrade config buffered")
 
-				if uc.config.Upgradeable.NetworkType == config.NetworkSync {
-					uc.log.Debug("Sync mode: sending time vote")
-					go uc.sendTimeVote(txHash)
+				// 尝试解析为 UpgradeConfigTransaction (新格式)
+				upgradeConfig := new(pb.UpgradeConfigTransaction)
+				if err := json.Unmarshal(tx.Payload, upgradeConfig); err == nil && upgradeConfig.TargetConsensus != "" {
+					uc.log.WithFields(logrus.Fields{
+						"target_consensus": upgradeConfig.TargetConsensus,
+						"consensus_id":     upgradeConfig.ConsensusId,
+						"fork_height":      upgradeConfig.ForkHeight,
+						"switch_height":    upgradeConfig.SwitchHeight,
+						"description":      upgradeConfig.Description,
+					}).Info("Received UpgradeProposal (new format)")
+
+					// 从提案构建共识配置
+					cc := uc.buildConsensusConfigFromProposal(upgradeConfig)
+					if cc == nil {
+						uc.log.Warn("Failed to build consensus config from upgrade proposal")
+						return
+					}
+
+					uc.log.WithFields(logrus.Fields{
+						"target_type": cc.Type,
+						"target_cid":  cc.ConsensusID,
+					}).Info("Upgrade consensus config created from proposal")
+
+					uc.upgradeLock.Lock()
+					txHash := rtx.Hash()
+					uc.upgradeBuffer[txHash] = cc
+					uc.upgradeLock.Unlock()
+					uc.log.WithField("hash", txHash).Debug("Upgrade config buffered")
+
+					if uc.config.Upgradeable.NetworkType == config.NetworkSync {
+						uc.log.Debug("Sync mode: sending time vote")
+						go uc.sendTimeVote(txHash)
+					} else {
+						uc.log.Debug("Async mode: starting new consensus immediately")
+						go uc.startNewConsensus(cc)
+					}
 				} else {
-					uc.log.Debug("Async mode: starting new consensus immediately")
-					go uc.startNewConsensus(cc)
+					// 尝试解析为 ConsensusConfig (旧格式)
+					cc := new(config.ConsensusConfig)
+					err := json.Unmarshal(tx.Payload, cc)
+					if err != nil {
+						uc.log.WithError(err).Warn("Failed to unmarshal upgrade transaction payload (both formats)")
+						return
+					}
+					cc.Nodes = uc.config.Nodes
+					cc.Keys = uc.config.Keys
+					cc.Fault = uc.config.Fault
+					uc.log.WithFields(logrus.Fields{
+						"target_type": cc.Type,
+						"target_cid":  cc.ConsensusID,
+					}).Info("Received ConsensusConfig (legacy format)")
+					uc.upgradeLock.Lock()
+					txHash := rtx.Hash()
+					uc.upgradeBuffer[txHash] = cc
+					uc.upgradeLock.Unlock()
+					uc.log.WithField("hash", txHash).Debug("Upgrade config buffered")
+
+					if uc.config.Upgradeable.NetworkType == config.NetworkSync {
+						uc.log.Debug("Sync mode: sending time vote")
+						go uc.sendTimeVote(txHash)
+					} else {
+						uc.log.Debug("Async mode: starting new consensus immediately")
+						go uc.startNewConsensus(cc)
+					}
 				}
 
 			case pb.TransactionType_TIMEVOTE:
@@ -156,7 +198,17 @@ func (uc *UpgradeableConsensus) CommitBlock(block types.ConsensusBlock, proof []
 				}()
 
 			case pb.TransactionType_LOCK:
-				uc.log.Info("Processing lock transaction for consensus upgrade")
+				uc.log.Info("Processing lock/confirm transaction")
+
+				// 首先尝试解析为 UpgradeConfirmTransaction (来自 upgrade 模块)
+				confirm := new(pb.UpgradeConfirmTransaction)
+				if err := json.Unmarshal(tx.Payload, confirm); err == nil && len(confirm.ProposalId) > 0 {
+					// 这是一个确认交易
+					uc.handleConfirmTransaction(tx, rtx)
+					continue
+				}
+
+				// 否则按原有的 Lock 交易处理
 				lock := new(Lock)
 				if err := json.Unmarshal(tx.Payload, lock); err != nil {
 					uc.log.WithError(err).Warn("Failed to parse lock transaction")
@@ -232,4 +284,174 @@ func (uc *UpgradeableConsensus) sendLockTx(block types.ConsensusBlock, proof []b
 	uc.consensusLock.RLock()
 	uc.working.GetRequestEntrance() <- request
 	uc.consensusLock.RUnlock()
+}
+
+// buildConsensusConfigFromProposal 从升级提案构建共识配置
+// 支持从 UpgradeConfigTransaction (来自 consensus/upgrade 模块) 构建 ConsensusConfig
+func (uc *UpgradeableConsensus) buildConsensusConfigFromProposal(proposal *pb.UpgradeConfigTransaction) *config.ConsensusConfig {
+	cc := &config.ConsensusConfig{
+		Type:        proposal.TargetConsensus,
+		ConsensusID: proposal.ConsensusId,
+		Nodes:       uc.config.Nodes,
+		Keys:        uc.config.Keys,
+		Fault:       uc.config.Fault,
+	}
+
+	uc.log.WithFields(logrus.Fields{
+		"target_consensus": proposal.TargetConsensus,
+		"consensus_id":     proposal.ConsensusId,
+	}).Info("Building consensus config from proposal")
+
+	// 解析自定义共识参数
+	var params map[string]interface{}
+	if proposal.ConsensusParams != "" {
+		if err := json.Unmarshal([]byte(proposal.ConsensusParams), &params); err != nil {
+			uc.log.WithError(err).Debug("Failed to parse consensus params, using defaults")
+		}
+	}
+
+	// 根据目标共识类型创建特定配置
+	switch proposal.TargetConsensus {
+	case "hotstuff":
+		hsType := "basic"
+		batchSize := 10
+		batchTimeout := 1
+		timeout := 2
+
+		if params != nil {
+			if t, ok := params["type"].(string); ok {
+				hsType = t
+			}
+			if bs, ok := params["batch_size"].(float64); ok {
+				batchSize = int(bs)
+			}
+			if bt, ok := params["batch_timeout"].(float64); ok {
+				batchTimeout = int(bt)
+			}
+			if to, ok := params["timeout"].(float64); ok {
+				timeout = int(to)
+			}
+		}
+
+		cc.HotStuff = &config.HotStuffConfig{
+			Type:         hsType,
+			BatchSize:    batchSize,
+			BatchTimeout: batchTimeout,
+			Timeout:      timeout,
+		}
+		uc.log.WithFields(logrus.Fields{
+			"hotstuff_type": hsType,
+			"batch_size":    batchSize,
+			"batch_timeout": batchTimeout,
+			"timeout":       timeout,
+		}).Info("Created HotStuff config")
+
+	case "whirly":
+		wType := "basic"
+		batchSize := 10
+		timeout := 2
+
+		if params != nil {
+			if t, ok := params["type"].(string); ok {
+				wType = t
+			}
+			if bs, ok := params["batch_size"].(float64); ok {
+				batchSize = int(bs)
+			}
+			if to, ok := params["timeout"].(float64); ok {
+				timeout = int(to)
+			}
+		}
+
+		cc.Whirly = &config.WhirlyConfig{
+			Type:      wType,
+			BatchSize: batchSize,
+			Timeout:   timeout,
+		}
+		uc.log.WithFields(logrus.Fields{
+			"whirly_type": wType,
+			"batch_size":  batchSize,
+			"timeout":     timeout,
+		}).Info("Created Whirly config")
+
+	case "pot":
+		// PoT 共识配置
+		snum := int64(2)
+		sysPara := "123456789"
+		vdf0Iter := 100000
+		vdf1Iter := 80000
+
+		cc.PoT = &config.PoTConfig{
+			Snum:          snum,
+			SysPara:       sysPara,
+			Vdf0Iteration: vdf0Iter,
+			Vdf1Iteration: vdf1Iter,
+		}
+		uc.log.WithFields(logrus.Fields{
+			"snum":           snum,
+			"vdf0_iteration": vdf0Iter,
+		}).Info("Created PoT config")
+
+	case "pow":
+		// PoW 共识配置使用默认参数
+		uc.log.Info("Created PoW config with defaults")
+
+	default:
+		uc.log.WithField("consensus_type", proposal.TargetConsensus).Warn("Unknown consensus type, using default hotstuff")
+		cc.Type = "hotstuff"
+		cc.HotStuff = &config.HotStuffConfig{
+			Type:         "basic",
+			BatchSize:    10,
+			BatchTimeout: 1,
+			Timeout:      2,
+		}
+	}
+
+	return cc
+}
+
+// handleConfirmTransaction 处理确认交易（用于简化的投票流程）
+func (uc *UpgradeableConsensus) handleConfirmTransaction(tx *pb.Transaction, rtx types.RawTransaction) {
+	uc.log.Info("=================================================")
+	uc.log.Info("  Processing CONFIRM Transaction")
+	uc.log.Info("=================================================")
+
+	// 解析确认交易
+	confirm := new(pb.UpgradeConfirmTransaction)
+	if err := json.Unmarshal(tx.Payload, confirm); err != nil {
+		uc.log.WithError(err).Warn("Failed to parse confirm transaction")
+		return
+	}
+
+	var proposalHash types.TxHash
+	copy(proposalHash[:], confirm.ProposalId)
+
+	uc.log.WithFields(logrus.Fields{
+		"proposal_id":  proposalHash,
+		"confirmer_id": confirm.ConfirmerId,
+		"approved":     confirm.Approved,
+	}).Info("Received upgrade confirmation")
+
+	if !confirm.Approved {
+		uc.log.Info("Upgrade rejected by confirmer")
+		return
+	}
+
+	// 查找对应的升级配置
+	uc.upgradeLock.Lock()
+	cc, ok := uc.upgradeBuffer[proposalHash]
+	uc.upgradeLock.Unlock()
+
+	if !ok {
+		uc.log.WithField("proposal_id", proposalHash).Warn("Upgrade proposal not found in buffer")
+		return
+	}
+
+	uc.log.WithFields(logrus.Fields{
+		"target_type": cc.Type,
+		"target_cid":  cc.ConsensusID,
+	}).Info("Upgrade confirmed, starting new consensus")
+
+	// 启动新共识
+	go uc.startNewConsensus(cc)
 }
