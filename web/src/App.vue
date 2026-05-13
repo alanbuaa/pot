@@ -75,6 +75,20 @@ let wsService: WebSocketService | null = null;
 // 轮询定时器
 let timers: number[] = [];
 
+const resolveWebSocketUrl = () => {
+  if (import.meta.env.VITE_WS_URL) {
+    return import.meta.env.VITE_WS_URL;
+  }
+
+  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "/api";
+  const wsUrl = new URL(apiBaseUrl, window.location.origin);
+  wsUrl.protocol = wsUrl.protocol === "https:" ? "wss:" : "ws:";
+  wsUrl.pathname = `${wsUrl.pathname.replace(/\/$/, "")}/ws`;
+  wsUrl.search = "";
+  wsUrl.hash = "";
+  return wsUrl.toString();
+};
+
 onMounted(async () => {
   // 初始数据加载
   await Promise.all([
@@ -115,7 +129,7 @@ onMounted(async () => {
 
   // 尝试连接 WebSocket
   try {
-    const wsUrl = import.meta.env.VITE_WS_URL || "ws://localhost:8080/api/ws";
+    const wsUrl = resolveWebSocketUrl();
     wsService = new WebSocketService(wsUrl);
     wsService.connect();
 

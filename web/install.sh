@@ -44,7 +44,7 @@ if [ $? -eq 0 ]; then
     echo "3. 预览构建结果: npm run preview"
     echo ""
     echo "开发服务器将运行在: http://localhost:3000"
-    echo "API 代理目标: http://localhost:8080/api"
+    echo "API 代理目标: http://localhost:10000/api (node0)"
     echo ""
 else
     echo ""

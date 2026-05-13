@@ -5,7 +5,7 @@
 本文档描述了POT（Proof of Time）共识可视化系统的RESTful API接口。系统提供实时的区块链状态监控和可视化数据。
 
 **版本**: 1.0.0  
-**基础URL**: `http://localhost:8080/api`
+**基础URL**: `http://localhost:10000/api`（node0）
 
 ---
 
@@ -406,7 +406,7 @@
 
 系统提供WebSocket接口用于实时数据推送：
 
-**连接URL**: `ws://localhost:8080/api/ws`
+**连接URL**: `ws://localhost:10000/api/ws`
 
 **订阅主题**:
 ```json

@@ -32,7 +32,7 @@ cd web
 # 2. 安装依赖
 npm install
 
-# 3. 启动开发服务器（Mock 模式）
+# 3. 启动开发服务器（默认连接 node0 后端 API）
 npm run dev
 
 # 4. 访问应用
@@ -41,7 +41,7 @@ npm run dev
 
 ### Mock 模式 vs 真实后端
 
-**Mock 模式**（默认，无需后端）：
+**Mock 模式**（无需后端）：
 ```env
 # .env.development
 VITE_USE_MOCK=true
@@ -51,8 +51,10 @@ VITE_USE_MOCK=true
 ```env
 # .env.development
 VITE_USE_MOCK=false
-VITE_API_BASE_URL=http://localhost:8080
+VITE_API_BASE_URL=/api
 ```
+
+开发服务器会把 `/api` 自动代理到 node0：`http://localhost:10000/api`。
 
 ## 🎯 功能模块
 
@@ -160,7 +162,7 @@ WS  /api/ws                  # WebSocket 实时推送
 # 1. 修改 .env.development
 VITE_USE_MOCK=false
 
-# 2. 确保后端服务运行
+# 2. 确保 node0 后端服务运行
 cd /home/ldc/workspace/pot
 make run_server
 
