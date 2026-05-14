@@ -1,0 +1,21 @@
+# 可升级共识客户端配置
+
+# RPC连接地址（连接到节点的RPC端口）
+rpc_address: "127.0.0.1:8100"
+
+# 日志配置
+log:
+  level: debug
+  to_file: false
+  filename: data/logs/upgrade-client.log
+
+# 升级相关配置
+upgrade:
+  # 目标共识类型：hotstuff, pot, pow, whirly
+  target_consensus: "hotstuff"
+  # 共识切换的目标高度（相对于当前高度的偏移）
+  switch_height_offset: 20
+  # 预执行开始高度偏移
+  preexec_start_offset: 5
+  # 确认者ID（本节点ID）
+  confirmer_id: 0
