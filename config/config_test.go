@@ -14,7 +14,8 @@ func TestMain(m *testing.M) {
 }
 
 func TestHotStuffConfig_ReadConfig(t *testing.T) {
-	cfg, err := NewConfig("config/configpot.yaml", 1)
+	cfg, err := NewConfig("config/config.yaml", 1)
+	utils.PanicOnError(err)
 	utils.PanicOnError(err)
 	t.Log(cfg.Nodes[0].Address)
 }
