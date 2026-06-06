@@ -1,9 +1,9 @@
 package pqcgo
 
 /*
-#cgo CFLAGS: -I./libs/include
-#cgo windows LDFLAGS: -L./libs/lib/win -lpqmagic
-#cgo linux LDFLAGS: -L./libs/lib/linux -lpqmagic
+#cgo CFLAGS: -I${SRCDIR}/libs/include
+#cgo windows LDFLAGS: ${SRCDIR}/libs/lib/win/libpqmagic.a
+#cgo linux LDFLAGS: ${SRCDIR}/libs/lib/linux/libpqmagic.a
 #include <stdint.h>
 #include <stdlib.h>
 #include "./pqcsign_wrapper.h"
